@@ -9,7 +9,7 @@
 - Worked on Project Requirements Documentation
 - Worked on Functional Requirements Part
 - Worked on Non-Functional Requirements Part
-- Edited document tabs and corrected grammar mistakes
+- Edited document tabs and corrected grammar mistakes 
 
 ![Yuxuan Sun Week 3 Personal Log](https://github.com/ErenSun408/COSC499-Team17/blob/main/personal_log_img/YuxuanSun_COSC499_WEEK3_PEER-EVAL.png)
 
