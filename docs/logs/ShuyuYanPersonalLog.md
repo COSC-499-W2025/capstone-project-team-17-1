@@ -14,3 +14,24 @@
 - Worked on Functional Requirements Part  
 - Worked on Success Criteria Part  
 - Edited document tabs and corrected grammar mistakes  
+
+## WEEK 4 Personal LOG (SEP 22 - 28, 2025)
+
+### Week 4
+
+In Week 4, the team has performed brainstorming on the Architucture Design Diagram, and Finished the Project Proposal, which will be uploaded to the Canvas.
+### 1. Type of Tasks Worked On
+
+<img width="1061" height="605" alt="Screenshot 2025-09-27 at 4 27 43 PM" src="https://github.com/user-attachments/assets/1f5ebd75-d371-4324-989b-9ff1f1338819" />
+
+### 2. Weekly Goals Recap
+- Worked on Project Proposal
+- Worked on System Architecture Design
+- Worked on System Components 
+- Build teh Kanban and complete kanban Automation
+- Create tasks and assgin tasks to members
+
+### Completed Tasks Week 4
+
+[Architecture Design Diagram](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?usp=sharing)
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
