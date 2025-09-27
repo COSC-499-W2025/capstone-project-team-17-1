@@ -51,7 +51,7 @@ Not Available for Week 3
 
 ### Recap of Milestone Goal - Week 4
 
-In Week 3, the team has performed brainstorming on the Architucture Design Diagram, and Finished the Project Proposal, which will be uploaded to the Canvas.
+In Week 4, the team has performed brainstorming on the Architucture Design Diagram, and Finished the Project Proposal, which will be uploaded to the Canvas.
 
 ### Username and Student Name for Team 17
 
