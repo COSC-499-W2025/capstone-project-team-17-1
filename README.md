@@ -47,6 +47,34 @@ Not Available for Week 3
 
 
 ## WEEK 4 TEAM LOG
+(SEP 22 - 28, 2025)
+
+### Recap of Milestone Goal - Week 4
+
+In Week 3, the team has performed brainstorming on the Architucture Design Diagram, and Finished the Project Proposal, which will be uploaded to the Canvas.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | erensun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 4
+
+[Architucture Design Diagram](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
+
+### In Progress Tasks
+
+Not Available for Week 3
+
+### Test Report Week 3
+
+Not Available for Week 3
 
 ## WEEK 5 TEAM LOG
 
