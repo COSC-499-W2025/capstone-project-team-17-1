@@ -65,7 +65,7 @@ In Week 3, the team has performed brainstorming on the Architucture Design Diagr
 
 ### Completed Tasks Week 4
 
-[Architecture Design Diagram](https://discord.com/channels/1419731637318455447/1421635685168975882/1421636189529837589)
+[Architecture Design Diagram](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?usp=sharing)
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
 
 ### In Progress Tasks
