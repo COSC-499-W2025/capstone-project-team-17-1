@@ -47,11 +47,26 @@ This week I focused on moving our project forward through early design and plann
 - Highlighted potential integration points for APIs and external tools.  
 
 ### Project Proposal
-- Contributed to writing the project proposal document.  
-- Drafted sections describing the project goals, motivation, and target user groups.  
-- Wrote about the problem being solved and why artifact mining is valuable for grad students and early professionals.  
-- Helped define the scope of the system and its expected impact.  
-- Reviewed the draft with the team to align expectations and refine language.  
+- Drafted the **Proposed Workload Distribution (Parsa)**, outlining ownership of the ingestion and preprocessing pipeline, metadata schema and indexed storage, privacy and security guardrails, analytics and insights, CI/testing and developer tooling, plus architecture documentation and demo prep.
+- Defined **measurable success metrics** for each ownership area, including ingest throughput (≥ 200 files per minute with zero data loss), indexed lookup latency (< 100 ms on common filters), redaction verification via automated tests and a spot-check script, correct top-five insights on a seeded workspace, and pipeline code coverage targets with a one-command local setup.
+- Authored an **8-sprint plan** with concrete deliverables:
+  - **Sprint 1** discovery and scaffolding  
+  - **Sprint 2** ingestion MVP  
+  - **Sprint 3** indexing and query  
+  - **Sprint 4** privacy pass  
+  - **Sprint 5** analytics v1  
+  - **Sprint 6** performance and scale  
+  - **Sprint 7** polish and docs  
+  - **Sprint 8** release and handoff
+- Specified **interfaces and collaboration points**:
+  - Storage service with CRUD for artifacts plus search and filters  
+  - Event hooks for discovered, indexed, redacted, and deleted artifacts  
+  - Repository redaction policy file in YAML or JSON consumed by ingestion and UI review
+- Documented **key risks and mitigations**:
+  - Heterogeneous file types → plug-in extractor pattern with safe fallback  
+  - Large catalogs → streaming, batching, backpressure, memory ceilings  
+  - Privacy gaps → redaction-first defaults and explicit allow lists with unit tests
+- Took ownership of **architecture documentation and demo materials**, including the system architecture diagram, data-flow diagrams, and a short demo script teammates can use to explain the pipeline in two minutes.
 
 ### Reflection
-This week strengthened my skills in **high-level system thinking** and **project framing**. Building the architecture diagram helped me think about how the pieces of our project will work together in practice, while writing the proposal forced me to clearly articulate our objectives and the value of the system. Both tasks gave me insight into how design and documentation set the stage for smooth implementation in later phases.
+Working end-to-end on ownership, metrics, sprints, interfaces, and risk mitigations strengthened my ability to turn broad goals into executable plans. By specifying measurable targets and clear collaboration points, I made it easier for the team to integrate work, validate progress, and de-risk the pipeline from ingestion through analytics to the final demo.
