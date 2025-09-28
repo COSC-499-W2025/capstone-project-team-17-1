@@ -68,13 +68,17 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 [Architecture Design Diagram](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?usp=sharing)
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
 
-### In Progress Tasks
+### Burnup chart
 
-Not Available for Week 4
+<img width="1000" height="488" alt="Screenshot 2025-09-28 at 12 55 41 PM" src="https://github.com/user-attachments/assets/71cc03ec-777e-4992-ad9a-74ea3056033c" />
 
-### Test Report Week 3
+### Completed Tasks Week4
 
-Not Available for Week 4
+<img width="1275" height="535" alt="Screenshot 2025-09-28 at 12 57 40 PM" src="https://github.com/user-attachments/assets/4c918636-7609-4d84-a58c-25207db324d5" />
+
+###  In Progress Tasks Week4
+<img width="1245" height="382" alt="Screenshot 2025-09-28 at 12 58 22 PM" src="https://github.com/user-attachments/assets/1d164b12-b15a-4fdc-ab4c-504f100e5187" />
+
 
 ## WEEK 5 TEAM LOG
 
