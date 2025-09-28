@@ -23,12 +23,12 @@
 
 ### 2. Weekly Goals Recap
 - Worked on Project Proposal
+- Worked on Project Proposal requirement table
 - Worked on System Architecture Design
-- Worked on System Components 
-- Build teh Kanban and complete kanban Automation
+- Worked on System Components in System Architecture Design
+- Build the Kanban and complete kanban Automation
 - Create tasks and assgin tasks to members
 - Reviewed Nade's pull requests.
-- Worked on Project Proposal requirement table
 - Worked on Team log Week4
 
 ### Completed Tasks Week 4
