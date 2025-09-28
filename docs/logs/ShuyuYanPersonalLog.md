@@ -17,7 +17,6 @@
 
 ## WEEK 4 Personal LOG (SEP 22 - 28, 2025)
 
-### Week 4
 ### 1. Type of Tasks Worked On
 
 <img width="1061" height="605" alt="Screenshot 2025-09-27 at 4 27 43 PM" src="https://github.com/user-attachments/assets/1f5ebd75-d371-4324-989b-9ff1f1338819" />
@@ -30,6 +29,7 @@
 - Create tasks and assgin tasks to members
 - Reviewed Nade's pull requests.
 - Worked on Project Proposal requirement table
+- Worked on Team log Week4
 
 ### Completed Tasks Week 4
 
