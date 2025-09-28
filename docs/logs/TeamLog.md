@@ -79,6 +79,9 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 ###  In Progress Tasks Week4
 <img width="1245" height="382" alt="Screenshot 2025-09-28 at 12 58 22 PM" src="https://github.com/user-attachments/assets/1d164b12-b15a-4fdc-ab4c-504f100e5187" />
 
+### Test Report Week 4
+
+Not Available for Week 4
 
 ## WEEK 5 TEAM LOG
 
