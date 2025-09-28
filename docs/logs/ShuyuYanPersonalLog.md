@@ -29,6 +29,7 @@
 - Build teh Kanban and complete kanban Automation
 - Create tasks and assgin tasks to members
 - Reviewed Nade's pull requests.
+- Worked on Project Proposal requirement table
 
 ### Completed Tasks Week 4
 
