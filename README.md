@@ -26,7 +26,7 @@ In Week 3, the team has performed brainstorming on the requirements of the proje
 
 | Student Name | Github Username |
 | ------------ | --------------- |
-| Yuxuan Sun | erensun408 |
+| Yuxuan Sun | ErenSun408 |
 | Parsa Aminian | Pmoney1383 |
 | Raunak Khanna | ronziekhanna |
 | Shuyu Yan | yanshuyu280042 |
@@ -57,7 +57,7 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 
 | Student Name | Github Username |
 | ------------ | --------------- |
-| Yuxuan Sun | erensun408 |
+| Yuxuan Sun | ErenSun408 |
 | Parsa Aminian | Pmoney1383 |
 | Raunak Khanna | ronziekhanna |
 | Shuyu Yan | yanshuyu280042 |
@@ -70,11 +70,11 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 
 ### In Progress Tasks
 
-Not Available for Week 3
+Not Available for Week 4
 
 ### Test Report Week 3
 
-Not Available for Week 3
+Not Available for Week 4
 
 ## WEEK 5 TEAM LOG
 
