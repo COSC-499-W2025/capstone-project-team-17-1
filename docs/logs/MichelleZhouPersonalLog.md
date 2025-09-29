@@ -2,8 +2,8 @@
 
 ## Table of Contents
 
-- [Week 3 Personal Log](#wekk-3-personal-log)
-- [Week 4 Personal Log](#wekk-4-personal-log)
+- [Week 3 Personal Log](#week-3-personal-log)
+- [Week 4 Personal Log](#week-4-personal-log)
 
 ## Week 3 Personal Log
 
