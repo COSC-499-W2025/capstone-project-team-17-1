@@ -21,4 +21,4 @@ Week Recap: Collaborated with the team to flesh out project plan, usage scenario
 <img width="1326" height="717" alt="image" src="https://github.com/user-attachments/assets/47842e51-11a0-44d6-9d25-1dfe34a6cdb6" />
 
 
-Week Recap: Focused on system architecture design models. Researched various development option for project tech stack. Expanded on the application process experienced by users and created the UML diagram and use cases accordingly. Attended group meetings, assigned tasks, and ensured clear communications between all members. 
+Week Recap: Researched various development option for project tech stack. Focused on creating system architecture design models based on in-class slides. Collaborated with team on project proposal document. Expanded on the application process experienced by users and created the UML diagram and use cases accordingly. Attended group meetings, assigned tasks, and ensured clear communications between all members. 
