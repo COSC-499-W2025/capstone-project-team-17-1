@@ -37,7 +37,7 @@ In Week 3, the team has performed brainstorming on the requirements of the proje
 
 [Project Requirements Report](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
 
-### In Progress Tasks
+### In Progress Tasks Week 3
 
 Not Available for Week 3
 
@@ -68,15 +68,44 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 [Architecture Design Diagram](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?usp=sharing)
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
 
-### In Progress Tasks
+### In Progress Tasks Week 4
 
 Not Available for Week 4
 
-### Test Report Week 3
+### Test Report Week 4
 
 Not Available for Week 4
+
 
 ## WEEK 5 TEAM LOG
+(SEP 29 - Oct 5, 2025)
+
+### Recap of Milestone Goal - Week 5
+
+In Week 5, the team has discussed the basic construction of the app and completed the Level 0 and Level 1 DFD.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 5
+
+[Data Flow Diagram](<img width="1340" height="1265" alt="image" src="https://github.com/user-attachments/assets/de23a3f4-3f7d-484b-be05-389b751b6829" />)
+
+### In Progress Tasks Week 5
+
+Not Available for Week 5
+
+### Test Report Week 5
+
+Not Available for Week 5
+
 
 ## WEEK 6 TEAM LOG
 
