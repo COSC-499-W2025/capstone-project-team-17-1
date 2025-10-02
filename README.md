@@ -96,7 +96,7 @@ In Week 5, the team has discussed the basic construction of the app and complete
 
 ### Completed Tasks Week 5
 
-[Data Flow Diagram](<img width="1340" height="1265" alt="image" src="https://github.com/user-attachments/assets/de23a3f4-3f7d-484b-be05-389b751b6829" />)
+[Data Flow Diagram](https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/main/docs/design/L0%26L1%20DFD.png)
 
 ### In Progress Tasks Week 5
 
