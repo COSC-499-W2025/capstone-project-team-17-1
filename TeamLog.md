@@ -37,7 +37,7 @@ In Week 3, the team has performed brainstorming on the requirements of the proje
 
 [Project Requirements Report](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
 
-### In Progress Tasks
+### In Progress Tasks Week 3
 
 Not Available for Week 3
 
@@ -67,23 +67,56 @@ In Week 4, the team has performed brainstorming on the Architucture Design Diagr
 
 [Architecture Design Diagram](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?usp=sharing)
 [Project Proposal](https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/main/docs/Plan/Project%20Porposal.md)
+<img width="1275" height="535" alt="Screenshot 2025-09-28 at 12 57 40 PM" src="https://github.com/user-attachments/assets/4c918636-7609-4d84-a58c-25207db324d5" />
 
-### Burnup chart
+### Burnup chart Week 4
 
 <img width="1000" height="488" alt="Screenshot 2025-09-28 at 12 55 41 PM" src="https://github.com/user-attachments/assets/71cc03ec-777e-4992-ad9a-74ea3056033c" />
 
-### Completed Tasks Week4
+###  In Progress Tasks Week 4
 
-<img width="1275" height="535" alt="Screenshot 2025-09-28 at 12 57 40 PM" src="https://github.com/user-attachments/assets/4c918636-7609-4d84-a58c-25207db324d5" />
-
-###  In Progress Tasks Week4
 <img width="1245" height="382" alt="Screenshot 2025-09-28 at 12 58 22 PM" src="https://github.com/user-attachments/assets/1d164b12-b15a-4fdc-ab4c-504f100e5187" />
 
 ### Test Report Week 4
 
 Not Available for Week 4
 
+
 ## WEEK 5 TEAM LOG
+(SEP 29 - Oct 5, 2025)
+
+### Recap of Milestone Goal - Week 5
+
+In Week 5, the team has discussed the basic construction of the app and completed the Level 0 and Level 1 DFD.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 5
+
+[Data Flow Diagram](https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/main/docs/design/L0%26L1%20DFD.png)
+
+<img width="1769" height="91" alt="image" src="https://github.com/user-attachments/assets/3f35aeaa-73a1-42c1-a46b-3a483471663c" />
+
+### Burnup chart Week 5
+
+<img width="1480" height="778" alt="91b403f0-1bb0-426f-9845-20515c70af5c" src="https://github.com/user-attachments/assets/f5f35467-e79d-49c1-8e98-188a817eeb3e" />
+
+### In Progress Tasks Week 5
+
+<img width="989" height="280" alt="image" src="https://github.com/user-attachments/assets/b1bd83d4-c99b-416b-b691-67d7c2443835" />
+
+### Test Report Week 5
+
+Not Available for Week 5
+
 
 ## WEEK 6 TEAM LOG
 
