@@ -1,6 +1,6 @@
 # COSC499 Team 127 Personal Log - Parsa Aminian (41202862)
 
-## Week 3 Personal Log [Sept 15 – Sept 21, 2025]
+## Week 3 Personal Log [Sept 15 – Sept 21, 2025] {#week-3}
 
 This week I contributed to multiple parts of our project’s requirement specification document:
 
@@ -70,3 +70,83 @@ This week I focused on moving our project forward through early design and plann
 
 ### Reflection
 Working end-to-end on ownership, metrics, sprints, interfaces, and risk mitigations strengthened my ability to turn broad goals into executable plans. By specifying measurable targets and clear collaboration points, I made it easier for the team to integrate work, validate progress, and de-risk the pipeline from ingestion through analytics to the final demo.
+
+---
+
+## Week 5 Personal Log [Sept 29 – Oct 5, 2025] 
+This week I worked with **Michelle** and **Raunak** to produce our **DFD Level 0 and Level 1** for the Data Mining App. The diagrams below reflect the finalized processes and data stores exactly as in our team drawing.
+
+> **Peer Eval**
+>
+> ![DFD L0 & L1 — Data Mining App](![alt text](Assets/Peer%20Eval%20Week%205.png))
+> _Figure 0. peer evaluation._
+
+---
+
+> **Diagram placeholder — replace with your export**
+>
+> ![DFD L0 & L1 — Data Mining App](![alt text](/Assets/DFD.png))
+> _Figure 1. Level 0 and Level 1 DFD._
+
+---
+
+### DFD Level 0 — Context
+
+**External Entities**
+- **User**
+- **System API** (external service we request analysis from / receive analysis back)
+
+**System**
+- **Data Mining App**
+
+**Level-0 Flows**
+- **User → Data Mining App:** `User Authentication`, `Data Mining Request`
+- **Data Mining App → User:** `Output Portfolio`
+- **Data Mining App → System API:** `Request Data Analysis`
+- **System API → Data Mining App:** `Provide Data Analysis`
+
+> *Balancing:* All inbound/outbound data at Level 0 reappears in Level 1 as aggregated equivalents.
+
+---
+
+### DFD Level 1 — Decomposition
+
+**Processes**
+1. **Source Selection** — user chooses input source(s)  
+   - *Flow:* `Select Source` (User → Source Selection)
+2. **Mining / Scan** — executes scan tasks and generates file records  
+   - *Flow:* `Scan Task` (Source Selection → Mining/Scan)  
+   - *Outputs:* `File Records` (→ **Artifact DB**), `Scan Logs` (→ **Error Logs**)
+3. **Analytics & Metrics Generation** — computes metrics and insights from artifacts  
+   - *Inputs:* reads **Artifact DB** (implicit via `File Records`)  
+   - *Outputs:* `Metrics & Insights` (→ Visualization & Export), `Data Results` (→ **Error Logs**)  
+     *(we keep “Data Results → Error Logs” to mirror the team diagram’s diagnostic capture)*
+4. **Visualization & Export** — assembles dashboard and export views  
+   - *Inputs:* `Metrics & Insights`  
+   - *Outputs:* `Dashboard Report` and `Return Output` (→ User)
+5. **Save Portfolio** — persists selected results  
+   - *Inputs:* `Save Portfolio` (User → Save Portfolio)  
+   - *Outputs:* `Store Data` (→ **Portfolio Database**)
+6. **Export Portfolio** — produces external deliverables from saved data  
+   - *Inputs:* `Export Data` (reads from **Portfolio Database**)  
+   - *Outputs:* `Export Logs` (→ **Error Logs**)
+
+**Data Stores**
+- **Artifact DB** — persists `File Records` from scans  
+- **Portfolio Database** — holds saved portfolio data  
+- **Error Logs** — central sink for `Scan Logs`, `Data Results`, and `Export Logs`
+
+**User-Facing Flows**
+- `Dashboard Report` and `Return Output` (Visualization & Export → User)
+
+---
+
+### Decisions & Alignment with the Diagram
+- **Centralized logging:** All operational diagnostics route to **Error Logs** from scanning, analytics, and export, matching the diagram’s right-side bus.
+- **Portfolio lifecycle split:** We separated **Save Portfolio** (persist) from **Export Portfolio** (publish) with **Portfolio Database** in between, as shown.
+- **External analysis path:** Level-0 API interaction is captured implicitly at Level-1 within **Mining/Scan** + **Analytics**, which is where outbound requests and inbound results are handled in our implementation plan.
+
+---
+
+### Reflection
+Translating the whiteboard into balanced Level-0/Level-1 diagrams clarified ownership boundaries and logging strategy. Collaborating with Michelle and Raunak helped us standardize flow names (`Scan Task`, `File Records`, `Metrics & Insights`, etc.), and the explicit **Portfolio Database** node makes the save/export UX and audit trail straightforward for the peer evaluation.
