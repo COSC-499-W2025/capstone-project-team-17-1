@@ -108,6 +108,36 @@ Not Available for Week 5
 
 
 ## WEEK 6 TEAM LOG
+(Oct 6 - Oct 12, 2025)
+
+### Recap of Milestone Goal - Week 6
+
+In Week 6, our team reviewed all project artifacts, including every diagram, the requirements document, the Project Proposal, and the WBS, to ensure consistency and completeness. We finished setting up the local development environment and configured Docker for a reproducible build and run process. We also initialized the repository structure, documented setup steps, and agreed on coding conventions. Development began with the core logic: we wrote the initial, non-GUI modules and command line entry points, added basic tests to verify functionality, and confirmed that everything builds and runs successfully in Docker.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 6
+
+[All Diagram](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0)
+[Requirements](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
+[System Architucture](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?tab=t.0)
+WBS included in Project Proposal Section 5
+### In Progress Tasks Week 6
+
+Not Available for Week 6
+
+### Test Report Week 6
+
+Not Available for Week 6
 
 ## WEEK 7 TEAM LOG
 
