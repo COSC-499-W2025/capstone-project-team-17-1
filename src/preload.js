@@ -7,3 +7,11 @@ contextBridge.exposeInMainWorld('archiveValidator', {
     return ipcRenderer.invoke('zip:validate', filePath);
   }
 });
+
+contextBridge.exposeInMainWorld("config", {
+  load: () => ipcRenderer.invoke("config:load"),
+  get: (k, f) => ipcRenderer.invoke("config:get", k, f),
+  set: (k, v) => ipcRenderer.invoke("config:set", k, v),
+  merge: (p) => ipcRenderer.invoke("config:merge", p),
+  reset: () => ipcRenderer.invoke("config:reset")
+});
