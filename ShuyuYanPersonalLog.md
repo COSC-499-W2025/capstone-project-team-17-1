@@ -70,12 +70,13 @@ These diagrams helped us clearly see how different parts of the app connect and 
 - revise the README file
 - Asssgin members to their tasks
 
-During this week, I completed the task “Return an error if the specified file is in the wrong format.” The system now correctly detects when a non-ZIP file is uploaded and returns a standardized JSON error message. It also logs the event in logs/error.log and prevents the parsing process from running. This improvement ensures the parser handles invalid inputs safely and communicates errors clearly to users.
+During this week, I focused on improving the system’s reliability and completing the task “Return an error if the specified file is in the wrong format.” The parser now automatically detects non-ZIP inputs, returns a clear JSON error message, and logs each event to logs/error.log before safely stopping the process. This change makes the system more robust and user-friendly, ensuring that incorrect inputs are handled gracefully rather than breaking the workflow.
 
-We also held a team meeting to discuss the local setup, confirming that the project will run through an Electron front-end with a Node.js backend and a Docker-based database. Each member contributed ideas on improving workflow consistency and local testing. Following the meeting, we updated the README file to include clearer setup instructions, project structure, milestone details, and troubleshooting steps so that any new developer can start the app easily.
+I also worked with the team to finalize our local environment setup, confirming that the app runs through an Electron shell, with a Node.js backend and a Docker-based database. I learned how these components connect together in a full-stack environment, especially how Docker provides consistency across different machines. After our setup meeting, I helped revise the README file to make it easier for teammates to run the project, adding clearer setup instructions, a quick-start guide, and troubleshooting notes.
 
-Through this process, I learned how to design and implement robust error-handling logic that improves system reliability, as well as how to use structured logging to track and debug issues effectively. I also gained a deeper understanding of how different components—Electron, Node.js, and Docker—integrate in a full-stack environment, and how clear documentation plays a crucial role in team collaboration and onboarding.
+Beyond coding, I contributed to planning discussions by reviewing our current Work Breakdown Structure and ensuring that all tasks and acceptance criteria align with the milestone requirements. We assigned ownership for each module to streamline collaboration and reduce overlap.
 
+From this week’s work, I learned how to design defensive error-handling logic, use structured logging for debugging, and maintain documentation that supports a smooth developer experience. It also gave me a better sense of how planning, environment setup, and communication tie together to keep a project organized and moving forward.
 ### Completed Tasks Week 6
 [All Diagram](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0)
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
