@@ -159,7 +159,8 @@ This week our team finalized task assignments and I focused on platform setup, p
 
 > **Peer Eval**
 >
-> ![Week 6 — Data Mining App](![alt text](Assets/Peer%20Eval%20Week%205.png))
+> ![Week 6 — Data Mining App](![alt text]
+> <img width="1086" height="637" alt="image" src="https://github.com/user-attachments/assets/264b1aa2-2561-4af3-9880-4de67dbd418d" />
 > _Figure 0. peer evaluation._
 
 ### Environment and Tooling Setup
