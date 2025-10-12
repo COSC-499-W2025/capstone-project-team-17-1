@@ -153,6 +153,12 @@ For an initial milestone, the team should ship source selection, common type det
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
 [System Architucture](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?tab=t.0)
 [WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
+
+### Burnup chart Week 6
+
+<img width="2056" height="1204" alt="image" src="https://github.com/user-attachments/assets/f070db89-42f6-4d3d-b89a-f03ec31da6bc" />
+
+
 ### In Progress Tasks Week 6
 
 Not Available for Week 6
