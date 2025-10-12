@@ -58,3 +58,29 @@ These diagrams helped us clearly see how different parts of the app connect and 
 
 ### Completed Tasks Week 5
 [Data Flow Diagram](https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/main/docs/design/L0%26L1%20DFD.png)
+
+## WEEK 6 Personal LOG (Oct6 - Oct12, 2025)
+
+### 1. Type of Tasks Worked On
+<img width="1068" height="596" alt="Screenshot 2025-10-11 at 11 50 36 AM" src="https://github.com/user-attachments/assets/919f3757-317a-4048-a17e-059427f3ccbd" />
+
+### 2. Weekly Goals Recap
+- complete 'Return an error if the specified file is in the wrong format' task
+- discussed the set-up with members in meeting
+- revise the README file
+- Asssgin members to their tasks
+
+During this week, I completed the task “Return an error if the specified file is in the wrong format.” The system now correctly detects when a non-ZIP file is uploaded and returns a standardized JSON error message. It also logs the event in logs/error.log and prevents the parsing process from running. This improvement ensures the parser handles invalid inputs safely and communicates errors clearly to users.
+
+We also held a team meeting to discuss the local setup, confirming that the project will run through an Electron front-end with a Node.js backend and a Docker-based database. Each member contributed ideas on improving workflow consistency and local testing. Following the meeting, we updated the README file to include clearer setup instructions, project structure, milestone details, and troubleshooting steps so that any new developer can start the app easily.
+
+Through this process, I learned how to design and implement robust error-handling logic that improves system reliability, as well as how to use structured logging to track and debug issues effectively. I also gained a deeper understanding of how different components—Electron, Node.js, and Docker—integrate in a full-stack environment, and how clear documentation plays a crucial role in team collaboration and onboarding.
+
+### Completed Tasks Week 6
+[All Diagram](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0)
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
+[WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
+Return an error if the specified file is in the wrong format--task #19
+
+
+
