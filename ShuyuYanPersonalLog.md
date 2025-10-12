@@ -65,7 +65,7 @@ These diagrams helped us clearly see how different parts of the app connect and 
 <img width="1068" height="596" alt="Screenshot 2025-10-11 at 11 50 36 AM" src="https://github.com/user-attachments/assets/919f3757-317a-4048-a17e-059427f3ccbd" />
 
 ### 2. Weekly Goals Recap
-- complete 'Return an error if the specified file is in the wrong format' task
+- complete 'Return an error if the specified file is in the wrong format' task #19
 - discussed the set-up with members in meeting
 - revise the README file
 - Asssgin members to their tasks
