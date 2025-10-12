@@ -1,0 +1,25 @@
+{
+  "name": "cosc-499-project",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron .",
+    "build:linux": "electron-builder -l",
+    "build:win": "electron-builder -w",
+    "build:mac": "electron-builder -m",
+    "dev": "electron ."
+  },
+  "build": {
+    "appId": "com.yourteam.app",
+    "files": ["**/*", "!dist", "!out", "!node_modules/.cache"]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "electron": "^38.2.2",
+    "electron-builder": "^26.0.12"
+  }
+}
