@@ -3,6 +3,7 @@ const path = require('path');
 
 const DEFAULT_LOG_PATH = path.join(__dirname, '..', '..', 'log', 'validation-errors.log');
 
+// Ensure the directory for the log file exists so append operations succeed.
 function ensureLogDirectory(logPath) {
   const directory = path.dirname(logPath);
   if (!fs.existsSync(directory)) {
@@ -10,6 +11,7 @@ function ensureLogDirectory(logPath) {
   }
 }
 
+// Append a timestamped entry describing the validation failure.
 function appendErrorLog(detail, logPath = DEFAULT_LOG_PATH) {
   try {
     ensureLogDirectory(logPath);
@@ -20,6 +22,8 @@ function appendErrorLog(detail, logPath = DEFAULT_LOG_PATH) {
   }
 }
 
+// Validate that the input points to an existing .zip archive and return
+// a standardized error payload when validation fails.
 function validateZipInput(filePath, { logPath = DEFAULT_LOG_PATH } = {}) {
   if (typeof filePath !== 'string' || filePath.trim().length === 0) {
     const detail = 'Expected a file path string but received an empty value.';
