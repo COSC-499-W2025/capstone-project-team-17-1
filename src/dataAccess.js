@@ -13,8 +13,15 @@ function getConsent() {
                 // generalize input
                 const ans = answer.trim().toLowerCase();
                 if (ans === 'y' || ans === 'n') {
+                    // clode input interface
                     user_input.close();
+                    // resolve based on input
                     resolve(ans === 'y' ? 'accepted' : 'rejected');
+                } else {
+                    // error messge for invalid input
+                    console.log('Invalid input :( Please enter "y" for yes or "n" for no. Thanks :)');
+                    // reprompt
+                    promptConsent();
                 }
             });
         }
