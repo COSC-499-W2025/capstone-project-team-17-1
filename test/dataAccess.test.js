@@ -1,9 +1,9 @@
 const readline = require('readline');
-const { getUserConsent } = require('./getUserConsent');
+const { getConsent } = require('../src/dataAccess');
 
 jest.mock('readline');
 
-describe('getUserConsent', () => {
+describe('getConsent', () => {
   let questionMock;
   let closeMock;
 
@@ -24,7 +24,7 @@ describe('getUserConsent', () => {
   // tests positive user input
   test('returns "accepted" when user inputs "y"', async () => {
     questionMock.mockImplementationOnce((query, cb) => cb('y'));
-    const result = await getUserConsent();
+    const result = await getConsent();
     expect(result).toBe('accepted');
     expect(closeMock).toHaveBeenCalled();
   });
@@ -32,7 +32,7 @@ describe('getUserConsent', () => {
   // tests negative user input
   test('returns "rejected" when user inputs "n"', async () => {
     questionMock.mockImplementationOnce((query, cb) => cb('n'));
-    const result = await getUserConsent();
+    const result = await getConsent();
     expect(result).toBe('rejected');
     expect(closeMock).toHaveBeenCalled();
   });
@@ -43,7 +43,7 @@ describe('getUserConsent', () => {
       .mockImplementationOnce((query, cb) => cb('maybe'))
       .mockImplementationOnce((query, cb) => cb('y'));
 
-    const result = await getUserConsent();
+    const result = await getConsent();
     expect(result).toBe('accepted');
     expect(questionMock).toHaveBeenCalledTimes(2);
   });

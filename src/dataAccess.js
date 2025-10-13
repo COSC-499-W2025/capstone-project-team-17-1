@@ -28,3 +28,5 @@ function getConsent() {
         promptConsent();
     });
 }
+
+module.exports = { getConsent };
