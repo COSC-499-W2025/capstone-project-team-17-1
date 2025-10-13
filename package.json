@@ -1,7 +1,10 @@
 {
   "name": "cosc-499-project",
   "version": "1.0.0",
-  "main": "src/index.js",
+  "main": "src/main.js",
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "test:jest": "jest",
@@ -26,7 +29,6 @@
   "description": "",
   "devDependencies": {
     "electron": "^38.2.2",
-    "electron-builder": "^26.0.12",
-    "jest": "^30.2.0"
+    "electron-builder": "^26.0.12"
   }
 }
