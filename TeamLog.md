@@ -141,6 +141,7 @@ In Week 6, our team reviewed all project artifacts, including every diagram, the
 
 
 [Requirements](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
+<img width="1233" height="520" alt="Screenshot 2025-10-12 at 11 50 43 PM" src="https://github.com/user-attachments/assets/7a0dca01-f7d7-44dc-974e-c7e08cc2c531" />
 
 # explanation 
 
@@ -160,12 +161,11 @@ For an initial milestone, the team should ship source selection, common type det
 
 
 ### In Progress Tasks Week 6
-
-Not Available for Week 6
+<img width="1229" height="390" alt="Screenshot 2025-10-12 at 11 50 01 PM" src="https://github.com/user-attachments/assets/e0400b65-3f4c-418e-889a-c527e4f380d1" />
 
 ### Test Report Week 6
 
-Not Available for Week 6
+During Week 6, the team conducted focused testing on two functional requirements: #23 Store User Configurations for Future Use and #19 Return an Error if the Specified File is in the Wrong Format. The objective was to verify that user preferences can be properly saved and reloaded across sessions, and that the system correctly identifies and handles invalid file inputs. For #23, tests confirmed that user configurations were successfully stored and reloaded upon restarting the application, ensuring persistence of settings such as directory paths and consent options. For #19, the system was tested with multiple non-zip files, including .pdf, .jpg, and .exe, and consistently returned the expected standardized error response in JSON format. Both functionalities performed as intended, with only a minor delay observed during configuration reload, and were marked as passed.
 
 ## WEEK 7 TEAM LOG
 
