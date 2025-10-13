@@ -1,7 +1,10 @@
 {
   "name": "cosc-499-project",
   "version": "1.0.0",
-  "main": "src/index.js",
+  "main": "src/main.js",
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "start": "electron .",

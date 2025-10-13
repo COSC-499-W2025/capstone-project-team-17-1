@@ -1,24 +1,71 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <title>Hello Electron</title>
+    <title>Artifacts</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 2rem; }
+      h2 { margin-top: 2rem; }
+      button { margin-bottom: 1rem; }
+      pre { padding: 1rem; background: #f5f5f5; border-radius: 4px; }
     </style>
   </head>
   <body>
     <h1>Hello Electron</h1>
-     <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const cfg = await window.config.load();
-        console.log('Loaded config:', cfg);
-        await window.config.set('theme', 'dark');
-      } catch (e) {
-        console.error('Config error:', e);
+    <h2>Stored sample data</h2>
+    <button id="refresh">refresh</button>
+    <pre id="out">loading...</pre>
+
+    <script>
+      const out = document.getElementById('out');
+      const refreshBtn = document.getElementById('refresh');
+
+      function pad(num) {
+        return String(num).padStart(2, '0');
       }
-    });
-  </script>
+
+      function formatTimestamp(ts) {
+        if (ts === null || ts === undefined) return '';
+        const date = new Date(ts * 1000);
+        if (Number.isNaN(date.getTime())) return String(ts);
+        const y = date.getFullYear();
+        const m = pad(date.getMonth() + 1);
+        const d = pad(date.getDate());
+        const hh = pad(date.getHours());
+        const mm = pad(date.getMinutes());
+        const ss = pad(date.getSeconds());
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+      }
+
+      async function loadArtifacts() {
+        try {
+          const rows = await window.db.queryArtifacts({ limit: 100 });
+          const display = rows.map((row) => ({
+            ...row,
+            created_at: formatTimestamp(row.created_at),
+            modified_at: formatTimestamp(row.modified_at),
+          }));
+          out.textContent = JSON.stringify(display, null, 2);
+        } catch (e) {
+          console.error(e);
+          out.textContent = 'data loading error, check console logs';
+        }
+      }
+
+      refreshBtn.addEventListener('click', loadArtifacts);
+      loadArtifacts();
+    </script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        try {
+          const cfg = await window.config.load();
+          console.log('Loaded config:', cfg);
+          await window.config.set('theme', 'dark');
+        } catch (e) {
+          console.error('Config error:', e);
+        }
+      });
+    </script>
   </body>
 </html>

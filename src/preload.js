@@ -8,10 +8,25 @@ contextBridge.exposeInMainWorld('archiveValidator', {
   }
 });
 
-contextBridge.exposeInMainWorld("config", {
-  load: () => ipcRenderer.invoke("config:load"),
-  get: (k, f) => ipcRenderer.invoke("config:get", k, f),
-  set: (k, v) => ipcRenderer.invoke("config:set", k, v),
-  merge: (p) => ipcRenderer.invoke("config:merge", p),
-  reset: () => ipcRenderer.invoke("config:reset")
+// Provide limited database helpers so renderer code can manage artifacts.
+contextBridge.exposeInMainWorld('db', {
+  async queryArtifacts(params) {
+    const res = await ipcRenderer.invoke('artifact.query', params);
+    if (!res || !res.ok) throw new Error(res?.error || 'artifact.query failed');
+    return res.data;
+  },
+  async insertArtifacts(rows) {
+    const res = await ipcRenderer.invoke('artifact.insertMany', rows);
+    if (!res || !res.ok) throw new Error(res?.error || 'artifact.insertMany failed');
+    return res.data;
+  }
+});
+
+// Surface config helpers so the renderer can read/write user preferences.
+contextBridge.exposeInMainWorld('config', {
+  load: () => ipcRenderer.invoke('config:load'),
+  get: (key, fallback) => ipcRenderer.invoke('config:get', key, fallback),
+  set: (key, value) => ipcRenderer.invoke('config:set', key, value),
+  merge: (patch) => ipcRenderer.invoke('config:merge', patch),
+  reset: () => ipcRenderer.invoke('config:reset')
 });
