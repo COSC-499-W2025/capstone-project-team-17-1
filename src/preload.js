@@ -7,3 +7,17 @@ contextBridge.exposeInMainWorld('archiveValidator', {
     return ipcRenderer.invoke('zip:validate', filePath);
   }
 });
+
+// Provide limited database helpers so renderer can query artifact data.
+contextBridge.exposeInMainWorld('db', {
+  async queryArtifacts(params) {
+    const res = await ipcRenderer.invoke('artifact.query', params);
+    if (!res || !res.ok) throw new Error(res?.error || 'artifact.query failed');
+    return res.data;
+  },
+  async insertArtifacts(rows) {
+    const res = await ipcRenderer.invoke('artifact.insertMany', rows);
+    if (!res || !res.ok) throw new Error(res?.error || 'artifact.insertMany failed');
+    return res.data;
+  }
+});

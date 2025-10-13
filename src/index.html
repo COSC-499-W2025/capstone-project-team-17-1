@@ -1,13 +1,52 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <title>Hello Electron</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 2rem; }
-    </style>
+    <title>Artifacts</title>
   </head>
   <body>
-    <h1>Hello Electron</h1>
+    <h1>Stored sample data</h1>
+    <button id="refresh">refresh</button>
+    <pre id="out">loading...</pre>
+
+    <script>
+      const out = document.getElementById('out');
+      const refreshBtn = document.getElementById('refresh');
+
+      function pad(num) {
+        return String(num).padStart(2, '0');
+      }
+
+      function formatTimestamp(ts) {
+        if (ts === null || ts === undefined) return '';
+        const date = new Date(ts * 1000);
+        if (Number.isNaN(date.getTime())) return String(ts);
+        const y = date.getFullYear();
+        const m = pad(date.getMonth() + 1);
+        const d = pad(date.getDate());
+        const hh = pad(date.getHours());
+        const mm = pad(date.getMinutes());
+        const ss = pad(date.getSeconds());
+        return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+      }
+
+      async function loadArtifacts() {
+        try {
+          const rows = await window.db.queryArtifacts({ limit: 100 });
+          const display = rows.map((row) => ({
+            ...row,
+            created_at: formatTimestamp(row.created_at),
+            modified_at: formatTimestamp(row.modified_at),
+          }));
+          out.textContent = JSON.stringify(display, null, 2);
+        } catch (e) {
+          console.error(e);
+          out.textContent = 'data loading error, check console logs';
+        }
+      }
+
+      refreshBtn.addEventListener('click', loadArtifacts);
+      loadArtifacts();
+    </script>
   </body>
 </html>
