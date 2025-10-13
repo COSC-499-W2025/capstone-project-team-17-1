@@ -1,2 +1,2 @@
 # Work Breakdown Structure
-[Work Breakdown Structure](wbs.md)
+[Work Breakdown Structure](docs/Plan/wbs.md)
