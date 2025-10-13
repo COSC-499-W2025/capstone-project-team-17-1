@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld('archiveValidator', {
   }
 });
 
-// Provide limited database helpers so renderer can query artifact data.
+// Provide limited database helpers so renderer code can manage artifacts.
 contextBridge.exposeInMainWorld('db', {
   async queryArtifacts(params) {
     const res = await ipcRenderer.invoke('artifact.query', params);
@@ -20,4 +20,13 @@ contextBridge.exposeInMainWorld('db', {
     if (!res || !res.ok) throw new Error(res?.error || 'artifact.insertMany failed');
     return res.data;
   }
+});
+
+// Surface config helpers so the renderer can read/write user preferences.
+contextBridge.exposeInMainWorld('config', {
+  load: () => ipcRenderer.invoke('config:load'),
+  get: (key, fallback) => ipcRenderer.invoke('config:get', key, fallback),
+  set: (key, value) => ipcRenderer.invoke('config:set', key, value),
+  merge: (patch) => ipcRenderer.invoke('config:merge', patch),
+  reset: () => ipcRenderer.invoke('config:reset')
 });
