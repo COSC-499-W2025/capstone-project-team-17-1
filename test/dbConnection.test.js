@@ -40,7 +40,9 @@ test('openDb creates the database folder and reuses the same handle', { concurre
   };
   const connection = require(connectionModulePath);
   t.after(() => connection.closeDb());
-  const expectedDir = path.join(tmpDir, 'src', 'db');
+  // Normalize to the real path because macOS resolves /var -> /private/var.
+  const resolvedTmpDir = fs.realpathSync(tmpDir);
+  const expectedDir = path.join(resolvedTmpDir, 'src', 'db');
   const expectedDbPath = path.join(expectedDir, 'app.db');
   assert.strictEqual(connection.getDbPath(), expectedDbPath);
   assert.ok(fs.existsSync(expectedDir), 'database directory should be created');
