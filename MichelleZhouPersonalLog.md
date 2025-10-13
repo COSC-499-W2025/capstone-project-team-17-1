@@ -5,6 +5,7 @@
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
 - [Week 5 Personal Log](#week-5-personal-log)
+- [Week 6 Personal Log](#week-6-personal-log)
 
 ## Week 3 Personal Log
 
@@ -23,10 +24,20 @@ Week Recap: Collaborated with the team to flesh out project plan, usage scenario
 
 Week Recap: Researched various development option for project tech stack. Focused on creating system architecture design models based on in-class slides. Collaborated with team on project proposal document. Expanded on the application process experienced by users and created the UML diagram and use cases accordingly. Attended group meetings, assigned tasks, and ensured clear communications between all members. <br />
 
-## Week 4 Personal Log
+## Week 5 Personal Log
 
 - (Sep 29 - Oct 5, 2025)<br />
 
 <img width="1326" height="717" alt="image" src="https://github.com/user-attachments/assets/18834751-87e4-44e0-b710-125409e666b1" /><br />
 
 Week Recap: Researched various types of DFD and looked back on previous work to gather inspiration. Worked with team to create DFD level 0 and 1 during Monday class. Finalized application system by focusing on flushing out main process and data flow. Worked out specific databases and logs systems. Exchanged DFD with other teams during Wednesday class and discussed various differences/similarities.
+
+## Week 6 Personal Log
+
+- (Oct 6 - Oct 12, 2025)<br />
+
+<img width="1326" height="717" alt="image" src="https://github.com/user-attachments/assets/f23b80f7-513c-4b62-96f5-712c2bf5ab10" />
+
+Week Recap: Finalized system architecture design based on feedback, making sure to address all areas that were previously vague or overly general. Each system component and interaction was clarified to ensure alignment with our requirements. Worked with team to set up local environment using Docker and Electron. Updated the project README with essential links to diagrams and explanations. Worked on finalizing DFD Level 1 and diagram explanation.
+
+Completed Work Breakdown Structure with team and delegated tasks to ensure that every member had clear actionable items and understood their responsibilities. Kept the group organized and focused by facilitating discussions, clarifying goals, and tracking action items.

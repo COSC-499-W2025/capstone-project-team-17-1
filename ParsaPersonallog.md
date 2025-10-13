@@ -146,7 +146,49 @@ This week I worked with **Michelle** and **Raunak** to produce our **DFD Level 0
 - **Portfolio lifecycle split:** We separated **Save Portfolio** (persist) from **Export Portfolio** (publish) with **Portfolio Database** in between, as shown.
 - **External analysis path:** Level-0 API interaction is captured implicitly at Level-1 within **Mining/Scan** + **Analytics**, which is where outbound requests and inbound results are handled in our implementation plan.
 
----
+
 
 ### Reflection
 Translating the whiteboard into balanced Level-0/Level-1 diagrams clarified ownership boundaries and logging strategy. Collaborating with Michelle and Raunak helped us standardize flow names (`Scan Task`, `File Records`, `Metrics & Insights`, etc.), and the explicit **Portfolio Database** node makes the save/export UX and audit trail straightforward for the peer evaluation.
+
+---
+
+## Week 6 Personal Log [Oct 6 to Oct 12, 2025] {#week-6}
+
+This week our team finalized task assignments and I focused on platform setup, planning, and early implementation work.
+
+> **Peer Eval**
+>
+> ![Week 6 — Data Mining App](![alt text]
+> <img width="1086" height="637" alt="image" src="https://github.com/user-attachments/assets/264b1aa2-2561-4af3-9880-4de67dbd418d" />
+> _Figure 0. peer evaluation._
+
+### Environment and Tooling Setup
+- Set up Docker for local development with a base image, dev dependencies, and a multi stage build for smaller images  
+- Wired Electron scaffolding so the desktop shell can run the app locally and inside a container  
+- Documented run, build, and troubleshoot commands so teammates can reproduce the setup  
+
+### Work Breakdown Structure and Planning
+- Broke the project into concrete tasks with clear owners and acceptance criteria  
+- Sequenced tasks for the next sprint and added estimates and dependencies to reduce blocker risk  
+- Linked WBS items to our repo issues to keep tracking and status consistent  
+
+### Requirements Walkthrough
+- Wrote an explaination for Week 3 requirements in the team logs, clarifying performance, security, and data constraints  
+- Captured open questions and updated notes where wording was ambiguous  
+- Verified alignment between requirements and the current WBS items  
+
+### Coding Progress
+- Added initial boilerplate to start the app with a minimal Electron main process and a placeholder renderer  
+- Wrote starter scripts for lint, format, and type checks to keep the codebase consistent  
+- Committed a sample module to exercise the build and run pipeline end to end  
+
+### Reviews and Pull Requests
+- Reviewed teammates code and pull requests for clarity, correctness, and consistency with requirements  
+- Left actionable comments and suggested small refactors to reduce tech debt early  
+- Verified that new changes build cleanly in Docker and still run in Electron
+
+### Reflection
+This week was about enabling the team. Getting Docker and Electron stable gave everyone a common platform and fewer environment bugs. Turning requirements into a concrete WBS helped us see scope, ordering, and risks. The small amount of starter code proved the path from source to a running desktop app, and early reviews kept quality in check. I feel confident that our foundation is solid and that the next sprint can focus on features rather than setup.
+
+---

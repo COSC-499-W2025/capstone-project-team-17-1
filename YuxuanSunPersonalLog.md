@@ -34,4 +34,17 @@
 
 [Back](#table-of-contents)
 
+## Week 6
+[Oct 6 – Oct 12, 2025]
+- Wrote brief explanation for the [DFD Level 1](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0) (Page 3)
+- Worked on [WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0#heading=h.g6wbaqojg4lv) (2, 3, 12, 16)
+- Learned Electron fundamentals
+- Set up local Electron development environment
+- Builded initial database schema
+- Generated sample test data
+- Reviewed PRs
+
+<img width="1560" height="914" alt="4f852e3502eb5090a2cf0682501fcb45" src="https://github.com/user-attachments/assets/e3476168-756d-4b00-8c00-24c690b0018d" />
+
+[Back](#table-of-contents)
 

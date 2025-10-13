@@ -58,3 +58,30 @@ These diagrams helped us clearly see how different parts of the app connect and 
 
 ### Completed Tasks Week 5
 [Data Flow Diagram](https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/main/docs/design/L0%26L1%20DFD.png)
+
+## WEEK 6 Personal LOG (Oct6 - Oct12, 2025)
+
+### 1. Type of Tasks Worked On
+<img width="1068" height="596" alt="Screenshot 2025-10-11 at 11 50 36 AM" src="https://github.com/user-attachments/assets/919f3757-317a-4048-a17e-059427f3ccbd" />
+
+### 2. Weekly Goals Recap
+- complete 'Return an error if the specified file is in the wrong format' task #19
+- discussed the set-up with members in meeting
+- revise the README file
+- Asssgin members to their tasks
+
+During this week, I focused on improving the system’s reliability and completing the task “Return an error if the specified file is in the wrong format.” The parser now automatically detects non-ZIP inputs, returns a clear JSON error message, and logs each event to logs/error.log before safely stopping the process. This change makes the system more robust and user-friendly, ensuring that incorrect inputs are handled gracefully rather than breaking the workflow.
+
+I also worked with the team to finalize our local environment setup, confirming that the app runs through an Electron shell, with a Node.js backend and a Docker-based database. I learned how these components connect together in a full-stack environment, especially how Docker provides consistency across different machines. After our setup meeting, I helped revise the README file to make it easier for teammates to run the project, adding clearer setup instructions, a quick-start guide, and troubleshooting notes.
+
+Beyond coding, I contributed to planning discussions by reviewing our current Work Breakdown Structure and ensuring that all tasks and acceptance criteria align with the milestone requirements. We assigned ownership for each module to streamline collaboration and reduce overlap.
+
+From this week’s work, I learned how to design defensive error-handling logic, use structured logging for debugging, and maintain documentation that supports a smooth developer experience. It also gave me a better sense of how planning, environment setup, and communication tie together to keep a project organized and moving forward.
+### Completed Tasks Week 6
+[All Diagram](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0)
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
+[WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
+Return an error if the specified file is in the wrong format--task #19
+
+
+

@@ -119,6 +119,53 @@ Not Available for Week 5
 
 
 ## WEEK 6 TEAM LOG
+(Oct 6 - Oct 12, 2025)
+
+### Recap of Milestone Goal - Week 6
+
+In Week 6, our team reviewed all project artifacts, including every diagram, the requirements document, the Project Proposal, and the WBS, to ensure consistency and completeness. We finished setting up the local development environment and configured Docker for a reproducible build and run process. We also initialized the repository structure, documented setup steps, and agreed on coding conventions. Development began with the core logic: we wrote the initial, non-GUI modules and command line entry points, added basic tests to verify functionality, and confirmed that everything builds and runs successfully in Docker.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 6
+
+[All Diagram](https://docs.google.com/document/d/1ZnNXTiLX3bXALCe2Ug8rojZ3RkSmjPB-2_YgaCqQyPA/edit?tab=t.0)
+
+
+[Requirements](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
+<img width="1233" height="520" alt="Screenshot 2025-10-12 at 11 50 43 PM" src="https://github.com/user-attachments/assets/7a0dca01-f7d7-44dc-974e-c7e08cc2c531" />
+
+# explanation 
+
+The document proposes a local first app that mines a user’s own files to help them understand and showcase their work history. It targets students and early professionals who want clear timelines, trends, and portfolio style summaries without sending data off the device. In scope are scanning chosen folders, classifying common file types, deduplicating with strong hashes, storing results in a local data store, and presenting dashboards plus simple exports. Users control what is scanned, can pause or resume, and see transparent previews and progress with errors surfaced. Typical use cases include presentations, reviews, resumes, and quick retrospectives.
+
+Functionally, the system lets a user pick sources, crawls and classifies artifacts, builds searchable indexes and filters by time, type, project, and path, and produces insights like activity timelines and type distributions. Non functional goals stress fast setup, efficient and resumable scans, responsiveness, accessibility, and strong privacy and security. Data stays local with least privilege, encrypted storage using the operating system keystore, a localhost only API with per session tokens, secure deletion, and redaction of sensitive patterns in cached snippets. Maintainability expectations include straightforward developer setup, high automated test coverage, pinned dependencies, signed releases, and clear documentation.
+
+For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
+
+[Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
+[System Architucture](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?tab=t.0)
+[WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
+
+### Burnup chart Week 6
+
+<img width="2056" height="1204" alt="image" src="https://github.com/user-attachments/assets/f070db89-42f6-4d3d-b89a-f03ec31da6bc" />
+
+
+### In Progress Tasks Week 6
+<img width="1229" height="390" alt="Screenshot 2025-10-12 at 11 50 01 PM" src="https://github.com/user-attachments/assets/e0400b65-3f4c-418e-889a-c527e4f380d1" />
+
+### Test Report Week 6
+
+During Week 6, the team conducted focused testing on two functional requirements: #23 Store User Configurations for Future Use and #19 Return an Error if the Specified File is in the Wrong Format. The objective was to verify that user preferences can be properly saved and reloaded across sessions, and that the system correctly identifies and handles invalid file inputs. For #23, tests confirmed that user configurations were successfully stored and reloaded upon restarting the application, ensuring persistence of settings such as directory paths and consent options. For #19, the system was tested with multiple non-zip files, including .pdf, .jpg, and .exe, and consistently returned the expected standardized error response in JSON format. Both functionalities performed as intended, with only a minor delay observed during configuration reload, and were marked as passed.
 
 ## WEEK 7 TEAM LOG
 
