@@ -9,5 +9,16 @@
   </head>
   <body>
     <h1>Hello Electron</h1>
+     <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const cfg = await window.config.load();
+        console.log('Loaded config:', cfg);
+        await window.config.set('theme', 'dark');
+      } catch (e) {
+        console.error('Config error:', e);
+      }
+    });
+  </script>
   </body>
 </html>
