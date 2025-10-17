@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
+    "test:jest": "jest",
     "start": "electron .",
     "build:linux": "electron-builder -l",
     "build:win": "electron-builder -w",
@@ -15,7 +16,12 @@
   },
   "build": {
     "appId": "com.yourteam.app",
-    "files": ["**/*", "!dist", "!out", "!node_modules/.cache"]
+    "files": [
+      "**/*",
+      "!dist",
+      "!out",
+      "!node_modules/.cache"
+    ]
   },
   "keywords": [],
   "author": "",
