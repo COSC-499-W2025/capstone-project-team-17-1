@@ -44,3 +44,7 @@ contextBridge.exposeInMainWorld('config', {
   merge: (patch) => ipcRenderer.invoke('config:merge', patch),
   reset: () => ipcRenderer.invoke('config:reset')
 });
+
+contextBridge.exposeInMainWorld("tech", {
+  detect: (rootPath) => ipcRenderer.invoke("tech:detect", rootPath ?? null),
+});

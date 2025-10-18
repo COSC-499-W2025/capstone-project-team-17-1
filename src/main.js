@@ -6,6 +6,14 @@ const { registerProjectIpc } = require('./ipc/projects');
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
 const { refreshAllProjectAnalysis } = require('./services/projectAnalyzer');
+const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
+
+ipcMain.handle("tech:detect", async (_event, rootDir) => {
+  const root = rootDir || process.cwd();
+  const det = await detectTechStack(root);
+  const md = buildMarkdown(det);
+  return { det, md };
+});
 
 //----------------- Caution: most of following commands are used to banned GPU rendering ----------------- //
 // to resolve an unknown bug affecting only Eren's computer, 
