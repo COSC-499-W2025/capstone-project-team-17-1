@@ -1,6 +1,7 @@
 const { collectGitContributions } = require('../lib/gitContributors');
 const { getProjectsForAnalysis, upsertProjectAnalysis } = require('../db/projectStore');
 
+// Walk through all known projects, collect Git metrics, and store the snapshot.
 async function refreshAllProjectAnalysis(options = {}) {
   const { logger = console } = options;
   const projects = getProjectsForAnalysis();
@@ -8,6 +9,7 @@ async function refreshAllProjectAnalysis(options = {}) {
 
   for (const project of projects) {
     if (!project.repoPath) {
+      // Without a repo path we cannot inspect commits, so skip gracefully.
       logger.warn?.(`[projectAnalyzer] Project "${project.name}" has no repository path, skipping analysis.`);
       continue;
     }

@@ -25,7 +25,9 @@
 
     <h2>Project analysis</h2>
     <button id="refresh-projects">re-analyze projects</button>
+    <!-- High-level project classification counts populate this summary grid -->
     <section class="summary-grid" id="project-summary"></section>
+    <!-- Contribution leaderboard highlighting the dominant contributor per project -->
     <section>
       <h3>Contribution ranking</h3>
       <ol class="ranking-list" id="project-ranking"></ol>
@@ -72,11 +74,13 @@
         }
       }
 
+      // Convert a decimal share into human friendly percentage text.
       function formatPercent(value) {
         if (value === null || value === undefined || Number.isNaN(value)) return '—';
         return `${Math.round(value * 1000) / 10}%`;
       }
 
+      // Render the classification summary cards shown above the ranking list.
       function renderProjectSummary(rows) {
         const counts = rows.reduce((map, row) => {
           const key = row.classification || 'unknown';
@@ -99,6 +103,7 @@
         `).join('');
       }
 
+      // Build the ordered list ranking projects by the dominant contributor's impact.
       function renderProjectRanking(rows) {
         const ranking = rows
           .map((row) => {

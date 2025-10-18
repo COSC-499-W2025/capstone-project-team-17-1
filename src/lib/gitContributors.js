@@ -5,6 +5,7 @@ const { execFile } = require('node:child_process');
 
 const execFileAsync = promisify(execFile);
 
+// Baseline patterns used to recognise common automation accounts.
 const DEFAULT_BOT_PATTERNS = [
   /\[bot\]/i,
   /\bbot\b/i,
@@ -14,6 +15,7 @@ const DEFAULT_BOT_PATTERNS = [
   /renovate/i,
 ];
 
+// Decide whether a contributor entry represents an automation account.
 function isBotContributor(name = '', email = '', extraPatterns = []) {
   const haystack = `${name} ${email}`.toLowerCase();
   const patterns = [...DEFAULT_BOT_PATTERNS, ...extraPatterns]
@@ -21,6 +23,7 @@ function isBotContributor(name = '', email = '', extraPatterns = []) {
   return patterns.some((pattern) => pattern.test(haystack));
 }
 
+// Convert `git shortlog` output into structured contributor objects.
 function parseShortlogOutput(output, options = {}) {
   const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const contributors = [];
@@ -42,6 +45,7 @@ function parseShortlogOutput(output, options = {}) {
   return contributors;
 }
 
+// Ensure the provided path is a Git working tree before running expensive commands.
 async function assertGitRepository(repoPath) {
   try {
     await execFileAsync('git', ['-C', repoPath, 'rev-parse', '--is-inside-work-tree']);
@@ -52,6 +56,7 @@ async function assertGitRepository(repoPath) {
   }
 }
 
+// Analyse commit history for a repository and return contributor breakdown stats.
 async function collectGitContributions(repoPath, options = {}) {
   if (!repoPath) throw new Error('Repository path is required');
   const resolvedPath = path.resolve(repoPath);

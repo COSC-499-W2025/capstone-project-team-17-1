@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { openDb } = require('./connection');
 
+// Fetch the set of projects that have repository metadata so Git analysis can run.
 function getProjectsForAnalysis() {
   const db = openDb();
   const rows = db.prepare(`
@@ -36,6 +37,7 @@ function getProjectsForAnalysis() {
   });
 }
 
+// Persist the latest Git-derived metrics for a single project.
 function upsertProjectAnalysis(projectId, analysis) {
   const db = openDb();
   const details = {
@@ -94,6 +96,7 @@ function upsertProjectAnalysis(projectId, analysis) {
   });
 }
 
+// Provide a combined view that joins projects, repository metadata, and analysis output.
 function listProjectSummaries() {
   const db = openDb();
   const rows = db.prepare(`

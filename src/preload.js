@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('db', {
   }
 });
 
+// Give the renderer controlled access to project analytics endpoints.
 contextBridge.exposeInMainWorld('projects', {
   async list() {
     const res = await ipcRenderer.invoke('project.list');

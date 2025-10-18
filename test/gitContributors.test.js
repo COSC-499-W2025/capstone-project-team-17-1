@@ -7,6 +7,7 @@ const { execSync } = require('node:child_process');
 
 const { collectGitContributions } = require('../src/lib/gitContributors');
 
+// Helper to execute git commands without polluting user configs or prompting.
 function runGit(repoDir, args, options = {}) {
   const result = execSync(`git ${args}`, {
     cwd: repoDir,
@@ -21,6 +22,7 @@ function runGit(repoDir, args, options = {}) {
   return result;
 }
 
+// Spin up an isolated git repo for each test case and clean it afterwards.
 function createTempRepo(t) {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-project-')); 
   t.after(() => {
@@ -47,7 +49,7 @@ test('collectGitContributions treats single human contributor as individual even
     },
   });
 
-  // Add a commit attributed to a bot account.
+  // Add a commit attributed to a bot account and confirm it is excluded.
   fs.writeFileSync(path.join(repoDir, 'bot.txt'), 'bot change\n');
   runGit(repoDir, 'add bot.txt');
   runGit(repoDir, 'commit -m "Automated update"', {
