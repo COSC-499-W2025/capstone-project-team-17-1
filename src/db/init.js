@@ -20,6 +20,7 @@ function initSchema() {
 
   // For right now test we create a few sample data in db
   sampleDataInsert();
+  seedSampleProject();
 }
 
 //------------------- This whole function is used to clean the existed db and generate sample data to test, remove it at later development ---------------------//
@@ -85,6 +86,30 @@ function sampleDataInsert() {
   });
   tx(sampleRows);
   console.log(`[seed] ${sampleRows.length} demo artifacts inserted`);
+}
+
+function seedSampleProject() {
+  const db = openDb();
+  const defaultProjectName = 'Capstone Team Workspace';
+  const repoPath = path.resolve(process.cwd());
+  const now = Math.floor(Date.now() / 1000);
+
+  const existing = db.prepare('SELECT id FROM project WHERE name = ?').get(defaultProjectName);
+  let projectId = existing?.id;
+  if (!projectId) {
+    const info = db.prepare('INSERT INTO project (name, created_at) VALUES (?, ?)').run(defaultProjectName, now);
+    projectId = info.lastInsertRowid;
+  }
+
+  const upsertRepo = db.prepare(`
+    INSERT INTO project_repository (project_id, repo_path, updated_at)
+    VALUES (@project_id, @repo_path, @updated_at)
+    ON CONFLICT(project_id) DO UPDATE SET
+      repo_path = excluded.repo_path,
+      updated_at = excluded.updated_at
+  `);
+
+  upsertRepo.run({ project_id: projectId, repo_path: repoPath, updated_at: now });
 }
 
 module.exports = { initSchema };
