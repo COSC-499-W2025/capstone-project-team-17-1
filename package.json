@@ -3,17 +3,20 @@
   "version": "1.0.0",
   "main": "src/main.js",
   "dependencies": {
-    "better-sqlite3": "^12.4.1"
+    "better-sqlite3": "^12.4.1",
+    "mime-types": "^3.0.1",
+    "unzipper": "^0.12.3"
   },
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\"",
-    "test:jest": "jest",
     "start": "electron .",
+    "dev": "electron .",
+    "test": "node --test test",
+    "test:watch": "node --test --watch test",
     "build:linux": "electron-builder -l",
     "build:win": "electron-builder -w",
-    "build:mac": "electron-builder -m",
-    "dev": "electron ."
+    "build:mac": "electron-builder -m"
   },
+  
   "build": {
     "appId": "com.yourteam.app",
     "files": [

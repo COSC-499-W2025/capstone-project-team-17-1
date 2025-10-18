@@ -4,6 +4,7 @@ const { initSchema } = require('./db/init');
 const { registerArtifactIpc } = require('./ipc/artifacts');
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
+const { registerZipIpc } = require("./ipc/zip"); // importing zip parser (Raunak's issue) 
 
 //----------------- Caution: most of following commands are used to banned GPU rendering ----------------- //
 // to resolve an unknown bug affecting only Eren's computer, 
@@ -72,6 +73,9 @@ app.whenReady().then(() => {
 
   initSchema(); 
   registerArtifactIpc(); 
+  registerArtifactIpc();
+  registerZipIpc(ipcMain);
+  
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
