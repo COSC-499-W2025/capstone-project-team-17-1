@@ -22,6 +22,20 @@ contextBridge.exposeInMainWorld('db', {
   }
 });
 
+// Give the renderer controlled access to project analytics endpoints.
+contextBridge.exposeInMainWorld('projects', {
+  async list() {
+    const res = await ipcRenderer.invoke('project.list');
+    if (!res || !res.ok) throw new Error(res?.error || 'project.list failed');
+    return res.data;
+  },
+  async refresh() {
+    const res = await ipcRenderer.invoke('project.refresh');
+    if (!res || !res.ok) throw new Error(res?.error || 'project.refresh failed');
+    return res.data;
+  }
+});
+
 // Surface config helpers so the renderer can read/write user preferences.
 contextBridge.exposeInMainWorld('config', {
   load: () => ipcRenderer.invoke('config:load'),

@@ -2,8 +2,10 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { initSchema } = require('./db/init');
 const { registerArtifactIpc } = require('./ipc/artifacts');
+const { registerProjectIpc } = require('./ipc/projects');
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
+const { refreshAllProjectAnalysis } = require('./services/projectAnalyzer');
 
 //----------------- Caution: most of following commands are used to banned GPU rendering ----------------- //
 // to resolve an unknown bug affecting only Eren's computer, 
@@ -72,7 +74,11 @@ app.whenReady().then(() => {
 
   initSchema(); 
   registerArtifactIpc(); 
+  registerProjectIpc();
   createWindow();
+  refreshAllProjectAnalysis({ logger: console }).catch((err) => {
+    console.error('[main] initial project analysis failed:', err);
+  });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
