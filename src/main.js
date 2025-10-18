@@ -1,10 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
-const { initSchema } = require('./db/init');
-const { registerArtifactIpc } = require('./ipc/artifacts');
+const { initSchema } = require("./db/init");
+const { registerArtifactIpc } = require("./ipc/artifacts");
+const { registerProjectIpc } = require("./ipc/projects");
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
+
+
 const { registerZipIpc } = require("./ipc/zip");
+const { refreshAllProjectAnalysis } = require("./services/projectAnalyzer");
 
 // --- GPU workarounds (leave as-is) ---
 app.disableHardwareAcceleration();
@@ -64,22 +68,34 @@ app.whenReady().then(() => {
   ipcMain.handle("config:merge", (_e, patch) => cfg.merge(patch));
   ipcMain.handle("config:reset", () => cfg.reset());
 
-  initSchema();
+  // init DB schema once
+initSchema();
 
-  ipcMain.removeHandler('artifact.query');
-  ipcMain.removeHandler('artifact.insertMany');
-  registerArtifactIpc();           // <-- single call
-  registerZipIpc(ipcMain);
-  console.log('[ipc] registered channels:', ipcMain.eventNames().map(String));
+// ensure single registration for artifact IPC
+ipcMain.removeHandler('artifact.query');
+ipcMain.removeHandler('artifact.insertMany');
+registerArtifactIpc();
 
+// (from develop) project IPCs
+if (typeof registerProjectIpc === 'function') {
+  registerProjectIpc(ipcMain);
+}
 
+// (from your branch) ZIP IPC
+registerZipIpc(ipcMain);
 
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+console.log('[ipc] registered channels:', ipcMain.eventNames().map(String));
+
+// (from develop) kick off initial project analysis
+if (typeof refreshAllProjectAnalysis === 'function') {
+  refreshAllProjectAnalysis({ logger: console }).catch((err) => {
+    console.error('[main] initial project analysis failed:', err);
   });
+}
+
+// window wiring
+createWindow();
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
