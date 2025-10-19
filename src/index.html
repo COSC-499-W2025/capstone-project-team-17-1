@@ -198,12 +198,11 @@
       });
     </script>
 
-<h2>Import a .zip and list contents</h2>
-<input id="zip-picker" type="file" accept=".zip" />
-<button id="btn-import-zip">Scan ZIP</button>
-<span id="zip-status" style="margin-left:8px; color:#555"></span>
+<h2>File upload (ZIP)</h2>
+<button id="btn-upload-file">Upload ZIP</button>
+<span id="file-upload-status" style="margin-left:8px; color:#555"></span>
 
-<table id="zip-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
+<table id="file-upload-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
   <thead>
     <tr>
       <th style="text-align:left; border-bottom:1px solid #ddd;">Path</th>
@@ -216,7 +215,8 @@
 </table>
 
 <!-- add this near the other <script> tags, before </body> -->
-<script src="./js/zipImport.js"></script>
+<script src="./js/fileUpload.js"></script>
+
     <h2>Tech stack</h2>
 <button id="detect-tech">Detect tech stack</button>
 
