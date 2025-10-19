@@ -34,22 +34,18 @@ function getConsent() {
 function saveConsent(db, consentStatus, callback) {
     // check for valid input
     if(!['accepted', 'rejected'].includes(consentStatus)) {
-        return callback(new Error('Invalid consent status :( Please use "accepted" or "rejected".'));
+        return process.nextTick(() => callback(new Error('Invalid consent status :( Please use "accepted" or "rejected".')));
     }
 
-    // get timestamp
-    const timestamp = new Date().toISOString();
-    db.run(
-        // insert into db
-        'INSERT INTO user_consent (consent, timestamp) VALUES (?, ?)',
-        [consentStatus, timestamp],
-        function(err) {
-            if (err) {
-                return callback(err);
-            }
-            callback(null, this.lastID);
-        }
-    );
-
+    try {
+        // get timestamp
+        const timestamp = new Date().toISOString();
+        const result = db
+            .prepare('INSERT INTO user_consent (consent, timestamp) VALUES (?, ?)')
+            .run(consentStatus, timestamp);
+        process.nextTick(() => callback(null, result.lastInsertRowid));
+    } catch (err) {
+        process.nextTick(() => callback(err));
+    }
 }
 module.exports = { getConsent, saveConsent };
