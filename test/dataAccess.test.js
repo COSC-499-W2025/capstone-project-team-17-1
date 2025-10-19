@@ -1,10 +1,11 @@
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 import { connect, initSchema } from '../src/db/consentDB.js';
 import { saveConsent } from '../dataAccess.js';
 
-// create a temporary database file for testing
+// create temp db file for testing
 const testDbPath = path.resolve('./temp_test_consentDB.sqlite');
 
 const assert = require('node:assert/strict');
@@ -12,7 +13,7 @@ const test = require('node:test');
 const readline = require('node:readline');
 const { getConsent } = require('../src/dataAccess');
 
-/**
+/*
  * Monkey patch readline so getConsent sees a scripted sequence of answers.
  * Returns a restore fn that rewinds createInterface and exposes call counts.
  */
@@ -46,6 +47,7 @@ describe('Consent Recording', () => {
   });
 });
 
+// fake terminal input for tests
 function stubReadline(responses) {
   const originalCreateInterface = readline.createInterface;
   let questionCalls = 0;

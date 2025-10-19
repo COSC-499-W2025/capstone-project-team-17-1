@@ -1,12 +1,13 @@
 const readline = require('readline')
 
+// get user consent from terminal
 function getConsent() {
     return new Promise((resolve) => {
         const user_input = readline.createInterface({
             input: process.stdin,
             output: process.stdout
         });
-
+        // asks for consent (recursive till valid input)
         function promptConsent() {
             // prompt question
             user_input.question('Do you consent to continuing with the program? (y/n): ', (answer) => {
@@ -29,4 +30,26 @@ function getConsent() {
     });
 }
 
+// save consent input to db
+export function saveConsent(db, consentStatus) {
+    // check for valid input
+    if(!['accepted', 'rejected'].includes(consentStatus)) {
+        return callbackify(new Error('Invalid consent status :( Please use "accepted" or "rejected".'));
+    }
+
+    // get timestamp
+    const timestamp = new Date().toISOString();
+    db.run(
+        // insert into db
+        'INSERT INTO user_consent (consent, timestamp) VALUES (?, ?)',
+        [consentStatus, timestamp],
+        function(err) {
+            if (err) {
+                return callbackify(err);
+                callbackify(null, this.lastID);
+            }
+        }
+    );
+
+}
 module.exports = { getConsent };
