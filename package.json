@@ -6,7 +6,7 @@
     "better-sqlite3": "^12.4.1"
   },
   "scripts": {
-    "test": "node --test test",
+    "test": "node --test",
     "detect:tech": "node src/lib/detectTechStack.js",
     "detect:tech:dry": "node src/lib/detectTechStack.js --dry",
     "start": "electron .",

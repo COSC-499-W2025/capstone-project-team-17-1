@@ -31,7 +31,7 @@ function getConsent() {
 }
 
 // save consent input to db
-export function saveConsent(db, consentStatus, callback) {
+function saveConsent(db, consentStatus, callback) {
     // check for valid input
     if(!['accepted', 'rejected'].includes(consentStatus)) {
         return callback(new Error('Invalid consent status :( Please use "accepted" or "rejected".'));
@@ -46,10 +46,10 @@ export function saveConsent(db, consentStatus, callback) {
         function(err) {
             if (err) {
                 return callback(err);
-                callback(null, this.lastID);
             }
+            callback(null, this.lastID);
         }
     );
 
 }
-module.exports = { getConsent };
+module.exports = { getConsent, saveConsent };
