@@ -5,6 +5,8 @@
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
 - [Week 5 [Sep 29 – Oct 5, 2025]](#week-5)
+- [Week 6 [Oct 6 – Oct 12, 2025]](#week-6)
+- [Week 7 [Sep 13 – Oct 19, 2025]](#week-7)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -45,6 +47,16 @@
 - Reviewed PRs
 
 <img width="1560" height="914" alt="4f852e3502eb5090a2cf0682501fcb45" src="https://github.com/user-attachments/assets/e3476168-756d-4b00-8c00-24c690b0018d" />
+
+[Back](#table-of-contents)
+
+## Week 7
+[Oct 13 – Oct 19, 2025]
+- Learned Electron fundamentals
+- Fixed User File Upload (Issue #50)
+- Reviewed PRs
+
+<img width="1550" height="909" alt="60e39d7e1610d92e70b1879fedade30d" src="https://github.com/user-attachments/assets/c1e81205-cca3-430d-8943-19ed510e767b" />
 
 [Back](#table-of-contents)
 
