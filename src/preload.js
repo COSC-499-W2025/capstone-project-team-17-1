@@ -1,14 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose a safe bridge for renderer code to access the validation IPC.
+// 1) Validate zip path
 contextBridge.exposeInMainWorld('archiveValidator', {
-  // Call into the main process and return the validation result.
   async validatePath(filePath) {
     return ipcRenderer.invoke('zip:validate', filePath);
   }
 });
 
-// Provide limited database helpers so renderer code can manage artifacts.
+// 2) DB helpers
 contextBridge.exposeInMainWorld('db', {
   async queryArtifacts(params) {
     const res = await ipcRenderer.invoke('artifact.query', params);
@@ -22,21 +21,7 @@ contextBridge.exposeInMainWorld('db', {
   }
 });
 
-// Give the renderer controlled access to project analytics endpoints.
-contextBridge.exposeInMainWorld('projects', {
-  async list() {
-    const res = await ipcRenderer.invoke('project.list');
-    if (!res || !res.ok) throw new Error(res?.error || 'project.list failed');
-    return res.data;
-  },
-  async refresh() {
-    const res = await ipcRenderer.invoke('project.refresh');
-    if (!res || !res.ok) throw new Error(res?.error || 'project.refresh failed');
-    return res.data;
-  }
-});
-
-// Surface config helpers so the renderer can read/write user preferences.
+// 3) Config helpers
 contextBridge.exposeInMainWorld('config', {
   load: () => ipcRenderer.invoke('config:load'),
   get: (key, fallback) => ipcRenderer.invoke('config:get', key, fallback),
@@ -44,3 +29,15 @@ contextBridge.exposeInMainWorld('config', {
   merge: (patch) => ipcRenderer.invoke('config:merge', patch),
   reset: () => ipcRenderer.invoke('config:reset')
 });
+
+// 4) ZIP API
+contextBridge.exposeInMainWorld('zipAPI', {
+  scan: (zipPath) => ipcRenderer.invoke('zip:scan', zipPath),
+  extractAndHash: (zipPath, outDir) =>
+    ipcRenderer.invoke('zip:extractAndHash', zipPath, outDir),
+  // NEW: native picker to return an ABSOLUTE path
+  pick: () => ipcRenderer.invoke('zip:pick'),
+});
+
+
+console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI');

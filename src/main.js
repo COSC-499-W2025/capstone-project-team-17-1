@@ -2,25 +2,23 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { initSchema } = require("./db/init");
 const { registerArtifactIpc } = require("./ipc/artifacts");
-const { registerProjectIpc } = require("./ipc/projects");
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
-
-
 const { registerZipIpc } = require("./ipc/zip");
-const { refreshAllProjectAnalysis } = require("./services/projectAnalyzer");
 
-// --- GPU workarounds (leave as-is) ---
+// --- GPU workarounds (keep) ---
 app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('use-angle', 'swiftshader');
-app.commandLine.appendSwitch('use-gl', 'swiftshader');
-app.commandLine.appendSwitch('in-process-gpu');
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('enable-logging');
-app.commandLine.appendSwitch('v', '1');
-app.commandLine.appendSwitch('log-file', 'gpu.log');
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+app.commandLine.appendSwitch("use-angle", "swiftshader");
+app.commandLine.appendSwitch("use-gl", "swiftshader");
+app.commandLine.appendSwitch("in-process-gpu");
+app.commandLine.appendSwitch("no-sandbox");
+
+// Quiet terminal (leave commented unless you want verbose Chromium logs)
+// app.commandLine.appendSwitch("enable-logging");
+// app.commandLine.appendSwitch("v", "1");
+// app.commandLine.appendSwitch("log-file", "gpu.log");
 
 let cfg;
 
@@ -32,17 +30,23 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js"),
+      devTools: !app.isPackaged, // allow in dev, block in prod
     },
   });
 
   win.loadFile(path.join(__dirname, "index.html"));
 
-  // Open DevTools only when not packaged (prevents Autofill noise)
-  if (!app.isPackaged) {
-    win.webContents.openDevTools({ mode: "detach" });
-  }
-}
+  // DO NOT auto-open DevTools (prevents Autofill noise)
+  // win.webContents.openDevTools({ mode: "detach" });
 
+  // If DevTools is opened manually, drop Autofill spam
+  win.webContents.on("console-message", (_e, _level, msg) => {
+    if (typeof msg === "string" && msg.includes("Autofill")) return; // swallow
+  });
+  win.webContents.on("devtools-opened", () => {
+    win.webContents.devToolsWebContents?.executeJavaScript("console.clear()");
+  });
+}
 
 ipcMain.handle("zip:validate", (_event, filePath) => {
   const validationError = validateZipInput(filePath);
@@ -51,6 +55,7 @@ ipcMain.handle("zip:validate", (_event, filePath) => {
 
 app.whenReady().then(() => {
   console.log("Electron ready");
+
   cfg = new ConfigStore({
     dir: path.join(app.getPath("userData"), "config"),
     defaults: { theme: "system", allowTelemetry: false },
@@ -59,7 +64,7 @@ app.whenReady().then(() => {
       for (const key of Object.keys(obj)) if (!allowed.has(key)) throw new Error(`Unknown key: ${key}`);
       if (!["system", "light", "dark"].includes(obj.theme)) throw new Error("Invalid theme");
       if (typeof obj.allowTelemetry !== "boolean") throw new Error("allowTelemetry must be boolean");
-    }
+    },
   });
 
   ipcMain.handle("config:load", () => cfg.load());
@@ -68,34 +73,26 @@ app.whenReady().then(() => {
   ipcMain.handle("config:merge", (_e, patch) => cfg.merge(patch));
   ipcMain.handle("config:reset", () => cfg.reset());
 
-  // init DB schema once
-initSchema();
+  initSchema();
 
-// ensure single registration for artifact IPC
-ipcMain.removeHandler('artifact.query');
-ipcMain.removeHandler('artifact.insertMany');
-registerArtifactIpc();
+  // Defensive cleanup + single registration for artifacts IPC
+  ipcMain.removeHandler("artifact.query");
+  ipcMain.removeHandler("artifact.insertMany");
+  registerArtifactIpc();
 
-// (from develop) project IPCs
-if (typeof registerProjectIpc === 'function') {
-  registerProjectIpc(ipcMain);
-}
+  // Register ZIP IPC once
+  registerZipIpc(ipcMain);
 
-// (from your branch) ZIP IPC
-registerZipIpc(ipcMain);
+  console.log("[ipc] registered channels:", ipcMain.eventNames().map(String));
 
-console.log('[ipc] registered channels:', ipcMain.eventNames().map(String));
+  createWindow();
 
-// (from develop) kick off initial project analysis
-if (typeof refreshAllProjectAnalysis === 'function') {
-  refreshAllProjectAnalysis({ logger: console }).catch((err) => {
-    console.error('[main] initial project analysis failed:', err);
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-}
-
-// window wiring
-createWindow();
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
