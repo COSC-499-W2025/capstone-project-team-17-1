@@ -6,6 +6,7 @@
 - [Week 4 Personal Log](#week-4-personal-log)
 - [Week 5 Personal Log](#week-5-personal-log)
 - [Week 6 Personal Log](#week-6-personal-log)
+- [Week 7 Personal Log](#week-7-personal-log)
 
 ## Week 3 Personal Log
 
@@ -42,11 +43,11 @@ Week Recap: Finalized system architecture design based on feedback, making sure 
 
 Completed Work Breakdown Structure with team and delegated tasks to ensure that every member had clear actionable items and understood their responsibilities. Kept the group organized and focused by facilitating discussions, clarifying goals, and tracking action items.
 
-## Week 6 Personal Log
+## Week 7 Personal Log
 
 - (Oct 13 - Oct 19, 2025)<br />
 
 <img width="1326" height="717" alt="image" src="https://github.com/user-attachments/assets/e80297f2-5b2c-44df-b940-a689f61f24d7" />
 
-Week Recap: Collaborated closely with the team to review one another's code and pull requests. Provided detailed feedback on functionality and any errors that arose during testing. There was noticeable improvement in team communication and organization. Everyone was proactive in updating task progress and offering assistance when needed. This level of collaboration helped us stay on top of our deliverables while ensuring steady progress. 
+Week Recap: Collaborated closely with the team to review one another's code and pull requests. Provided detailed feedback on functionality and any errors that arose during testing. There was noticeable improvement in team communication and organization. Everyone was proactive in updating task progress and offering assistance when needed. This level of collaboration helped us stay on top of our deliverables while ensuring steady progress. Worked on User Consent Feature and saving inputs in a database. 
 
