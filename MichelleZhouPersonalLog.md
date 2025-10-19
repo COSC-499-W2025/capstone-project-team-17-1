@@ -46,5 +46,7 @@ Completed Work Breakdown Structure with team and delegated tasks to ensure that 
 
 - (Oct 13 - Oct 19, 2025)<br />
 
-<img width="936" height="545" alt="image" src="https://github.com/user-attachments/assets/e80297f2-5b2c-44df-b940-a689f61f24d7" />
+<img width="1326" height="717" alt="image" src="https://github.com/user-attachments/assets/e80297f2-5b2c-44df-b940-a689f61f24d7" />
+
+Week Recap: Collaborated closely with the team to review one another's code and pull requests. Provided detailed feedback on functionality and any errors that arose during testing. There was noticeable improvement in team communication and organization. Everyone was proactive in updating task progress and offering assistance when needed. This level of collaboration helped us stay on top of our deliverables while ensuring steady progress. 
 
