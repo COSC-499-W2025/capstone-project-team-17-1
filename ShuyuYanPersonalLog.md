@@ -83,5 +83,8 @@ From this week’s work, I learned how to design defensive error-handling logic,
 [WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
 Return an error if the specified file is in the wrong format--task #19
 
+## WEEK 7 Personal LOG (Oct13 - Oct19, 2025)
+### 1. Type of Tasks Worked On
+<img width="1064" height="558" alt="Screenshot 2025-10-18 at 1 34 14 PM" src="https://github.com/user-attachments/assets/a33a015c-4228-41b3-8ba1-063985706019" />
 
 
