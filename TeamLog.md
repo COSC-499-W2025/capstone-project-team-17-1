@@ -167,7 +167,43 @@ For an initial milestone, the team should ship source selection, common type det
 
 During Week 6, the team conducted focused testing on two functional requirements: #23 Store User Configurations for Future Use and #19 Return an Error if the Specified File is in the Wrong Format. The objective was to verify that user preferences can be properly saved and reloaded across sessions, and that the system correctly identifies and handles invalid file inputs. For #23, tests confirmed that user configurations were successfully stored and reloaded upon restarting the application, ensuring persistence of settings such as directory paths and consent options. For #19, the system was tested with multiple non-zip files, including .pdf, .jpg, and .exe, and consistently returned the expected standardized error response in JSON format. Both functionalities performed as intended, with only a minor delay observed during configuration reload, and were marked as passed.
 
+
 ## WEEK 7 TEAM LOG
+(Oct 13 - Oct 19, 2025)
+
+### Recap of Milestone Goal - Week 7
+
+In Week 7, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 7
+
+<img width="1770" height="194" alt="image" src="https://github.com/user-attachments/assets/dbcb8f99-f292-4d43-8f10-10fb81ae8337" />
+<img width="1770" height="94" alt="image" src="https://github.com/user-attachments/assets/38df4fb9-bf1b-40c6-8e00-fe18279e854f" />
+<img width="1769" height="91" alt="image" src="https://github.com/user-attachments/assets/14ef5445-0ec2-4331-8499-ee8b28c6f2f8" />
+<img width="1769" height="95" alt="image" src="https://github.com/user-attachments/assets/b50d2e9f-880c-4be8-b056-16dcff9012e5" />
+
+### Burnup chart Week 7
+
+<img width="1460" height="838" alt="image" src="https://github.com/user-attachments/assets/5ec1f6ce-d57f-46e9-81d1-c38496e73d32" />
+
+### In Progress Tasks Week 7
+
+<img width="1761" height="481" alt="image" src="https://github.com/user-attachments/assets/b8030dc4-8979-4ac1-9751-1e9a46ea8292" />
+
+### Test Report Week 7
+
+<img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
+
 
 ## WEEK 8 TEAM LOG
 
