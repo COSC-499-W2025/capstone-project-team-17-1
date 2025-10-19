@@ -6,17 +6,17 @@ import sqlite3 from 'sqlite3';
 // open connnection
 // check if user passes in a path, if not default to env var or local file
 export function connect(dbPath = null) {
-    const target = dbPath || process.env.CONSENT_DB_PATH || 'local_consent.db';
+    const targetDBPath = dbPath || process.env.CONSENT_DB_PATH || 'local_consent.db';
 
     // check if target path exists, if not create directories
-    if (targetDbPath !== ':memory:') {
-        const dir = path.dirname(targetDbPath);
+    if (targetDBPath !== ':memory:') {
+        const dir = path.dirname(targetDBPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
     }
         // create database file
-        const db = new sqlite3.Datavase(targetDbPath);
+        const db = new sqlite3.Database(targetDBPath);
         db.exec('PRAGMA foreign_keys = ON;');   // enable foreign keys
         db.exec('PRAGMA synchronous = NORMAL;');   // set synchronous mode
         return db;

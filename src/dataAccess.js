@@ -31,10 +31,10 @@ function getConsent() {
 }
 
 // save consent input to db
-export function saveConsent(db, consentStatus) {
+export function saveConsent(db, consentStatus, callback) {
     // check for valid input
     if(!['accepted', 'rejected'].includes(consentStatus)) {
-        return callbackify(new Error('Invalid consent status :( Please use "accepted" or "rejected".'));
+        return callback(new Error('Invalid consent status :( Please use "accepted" or "rejected".'));
     }
 
     // get timestamp
@@ -45,8 +45,8 @@ export function saveConsent(db, consentStatus) {
         [consentStatus, timestamp],
         function(err) {
             if (err) {
-                return callbackify(err);
-                callbackify(null, this.lastID);
+                return callback(err);
+                callback(null, this.lastID);
             }
         }
     );

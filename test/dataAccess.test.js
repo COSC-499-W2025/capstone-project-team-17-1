@@ -1,17 +1,14 @@
-import assert from 'assert';
-import fs from 'fs';
-import path from 'path';
-import readline from 'readline';
-import { connect, initSchema } from '../src/db/consentDB.js';
-import { saveConsent } from '../dataAccess.js';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+const { saveConsent, getConsent } = require('../src/dataAccess.js');
+const { connect, initSchema } = require('../src/db/consentDB.js');
 
 // create temp db file for testing
 const testDbPath = path.resolve('./temp_test_consentDB.sqlite');
 
-const assert = require('node:assert/strict');
 const test = require('node:test');
-const readline = require('node:readline');
-const { getConsent } = require('../src/dataAccess');
 
 /*
  * Monkey patch readline so getConsent sees a scripted sequence of answers.
