@@ -192,3 +192,39 @@ This week our team finalized task assignments and I focused on platform setup, p
 This week was about enabling the team. Getting Docker and Electron stable gave everyone a common platform and fewer environment bugs. Turning requirements into a concrete WBS helped us see scope, ordering, and risks. The small amount of starter code proved the path from source to a running desktop app, and early reviews kept quality in check. I feel confident that our foundation is solid and that the next sprint can focus on features rather than setup.
 
 ---
+
+## Week 7 Personal Log [Oct 13 – Oct 19, 2025] {#week-7}
+
+This week I implemented and shipped a full **Tech Stack Detector** feature and wired it into our Electron app.
+
+ **Peer Eval**
+>
+> ![Week 7 — Data Mining App](![alt text]
+> <img width="1084" height="632" alt="image" src="https://github.com/user-attachments/assets/53911e5e-e216-42ee-9f5c-823bf7138fbc" />
+
+> _Figure 0. peer evaluation._
+
+
+### Feature: Tech Stack Detection and UI Integration
+- Built `detectTechStack.js` to scan the repo and identify languages, frameworks, tools, and package managers, and to generate `TECH_STACK.md`.  
+- Exposed an IPC channel `tech:detect` in the main process and a `window.tech.detect()` bridge in `preload.js`.  
+- Added a new section in the renderer with a Detect tech stack button, summary cards, and a live preview of the generated markdown.  
+- Verified output in app matches CLI dry run and shows Electron and Jest correctly for our project.
+
+### Testing and Tooling
+- Created a Node test runner suite `test/detectTechStack.node.test.js` that mocks a tiny project and asserts detector output and markdown creation.  
+- Fixed package scripts so the team can run `npm test` consistently without breaking the existing Node test workflow.  
+- Resolved path issues by switching to `__dirname` based requires in `main.js`.
+
+### Bug Fixes and Polishing
+- Repaired PHP composer parsing using safe bracket notation for `require-dev`.  
+- Removed paste artifacts that caused ReferenceError and syntax errors.  
+- Cleaned relative paths so imports work from `src/` without aliasing.
+
+### Documentation and PR
+- Added `detect:tech` and `detect:tech:dry` npm scripts.  
+- Wrote and filled a PR description that closes Issue 39 and explains testing and scope.  
+- Updated the PR template to match our project and added a concise review checklist.
+
+### Reflection
+This week taught me how to move quickly from a command line utility to a fully integrated app feature. I practiced clean IPC design, safer file system mocking for tests, and careful script configuration so the whole team can run tests the same way. Seeing the detector surface real project signals in the UI felt great and set us up for clearer onboarding and audits.
