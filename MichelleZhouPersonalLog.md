@@ -41,3 +41,10 @@ Week Recap: Researched various types of DFD and looked back on previous work to 
 Week Recap: Finalized system architecture design based on feedback, making sure to address all areas that were previously vague or overly general. Each system component and interaction was clarified to ensure alignment with our requirements. Worked with team to set up local environment using Docker and Electron. Updated the project README with essential links to diagrams and explanations. Worked on finalizing DFD Level 1 and diagram explanation.
 
 Completed Work Breakdown Structure with team and delegated tasks to ensure that every member had clear actionable items and understood their responsibilities. Kept the group organized and focused by facilitating discussions, clarifying goals, and tracking action items.
+
+## Week 6 Personal Log
+
+- (Oct 13 - Oct 19, 2025)<br />
+
+<img width="936" height="545" alt="image" src="https://github.com/user-attachments/assets/e80297f2-5b2c-44df-b940-a689f61f24d7" />
+
