@@ -1,3 +1,12 @@
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import { connect, initSchema } from '../src/db/consentDB.js';
+import { saveConsent } from '../dataAccess.js';
+
+// create a temporary database file for testing
+const testDbPath = path.resolve('./temp_test_consentDB.sqlite');
+
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const readline = require('node:readline');
@@ -7,6 +16,36 @@ const { getConsent } = require('../src/dataAccess');
  * Monkey patch readline so getConsent sees a scripted sequence of answers.
  * Returns a restore fn that rewinds createInterface and exposes call counts.
  */
+
+describe('Consent Recording', () => {
+  let db; // hold sqlite connection
+  before(() => {
+    process.env.CONSENT_DB_PATH = testDbPath; // set environment vari
+    db = connect(); // open connection
+    initSchema(db);
+  });
+
+  // housekeeping -> close db and delete temp file
+  after(() => {
+    db.close();
+    if (fs.existsSync(testDbPath)) 
+      fs.unlinkSync(testDbPath);
+    delete process.env.CONSENT_DB_PATH;
+  });
+
+  // test for saving consent
+  it('store user consent in db', (done) => {
+    saveConsent(db, 'accepted', (err, cid) => {
+      assert.ifError(err);
+      db.get('SELECT status FROM user_consent WHERE consent_id=?', [cid], (err, row) => {
+        assert.ifError(err);
+        assert.strictEqual(row.consent, 'accepted');
+        done();
+      });
+    });
+  });
+});
+
 function stubReadline(responses) {
   const originalCreateInterface = readline.createInterface;
   let questionCalls = 0;
