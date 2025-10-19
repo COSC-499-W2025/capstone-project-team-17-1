@@ -5,6 +5,15 @@ const { registerArtifactIpc } = require("./ipc/artifacts");
 const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
 const { registerZipIpc } = require("./ipc/zip");
+const { refreshAllProjectAnalysis } = require('./services/projectAnalyzer');
+const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
+
+ipcMain.handle("tech:detect", async (_event, rootDir) => {
+  const root = rootDir || process.cwd();
+  const det = await detectTechStack(root);
+  const md = buildMarkdown(det);
+  return { det, md };
+});
 
 // --- GPU workarounds (keep) ---
 app.disableHardwareAcceleration();

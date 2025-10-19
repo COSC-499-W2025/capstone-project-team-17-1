@@ -41,3 +41,6 @@ contextBridge.exposeInMainWorld('zipAPI', {
 
 
 console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI');
+contextBridge.exposeInMainWorld("tech", {
+  detect: (rootPath) => ipcRenderer.invoke("tech:detect", rootPath ?? null),
+});
