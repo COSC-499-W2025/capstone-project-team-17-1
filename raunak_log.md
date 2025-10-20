@@ -5,6 +5,7 @@
 - [Week 4 Personal Log](#week-4-personal-log)
 - [Week 5 Personal Log](#week-5-personal-log)
 - [Week 6 Personal Log](#week-6-personal-log)
+- [Week 7 Personal Log](#week-7-personal-log)
 
 ---
 
@@ -92,4 +93,43 @@ The privacy-centric sections I authored establish trust and compliance standards
 Active contribution to Kanban planning and task alignment has improved workflow clarity and collaboration across the team.
 
 <img width="1026" height="485" alt="WEEK6PERSONALLOG" src="https://github.com/user-attachments/assets/2f581570-c6b8-40c6-af8b-a108720c9a9a" />
+
+### WEEK 7 PERSONAL LOG 
+
+What I built
+- Created feature branch feat/zip-parse.
+- Implemented ZIP parsing pipeline:
+- Main/IPC: added zip:validate, zip:scan, (optional zip:extractAndHash), registered via registerZipIpc(ipcMain).
+- Preload bridges: exposed window.archiveValidator, window.zipAPI, window.db, window.config for safe renderer access.
+- Renderer UI: added ZIP Import section (index.html + src/js/zipImport.js) to pick a .zip, scan, render table (Path / Size / Modified UTC / MIME), and upsert rows into the artifact table.
+- Added button state + status messages (disable until file chosen, “Validating…/Scanning…/Found N files · Inserted M”).
+- Validation & safety: file path validation, MIME/size display, basic error/status handling in UI.
+- Fixes & hardening
+- Resolved a crash from double registering Artifact IPC:
+- Removed duplicate registerArtifactIpc() and added defensive ipcMain.removeHandler('artifact.query' | 'artifact.insertMany') before single registration.
+- Prevented DevTools “Autofill” noise (stopped auto-opening DevTools and filtered Autofill logs).
+- Guarded zip:scan against bad inputs; added native picker in IPC (returns absolute path) to avoid path issues on some machines.
+- Tests & runs
+- Unit tests: 12/12 passing (ConfigStore, DB connection, file validator, ZIP validator).
+- Manual run (Electron): seeded demo artifacts render; scanning a .zip lists entries and upserts to DB. No functional errors seen.
+- Git/GitHub
+- Opened PR #45: “feat(zip): scan nested .zip via IPC; renderer UI; DB upsert; guard duplicates”.
+- Added reviewers and filled out description (scope, testing steps, checklist, notes, screenshots).
+- Resolved merge conflicts with develop in src/main.js:
+- Kept our single IPC-registration pattern + kept team’s new imports/initialization where relevant.
+- Re-requested review after fixes; PR now shows no conflicts and is ready for approvals/merge.
+- Collaboration / debugging
+- Helped teammate reproduce an issue; root cause was duplicate IPC registration in main.js.
+- Provided a simple “fresh run” checklist (git fetch/pull, npm ci, electron-rebuild, npm test, npm start) to testers.
+- What’s left / next
+- Team review & approvals for PR #45; merge into develop.
+- Wire real project_id on insert; add unit tests for zipParser happy/evil paths.
+- Add UI notice for existing-rows skipped on upsert.
+
+- PARSE(ZIP) below:
+
+<img width="1470" height="956" alt="FEAT(PARSE)" src="https://github.com/user-attachments/assets/4d859d39-f981-429a-9ab0-12cf2add0e76" />
+<img width="1047" height="535" alt="WEEK7PERSONALLOG" src="https://github.com/user-attachments/assets/f69fccbd-e06b-4bd7-9122-ee53cc83f05f" />
+
+
 

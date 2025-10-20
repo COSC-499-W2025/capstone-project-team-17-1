@@ -143,14 +143,6 @@ In Week 6, our team reviewed all project artifacts, including every diagram, the
 [Requirements](https://docs.google.com/document/d/1ZpG3Qs_pn9l6rbohNV1cGoopClzvmiS5qVH1lqKooFY/edit?tab=t.0)
 <img width="1233" height="520" alt="Screenshot 2025-10-12 at 11 50 43 PM" src="https://github.com/user-attachments/assets/7a0dca01-f7d7-44dc-974e-c7e08cc2c531" />
 
-# explanation 
-
-The document proposes a local first app that mines a user’s own files to help them understand and showcase their work history. It targets students and early professionals who want clear timelines, trends, and portfolio style summaries without sending data off the device. In scope are scanning chosen folders, classifying common file types, deduplicating with strong hashes, storing results in a local data store, and presenting dashboards plus simple exports. Users control what is scanned, can pause or resume, and see transparent previews and progress with errors surfaced. Typical use cases include presentations, reviews, resumes, and quick retrospectives.
-
-Functionally, the system lets a user pick sources, crawls and classifies artifacts, builds searchable indexes and filters by time, type, project, and path, and produces insights like activity timelines and type distributions. Non functional goals stress fast setup, efficient and resumable scans, responsiveness, accessibility, and strong privacy and security. Data stays local with least privilege, encrypted storage using the operating system keystore, a localhost only API with per session tokens, secure deletion, and redaction of sensitive patterns in cached snippets. Maintainability expectations include straightforward developer setup, high automated test coverage, pinned dependencies, signed releases, and clear documentation.
-
-For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
-
 [Project Proposal](https://docs.google.com/document/d/1yNkyeBqHvSgFAER2WQUW5GLdEmcIMknSAGh68UDHqCg/edit?tab=t.0)
 [System Architucture](https://docs.google.com/document/d/1fZNTCu4YO0CFwIvErlJ1agD4Zyxgh6q11CnjB686NzY/edit?tab=t.0)
 [WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
@@ -167,7 +159,45 @@ For an initial milestone, the team should ship source selection, common type det
 
 During Week 6, the team conducted focused testing on two functional requirements: #23 Store User Configurations for Future Use and #19 Return an Error if the Specified File is in the Wrong Format. The objective was to verify that user preferences can be properly saved and reloaded across sessions, and that the system correctly identifies and handles invalid file inputs. For #23, tests confirmed that user configurations were successfully stored and reloaded upon restarting the application, ensuring persistence of settings such as directory paths and consent options. For #19, the system was tested with multiple non-zip files, including .pdf, .jpg, and .exe, and consistently returned the expected standardized error response in JSON format. Both functionalities performed as intended, with only a minor delay observed during configuration reload, and were marked as passed.
 
+
 ## WEEK 7 TEAM LOG
+(Oct 13 - Oct 19, 2025)
+
+### Recap of Milestone Goal - Week 7
+
+In Week 7, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 7
+
+<img width="1770" height="194" alt="image" src="https://github.com/user-attachments/assets/dbcb8f99-f292-4d43-8f10-10fb81ae8337" />
+<img width="1770" height="94" alt="image" src="https://github.com/user-attachments/assets/38df4fb9-bf1b-40c6-8e00-fe18279e854f" />
+<img width="1769" height="91" alt="image" src="https://github.com/user-attachments/assets/14ef5445-0ec2-4331-8499-ee8b28c6f2f8" />
+<img width="1769" height="95" alt="image" src="https://github.com/user-attachments/assets/b50d2e9f-880c-4be8-b056-16dcff9012e5" />
+
+### Burnup chart Week 7
+
+<img width="1460" height="838" alt="image" src="https://github.com/user-attachments/assets/5ec1f6ce-d57f-46e9-81d1-c38496e73d32" />
+
+### In Progress Tasks Week 7
+
+<img width="1761" height="481" alt="image" src="https://github.com/user-attachments/assets/b8030dc4-8979-4ac1-9751-1e9a46ea8292" />
+
+### Test Report Week 7
+
+During Week 7, the team closed five issues: **#39** finalized the tech stack (Electron/Node/TypeScript) with scripts and a bootable skeleton; **#38** implemented heuristics to distinguish individual vs. collaborative projects and exposed the labels in filters; **#21** delivered the consent/settings UI with choices persisted across sessions; **#20** completed core ZIP parsing via a streaming iterator that emits normalized entries, with upload-flow integration tracked next; and **#49** triaged the upload bug—non-ZIP paths are stable and return standardized JSON via `fileValidator.js`, while ZIP uploads still surface “iterZipMetadata is not a function” until #20 is wired into the upload pipeline.
+
+<img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
+
 
 ## WEEK 8 TEAM LOG
 

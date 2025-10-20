@@ -83,5 +83,21 @@ From this week’s work, I learned how to design defensive error-handling logic,
 [WBS](https://docs.google.com/document/d/1wPQgS1NMM9Jt1JUTCCPeJgyASQXQxxf_LkWZkoiAauA/edit?tab=t.0)
 Return an error if the specified file is in the wrong format--task #19
 
+## WEEK 7 Personal LOG (Oct13 - Oct19, 2025)
+### 1. Type of Tasks Worked On
+<img width="1064" height="558" alt="Screenshot 2025-10-18 at 1 34 14 PM" src="https://github.com/user-attachments/assets/a33a015c-4228-41b3-8ba1-063985706019" />
 
+### 2. Weekly Goals Recap
+- complete 'Distinguish Individual Projects from Collaborative Projects' task #38
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+- upload the README file to canvas
 
+During this week, I completed the task “Distinguish Individual Projects from Collaborative Projects” (#38) by analyzing contribution metadata and Git history patterns to classify repositories based on the number of unique contributors and commit ownership distribution. This enhanced our system’s ability to organize project data more meaningfully for users and supports future features like contribution analysis. I also discussed technical design details with team members to ensure the task aligned with our overall architecture and data pipeline.
+
+In addition to development work, I helped organize the team by assigning tasks to members and creating new tasks for upcoming work. I also reviewed teammates’ pull requests, provided feedback to maintain code quality, and helped resolve issues to prevent conflicts during merging. Finally, I uploaded the updated README file to Canvas, ensuring it reflected our current project structure and setup instructions for both instructors and team members.
+
+This week strengthened my understanding of team coordination in a collaborative software project. I learned how to design logic that handles multiple project types, manage task planning in a structured way, and support team progress through effective code reviews and communication.
+### Completed Tasks Week 7
+'Distinguish Individual Projects from Collaborative Projects' task #38
