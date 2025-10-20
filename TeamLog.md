@@ -194,6 +194,8 @@ In Week 7, team members self-assigned issues based on the tasks assigned in the 
 
 ### Test Report Week 7
 
+During Week 7, the team closed five issues: **#39** finalized the tech stack (Electron/Node/TypeScript) with scripts and a bootable skeleton; **#38** implemented heuristics to distinguish individual vs. collaborative projects and exposed the labels in filters; **#21** delivered the consent/settings UI with choices persisted across sessions; **#20** completed core ZIP parsing via a streaming iterator that emits normalized entries, with upload-flow integration tracked next; and **#49** triaged the upload bug—non-ZIP paths are stable and return standardized JSON via `fileValidator.js`, while ZIP uploads still surface “iterZipMetadata is not a function” until #20 is wired into the upload pipeline.
+
 <img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
 
 
