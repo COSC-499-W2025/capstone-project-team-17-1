@@ -39,8 +39,13 @@ contextBridge.exposeInMainWorld('zipAPI', {
   pick: () => ipcRenderer.invoke('zip:pick'),
 });
 
+// 5) File uploads
+contextBridge.exposeInMainWorld('files', {
+  upload: (options) => ipcRenderer.invoke('file:upload', options),
+});
 
-console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI');
+
+console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI, files');
 contextBridge.exposeInMainWorld("tech", {
   detect: (rootPath) => ipcRenderer.invoke("tech:detect", rootPath ?? null),
 });
