@@ -1,12 +1,51 @@
-const assert = require('node:assert/strict');
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+const { saveConsent, getConsent } = require('../src/dataAccess.js');
+const { connect, initSchema } = require('../src/db/consentDB.js');
 const test = require('node:test');
-const readline = require('node:readline');
-const { getConsent } = require('../src/dataAccess');
+const { describe, it, before, after } = test;
 
-/**
+// create temp db file for testing
+const testDbPath = path.resolve('./temp_test_consentDB.sqlite');
+
+/*
  * Monkey patch readline so getConsent sees a scripted sequence of answers.
  * Returns a restore fn that rewinds createInterface and exposes call counts.
  */
+
+describe('Consent Recording', () => {
+  let db; // hold sqlite connection
+  before(() => {
+    process.env.CONSENT_DB_PATH = testDbPath; // set environment vari
+    db = connect(); // open connection
+    initSchema(db);
+  });
+
+  // housekeeping -> close db and delete temp file
+  after(() => {
+    db.close();
+    if (fs.existsSync(testDbPath)) 
+      fs.unlinkSync(testDbPath);
+    delete process.env.CONSENT_DB_PATH;
+  });
+
+  // test for saving consent
+  it('store user consent in db', async () => {
+    const consentId = await new Promise((resolve, reject) => {
+      saveConsent(db, 'accepted', (err, cid) => {
+        if (err) reject(err);
+        else resolve(cid);
+      });
+    });
+    const row = db.prepare('SELECT consent FROM user_consent WHERE consent_id = ?').get(consentId);
+    assert.ok(row);
+    assert.strictEqual(row.consent, 'accepted');
+  });
+});
+
+// fake terminal input for tests
 function stubReadline(responses) {
   const originalCreateInterface = readline.createInterface;
   let questionCalls = 0;
@@ -29,8 +68,8 @@ function stubReadline(responses) {
   };
 }
 
-test.describe('getConsent', () => {
-  test.it('returns "accepted" when user inputs y', async (t) => {
+describe('getConsent', () => {
+  it('returns "accepted" when user inputs y', async (t) => {
     const restore = stubReadline(['y']);
     let stats;
     try {
@@ -43,7 +82,7 @@ test.describe('getConsent', () => {
     assert.strictEqual(stats.closeCalls, 1);
   });
 
-  test.it('returns "rejected" when user inputs n', async () => {
+  it('returns "rejected" when user inputs n', async () => {
     const restore = stubReadline(['n']);
     let stats;
     try {
@@ -56,7 +95,7 @@ test.describe('getConsent', () => {
     assert.strictEqual(stats.closeCalls, 1);
   });
 
-  test.it('reprompts until a valid input is given', async () => {
+  it('reprompts until a valid input is given', async () => {
     const restore = stubReadline(['maybe', 'y']);
     let stats;
     try {
