@@ -19,9 +19,21 @@
   </head>
   <body>
     <h1>Hello Electron</h1>
-    <h2>Stored sample data</h2>
-    <button id="refresh">refresh</button>
-    <pre id="out">loading...</pre>
+    <h2>File upload (ZIP)</h2>
+    <button id="btn-upload-file">Upload ZIP</button>
+    <span id="file-upload-status" style="margin-left:8px; color:#555"></span>
+
+    <table id="file-upload-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">Path</th>
+          <th style="text-align:right; border-bottom:1px solid #ddd;">Size (B)</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">Modified (UTC)</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">MIME</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
     <h2>Project analysis</h2>
     <button id="refresh-projects">re-analyze projects</button>
@@ -33,6 +45,58 @@
       <ol class="ranking-list" id="project-ranking"></ol>
     </section>
     <pre id="projects-out">loading...</pre>
+
+<script src="./js/fileUpload.js"></script>
+
+    <h2>Tech stack</h2>
+<button id="detect-tech">Detect tech stack</button>
+
+<section class="summary-grid" id="tech-summary"></section>
+<pre id="tech-markdown">Press “Detect tech stack” to analyze…</pre>
+<script>
+  const btnDetectTech = document.getElementById('detect-tech');
+  const techSummaryEl = document.getElementById('tech-summary');
+  const techMdEl = document.getElementById('tech-markdown');
+
+  function renderTechSummary(det) {
+    const cards = [
+      { label: 'Languages', value: det.languages.length ? det.languages.join(', ') : 'Unknown' },
+      { label: 'Frameworks', value: det.frameworks.length ? det.frameworks.map(f => f.version ? `${f.name} (${f.version})` : f.name).join(', ') : 'None' },
+      { label: 'Tools', value: det.tools.length ? det.tools.join(', ') : 'None' },
+      { label: 'Package Managers', value: det.packageManagers.length ? det.packageManagers.join(', ') : 'Not detected' },
+      { label: 'Run Tips', value: det.runTips.length ? det.runTips.join(', ') : 'See README' },
+    ];
+
+    techSummaryEl.innerHTML = cards.map(c => `
+      <div class="summary-card">
+        <h3>${c.label}</h3>
+        <p>${c.value}</p>
+      </div>
+    `).join('');
+  }
+
+  async function detectTech() {
+    if (!window.tech?.detect) {
+      techMdEl.textContent = 'Tech API unavailable (check preload).';
+      return;
+    }
+    try {
+      const { det, md } = await window.tech.detect(/* optional: pass a path */);
+      renderTechSummary(det);
+      techMdEl.textContent = md;
+    } catch (e) {
+      console.error(e);
+      techMdEl.textContent = 'Detection failed. See console for details.';
+      techSummaryEl.innerHTML = '';
+    }
+  }
+
+  btnDetectTech.addEventListener('click', detectTech);
+</script>
+
+    <h2>Stored sample data</h2>
+    <button id="refresh">refresh</button>
+    <pre id="out">loading...</pre>
 
     <script>
       const out = document.getElementById('out');
@@ -74,13 +138,11 @@
         }
       }
 
-      // Convert a decimal share into human friendly percentage text.
       function formatPercent(value) {
         if (value === null || value === undefined || Number.isNaN(value)) return '—';
         return `${Math.round(value * 1000) / 10}%`;
       }
 
-      // Render the classification summary cards shown above the ranking list.
       function renderProjectSummary(rows) {
         const counts = rows.reduce((map, row) => {
           const key = row.classification || 'unknown';
@@ -103,7 +165,6 @@
         `).join('');
       }
 
-      // Build the ordered list ranking projects by the dominant contributor's impact.
       function renderProjectRanking(rows) {
         const ranking = rows
           .map((row) => {
@@ -197,52 +258,6 @@
         }
       });
     </script>
-
-    <h2>Tech stack</h2>
-<button id="detect-tech">Detect tech stack</button>
-
-<section class="summary-grid" id="tech-summary"></section>
-<pre id="tech-markdown">Press “Detect tech stack” to analyze…</pre>
-<script>
-  const btnDetectTech = document.getElementById('detect-tech');
-  const techSummaryEl = document.getElementById('tech-summary');
-  const techMdEl = document.getElementById('tech-markdown');
-
-  function renderTechSummary(det) {
-    const cards = [
-      { label: 'Languages', value: det.languages.length ? det.languages.join(', ') : 'Unknown' },
-      { label: 'Frameworks', value: det.frameworks.length ? det.frameworks.map(f => f.version ? `${f.name} (${f.version})` : f.name).join(', ') : 'None' },
-      { label: 'Tools', value: det.tools.length ? det.tools.join(', ') : 'None' },
-      { label: 'Package Managers', value: det.packageManagers.length ? det.packageManagers.join(', ') : 'Not detected' },
-      { label: 'Run Tips', value: det.runTips.length ? det.runTips.join(', ') : 'See README' },
-    ];
-
-    techSummaryEl.innerHTML = cards.map(c => `
-      <div class="summary-card">
-        <h3>${c.label}</h3>
-        <p>${c.value}</p>
-      </div>
-    `).join('');
-  }
-
-  async function detectTech() {
-    if (!window.tech?.detect) {
-      techMdEl.textContent = 'Tech API unavailable (check preload).';
-      return;
-    }
-    try {
-      const { det, md } = await window.tech.detect(/* optional: pass a path */);
-      renderTechSummary(det);
-      techMdEl.textContent = md;
-    } catch (e) {
-      console.error(e);
-      techMdEl.textContent = 'Detection failed. See console for details.';
-      techSummaryEl.innerHTML = '';
-    }
-  }
-
-  btnDetectTech.addEventListener('click', detectTech);
-</script>
 
   </body>
 </html>
