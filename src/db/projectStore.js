@@ -40,13 +40,20 @@ function getProjectsForAnalysis() {
 // Persist the latest Git-derived metrics for a single project.
 function upsertProjectAnalysis(projectId, analysis) {
   const db = openDb();
+  const totals = analysis.totals || {
+    totalCommits: analysis.totalCommits ?? 0,
+    totalHumanCommits: analysis.totalHumanCommits ?? analysis.totalCommits ?? 0,
+    totalBotCommits: analysis.totalBotCommits ?? 0,
+  };
+
+  // Store richer analytics so the renderer can surface advanced metrics/export data.
   const details = {
-    contributors: analysis.contributors || [],
-    totals: {
-      totalCommits: analysis.totalCommits ?? 0,
-      humanCommits: analysis.totalHumanCommits ?? analysis.totalCommits ?? 0,
-      botCommits: analysis.totalBotCommits ?? 0,
-    },
+    totals,
+    contributorsDetailed: analysis.contributorsDetailed || [],
+    contributorsSummary: analysis.contributors || [],
+    timeframe: analysis.timeframe || null,
+    weights: analysis.weights || null,
+    sharedAccounts: analysis.sharedAccounts || [],
   };
 
   const mainAuthor = analysis.mainAuthor || null;
@@ -140,7 +147,9 @@ function listProjectSummaries() {
       mainUserName: row.main_user_name || null,
       mainUserEmail: row.main_user_email || null,
       classification: row.classification || 'unknown',
-      totalCommits: row.total_commits ?? 0,
+      totalCommits: row.total_commits ?? (details?.totals?.totalCommits ?? 0),
+      totalHumanCommits: details?.totals?.totalHumanCommits ?? null,
+      totalBotCommits: details?.totals?.totalBotCommits ?? null,
       humanContributorCount: row.human_contributor_count ?? 0,
       botContributorCount: row.bot_contributor_count ?? 0,
       mainAuthor: row.main_author_name ? {
