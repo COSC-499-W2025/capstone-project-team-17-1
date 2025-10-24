@@ -1,4 +1,4 @@
-const { collectGitContributions } = require('../lib/gitContributors');
+const { buildCollaborationAnalysis } = require('../lib/gitContributors');
 const { getProjectsForAnalysis, upsertProjectAnalysis } = require('../db/projectStore');
 
 // Walk through all known projects, collect Git metrics, and store the snapshot.
@@ -15,19 +15,25 @@ async function refreshAllProjectAnalysis(options = {}) {
     }
 
     try {
-      const analysis = await collectGitContributions(project.repoPath, {
+      const analysis = await buildCollaborationAnalysis(project.repoPath, {
         mainUserEmails: project.mainUserEmail ? [project.mainUserEmail] : undefined,
         botPatterns: project.botPatterns,
       });
 
+      // Persist both the aggregate snapshot and the detailed breakdown for later export.
       upsertProjectAnalysis(project.id, {
         classification: analysis.classification,
-        totalCommits: analysis.totalCommits,
-        totalHumanCommits: analysis.totalHumanCommits,
-        totalBotCommits: analysis.totalBotCommits,
+        totalCommits: analysis.totals.totalCommits,
+        totalHumanCommits: analysis.totals.totalHumanCommits,
+        totalBotCommits: analysis.totals.totalBotCommits,
         humanContributorCount: analysis.humanContributorCount,
         botContributorCount: analysis.botContributorCount,
         contributors: analysis.contributors,
+        contributorsDetailed: analysis.contributorsDetailed,
+        totals: analysis.totals,
+        timeframe: analysis.timeframe,
+        weights: analysis.weights,
+        sharedAccounts: analysis.sharedAccounts,
         mainAuthor: analysis.mainAuthor,
         analyzedAt,
       });

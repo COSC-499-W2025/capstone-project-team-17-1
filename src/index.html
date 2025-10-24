@@ -19,9 +19,21 @@
   </head>
   <body>
     <h1>Hello Electron</h1>
-    <h2>Stored sample data</h2>
-    <button id="refresh">refresh</button>
-    <pre id="out">loading...</pre>
+    <h2>File upload (ZIP)</h2>
+    <button id="btn-upload-file">Upload ZIP</button>
+    <span id="file-upload-status" style="margin-left:8px; color:#555"></span>
+
+    <table id="file-upload-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">Path</th>
+          <th style="text-align:right; border-bottom:1px solid #ddd;">Size (B)</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">Modified (UTC)</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd;">MIME</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
     <h2>Project analysis</h2>
     <button id="refresh-projects">re-analyze projects</button>
@@ -32,7 +44,91 @@
       <h3>Contribution ranking</h3>
       <ol class="ranking-list" id="project-ranking"></ol>
     </section>
+    <section>
+      <h3>Collaboration metrics</h3>
+      <div class="summary-grid" id="collaboration-summary"></div>
+      <table id="collaboration-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left; border-bottom:1px solid #ddd;">Project</th>
+            <th style="text-align:left; border-bottom:1px solid #ddd;">Contributor</th>
+            <th style="text-align:right; border-bottom:1px solid #ddd;">Commits</th>
+            <th style="text-align:right; border-bottom:1px solid #ddd;">Lines Δ</th>
+            <th style="text-align:right; border-bottom:1px solid #ddd;">Reviews</th>
+            <th style="text-align:right; border-bottom:1px solid #ddd;">Score</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+    <section>
+      <h3>Export collaboration data</h3>
+      <div style="margin-bottom:0.75rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+        <label for="project-export-select">Project:</label>
+        <select id="project-export-select" style="min-width:200px; padding:0.25rem 0.5rem;"></select>
+        <label style="display:flex; align-items:center; gap:0.25rem;">
+          <input type="checkbox" id="export-include-bots" checked>
+          <span style="user-select:none;">Include bots</span>
+        </label>
+        <button id="export-project-json">Export JSON</button>
+        <button id="export-project-csv">Export CSV</button>
+        <span id="project-export-status" style="color:#555;"></span>
+      </div>
+      <pre id="project-export-preview">Select a project and export format to view data here.</pre>
+    </section>
     <pre id="projects-out">loading...</pre>
+
+<script src="./js/fileUpload.js"></script>
+
+    <h2>Tech stack</h2>
+<button id="detect-tech">Detect tech stack</button>
+
+<section class="summary-grid" id="tech-summary"></section>
+<pre id="tech-markdown">Press “Detect tech stack” to analyze…</pre>
+<script>
+  const btnDetectTech = document.getElementById('detect-tech');
+  const techSummaryEl = document.getElementById('tech-summary');
+  const techMdEl = document.getElementById('tech-markdown');
+
+  function renderTechSummary(det) {
+    const cards = [
+      { label: 'Languages', value: det.languages.length ? det.languages.join(', ') : 'Unknown' },
+      { label: 'Frameworks', value: det.frameworks.length ? det.frameworks.map(f => f.version ? `${f.name} (${f.version})` : f.name).join(', ') : 'None' },
+      { label: 'Tools', value: det.tools.length ? det.tools.join(', ') : 'None' },
+      { label: 'Package Managers', value: det.packageManagers.length ? det.packageManagers.join(', ') : 'Not detected' },
+      { label: 'Run Tips', value: det.runTips.length ? det.runTips.join(', ') : 'See README' },
+    ];
+
+    techSummaryEl.innerHTML = cards.map(c => `
+      <div class="summary-card">
+        <h3>${c.label}</h3>
+        <p>${c.value}</p>
+      </div>
+    `).join('');
+  }
+
+  async function detectTech() {
+    if (!window.tech?.detect) {
+      techMdEl.textContent = 'Tech API unavailable (check preload).';
+      return;
+    }
+    try {
+      const { det, md } = await window.tech.detect(/* optional: pass a path */);
+      renderTechSummary(det);
+      techMdEl.textContent = md;
+    } catch (e) {
+      console.error(e);
+      techMdEl.textContent = 'Detection failed. See console for details.';
+      techSummaryEl.innerHTML = '';
+    }
+  }
+
+  btnDetectTech.addEventListener('click', detectTech);
+</script>
+
+    <h2>Stored sample data</h2>
+    <button id="refresh">refresh</button>
+    <pre id="out">loading...</pre>
 
     <script>
       const out = document.getElementById('out');
@@ -41,6 +137,18 @@
       const refreshProjectsBtn = document.getElementById('refresh-projects');
       const projectSummaryEl = document.getElementById('project-summary');
       const projectRankingEl = document.getElementById('project-ranking');
+      const collaborationSummaryEl = document.getElementById('collaboration-summary');
+      const collaborationTableBody = document.querySelector('#collaboration-table tbody');
+      const exportSelect = document.getElementById('project-export-select');
+      const exportIncludeBots = document.getElementById('export-include-bots');
+      const exportJsonBtn = document.getElementById('export-project-json');
+      const exportCsvBtn = document.getElementById('export-project-csv');
+      const exportStatusEl = document.getElementById('project-export-status');
+      const exportPreviewEl = document.getElementById('project-export-preview');
+
+      const numberFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+      const scoreFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+      let selectedProjectId = null;
 
       function pad(num) {
         return String(num).padStart(2, '0');
@@ -74,13 +182,26 @@
         }
       }
 
-      // Convert a decimal share into human friendly percentage text.
       function formatPercent(value) {
         if (value === null || value === undefined || Number.isNaN(value)) return '—';
         return `${Math.round(value * 1000) / 10}%`;
       }
 
-      // Render the classification summary cards shown above the ranking list.
+      function formatNumber(value) {
+        if (value === null || value === undefined || Number.isNaN(value)) return '—';
+        return numberFormatter.format(value);
+      }
+
+      function escapeHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, (m) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[m]);
+      }
+
       function renderProjectSummary(rows) {
         const counts = rows.reduce((map, row) => {
           const key = row.classification || 'unknown';
@@ -103,7 +224,6 @@
         `).join('');
       }
 
-      // Build the ordered list ranking projects by the dominant contributor's impact.
       function renderProjectRanking(rows) {
         const ranking = rows
           .map((row) => {
@@ -147,6 +267,152 @@
         }).join('');
       }
 
+      // Summarise portfolio-level stats to give fast insight into teamwork volume.
+      function renderCollaborationSummary(rows) {
+        if (!collaborationSummaryEl) return;
+        if (!rows || rows.length === 0) {
+          collaborationSummaryEl.innerHTML = '<div class="summary-card"><h3>No analysis</h3><p>Run the analyzer to populate metrics.</p></div>';
+          return;
+        }
+
+        const aggregate = rows.reduce((acc, row) => {
+          const totals = row.details?.totals || {};
+          acc.totalCommits += totals.totalCommits ?? row.totalCommits ?? 0;
+          acc.totalLines += totals.totalLinesChanged ?? 0;
+          acc.totalReviews += totals.totalReviews ?? 0;
+          acc.projects += 1;
+          acc.humanContributors += row.humanContributorCount ?? 0;
+          acc.botContributors += row.botContributorCount ?? 0;
+          return acc;
+        }, { totalCommits: 0, totalLines: 0, totalReviews: 0, projects: 0, humanContributors: 0, botContributors: 0 });
+
+        const cards = [
+          { label: 'Commits analyzed', value: formatNumber(aggregate.totalCommits), description: `${aggregate.projects} projects` },
+          { label: 'Lines changed', value: formatNumber(aggregate.totalLines), description: 'Additions + deletions' },
+          { label: 'Reviews logged', value: formatNumber(aggregate.totalReviews), description: 'From Reviewed-by trailers' },
+          { label: 'Human contributors', value: formatNumber(aggregate.humanContributors), description: 'Bots excluded' },
+        ];
+
+        collaborationSummaryEl.innerHTML = cards.map((card) => `
+          <div class="summary-card">
+            <h3>${card.label}</h3>
+            <p><strong>${card.value}</strong></p>
+            <p>${card.description}</p>
+          </div>
+        `).join('');
+      }
+
+      // Highlight the top human contributors by score for a quick leaderboard.
+      function renderCollaborationTable(rows) {
+        if (!collaborationTableBody) return;
+        const entries = [];
+
+        rows.forEach((row) => {
+          const details = row.details || {};
+          const contributors = Array.isArray(details.contributorsDetailed) ? details.contributorsDetailed : [];
+          contributors.forEach((contrib) => {
+            const metrics = contrib?.metrics || {};
+            const score = contrib?.scores?.normalized ?? 0;
+            entries.push({
+              projectId: row.id,
+              projectName: row.name,
+              contributorName: contrib?.name || 'Unknown',
+              contributorEmail: contrib?.email || '',
+              commits: metrics.commitsAuthored ?? 0,
+              linesChanged: metrics.linesChanged ?? 0,
+              reviews: metrics.reviewCount ?? 0,
+              score,
+              isBot: !!contrib?.isBot,
+            });
+          });
+        });
+
+        const humanEntries = entries.filter((entry) => !entry.isBot && entry.score > 0);
+        const ranking = humanEntries
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if (b.linesChanged !== a.linesChanged) return b.linesChanged - a.linesChanged;
+            return b.commits - a.commits;
+          })
+          .slice(0, 8);
+
+        if (ranking.length === 0) {
+          collaborationTableBody.innerHTML = '<tr><td colspan="6" style="padding:0.75rem; color:#666;">No contributor metrics available yet.</td></tr>';
+          return;
+        }
+
+        collaborationTableBody.innerHTML = ranking.map((entry) => {
+          const contributor = entry.contributorEmail
+            ? `${escapeHtml(entry.contributorName)}<br><span style="color:#666; font-size:0.85rem;">${escapeHtml(entry.contributorEmail)}</span>`
+            : escapeHtml(entry.contributorName);
+          return `
+            <tr>
+              <td style="padding:6px 4px;border-bottom:1px solid #f0f0f0;">${escapeHtml(entry.projectName)}</td>
+              <td style="padding:6px 4px;border-bottom:1px solid #f0f0f0;">${contributor}</td>
+              <td style="padding:6px 4px;text-align:right;border-bottom:1px solid #f0f0f0;">${formatNumber(entry.commits)}</td>
+              <td style="padding:6px 4px;text-align:right;border-bottom:1px solid #f0f0f0;">${formatNumber(entry.linesChanged)}</td>
+              <td style="padding:6px 4px;text-align:right;border-bottom:1px solid #f0f0f0;">${formatNumber(entry.reviews)}</td>
+              <td style="padding:6px 4px;text-align:right;border-bottom:1px solid #f0f0f0;">${scoreFormatter.format(entry.score)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Keep the export dropdown synchronised with the latest project list.
+      function populateExportSelect(rows) {
+        if (!exportSelect) return;
+        if (!rows || rows.length === 0) {
+          exportSelect.innerHTML = '<option value="" disabled selected>No projects available</option>';
+          exportSelect.disabled = true;
+          exportJsonBtn.disabled = true;
+          exportCsvBtn.disabled = true;
+          exportStatusEl.textContent = 'No projects ready for export';
+          return;
+        }
+
+        exportSelect.disabled = false;
+        exportJsonBtn.disabled = false;
+        exportCsvBtn.disabled = false;
+
+        if (!selectedProjectId || !rows.some((row) => row.id === selectedProjectId)) {
+          selectedProjectId = rows[0]?.id ?? null;
+        }
+
+        exportSelect.innerHTML = rows.map((row) => `
+          <option value="${row.id}" ${row.id === selectedProjectId ? 'selected' : ''}>
+            ${escapeHtml(row.name)} (${escapeHtml(row.classification)})
+          </option>
+        `).join('');
+      }
+
+      // Request an export payload from the main process and show it inline.
+      async function handleExport(format) {
+        if (!window.projects?.export) {
+          exportStatusEl.textContent = 'Export API unavailable';
+          return;
+        }
+        const projectId = Number.parseInt(exportSelect.value, 10);
+        if (!projectId) {
+          exportStatusEl.textContent = 'Choose a project to export';
+          return;
+        }
+        selectedProjectId = projectId;
+        exportStatusEl.textContent = `Exporting ${format.toUpperCase()}...`;
+        try {
+          const payload = await window.projects.export({
+            projectId,
+            format,
+            includeBots: !!exportIncludeBots?.checked,
+            pretty: format === 'json' ? 2 : undefined,
+          });
+          exportPreviewEl.textContent = payload?.payload ?? '';
+          exportStatusEl.textContent = `Exported ${format.toUpperCase()} (${(payload?.payload || '').length} chars)`;
+        } catch (e) {
+          console.error(e);
+          exportStatusEl.textContent = 'Export failed (see console for details)';
+        }
+      }
+
       async function loadProjects({ reanalyze = false } = {}) {
         if (!window.projects) {
           projectsOut.textContent = 'project API not available';
@@ -156,6 +422,9 @@
           const rows = reanalyze ? await window.projects.refresh() : await window.projects.list();
           renderProjectSummary(rows);
           renderProjectRanking(rows);
+          renderCollaborationSummary(rows);
+          renderCollaborationTable(rows);
+          populateExportSelect(rows);
           const view = rows.map((row) => ({
             id: row.id,
             name: row.name,
@@ -163,12 +432,15 @@
             humanContributors: row.humanContributorCount,
             botContributors: row.botContributorCount,
             totalCommits: row.totalCommits,
+            totalLinesChanged: row.details?.totals?.totalLinesChanged ?? null,
+            totalReviews: row.details?.totals?.totalReviews ?? null,
             mainAuthor: row.mainAuthor ? {
               name: row.mainAuthor.name,
               email: row.mainAuthor.email,
               commits: row.mainAuthor.commits,
               contributionShare: row.mainAuthor.share,
             } : null,
+            timeframe: row.details?.timeframe || null,
             analyzedAt: formatTimestamp(row.analyzedAt),
           }));
           projectsOut.textContent = JSON.stringify(view, null, 2);
@@ -177,11 +449,20 @@
           projectsOut.textContent = 'unable to load project analysis data';
           projectSummaryEl.innerHTML = '';
           projectRankingEl.innerHTML = '';
+          if (collaborationSummaryEl) collaborationSummaryEl.innerHTML = '';
+          if (collaborationTableBody) collaborationTableBody.innerHTML = '';
         }
       }
 
       refreshBtn.addEventListener('click', loadArtifacts);
       refreshProjectsBtn.addEventListener('click', () => loadProjects({ reanalyze: true }));
+      exportSelect?.addEventListener('change', () => {
+        selectedProjectId = Number.parseInt(exportSelect.value, 10) || null;
+        exportStatusEl.textContent = '';
+        exportPreviewEl.textContent = 'Select a project and export format to view data here.';
+      });
+      exportJsonBtn?.addEventListener('click', () => handleExport('json'));
+      exportCsvBtn?.addEventListener('click', () => handleExport('csv'));
       loadArtifacts();
       loadProjects();
     </script>
@@ -197,5 +478,6 @@
         }
       });
     </script>
+
   </body>
 </html>
