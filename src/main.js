@@ -6,7 +6,7 @@ const { validateZipInput } = require("./lib/fileValidator");
 const { ConfigStore } = require("./lib/configStore");
 const { registerZipIpc } = require("./ipc/zip");
 const { registerFileIpc } = require("./ipc/files");
-const { refreshAllProjectAnalysis } = require('./services/projectAnalyzer');
+const { registerProjectIpc } = require('./ipc/projects');
 const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
 
 ipcMain.handle("tech:detect", async (_event, rootDir) => {
@@ -93,6 +93,7 @@ app.whenReady().then(() => {
   // Register ZIP IPC once
   registerZipIpc(ipcMain);
   registerFileIpc();
+  registerProjectIpc();
 
   console.log("[ipc] registered channels:", ipcMain.eventNames().map(String));
 

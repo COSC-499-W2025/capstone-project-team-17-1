@@ -44,8 +44,28 @@ contextBridge.exposeInMainWorld('files', {
   upload: (options) => ipcRenderer.invoke('file:upload', options),
 });
 
+// 6) Project analytics helpers
+// Expose project analytics helpers to the renderer for listing/refresh/export flows.
+contextBridge.exposeInMainWorld('projects', {
+  async list() {
+    const res = await ipcRenderer.invoke('project.list');
+    if (!res || !res.ok) throw new Error(res?.error || 'project.list failed');
+    return res.data;
+  },
+  async refresh() {
+    const res = await ipcRenderer.invoke('project.refresh');
+    if (!res || !res.ok) throw new Error(res?.error || 'project.refresh failed');
+    return res.data;
+  },
+  async export(params) {
+    const res = await ipcRenderer.invoke('project.export', params);
+    if (!res || !res.ok) throw new Error(res?.error || 'project.export failed');
+    return res.data;
+  },
+});
 
-console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI, files');
+
+console.log('[preload] bridges exposed: archiveValidator, db, config, zipAPI, files, projects, tech');
 contextBridge.exposeInMainWorld("tech", {
   detect: (rootPath) => ipcRenderer.invoke("tech:detect", rootPath ?? null),
 });

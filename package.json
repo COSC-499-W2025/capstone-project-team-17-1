@@ -8,13 +8,13 @@
     "unzipper": "^0.12.3"
   },
   "scripts": {
-    "test": "node --test",
+    "test": "ELECTRON_RUN_AS_NODE=1 electron --test \"test/**/*.test.js\"",
     "detect:tech": "node src/lib/detectTechStack.js",
     "detect:tech:dry": "node src/lib/detectTechStack.js --dry",
     "start": "electron .",
     "dev": "electron .",
-    "test": "node --test \"test/**/*.test.js\"",
-    "test:watch": "node --test --watch test",
+    "test:watch": "ELECTRON_RUN_AS_NODE=1 electron --test --watch test",
+    "rebuild:electron": "npx electron-rebuild --force --module-dir .",
     "build:linux": "electron-builder -l",
     "build:win": "electron-builder -w",
     "build:mac": "electron-builder -m"
@@ -35,6 +35,7 @@
   "devDependencies": {
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "mock-fs": "^5.5.0"
   }
 }
