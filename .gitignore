@@ -9,6 +9,6 @@ npm-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
-
+**/app.db
 # SQLite
 src/db/*.db*

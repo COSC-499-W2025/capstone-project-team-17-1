@@ -17,10 +17,20 @@
     "rebuild:electron": "npx electron-rebuild --force --module-dir .",
     "build:linux": "electron-builder -l",
     "build:win": "electron-builder -w",
-    "build:mac": "electron-builder -m"
+    "build:mac": "electron-builder -m",
+    "icon:prep": "node -e \"require('fs').mkdirSync('build',{recursive:true})\"",
+    "icon:png": "node scripts/svg2png.js",
+    "icon:gen": "node scripts/make-icons.js",
+    "icon:all": "npm run icon:png && npm run icon:gen"
+
+
   },
   "build": {
     "appId": "com.yourteam.app",
+    "directories": { "buildResources": "build" },
+    "mac":   { "icon": "build/icon.icns" },
+    "win":   { "icon": "build/icon.ico" },
+    "linux": { "icon": "build/icon.png" },
     "files": [
       "**/*",
       "!dist",
@@ -33,9 +43,13 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@resvg/resvg-js-cli": "^2.6.2-beta.1",
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
-    "mock-fs": "^5.5.0"
+    "icon-gen": "^5.0.0",
+    "mock-fs": "^5.5.0",
+    "sharp": "^0.34.4",
+    "sharp-cli": "^5.2.0"
   }
 }
