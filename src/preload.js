@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('db', {
   }
 });
 
+contextBridge.exposeInMainWorld("loom", {
+  startApp: () => ipcRenderer.send("start-app")
+});
+
 // 3) Config helpers
 contextBridge.exposeInMainWorld('config', {
   load: () => ipcRenderer.invoke('config:load'),
