@@ -9,3 +9,10 @@ npm-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+**/app.db
+**/app.db-wal
+**/app.db-shm
+app.db
+app.db-wal
+app.db-shm
+
