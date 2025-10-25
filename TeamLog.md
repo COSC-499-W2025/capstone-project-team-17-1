@@ -199,7 +199,21 @@ During Week 7, the team closed five issues: **#39** finalized the tech stack (El
 <img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
 
 
-## WEEK 8 TEAM LOG
+## WEEK 8 TEAM LOG (Oct 20 - Oct 26, 2025)
+
+### Recap of Milestone Goal - Week 8
+
+In Week 8, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
 
 ## WEEK 9 TEAM LOG
 
