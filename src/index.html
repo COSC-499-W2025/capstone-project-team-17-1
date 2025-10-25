@@ -208,8 +208,18 @@
       const pct  = Math.round((s.impact ?? 0) * 100);
       const conf = Math.round((s.confidence ?? 0) * 100);
       return `<span style="white-space:nowrap; margin-right:10px">${s.skill}
-        <span style="display:inline-block;width:60px;height:6px;background:#1e2a46;border-radius:6px;vertical-align:middle;margin-left:6px">
-          <span style="display:inline-block;height:6px;width:${pct}%;background:#7aa2ff;border-radius:6px"></span>
+        <span style="
+          display:inline-block; position:relative;
+          width:60px; height:6px;
+          background:#1e2a46; border-radius:6px;
+          vertical-align:middle; margin-left:6px;
+          overflow:hidden;
+        ">
+          <span style="
+            position:absolute; left:0; top:0; height:100%;
+            width:${pct}%;
+            background:#7aa2ff; border-radius:inherit; display:block;
+          "></span>
         </span>
         <span style="color:#9aa6bd; margin-left:6px">${conf}%</span>`;
     }).join('');
