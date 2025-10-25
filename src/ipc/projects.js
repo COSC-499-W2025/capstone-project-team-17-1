@@ -34,7 +34,11 @@ function registerProjectIpc() {
       return fail(err);
     }
   });
-
+  ipcMain.handle('projects:getSnapshot', (_e, { projectId }) => {
+  const row = getProjectAnalysisById(projectId);
+  if (!row) return null;
+  return buildSkillsSnapshotFromDetails(row);
+});
   // Allow the renderer to export JSON/CSV snapshots without rereading the repo.
   ipcMain.handle('project.export', async (_event, params = {}) => {
     try {

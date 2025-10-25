@@ -8,7 +8,7 @@
     "unzipper": "^0.12.3"
   },
   "scripts": {
-    "test": "ELECTRON_RUN_AS_NODE=1 electron --test \"test/**/*.test.js\"",
+    "test": "cross-env ELECTRON_RUN_AS_NODE=1 electron --test \"test/**/*.test.js\"",
     "detect:tech": "node src/lib/detectTechStack.js",
     "detect:tech:dry": "node src/lib/detectTechStack.js --dry",
     "start": "electron .",
@@ -33,6 +33,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
