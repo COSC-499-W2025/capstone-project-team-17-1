@@ -318,34 +318,41 @@ async function buildCollaborationAnalysis(repoPath, options = {}) {
     totalFilesChanged += filesChanged;
 
     const participantShare = 1 / participants.length;
-    const participantsForLines = [author, ...coauthors]; // <- no reviewers
-    const share = participantsForLines.length ? (1 / participantsForLines.length) : 1;
-    
-    participants.forEach((participant, idx) => {
-      const entry = ensureContributor(participant);
-      entry.commitParticipation += 1;
-      entry.commitWeighted += participantShare;
-      entry.linesAdded  += commit.linesAdded * share;
-      entry.linesDeleted+= commit.linesDeleted * share;
-      // Attribute lines by file extension (added + deleted) split by participantShare
-      for (const f of (commit.files || [])) {
-        const delta = (f.added || 0) + (f.deleted || 0);
-        if (!delta) continue;
-        const ext = (path.extname(f.path) || '').toLowerCase() || '__noext__';
-        entry.linesByExt[ext] = (entry.linesByExt[ext] || 0) + delta * share;
-      }
+    // Only author + co-authors get line credit (we already excluded reviewers here)
+const participantsForLines = participants;
+const share = participantsForLines.length ? (1 / participantsForLines.length) : 1;
 
-      entry.filesChanged += filesChanged * participantShare;
-      if (participants.length > 1) {
-        entry.sharedCommitUnits += participantShare;
-        entry.sharedCommitEvents += 1;
-      }
-      if (idx === 0) {
-        entry.commitsAuthored += 1;
-      } else {
-        entry.coauthoredCommits += 1;
-      }
-    });
+participants.forEach((participant, idx) => {
+  const entry = ensureContributor(participant);
+
+  // commit presence/weights
+  entry.commitParticipation += 1;
+  entry.commitWeighted     += participantShare;
+
+  // line attribution — use the parsed fields
+  entry.linesAdded  += (commit.additions || 0) * share;
+  entry.linesDeleted+= (commit.deletions || 0) * share;
+
+  // by-extension attribution (added + deleted), split by the same share
+  for (const f of (commit.files || [])) {
+    const delta = (f.added || 0) + (f.deleted || 0);
+    if (!delta) continue;
+    const ext = (path.extname(f.path) || '').toLowerCase() || '__noext__';
+    entry.linesByExt[ext] = (entry.linesByExt[ext] || 0) + delta * share;
+  }
+
+  // files changed & shared-commit stats
+  entry.filesChanged += filesChanged * participantShare;
+  if (participants.length > 1) {
+    entry.sharedCommitUnits  += participantShare;
+    entry.sharedCommitEvents += 1;
+  }
+
+  // authorship/co-authorship counts
+  if (idx === 0) entry.commitsAuthored += 1;
+  else           entry.coauthoredCommits += 1;
+});
+
 
     const reviewers = commit.reviewers || [];
     for (const reviewer of reviewers) {
