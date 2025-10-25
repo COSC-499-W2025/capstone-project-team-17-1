@@ -104,6 +104,7 @@ This week strengthened my understanding of team coordination in a collaborative 
 
 ## WEEK 8 Personal LOG (Oct20 - Oct26, 2025)
 ### 1. Type of Tasks Worked On
+<img width="1084" height="557" alt="Screenshot 2025-10-25 at 2 13 59 PM" src="https://github.com/user-attachments/assets/16b9b472-78ef-4fb3-ac79-8ff41fdb9307" />
 
 ### 2. Weekly Goals Recap
 - complete 'Collaboration Analysis Module' task #42
