@@ -7,7 +7,11 @@ const { ConfigStore } = require("./lib/configStore");
 const { registerZipIpc } = require("./ipc/zip");
 const { registerFileIpc } = require("./ipc/files");
 const { registerProjectIpc } = require('./ipc/projects');
+const { getProjectAnalysisById, listProjectSummaries } = require('./db/projectStore');
 const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
+const { buildSkillsSnapshotFromDetails } = require('./services/skillsSnapshot');
+const detectSkills = require('./lib/detectSkills');
+const scoreSkills = require('./lib/scoreSkills');
 
 ipcMain.handle("tech:detect", async (_event, rootDir) => {
   const root = rootDir || process.cwd();
@@ -15,6 +19,59 @@ ipcMain.handle("tech:detect", async (_event, rootDir) => {
   const md = buildMarkdown(det);
   return { det, md };
 });
+ipcMain.handle('skills:get', (_e, args = {}) => {
+  try {
+    const projectId = args.projectId ?? null;
+    let row = projectId ? getProjectAnalysisById(projectId) : (listProjectSummaries()[0] || null);
+    if (!row) throw new Error('No project found to analyze.');
+    if (!row.details) throw new Error('Project has no analysis details yet.');
+
+    // --- debug: do we actually have per-ext data stored?
+    const first = row?.details?.contributorsDetailed?.[0];
+    console.log('[skills:get] details?',
+      !!row?.details,
+      'contributorsDetailed?', Array.isArray(row?.details?.contributorsDetailed),
+      'first.linesByExt keys:',
+      first && first.metrics && first.metrics.linesByExt ? Object.keys(first.metrics.linesByExt) : []
+    );
+
+    const snapshot = buildSkillsSnapshotFromDetails(row);
+
+    // --- debug: did the snapshot build per-author buckets?
+    const perAuthorBuckets =
+      snapshot.files.filter(f => Object.keys(f.authors || {}).some(a => a && a !== '__project__')).length;
+    console.log('[skills:get] snapshot counts',
+      { manifests: snapshot.manifests.length, files: snapshot.files.length, contributors: snapshot.contributors.length,
+        perAuthorBuckets });
+
+    const raw = detectSkills(snapshot); // presence + confidence
+
+    const scored = scoreSkills({
+      contributors: snapshot.contributors,
+      contributorSkills: raw.contributorSkills,
+      presence: raw.projectSkills      // allow fallback scoring when no per-skill lines
+    });
+
+    // ---- fall back to presence if impact is empty ----
+    let projectSkills = scored.projectSkills || [];
+    if (!projectSkills.length && raw.projectSkills?.length) {
+      projectSkills = raw.projectSkills.map(s => ({
+        skill: s.skill,
+        impact: Math.max(0.4, Math.min(1, s.confidence || 0.6))
+      }));
+    }
+
+    return {
+      projectSkills,                         // used by UI chips
+      contributorSkills: scored.contributorSkills,
+      presence: raw.projectSkills            // just for inspection if needed
+    };
+  } catch (err) {
+    console.error('[skills:get] failure:', err);
+    throw err;
+  }
+});
+
 
 // --- GPU workarounds (keep) ---
 app.disableHardwareAcceleration();

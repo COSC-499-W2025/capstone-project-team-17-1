@@ -102,6 +102,67 @@ function upsertProjectAnalysis(projectId, analysis) {
     details_json: JSON.stringify(details),
   });
 }
+// Fetch one project + its latest analysis/details by id.
+function getProjectAnalysisById(projectId) {
+  const db = openDb();
+  const row = db.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      p.created_at,
+      pr.repo_path,
+      pr.main_user_name,
+      pr.main_user_email,
+      pa.classification,
+      pa.total_commits,
+      pa.human_contributor_count,
+      pa.bot_contributor_count,
+      pa.main_author_name,
+      pa.main_author_email,
+      pa.main_author_commits,
+      pa.main_author_commit_share,
+      pa.analyzed_at,
+      pa.details_json
+    FROM project p
+    LEFT JOIN project_repository pr ON pr.project_id = p.id
+    LEFT JOIN project_analysis pa   ON pa.project_id = p.id
+    WHERE p.id = ?
+    LIMIT 1
+  `).get(projectId);
+
+  if (!row) return null;
+
+  let details = null;
+  if (row.details_json) {
+    try { details = JSON.parse(row.details_json); }
+    catch (err) {
+      console.warn('[projectStore] Unable to parse details_json:', err.message);
+    }
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    repoPath: row.repo_path || null,
+    mainUserName: row.main_user_name || null,
+    mainUserEmail: row.main_user_email || null,
+    classification: row.classification || 'unknown',
+    totalCommits: row.total_commits ?? (details?.totals?.totalCommits ?? 0),
+    totalHumanCommits: details?.totals?.totalHumanCommits ?? null,
+    totalBotCommits: details?.totals?.totalBotCommits ?? null,
+    humanContributorCount: row.human_contributor_count ?? 0,
+    botContributorCount: row.bot_contributor_count ?? 0,
+    mainAuthor: row.main_author_name ? {
+      name: row.main_author_name,
+      email: row.main_author_email,
+      commits: row.main_author_commits ?? 0,
+      share: row.main_author_commit_share ?? 0,
+    } : null,
+    analyzedAt: row.analyzed_at ?? null,
+    details, // <- this includes contributorsDetailed, contributorsSummary, totals, timeframe, etc.
+  };
+}
 
 // Provide a combined view that joins projects, repository metadata, and analysis output.
 function listProjectSummaries() {
@@ -168,4 +229,5 @@ module.exports = {
   getProjectsForAnalysis,
   upsertProjectAnalysis,
   listProjectSummaries,
+  getProjectAnalysisById,
 };

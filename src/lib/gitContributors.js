@@ -164,7 +164,7 @@ function parseGitLogWithNumstat(output) {
       const del = delRaw === '-' ? 0 : Number.parseInt(delRaw, 10);
       if (!Number.isNaN(add)) additions += add;
       if (!Number.isNaN(del)) deletions += del;
-      files.push(filePath);
+      files.push({ path: filePath, added: add, deleted: del });
     }
 
     commits.push({
@@ -268,6 +268,7 @@ async function buildCollaborationAnalysis(repoPath, options = {}) {
         coauthoredCommits: 0,
         linesAdded: 0,
         linesDeleted: 0,
+        linesByExt: {},  
         filesChanged: 0,
         reviewCount: 0,
         isBot: isBotContributor(identity.name || '', identity.email || '', extraPatterns),
@@ -312,17 +313,28 @@ async function buildCollaborationAnalysis(repoPath, options = {}) {
     const participants = dedupeIdentities([authorIdentity, ...(commit.coAuthors || [])]);
     if (participants.length === 0) continue;
 
-    const filesChanged = new Set(commit.files || []).size;
+    const filesChanged = new Set((commit.files || []).map(f => f.path)).size;
+
     totalFilesChanged += filesChanged;
 
     const participantShare = 1 / participants.length;
-
+    const participantsForLines = [author, ...coauthors]; // <- no reviewers
+    const share = participantsForLines.length ? (1 / participantsForLines.length) : 1;
+    
     participants.forEach((participant, idx) => {
       const entry = ensureContributor(participant);
       entry.commitParticipation += 1;
       entry.commitWeighted += participantShare;
-      entry.linesAdded += (commit.additions || 0) * participantShare;
-      entry.linesDeleted += (commit.deletions || 0) * participantShare;
+      entry.linesAdded  += commit.linesAdded * share;
+      entry.linesDeleted+= commit.linesDeleted * share;
+      // Attribute lines by file extension (added + deleted) split by participantShare
+      for (const f of (commit.files || [])) {
+        const delta = (f.added || 0) + (f.deleted || 0);
+        if (!delta) continue;
+        const ext = (path.extname(f.path) || '').toLowerCase() || '__noext__';
+        entry.linesByExt[ext] = (entry.linesByExt[ext] || 0) + delta * share;
+      }
+
       entry.filesChanged += filesChanged * participantShare;
       if (participants.length > 1) {
         entry.sharedCommitUnits += participantShare;
@@ -402,6 +414,7 @@ async function buildCollaborationAnalysis(repoPath, options = {}) {
         linesAdded: entry.linesAdded,
         linesDeleted: entry.linesDeleted,
         linesChanged,
+        linesByExt: entry.linesByExt,     
         filesChanged: entry.filesChanged,
         reviewCount: entry.reviewCount,
       },
