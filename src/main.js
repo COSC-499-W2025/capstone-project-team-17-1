@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, screen, nativeImage } = require("electron");
 const path = require("path");
 const { initSchema } = require("./db/init");
 const { registerArtifactIpc } = require("./ipc/artifacts");
@@ -88,21 +88,64 @@ app.commandLine.appendSwitch("no-sandbox");
 // app.commandLine.appendSwitch("log-file", "gpu.log");
 
 let cfg;
+function iconPathForPlatform() {
+  // icons created in /build by your scripts
+  const base = path.join(__dirname, "..", "build");
+  if (process.platform === "win32")  return path.join(base, "app.ico");
+  if (process.platform === "darwin") return path.join(base, "app.icns");
+  return path.join(base, "icon.png");
+}
 
 function createWindow() {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { width, height, x, y } = display.workArea; // excludes taskbar/dock
+  const iconPath = iconPathForPlatform();
+  const img = nativeImage.createFromPath(iconPath);
+  const { workArea } = screen.getPrimaryDisplay();
+  console.log("[icon]", iconPath, "loaded?", !img.isEmpty()); // should print true
+  // macOS dock icon in dev
+  if (process.platform === "darwin") {
+    const img = nativeImage.createFromPath(iconPath);
+    if (!img.isEmpty()) app.dock.setIcon(img);
+  }
+
+  // Windows taskbar identity (helps show your icon & notifications properly)
+  if (process.platform === "win32") {
+    app.setAppUserModelId("com.yourteam.loom");
+  }
+
   const win = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height,
+    show: false,
+    show: false,                 // create hidden
+    title: "Loom",
+    icon: iconPath,
+    fullscreen: false,           // we want windowed, not OS fullscreen
+    fullscreenable: true,
+    backgroundColor: '#0b1220',   // matches your page
+    autoHideMenuBar: true,       // optional: hide menu bar
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js"),
-      devTools: !app.isPackaged, // allow in dev, block in prod
+      devTools: !app.isPackaged,
     },
   });
 
-  win.loadFile(path.join(__dirname, "index.html"));
+  win.loadFile(path.join(__dirname, "welcome.html"));
 
+  // maximize to fill the work area when ready
+  win.once("ready-to-show", () => {
+    try { win.maximize(); } catch {}
+    win.show();
+  });
+  win.once("ready-to-show", () => win.setTitle("Loom"));
+
+  // keep it windowed even if something tries to toggle fullscreen
+  win.on("enter-full-screen", () => win.setFullScreen(false));
+  ipcMain.on("start-app", () => {
+    win.loadFile(path.join(__dirname, "index.html"));
+  });
   // DO NOT auto-open DevTools (prevents Autofill noise)
   // win.webContents.openDevTools({ mode: "detach" });
 

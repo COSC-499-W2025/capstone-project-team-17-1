@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('db', {
     return res.data;
   }
 });
+contextBridge.exposeInMainWorld("loom", {
+  startApp: () => ipcRenderer.send("start-app")
+});
+
 contextBridge.exposeInMainWorld('loomSkills', {
   get: () => ipcRenderer.invoke('skills:get')
 });
