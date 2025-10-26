@@ -2,23 +2,181 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <title>Artifacts</title>
+    <title>Loom</title>
+    <!-- Minimal weave mark + word -->
+<svg width="220" height="44" viewBox="0 0 220 44" xmlns="http://www.w3.org/2000/svg" aria-label="Loom">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B3C7FF"/>
+      <stop offset="1" stop-color="#7AA2FF"/>
+    </linearGradient>
+  </defs>
+  <!-- weave glyph -->
+  <g transform="translate(6,6)">
+    <rect x="0" y="6" width="10" height="26" rx="3" fill="url(#g)"/>
+    <rect x="12" y="0" width="10" height="26" rx="3" fill="#2B3B66"/>
+    <rect x="24" y="6" width="10" height="26" rx="3" fill="url(#g)"/>
+    <rect x="6" y="12" width="26" height="10" rx="3" fill="#3A57A8" opacity=".9"/>
+  </g>
+  <!-- word -->
+  <text x="58" y="30" font-size="26" font-family="Inter, system-ui, Arial" fill="url(#g)" letter-spacing=".5">Loom</text>
+</svg>
+
     <style>
-      body { font-family: Arial, sans-serif; margin: 2rem; }
-      h2 { margin-top: 2rem; }
-      button { margin-bottom: 1rem; }
-      pre { padding: 1rem; background: #f5f5f5; border-radius: 4px; }
-      section { margin-top: 1rem; }
-      .summary-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
-      .summary-card { padding: 1rem; background: #eef3ff; border-radius: 6px; min-width: 180px; }
-      .summary-card h3 { margin: 0 0 0.25rem; font-size: 1rem; }
-      .summary-card p { margin: 0; font-size: 0.85rem; color: #333; }
-      .ranking-list { padding-left: 1.5rem; }
-      .ranking-list li { margin-bottom: 0.5rem; }
-    </style>
+  :root{
+    --bg1:#0b1220;
+    --bg2:#111827;
+    --card:#101826cc;   /* glass card */
+    --card-border:#2a3757;
+    --text:#e6eaf2;
+    --muted:#9aa6bd;
+    --accent:#7aa2ff;
+  }
+
+  /* full-bleed modern background */
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: Inter, system-ui, Arial, sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(1100px 700px at -10% -10%, #1f2a44 0%, transparent 60%),
+      radial-gradient(900px 600px at 120% 0%, #2a3a66 0%, transparent 55%),
+      linear-gradient(160deg, var(--bg2) 0%, var(--bg1) 60%);
+    background-attachment: fixed;
+  }
+
+  /* page container */
+  body > *{
+    max-width: 1100px;
+    margin-inline: auto;
+  }
+
+  h1{
+    margin: 28px 24px 8px;
+    font-size: 28px;
+    line-height: 1.2;
+    letter-spacing: .3px;
+    background: linear-gradient(90deg,#b3c7ff, #7aa2ff 35%, #b3e1ff 80%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color: transparent;
+  }
+  h2{ margin: 18px 24px 10px; font-size: 18px; color:#d7deee }
+  h3{ margin: 0 0 6px; font-size: 14px; color:#d7deee }
+
+  /* glass panels */
+  pre, section, .summary-card{
+    margin: 12px 24px;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.02);
+    backdrop-filter: blur(6px);
+  }
+  pre{ overflow:auto; font-size: 12px; line-height:1.45 }
+
+  /* controls */
+  button{
+    margin: 0 24px 10px;
+    padding: 9px 14px;
+    border-radius: 12px;
+    border: 1px solid #2c3b63;
+    background: linear-gradient(180deg,#1d2a49,#15203b);
+    color:#e6ecff;
+    cursor:pointer;
+    transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+  button:hover{
+    transform: translateY(-1px);
+    border-color:#3e57a8;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45);
+  }
+  button:active{ transform: translateY(0) }
+
+  /* summary cards grid */
+  .summary-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 12px 24px;
+  }
+  .summary-card{
+    min-width: 0;
+    background: linear-gradient(180deg, #0f172aCC, #0b1220CC);
+    border-color:#2a365a;
+  }
+  .summary-card p{ margin: 2px 0; font-size: 12px; color: var(--muted) }
+  .summary-card p strong{ color:#ffffff; font-size: 16px }
+
+  /* ranking list */
+  .ranking-list{ margin: 0; padding-left: 20px }
+  .ranking-list li{
+    margin: 8px 0;
+    padding-left: 4px;
+    color:#dbe4ff;
+  }
+
+  /* tiny responsive tweaks */
+  @media (max-width:640px){
+    h1{ margin:20px 16px }
+    h2,pre,section,button{ margin-left:16px; margin-right:16px }
+  }
+  html { scrollbar-gutter: auto; }
+
+::-webkit-scrollbar { width: 10px; background: transparent; }
+::-webkit-scrollbar-track { background: transparent; border-left: none; } /* invisible track */
+::-webkit-scrollbar-thumb {
+  background: rgba(58, 87, 168, .9);
+  border-radius: 10px;
+  border: 2px solid transparent;           /* “floating” look */
+  background-clip: padding-box;
+}
+
+  /* ===== Custom Scrollbars (Chromium + Firefox) ===== */
+
+/* Firefox */
+* {
+  scrollbar-width: thin; /* auto | thin | none */
+  scrollbar-color: #35466f transparent; /* thumb | track */
+}
+
+/* Chromium/WebKit (Electron) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background:
+    linear-gradient(180deg, #0f172acc, #0b1220cc); /* matches glass cards */
+  border-left: 1px solid #1c2743;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #2b3b66, #1b2746);
+  border: 1px solid #3a4f83;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #3a57a8, #273a6a);
+  border-color: #5a79d6;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Nice layout feel with visible gutter (optional) */
+html {
+  scrollbar-gutter: stable both-edges;
+  scroll-behavior: smooth;
+}
+
+</style>
+
   </head>
   <body>
-    <h1>Hello Electron</h1>
     <h2>File upload (ZIP)</h2>
     <button id="btn-upload-file">Upload ZIP</button>
     <span id="file-upload-status" style="margin-left:8px; color:#555"></span>
