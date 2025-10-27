@@ -9,14 +9,11 @@ const { registerFileIpc } = require("./ipc/files");
 const { registerProjectIpc } = require('./ipc/projects');
 const { getProjectAnalysisById, listProjectSummaries } = require('./db/projectStore');
 const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
-<<<<<<< HEAD
 const { buildSkillsSnapshotFromDetails } = require('./services/skillsSnapshot');
 const detectSkills = require('./lib/detectSkills');
 const scoreSkills = require('./lib/scoreSkills');
-=======
 const { closeDb } = require("./db/connection");
 
->>>>>>> cb18fec (feat(db): SQLite persistence via userData, schema runner, and IPC wiring (#55))
 
 ipcMain.handle("tech:detect", async (_event, rootDir) => {
   const root = rootDir || process.cwd();
