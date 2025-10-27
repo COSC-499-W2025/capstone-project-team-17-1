@@ -9,9 +9,14 @@ const { registerFileIpc } = require("./ipc/files");
 const { registerProjectIpc } = require('./ipc/projects');
 const { getProjectAnalysisById, listProjectSummaries } = require('./db/projectStore');
 const { detectTechStack, buildMarkdown } = require("./lib/detectTechStack");
+<<<<<<< HEAD
 const { buildSkillsSnapshotFromDetails } = require('./services/skillsSnapshot');
 const detectSkills = require('./lib/detectSkills');
 const scoreSkills = require('./lib/scoreSkills');
+=======
+const { closeDb } = require("./db/connection");
+
+>>>>>>> cb18fec (feat(db): SQLite persistence via userData, schema runner, and IPC wiring (#55))
 
 ipcMain.handle("tech:detect", async (_event, rootDir) => {
   const root = rootDir || process.cwd();
@@ -166,6 +171,10 @@ ipcMain.handle("zip:validate", (_event, filePath) => {
 app.whenReady().then(() => {
   console.log("Electron ready");
 
+  // I am adding this so that I can see where exactly app.db will exist
+  console.log("[app]", "userData =", app.getPath("userData"));
+
+
   cfg = new ConfigStore({
     dir: path.join(app.getPath("userData"), "config"),
     defaults: { theme: "system", allowTelemetry: false },
@@ -207,4 +216,8 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  closeDb();
 });

@@ -14,3 +14,6 @@ Thumbs.db
 **/app.dp-wal
 # SQLite
 src/db/*.db*
+app.db
+app.db-*
+*.db-journal

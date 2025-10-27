@@ -120,6 +120,49 @@ function registerProjectIpc() {
   });
 }
 
+  // Save a project + its latest analysis into SQLite
+  ipcMain.handle('project.saveAnalysis', async (_evt, payload = {}) => {
+    try {
+      // minimal guardrails
+      if (!payload || typeof payload !== 'object') throw new Error('Invalid payload');
+      const {
+        name = 'Unnamed Project',
+        repoPath = '',
+        analysis = {},
+        rawJson = {}
+      } = payload;
+
+      // normalize / defaults (epoch seconds for analyzed_at)
+      const normalized = {
+        name,
+        repoPath,
+        classification: analysis.classification || 'unknown',
+        totalCommits: Number(analysis.totalCommits ?? 0),
+        humanContributorCount: Number(analysis.humans ?? analysis.humanContributorCount ?? 0),
+        botContributorCount: Number(analysis.bots ?? analysis.botContributorCount ?? 0),
+        mainAuthorName: analysis.mainAuthorName ?? analysis.mainAuthor?.name ?? null,
+        mainAuthorEmail: analysis.mainAuthorEmail ?? analysis.mainAuthor?.email ?? null,
+        mainAuthorCommits: analysis.mainAuthorCommits ?? analysis.mainAuthor?.commits ?? null,
+        mainAuthorShare: analysis.mainAuthorShare ?? analysis.mainAuthor?.contributionShare ?? null,
+        analyzedAt: Number(
+          typeof analysis.analyzedAt === 'number'
+            ? analysis.analyzedAt
+            : Math.floor(new Date(analysis.analyzedAt || Date.now()).getTime() / 1000)
+        ),
+        detailsJson: rawJson, // full export blob
+      };
+
+      // single-transaction upsert
+      const projectId = require('../db/projectStore').saveProjectAnalysisTx(normalized);
+      // return the updated list so the UI can refresh immediately
+      const rows = listProjectSummaries();
+      return ok({ projectId, rows });
+    } catch (err) {
+      console.error('[ipc] project.saveAnalysis error:', err);
+      return fail(err);
+    }
+  });
+
 module.exports = {
   registerProjectIpc,
 };
