@@ -4,6 +4,19 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { openDb } = require('./connection');
 
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDateTime(new Date());
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 /** Run schema.sql once on startup (idempotent). */
 function initSchema() {
   const db = openDb();
@@ -40,7 +53,7 @@ function seedArtifacts() {
   db.exec("DELETE FROM artifact;");
   db.exec("DELETE FROM sqlite_sequence WHERE name='artifact';");
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = new Date();
   const rows = [
     {
       project_id: null,
@@ -48,8 +61,8 @@ function seedArtifacts() {
       name: 'demo-file.txt',
       ext: 'txt',
       size_bytes: 120,
-      created_at: now - 120,
-      modified_at: now - 60,
+      created_at: formatDateTime(new Date(now.getTime() - 120 * 1000)),
+      modified_at: formatDateTime(new Date(now.getTime() - 60 * 1000)),
       tag: 'doc',
       sha256: crypto.createHash('sha256').update('demo-file-1').digest('hex'),
       meta_json: JSON.stringify({ note: 'seeded by init.js' }),
@@ -60,8 +73,8 @@ function seedArtifacts() {
       name: 'demo-script.js',
       ext: 'js',
       size_bytes: 1024,
-      created_at: now - 300,
-      modified_at: now - 240,
+      created_at: formatDateTime(new Date(now.getTime() - 300 * 1000)),
+      modified_at: formatDateTime(new Date(now.getTime() - 240 * 1000)),
       tag: 'code',
       sha256: crypto.createHash('sha256').update('demo-script.js').digest('hex'),
       meta_json: JSON.stringify({ note: 'seeded by init.js' }),
@@ -72,8 +85,8 @@ function seedArtifacts() {
       name: 'project-report.pdf',
       ext: 'pdf',
       size_bytes: 2048,
-      created_at: now - 180,
-      modified_at: now - 120,
+      created_at: formatDateTime(new Date(now.getTime() - 180 * 1000)),
+      modified_at: formatDateTime(new Date(now.getTime() - 120 * 1000)),
       tag: 'report',
       sha256: crypto.createHash('sha256').update('project-report.pdf').digest('hex'),
       meta_json: JSON.stringify({ note: 'seeded by init.js' }),

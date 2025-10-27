@@ -5,6 +5,19 @@ const tableBody = document.querySelector('#file-upload-table tbody');
 // Hook up a project id if you want to associate uploads with a specific project.
 const ACTIVE_PROJECT_ID = null;
 
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 function fmtBytes(n) {
   if (typeof n !== 'number' || Number.isNaN(n)) return '';
   if (n < 1024) return `${n} B`;
@@ -129,7 +142,7 @@ async function handleUpload() {
       durationMs: summary.durationMs,
     });
 
-    const now = Math.floor(Date.now() / 1000);
+    const now = formatDateTime(new Date());
     const artifactRows = files.map((file) => ({
       project_id: ACTIVE_PROJECT_ID,
       path: file.zip_path,

@@ -6,8 +6,19 @@ const crypto = require('node:crypto');
 const { openDb } = require('../db/connection');
 const { validateZipInput } = require('../lib/fileValidator');
 
-function toUnixSeconds(date) {
-  return Math.floor(date.getTime() / 1000);
+function formatDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return formatDateTime(new Date());
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 async function ensureUploadsDir() {
@@ -81,8 +92,12 @@ function registerFileIpc() {
       const destination = await uniqueDestination(uploadsDir, path.basename(sourcePath));
       const sha256 = await copyAndHash(sourcePath, destination);
       const stats = await fsp.stat(destination);
-      const createdAt = Number.isFinite(stats.birthtimeMs) ? toUnixSeconds(stats.birthtime) : Math.floor(Date.now() / 1000);
-      const modifiedAt = Number.isFinite(stats.mtimeMs) ? toUnixSeconds(stats.mtime) : createdAt;
+      const createdAt = Number.isFinite(stats.birthtimeMs)
+        ? formatDateTime(stats.birthtime)
+        : formatDateTime(new Date());
+      const modifiedAt = Number.isFinite(stats.mtimeMs)
+        ? formatDateTime(stats.mtime)
+        : createdAt;
 
       const artifactRow = {
         project_id: projectId,
