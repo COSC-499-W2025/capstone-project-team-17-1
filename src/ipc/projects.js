@@ -1,6 +1,7 @@
 const { ipcMain } = require('electron');
-const { listProjectSummaries, getProjectsForAnalysis } = require('../db/projectStore');
+const { listProjectSummaries, getProjectsForAnalysis, getProjectAnalysisById } = require('../db/projectStore');
 const { refreshAllProjectAnalysis } = require('../services/projectAnalyzer');
+const { buildSkillsSnapshotFromDetails } = require('../services/skillsSnapshot');
 const {
   buildCollaborationAnalysis,
   formatAnalysisAsCSV,
@@ -35,10 +36,10 @@ function registerProjectIpc() {
     }
   });
   ipcMain.handle('projects:getSnapshot', (_e, { projectId }) => {
-  const row = getProjectAnalysisById(projectId);
-  if (!row) return null;
-  return buildSkillsSnapshotFromDetails(row);
-});
+    const row = getProjectAnalysisById(projectId);
+    if (!row) return null;
+    return buildSkillsSnapshotFromDetails(row);
+  });
   // Allow the renderer to export JSON/CSV snapshots without rereading the repo.
   ipcMain.handle('project.export', async (_event, params = {}) => {
     try {
@@ -119,6 +120,49 @@ function registerProjectIpc() {
     }
   });
 }
+
+  // Save a project + its latest analysis into SQLite
+  ipcMain.handle('project.saveAnalysis', async (_evt, payload = {}) => {
+    try {
+      // minimal guardrails
+      if (!payload || typeof payload !== 'object') throw new Error('Invalid payload');
+      const {
+        name = 'Unnamed Project',
+        repoPath = '',
+        analysis = {},
+        rawJson = {}
+      } = payload;
+
+      // normalize / defaults (epoch seconds for analyzed_at)
+      const normalized = {
+        name,
+        repoPath,
+        classification: analysis.classification || 'unknown',
+        totalCommits: Number(analysis.totalCommits ?? 0),
+        humanContributorCount: Number(analysis.humans ?? analysis.humanContributorCount ?? 0),
+        botContributorCount: Number(analysis.bots ?? analysis.botContributorCount ?? 0),
+        mainAuthorName: analysis.mainAuthorName ?? analysis.mainAuthor?.name ?? null,
+        mainAuthorEmail: analysis.mainAuthorEmail ?? analysis.mainAuthor?.email ?? null,
+        mainAuthorCommits: analysis.mainAuthorCommits ?? analysis.mainAuthor?.commits ?? null,
+        mainAuthorShare: analysis.mainAuthorShare ?? analysis.mainAuthor?.contributionShare ?? null,
+        analyzedAt: Number(
+          typeof analysis.analyzedAt === 'number'
+            ? analysis.analyzedAt
+            : Math.floor(new Date(analysis.analyzedAt || Date.now()).getTime() / 1000)
+        ),
+        detailsJson: rawJson, // full export blob
+      };
+
+      // single-transaction upsert
+      const projectId = require('../db/projectStore').saveProjectAnalysisTx(normalized);
+      // return the updated list so the UI can refresh immediately
+      const rows = listProjectSummaries();
+      return ok({ projectId, rows });
+    } catch (err) {
+      console.error('[ipc] project.saveAnalysis error:', err);
+      return fail(err);
+    }
+  });
 
 module.exports = {
   registerProjectIpc,
