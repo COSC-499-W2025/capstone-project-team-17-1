@@ -30,11 +30,13 @@ function registerZipIpc(ipcMain) {
       if (!fs.existsSync(zipPath)) {
         return { ok: false, error: `NotFound: ${zipPath}` };
       }
-      const { rows, count } = await collectZipMetadata(zipPath);
+      const { rows, count, totalBytes, durationMs } = await collectZipMetadata(zipPath);
       return {
         ok: true,
         data: rows,
         count,
+        total_bytes: totalBytes,
+        duration_ms: durationMs,
       };
     } catch (e) {
       return { ok: false, error: e?.message || String(e) };

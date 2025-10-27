@@ -107,18 +107,35 @@ async function collectZipMetadata(zipPath, options = {}) {
     log = true,
   } = options;
 
+  const start = process.hrtime.bigint();
+  let totalBytes = 0;
   const rows = [];
   for await (const meta of iterZipMetadata(zipPath)) {
     rows.push(meta);
+    const size = Number(meta.size_bytes) || 0;
+    totalBytes += size;
   }
+  const durationNs = process.hrtime.bigint() - start;
+  const durationMs = Number(durationNs) / 1e6;
 
   if (log) {
     rows.forEach((row) => {
       console.log('[zipParser] metadata', JSON.stringify(row));
     });
+    console.log('[zipParser] summary', JSON.stringify({
+      zip: path.basename(zipPath),
+      files: rows.length,
+      total_bytes: totalBytes,
+      duration_ms: Number(durationMs.toFixed(3)),
+    }));
   }
 
-  return { rows, count: rows.length };
+  return {
+    rows,
+    count: rows.length,
+    totalBytes,
+    durationMs,
+  };
 }
 
 module.exports = {

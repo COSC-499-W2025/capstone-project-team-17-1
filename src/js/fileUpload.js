@@ -112,6 +112,23 @@ async function handleUpload() {
     const files = scanRes.data || [];
     renderRows(files);
 
+    const summary = {
+      files: Number.isInteger(scanRes.count) ? scanRes.count : files.length,
+      totalBytes: Number.isFinite(scanRes.total_bytes) ? scanRes.total_bytes : files.reduce((sum, file) => sum + (Number(file.size_bytes) || 0), 0),
+      durationMs: Number.isFinite(scanRes.duration_ms) ? scanRes.duration_ms : null,
+    };
+    const formatDuration = (ms) => {
+      if (!Number.isFinite(ms)) return null;
+      if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+      return `${ms >= 100 ? ms.toFixed(0) : ms.toFixed(1)} ms`;
+    };
+    console.info('[fileUpload] zip summary', {
+      files: summary.files,
+      totalBytes: summary.totalBytes,
+      totalBytesHuman: Number.isFinite(summary.totalBytes) ? fmtBytes(summary.totalBytes) : null,
+      durationMs: summary.durationMs,
+    });
+
     const now = Math.floor(Date.now() / 1000);
     const artifactRows = files.map((file) => ({
       project_id: ACTIVE_PROJECT_ID,
@@ -143,7 +160,12 @@ async function handleUpload() {
       }
     }
 
-    statusEl.textContent = `Uploaded ${uploaded.name || 'archive'}${insertedMsg}`;
+    const durationText = formatDuration(summary.durationMs) || 'N/A';
+    const totalBytesText = Number.isFinite(summary.totalBytes) ? fmtBytes(summary.totalBytes) : 'N/A';
+    const summaryText = `Number of files: ${summary.files} · Total bytes: ${totalBytesText} · Scan duration: ${durationText}`;
+    const summarySuffix = ` · ${summaryText}`;
+
+    statusEl.textContent = `Uploaded ${uploaded.name || 'archive'}${insertedMsg}${summarySuffix}`;
   } catch (err) {
     console.error(err);
     statusEl.textContent = 'Upload failed';
