@@ -199,7 +199,38 @@ During Week 7, the team closed five issues: **#39** finalized the tech stack (El
 <img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
 
 
-## WEEK 8 TEAM LOG
+## WEEK 8 TEAM LOG (Oct 20 - Oct 26, 2025)
+
+### Recap of Milestone Goal - Week 8
+
+In Week 8, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 8
+<img width="1216" height="263" alt="Screenshot 2025-10-26 at 10 52 02 PM" src="https://github.com/user-attachments/assets/93985ea8-80e3-4b83-9e36-c6a6b9ac3c02" />
+<img width="1150" height="52" alt="Screenshot 2025-10-26 at 11 04 57 PM" src="https://github.com/user-attachments/assets/59e57b61-19fb-435f-a0d8-6bc4e55f4db2" />
+
+
+### Burnup chart Week 8
+<img width="1085" height="610" alt="Screenshot 2025-10-26 at 10 54 11 PM" src="https://github.com/user-attachments/assets/1a6bbf93-43e6-49b2-b738-ea948cd81197" />
+
+### In Progress Tasks Week 8
+<img width="1232" height="338" alt="Screenshot 2025-10-26 at 10 54 46 PM" src="https://github.com/user-attachments/assets/f3a3224b-681c-4b11-894d-28e8b457617c" />
+
+### Test Report Week 8
+During Week 8, the team focused on advancing core analysis capabilities and improving application usability across multiple modules. **#56 (Collaboration Analysis Module)** introduced logic to detect co-authorship patterns, review-based interactions, shared accounts, and configurable weight normalization. The implementation was validated through automated tests (`TestA–TestC`) and CSV formatting checks (`TestD`), confirming robustness even on empty repositories. **#58** enhanced frontend usability by polishing layout components, improving visual consistency, and adding a custom application icon to our Electron build, making the application feel more production-ready. **#59 (Feature: Extract Key Skills)** delivered contributor skill detection with adjustable filters and export features; manual and automated tests confirmed skill attribution accuracy and CSV export structure. Finally, **#63** enabled persistent data storage by integrating SQLite through Electron `userData`, with schema auto-loading and IPC support, verified via database initialization logs and table inspection. Overall, this week transitioned the system from isolated features toward an integrated analysis pipeline with data persistence, collaboration metrics, and user-facing analytics.
+
+<img width="595" height="247" alt="Screenshot 2025-10-26 at 10 59 53 PM" src="https://github.com/user-attachments/assets/df9b0e29-477e-4815-a2ca-b4bb78e6efae" />
+
 
 ## WEEK 9 TEAM LOG
 

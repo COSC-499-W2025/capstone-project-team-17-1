@@ -101,3 +101,24 @@ In addition to development work, I helped organize the team by assigning tasks t
 This week strengthened my understanding of team coordination in a collaborative software project. I learned how to design logic that handles multiple project types, manage task planning in a structured way, and support team progress through effective code reviews and communication.
 ### Completed Tasks Week 7
 'Distinguish Individual Projects from Collaborative Projects' task #38
+
+## WEEK 8 Personal LOG (Oct20 - Oct26, 2025)
+### 1. Type of Tasks Worked On
+<img width="1084" height="557" alt="Screenshot 2025-10-25 at 2 13 59 PM" src="https://github.com/user-attachments/assets/16b9b472-78ef-4fb3-ac79-8ff41fdb9307" />
+
+### 2. Weekly Goals Recap
+- complete 'Collaboration Analysis Module' task #42
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+
+This week I completed the Collaboration Analysis Module (task #42), which is responsible for analyzing team contribution patterns in a project. To implement this, I parsed git log --numstat output to extract meaningful contribution metrics like commit count, lines added/removed, and review involvement. I also added logic to distinguish between real contributors, shared accounts, and bots, since many Git histories include dependabot or team accounts that can distort results. The module now stores contribution summaries in our database so they can be reused later for analytics and user portfolio generation.
+
+After finishing the backend logic, I connected it to our application by updating the Electron IPC layer and preload bridge, and I built the frontend components to display collaboration summaries, contributor leaderboards, and export options (JSON/CSV). I also added refresh and export handlers in the UI. During development, I ran into compatibility issues with better-sqlite3 when running tests inside Electron, so I added an electron-rebuild script to solve native module loading problems.
+
+Besides coding, I also helped organize the team by assigning some new tasks for the next phase and reviewing teammates’ pull requests. I discussed implementation details with others to make sure this module fits our data pipeline design and that future visualization features can build on top of it smoothly.
+
+Overall, this week helped me improve both system design thinking and team coordination skills.
+  
+### Completed Tasks Week 7
+'Collaboration Analysis Module' task #42

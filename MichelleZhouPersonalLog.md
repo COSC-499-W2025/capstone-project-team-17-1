@@ -7,6 +7,7 @@
 - [Week 5 Personal Log](#week-5-personal-log)
 - [Week 6 Personal Log](#week-6-personal-log)
 - [Week 7 Personal Log](#week-7-personal-log)
+- [Week 8 Personal Log](#week-8-personal-log)
 
 ## Week 3 Personal Log
 
@@ -51,3 +52,22 @@ Completed Work Breakdown Structure with team and delegated tasks to ensure that 
 
 Week Recap: Collaborated closely with the team to review one another's code and pull requests. Provided detailed feedback on functionality and any errors that arose during testing. There was noticeable improvement in team communication and organization. Everyone was proactive in updating task progress and offering assistance when needed. This level of collaboration helped us stay on top of our deliverables while ensuring steady progress. Worked on User Consent Feature and saving inputs in a database. 
 
+
+## Week 8 Personal Log
+
+- (Oct 20 - Oct 26, 2025)<br />
+
+<img width="966" height="566" alt="image" src="https://github.com/user-attachments/assets/b127074f-4733-48f4-ba73-9ff5789437ad" />
+
+### Week Recap: 
+- Worked on 'Metrics Calculation Module' task #43
+- Discussed new implementations with members
+- Reviewed team member's PR and help test new features
+
+This week i worked on implementing a unified metrics extraction module that ties together quantitative activity analysis and quantitative skill inferences. To start, I defined and formalized each core metric in order to identify the type of data the program should be looking for. Each metric type is then calculated alongside a contribution analysis to obtain an overview of the project activities/behaviour. The metrics:extract handler receives these details and passes them to analyzeMetrics() which returns with a summary of all key metrics. Lastly, I am working on outputting the metrics to the Electron UI. To do this, I am writing a renderer which will request the finalized data and present it as the corresponding activity patterns.
+
+Aside from my own code, I assisted in troubleshooting pr's where feature/extract-key-skills resulted in many merge conflicts. My team and I also coordinated on new task assignments. We reviewed our progress thus far and are actively working towards milestone 1 completion.
+
+### Next Week:
+- Finish Metrics Calculation Module
+- Start developing "Chronological List of Projects" task #67

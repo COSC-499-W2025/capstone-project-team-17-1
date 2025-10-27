@@ -228,3 +228,125 @@ This week I implemented and shipped a full **Tech Stack Detector** feature and w
 
 ### Reflection
 This week taught me how to move quickly from a command line utility to a fully integrated app feature. I practiced clean IPC design, safer file system mocking for tests, and careful script configuration so the whole team can run tests the same way. Seeing the detector surface real project signals in the UI felt great and set us up for clearer onboarding and audits.
+
+---
+
+## Week 8 Personal Log [Oct 20 – Oct 26, 2025] {#week-8}
+
+This week I worked on two big areas: polishing the frontend/UX of our Electron app and implementing the new **Key Skills Extraction** feature that analyzes contributors’ work and surfaces what each teammate is strong in. I also got tests working in CI again after refactoring backend logic.
+
+**Peer Eval**  
+>
+> ![Week 8 — Data Mining App](![alt text]
+> <img width="1064" height="623" alt="image" src="https://github.com/user-attachments/assets/261a17cc-9332-420f-937a-ac80ec4a54de" />
+
+> _Figure 0. peer evaluation._
+
+---
+
+### Frontend / UI Work
+
+**Branding + polish**
+- Rebranded the app from the default Electron boilerplate to our own name, **Loom**.
+- Added a custom app icon (SVG → ICO/ICNS) and updated `BrowserWindow` so the icon shows instead of the Electron logo.
+- Swapped in a full-screen gradient background and moved the UI into styled cards with rounded borders, subtle shadows, and a dark navy theme. This made the dashboard look way more like a product and less like a prototype.
+- Customized the scrollbars to match our color scheme (dark track, accent thumb), and removed the ugly default Windows light gray scrollbars.
+- Made the Electron window open “borderless fullscreen style” (maximized client area) so the app fills the screen on launch instead of a tiny dev window.
+
+**Landing / UX**
+- Started planning a Welcome screen (separate HTML) so that when the app opens we can show “Welcome / Get Started →” instead of immediately dumping raw tables.
+- Hooked up the renderer layout to be more modular so we can swap between views (welcome vs dashboard).
+
+**Result:** The UI now feels like an actual product demo we could hand to someone, not just an internal debug tool.
+
+---
+
+### Feature: Key Skills Extraction
+
+We added a full skills analyzer that answers:  
+**“What does each teammate actually work on?”**
+
+#### Backend skills pipeline
+- Built `detectSkills` which:
+  - Looks at commit histories and breaks down who edited which files and how many lines in each language / tech area.
+  - Maps file extensions (like `.js`, `.ts`, `.sql`, `.cs`) to higher-level skills (`JavaScript`, `TypeScript`, `SQL/Databases`, `C#`, `Electron`).
+  - Ignores noise like `.md`, `.json`, `.yml`, images, lockfiles, etc.
+- Added logic to attribute lines only to authors/co-authors, not reviewers. This makes the signal about actual code ownership instead of approvals.
+- Tracks `linesByExt` per contributor, so we know “Alice touched 900 lines of JS and 100 lines of SQL.”
+- From that, we compute:
+  - **Impact bar** per skill = how much of this person’s work is that skill.
+  - **Confidence %** per skill = how certain we are that the person actually works in that area.  
+    We turned this into a dynamic curve: higher share of edits in that skill → higher confidence. Low/no evidence = lower confidence, not just a flat 60%.
+
+#### Filtering / quality control
+- Added an allow-list of meaningful skills (JavaScript, SQL/Databases, Electron, C#, etc.).
+- Added thresholds so junk doesn’t show:
+  - Drop a skill for a person if it’s < N lines or < X% of their total work.
+  - Drop a skill from project chips if it barely appears overall.
+- This gets rid of spam like “CSS” or “Markdown” showing up as someone’s “top skill” just because they fixed a README once.
+
+#### IPC + renderer integration
+- Added a new IPC channel `skills:get` in `main.js`.
+  - It builds a snapshot of all contributors, runs `detectSkills`, then returns `{ projectSkills, contributorSkills }` to the renderer.
+- In the renderer (index.html):
+  - Created a **Key skills** card with:
+    - “Detect key skills” button that calls `window.loomSkills.get()` and renders results.
+    - Chips across the top for the project’s dominant skills.
+    - A table of contributors where each row shows:
+      - the skill name,
+      - an “impact” progress bar,
+      - the confidence percentage for that skill.
+    - “Copy JSON” button for debugging and “Export CSV” button that generates a proper comma-separated export with `email, skill, confidence, impact, lines, sources`.
+  - Filtered out contributors who had no real evidence so we don’t show blank rows.
+
+Result: we can now point at the app and say “this person is mostly JavaScript, this person’s top secondary area is SQL/Databases,” with confidence numbers and supporting evidence.
+
+---
+
+### Testing & Stability
+
+**Skills tests**
+- Added `test/skills.test.js` which:
+  - Builds a fake snapshot (JS-heavy plus some SQL) and checks that:
+    - `detectSkills` returns the expected high-signal skills for that project.
+    - One contributor’s JavaScript confidence is higher than their SQL confidence.
+    - Noise like markdown-only edits doesn’t get flagged as a “real skill.”
+- Hooked these into our test runner (`npm test`) using Electron’s Node mode (`ELECTRON_RUN_AS_NODE=1 electron --test`).
+
+**Fixing broken tests in existing code**
+- After refactoring contributor analysis, the old tests for `gitContributors` started failing with `author is not defined` and bogus `linesAdded`/`linesDeleted` fields.
+- I fixed `buildCollaborationAnalysis` to:
+  - Stop referencing undefined `author` / `coauthors` variables.
+  - Attribute line counts using the actual parsed fields (`commit.additions` / `commit.deletions`).
+  - Split line credit between the real participants (author + co-authors) only, leaving reviewers out, which is what the tests expect.
+- After that, the team’s original tests for classification (“individual vs collaborative”), shared-account detection, CSV export, etc. all started passing again.
+
+**Dev environment fixes**
+- Helped fix the native module mismatch for `better-sqlite3` on a new machine.
+  - It was compiled for a different Node ABI than the version bundled with our Electron build.
+  - Documented and ran `npm install` + `npm run rebuild:electron` (`electron-rebuild`) to rebuild `better-sqlite3` against our Electron runtime.
+- Added guidance that we may want a `postinstall` script to auto-run `electron-rebuild` so teammates don’t get blocked by ABI errors when they pull.
+
+---
+
+### PR / Process
+
+- Wrote PR descriptions for:
+  - Frontend polish & branding (“Loom”, fullscreen window, gradient background, custom icon).
+  - The Key Skills feature: what it does, how we calculate impact and confidence, and how we tested it (manual flow + automated tests).
+- Filled in the Testing section in the PR template:
+  - Manual steps (click Detect, inspect table, export CSV).
+  - Automated steps (`npm test` / `npm run test:watch`).
+- Connected the PR to Issue #53 (“Extract Key Skills”) so it can auto-close.
+
+---
+
+### Reflection
+
+This week felt like a legit product turn instead of just raw data plumbing:
+- I took something that was originally just internal numbers (lines-per-ext, commit metadata) and exposed it in a way that teammates and maybe even stakeholders could understand at a glance.
+- I gave the app an identity (Loom), cleaned up visuals, and started thinking about first-run UX.
+- I also had to do some “integration janitor” work: fixing test failures caused by refactors, dealing with native module rebuilds, and making sure our scripts work across machines.
+
+The coolest part was watching the Key Skills panel evolve from “dump some JSON” to a proper dashboard with impact bars, % confidence, and CSV export. It feels like the first real version of our collaboration analytics story.
+
