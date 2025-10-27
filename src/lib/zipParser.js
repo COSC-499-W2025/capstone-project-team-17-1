@@ -100,7 +100,29 @@ async function* iterZipMetadata(zipPath) {
   }
 }
 
+// Collect metadata from ZIP and log each entry as JSON.
+// We only print to the console for now; JSONL persistence may return later
+async function collectZipMetadata(zipPath, options = {}) {
+  const {
+    log = true,
+  } = options;
+
+  const rows = [];
+  for await (const meta of iterZipMetadata(zipPath)) {
+    rows.push(meta);
+  }
+
+  if (log) {
+    rows.forEach((row) => {
+      console.log('[zipParser] metadata', JSON.stringify(row));
+    });
+  }
+
+  return { rows, count: rows.length };
+}
+
 module.exports = {
   iterZipEntries,
   iterZipMetadata,
+  collectZipMetadata,
 };

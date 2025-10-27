@@ -2,7 +2,7 @@
 const { dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { iterZipMetadata, extractAndHash } = require('../lib/zipParser');
+const { collectZipMetadata, extractAndHash } = require('../lib/zipParser');
 
 async function collect(iterable) {
   const out = [];
@@ -30,8 +30,12 @@ function registerZipIpc(ipcMain) {
       if (!fs.existsSync(zipPath)) {
         return { ok: false, error: `NotFound: ${zipPath}` };
       }
-      const data = await collect(iterZipMetadata(zipPath));
-      return { ok: true, data };
+      const { rows, count } = await collectZipMetadata(zipPath);
+      return {
+        ok: true,
+        data: rows,
+        count,
+      };
     } catch (e) {
       return { ok: false, error: e?.message || String(e) };
     }
