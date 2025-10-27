@@ -181,13 +181,19 @@ html {
     <button id="btn-upload-file">Upload ZIP</button>
     <span id="file-upload-status" style="margin-left:8px; color:#555"></span>
 
-    <table id="file-upload-table" style="margin-top:1rem; width:100%; border-collapse:collapse">
+    <table id="file-upload-table" style="margin-top:1rem; width:100%; border-collapse:collapse; table-layout:fixed;">
+      <colgroup>
+        <col style="width:45%;">
+        <col style="width:15%;">
+        <col style="width:30%;">
+        <col style="width:10%;">
+      </colgroup>
       <thead>
         <tr>
-          <th style="text-align:left; border-bottom:1px solid #ddd;">Path</th>
-          <th style="text-align:right; border-bottom:1px solid #ddd;">Size (B)</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd;">Modified (UTC)</th>
-          <th style="text-align:left; border-bottom:1px solid #ddd;">MIME</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px 12px;">Path</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px 12px;">Size</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px 12px;">Last Modified</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px 12px;">Format</th>
         </tr>
       </thead>
       <tbody></tbody>
