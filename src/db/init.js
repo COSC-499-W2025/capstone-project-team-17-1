@@ -1,21 +1,6 @@
-// src/db/init.js
 const fs   = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { openDb } = require('./connection');
-
-function formatDateTime(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return formatDateTime(new Date());
-  const pad = (n) => String(n).padStart(2, '0');
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-}
 
 /** Run schema.sql once on startup (idempotent). */
 function initSchema() {
@@ -42,66 +27,7 @@ function initSchema() {
   ).all().map(r => r.name);
   console.log('[db:init] tables:', tables);
 
-  // Dev seeds (okay to keep for now)
-  seedArtifacts();
   seedDefaultProject();
-}
-
-/** Dev-only: sample artifacts so UI has something to show. */
-function seedArtifacts() {
-  const db = openDb();
-  db.exec("DELETE FROM artifact;");
-  db.exec("DELETE FROM sqlite_sequence WHERE name='artifact';");
-
-  const now = new Date();
-  const rows = [
-    {
-      project_id: null,
-      path: 'sample/demo-file-1.txt',
-      name: 'demo-file.txt',
-      ext: 'txt',
-      size_bytes: 120,
-      created_at: formatDateTime(new Date(now.getTime() - 120 * 1000)),
-      modified_at: formatDateTime(new Date(now.getTime() - 60 * 1000)),
-      tag: 'doc',
-      sha256: crypto.createHash('sha256').update('demo-file-1').digest('hex'),
-      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
-    },
-    {
-      project_id: null,
-      path: 'sample/demo-script.js',
-      name: 'demo-script.js',
-      ext: 'js',
-      size_bytes: 1024,
-      created_at: formatDateTime(new Date(now.getTime() - 300 * 1000)),
-      modified_at: formatDateTime(new Date(now.getTime() - 240 * 1000)),
-      tag: 'code',
-      sha256: crypto.createHash('sha256').update('demo-script.js').digest('hex'),
-      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
-    },
-    {
-      project_id: null,
-      path: 'sample/project-report.pdf',
-      name: 'project-report.pdf',
-      ext: 'pdf',
-      size_bytes: 2048,
-      created_at: formatDateTime(new Date(now.getTime() - 180 * 1000)),
-      modified_at: formatDateTime(new Date(now.getTime() - 120 * 1000)),
-      tag: 'report',
-      sha256: crypto.createHash('sha256').update('project-report.pdf').digest('hex'),
-      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
-    },
-  ];
-
-  const insert = db.prepare(`
-    INSERT INTO artifact
-      (project_id, path, name, ext, size_bytes, created_at, modified_at, tag, sha256, meta_json)
-    VALUES
-      (@project_id, @path, @name, @ext, @size_bytes, @created_at, @modified_at, @tag, @sha256, @meta_json)
-  `);
-  db.transaction((all) => { for (const r of all) insert.run(r); })(rows);
-
-  console.log(`[seed] ${rows.length} demo artifacts inserted`);
 }
 
 /** Dev-only: ensure a default project + repo row exists. */
