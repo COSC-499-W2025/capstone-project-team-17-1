@@ -283,6 +283,173 @@ html {
 
   btnDetectTech.addEventListener('click', detectTech);
 </script>
+<!-- Key skills -->
+<section class="summary-card" id="skills-card">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
+    <h2 style="margin:0">Key skills</h2>
+    <div style="display:flex; gap:8px">
+      <button id="skills-detect" style="margin:0">Detect key skills</button>
+      <button id="skills-copy" style="margin:0">Copy JSON</button>
+      <button id="skills-export" style="margin:0">Export CSV</button>
+    </div>
+  </div>
+
+  <p style="margin:4px 0 10px; color:#9aa6bd">
+    Ranked by contribution impact with evidence-based confidence.
+  </p>
+
+  <div id="skills-project" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px"></div>
+
+  <div style="overflow:auto">
+    <table id="skills-table" style="width:100%; border-collapse:collapse; font-size:13px">
+      <thead>
+        <tr>
+          <th align="left" style="padding:6px 0">Contributor</th>
+          <th align="left" style="padding:6px 0">Top skills (impact ▮ + confidence)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- put the script AFTER the elements -->
+  <script>
+  (function(){
+    function getCurrentProjectId(){
+      const sel = document.querySelector('#export-project-select, select[data-project-select]');
+      const v = sel?.value; return v && /^\d+$/.test(v) ? Number(v) : null;
+    }
+    async function fetchSkills(){
+      const projectId = getCurrentProjectId();
+      return window.loomSkills.get({ projectId });
+    }
+
+    const elProj   = document.getElementById('skills-project');
+    const elTBody  = document.querySelector('#skills-table tbody');
+    const btnDetect= document.getElementById('skills-detect');
+    const btnCopy  = document.getElementById('skills-copy');
+    const btnExport= document.getElementById('skills-export');
+
+    function makeChip(label, pct){
+      const wrap = document.createElement('span');
+      wrap.className = 'skill-chip';
+      wrap.innerHTML = `<span>${label}</span>
+        <span class="skill-bar"><span style="width:${Math.round((pct||0)*100)}%"></span></span>`;
+      return wrap;
+    }
+    function renderProjectChips(projectSkills){
+      elProj.innerHTML = '';
+      if (!projectSkills?.length) { elProj.textContent = 'No skills detected yet.'; return; }
+      projectSkills.slice(0,10).forEach(s => elProj.appendChild(makeChip(s.skill, s.impact ?? 0.5)));
+    }
+    function renderByContributor(byUser){
+  elTBody.innerHTML = '';
+
+  // Hide contributors with no evidence
+  const MIN_IMPACT = 0.000001;   // tweak if you want
+  const MIN_LINES  = 1;          // tweak if you want
+
+  const entries = Object.entries(byUser || {})
+    .filter(([, list]) =>
+      Array.isArray(list) &&
+      list.some(s => (s.impact || 0) > MIN_IMPACT || (s.lines || 0) >= MIN_LINES)
+    );
+
+  if (!entries.length) {
+    elTBody.innerHTML =
+      '<tr><td colspan="2" style="padding:6px 0; color:#9aa6bd">No contributors with evidence.</td></tr>';
+    return;
+  }
+
+  for (const [email, list] of entries){
+    const top = (list || []).slice(0,5).map(s => {
+      const pct  = Math.round((s.impact ?? 0) * 100);
+      const conf = Math.round((s.confidence ?? 0) * 100);
+      return `<span style="white-space:nowrap; margin-right:10px">${s.skill}
+        <span style="
+          display:inline-block; position:relative;
+          width:60px; height:6px;
+          background:#1e2a46; border-radius:6px;
+          vertical-align:middle; margin-left:6px;
+          overflow:hidden;
+        ">
+          <span style="
+            position:absolute; left:0; top:0; height:100%;
+            width:${pct}%;
+            background:#7aa2ff; border-radius:inherit; display:block;
+          "></span>
+        </span>
+        <span style="color:#9aa6bd; margin-left:6px">${conf}%</span>`;
+    }).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="padding:6px 0">${email}</td><td style="padding:6px 0">${top}</td>`;
+    elTBody.appendChild(tr);
+  }
+}
+
+    function exportCSV(cache){
+  if (!cache) return;
+  const rows = [['entity','email','skill','confidence','impact','lines','sources']];
+
+  // project-level rows (always present)
+  for (const s of (cache.projectSkills || [])) {
+    rows.push(['project','', s.skill, '', s.impact ?? '', '', '']);
+  }
+
+  // contributor rows
+  for (const [email, list] of Object.entries(cache.contributorSkills || {})) {
+    for (const s of (list || [])) {
+      rows.push([
+        'contributor', email, s.skill,
+        s.confidence ?? '', s.impact ?? '', s.lines ?? '',
+        (s.sources || []).join(' | ')
+      ]);
+    }
+  }
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
+  a.download = `project-skills_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+    let cache = null;
+    async function runDetect(){
+      btnDetect.disabled = true;
+      try {
+        cache = await fetchSkills();
+        renderProjectChips(cache.projectSkills);
+        renderByContributor(cache.contributorSkills);
+      } catch (e) {
+        console.error('skills detect failed', e);
+        alert('Failed to detect skills. Check console for details.');
+      } finally {
+        btnDetect.disabled = false;
+      }
+    }
+
+    btnDetect.addEventListener('click', runDetect);
+    btnCopy.addEventListener('click', () => cache && navigator.clipboard.writeText(JSON.stringify(cache, null, 2)));
+    btnExport.addEventListener('click', () => {
+      if (!cache) return;
+      const rows = [['entity','email','skill','confidence','impact','lines','sources']];
+      for (const [email, list] of Object.entries(cache.contributorSkills || {})) {
+        for (const s of list) rows.push(['contributor', email, s.skill, s.confidence ?? '', s.impact ?? '', s.lines ?? '', (s.sources||[]).join(' | ')]);
+      }
+      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+      a.download = `project-skills_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    });
+
+    // auto-run once
+    runDetect();
+  })();
+  </script>
+</section>
+
 
     <h2>Stored sample data</h2>
     <button id="refresh">refresh</button>

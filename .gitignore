@@ -10,5 +10,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 **/app.db
+**/app.dp-shm
+**/app.dp-wal
 # SQLite
 src/db/*.db*
