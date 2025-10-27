@@ -6,6 +6,7 @@
 - [Week 5 Personal Log](#week-5-personal-log)
 - [Week 6 Personal Log](#week-6-personal-log)
 - [Week 7 Personal Log](#week-7-personal-log)
+- [Week 8 Personal Log](#week-8-personal-log)
 
 ---
 
@@ -131,5 +132,109 @@ What I built
 <img width="1470" height="956" alt="FEAT(PARSE)" src="https://github.com/user-attachments/assets/4d859d39-f981-429a-9ab0-12cf2add0e76" />
 <img width="1047" height="535" alt="WEEK7PERSONALLOG" src="https://github.com/user-attachments/assets/f69fccbd-e06b-4bd7-9122-ee53cc83f05f" />
 
+### WEEK 8 PERSONAL LOG 
+##  Goals for the Week
+- Persist project information and analytics to a local database.
+- Wire main/renderer IPC to read/write analytics without recomputing.
+- Seed sample data for demo/testing.
+- Open a PR (review only) against `develop`.
 
+---
+
+##  What I Did
+1. **SQLite Persistence (better-sqlite3)**
+   - Implemented `src/db/connection.js` using `app.getPath('userData')` for a writable, per-user DB path.
+   - Enabled pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`.
+   - Added `closeDb()` and hooked it to `app.on('before-quit')`.
+
+2. **Schema & Init Runner**
+   - Created `src/db/schema.sql` with tables:
+     - `project`, `project_repository` (1:1), `project_analysis`, `artifact` (+ indexes).
+   - Wrote `src/db/init.js` to load and apply the schema in a transaction.
+   - Logged created tables on startup for verification.
+   - Added **dev seeds**: 3 demo artifacts + default project (“Capstone Team Workspace”).
+
+3. **Data Store**
+   - Implemented `src/db/projectStore.js`:
+     - `getProjectsForAnalysis()` — repo config for analyzer.
+     - `upsertProjectAnalysis(projectId, analysis)` — persist analyzer output.
+     - `listProjectSummaries()` — joined view for UI (parses `details_json`).
+
+4. **IPC Wiring**
+   - `src/ipc/projects.js`:
+     - `project.list` — list summaries.
+     - `project.refresh` — re-run analysis then list.
+     - `project.export` — JSON/CSV snapshot export (optionally refresh).
+
+5. **Main Process Updates**
+   - In `src/main.js`, called `initSchema()` on `app.whenReady()`.
+   - Added a log for `[app] userData = …` to locate the DB on disk.
+   - **Fixed by me:** imported `closeDb` and added shutdown hook to flush/close SQLite.
+
+6. **Repo Hygiene**
+   - Ensured `.gitignore` excludes `app.db`, `app.db-*`, `*.db-journal`.
+   - Removed stray dev DB files in `src/` to avoid confusion.
+
+7. **PR**
+   - Pushed branch `feat/db-persistence`.
+   - Opened a **draft PR** to `develop` for review (no merge yet).
+   - Added detailed PR body (scope, testing, notes).
+
+---
+
+##  Verification & Testing
+- **Runtime logs:**
+  - Saw `[app] userData = /Users/<me>/Library/Application Support/cosc-499-project`.
+  - Saw `[db:init] applying schema from src/db/schema.sql`.
+  - Saw `[db:init] tables: ['artifact','project','project_analysis','project_repository','sqlite_sequence']`.
+  - Saw `[seed] 3 demo artifacts inserted`.
+- **SQLite checks:**
+  - `sqlite3 "$HOME/Library/Application Support/cosc-499-project/app.db" '.tables'` shows all tables.
+- **Manual seed/write:**
+  - Used `window.db.saveAnalysis(...)` from DevTools to insert an analysis; counts reflect in DB.
+
+---
+
+##  Issues & Resolutions
+- **DB path confusion:** Initially created DB under `src/` (wrong).  
+  **Fix:** Switched to `app.getPath('userData')` in `connection.js`; added startup log to confirm path.
+- **Empty DB (0 bytes):** Schema hadn’t run for that file.  
+  **Fix:** Deleted file and ensured `initSchema()` runs in `app.whenReady()`.
+- **Merge conflict markers in `main.js`:** Caused `Unexpected token '<<'`.  
+  **Fix:** Resolved conflicts, removed markers, kept `initSchema()` and `closeDb()` logic.
+- **Electron deprecation warning:** `console-message` args.  
+  **Status:** Non-blocking; will update to new `(event, params)` signature later.
+- **IPC log confusion:** `ipcMain.eventNames()` doesn’t list `ipcMain.handle` channels.  
+  **Status:** Verified IPC via working handlers & UI/DevTools calls.
+
+---
+
+##  Collaboration
+- Opened a draft PR for teammate review (no merge).  
+- Documented DB location and testing steps in the PR for reviewers.
+
+---
+
+##  Learnings
+- Correct DB placement in Electron apps is **userData**, not project cwd.
+- Always remove conflict markers before running the app; add a grep check to CI/local workflow.
+- Seeding data + startup logs speed up verification and reduce confusion.
+
+---
+
+##  Risks / Blockers
+- Seeds should be gated to dev mode before release.
+- Need a small UI “Save to DB” action so QA doesn’t rely on DevTools.
+
+---
+
+##  Plan for Next Week
+- Gate or remove dev seeds behind an environment flag.
+- Add UI button/workflow to persist current analysis.
+- Update the `console-message` listener to the new Electron signature.
+- Add light tests for `projectStore` (e.g., upsert/list roundtrip).
+- Address any reviewer feedback on the draft PR.
+<img width="1046" height="615" alt="WEEK8PERSONALLOG" src="https://github.com/user-attachments/assets/aec99609-0910-4b78-8a2b-9c75daaa0d36" />
+
+---
 
