@@ -349,6 +349,7 @@ function listProjectSummaries() {
    -----------------------------------------------------*/
 module.exports = {
   createProjectWithRepo,
+  getProjectsForAnalysis,
   upsertProjectAnalysis,
   saveProjectAnalysisTx,
   listProjectSummaries,

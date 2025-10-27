@@ -1,6 +1,7 @@
 const { ipcMain } = require('electron');
-const { listProjectSummaries, getProjectsForAnalysis } = require('../db/projectStore');
+const { listProjectSummaries, getProjectsForAnalysis, getProjectAnalysisById } = require('../db/projectStore');
 const { refreshAllProjectAnalysis } = require('../services/projectAnalyzer');
+const { buildSkillsSnapshotFromDetails } = require('../services/skillsSnapshot');
 const {
   buildCollaborationAnalysis,
   formatAnalysisAsCSV,
@@ -35,10 +36,10 @@ function registerProjectIpc() {
     }
   });
   ipcMain.handle('projects:getSnapshot', (_e, { projectId }) => {
-  const row = getProjectAnalysisById(projectId);
-  if (!row) return null;
-  return buildSkillsSnapshotFromDetails(row);
-});
+    const row = getProjectAnalysisById(projectId);
+    if (!row) return null;
+    return buildSkillsSnapshotFromDetails(row);
+  });
   // Allow the renderer to export JSON/CSV snapshots without rereading the repo.
   ipcMain.handle('project.export', async (_event, params = {}) => {
     try {
