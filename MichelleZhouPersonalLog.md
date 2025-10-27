@@ -70,4 +70,4 @@ Aside from my own code, I assisted in troubleshooting pr's where feature/extract
 
 ### Next Week:
 - Finish Metrics Calculation Module
-- Start developing task #67 "Chronological List of Projects"
+- Start developing "Chronological List of Projects" task #67
