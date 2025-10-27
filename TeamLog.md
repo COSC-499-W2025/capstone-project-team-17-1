@@ -217,6 +217,8 @@ In Week 8, team members self-assigned issues based on the tasks assigned in the 
 
 ### Completed Tasks Week 8
 <img width="1216" height="263" alt="Screenshot 2025-10-26 at 10 52 02 PM" src="https://github.com/user-attachments/assets/93985ea8-80e3-4b83-9e36-c6a6b9ac3c02" />
+<img width="1150" height="52" alt="Screenshot 2025-10-26 at 11 04 57 PM" src="https://github.com/user-attachments/assets/59e57b61-19fb-435f-a0d8-6bc4e55f4db2" />
+
 
 ### Burnup chart Week 8
 <img width="1085" height="610" alt="Screenshot 2025-10-26 at 10 54 11 PM" src="https://github.com/user-attachments/assets/1a6bbf93-43e6-49b2-b738-ea948cd81197" />
