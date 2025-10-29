@@ -23,7 +23,7 @@ class CLITestCase(unittest.TestCase):
 
     def test_analyze_missing_file_returns_json_error(self) -> None:
         args = SimpleNamespace(
-            archive=Path(self._tmpdir.name) / "missing.zip",
+            archive=str(Path(self._tmpdir.name) / "missing.zip"),
             metadata_output=Path(self._tmpdir.name) / "out" / "metadata.jsonl",
             summary_output=Path(self._tmpdir.name) / "out" / "summary.json",
             analysis_mode="auto",
@@ -47,7 +47,7 @@ class CLITestCase(unittest.TestCase):
             pass
 
         args = SimpleNamespace(
-            archive=archive_path,
+            archive=str(archive_path),
             metadata_output=Path(self._tmpdir.name) / "out" / "metadata.jsonl",
             summary_output=Path(self._tmpdir.name) / "out" / "summary.json",
             analysis_mode="auto",
@@ -78,6 +78,22 @@ class CLITestCase(unittest.TestCase):
         self.assertIn("Local Analysis Mode", output)
         parsed = json.loads(output)
         self.assertEqual(parsed["resolved_mode"], "local")
+
+    def test_analyze_rejects_empty_archive_path(self) -> None:
+        args = SimpleNamespace(
+            archive="  ",
+            metadata_output=Path(self._tmpdir.name) / "meta.jsonl",
+            summary_output=Path(self._tmpdir.name) / "summary.json",
+            analysis_mode="auto",
+            summary_to_stdout=False,
+            quiet=False,
+        )
+
+        with patch("sys.stderr", new_callable=io.StringIO) as fake_err:
+            exit_code = cli._handle_analyze(args)
+
+        self.assertEqual(exit_code, 5)
+        self.assertIn("Archive path must not be empty", fake_err.getvalue())
 
 
 if __name__ == "__main__":

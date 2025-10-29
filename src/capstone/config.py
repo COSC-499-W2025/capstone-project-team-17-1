@@ -64,20 +64,62 @@ class Config:
     preferences: Preferences
 
 
-_DEFAULT_CONFIG = Config(
-    consent=ConsentState(granted=False, decision="deny", timestamp=datetime.now(timezone.utc).isoformat()),
-    preferences=Preferences(),
-)
+_REQUIRED_CONSENT_FIELDS = {"granted", "decision", "timestamp", "source"}
+_REQUIRED_PREFERENCE_FIELDS = {"last_opened_path", "analysis_mode", "theme", "labels"}
+
+
+def _fresh_default_config() -> Config:
+    return Config(
+        consent=ConsentState(
+            granted=False,
+            decision="deny",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        ),
+        preferences=Preferences(),
+    )
+
+
+_DEFAULT_CONFIG = _fresh_default_config()
+
+
+def validate_config_shape(payload: Dict[str, Any]) -> None:
+    """Validate that an on-disk payload contains the expected encrypted shape."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("Configuration payload must be an object")
+
+    required_top_level = {"consent", "preferences"}
+    missing_keys = required_top_level - payload.keys()
+    if missing_keys:
+        raise ValueError(f"Configuration payload missing keys: {sorted(missing_keys)}")
+
+    consent_blob = payload.get("consent")
+    preferences_blob = payload.get("preferences")
+
+    if not isinstance(consent_blob, str) or not isinstance(preferences_blob, str):
+        raise ValueError("Configuration values must be encrypted strings")
+
+    consent_data = _decrypt(consent_blob)
+    preferences_data = _decrypt(preferences_blob)
+
+    if not _REQUIRED_CONSENT_FIELDS <= consent_data.keys():
+        raise ValueError("Consent payload missing required fields")
+    if not _REQUIRED_PREFERENCE_FIELDS <= preferences_data.keys():
+        raise ValueError("Preferences payload missing required fields")
 
 
 def load_config() -> Config:
     _ensure_config_dir()
     if not CONFIG_PATH.exists():
-        save_config(_DEFAULT_CONFIG)
-        return _DEFAULT_CONFIG
+        default = _fresh_default_config()
+        save_config(default)
+        return default
 
     with CONFIG_PATH.open("r", encoding="utf-8") as fh:
         stored = json.load(fh)
+
+    if isinstance(stored, dict):
+        validate_config_shape(stored)
 
     consent_data = stored.get("consent")
     preferences_data = stored.get("preferences")
@@ -104,6 +146,14 @@ def save_config(config: Config) -> None:
     }
     with CONFIG_PATH.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
+
+
+def reset_config() -> Config:
+    """Restore default configuration values on disk."""
+
+    default = _fresh_default_config()
+    save_config(default)
+    return default
 
 
 def update_consent(granted: bool, decision: str, source: str = "cli") -> Config:

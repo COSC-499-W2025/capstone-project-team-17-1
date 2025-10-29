@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     consent_sub.add_parser("status", help="Show current consent state")
 
     analyze_parser = subparsers.add_parser("analyze", help="Scan a zip archive for metadata")
-    analyze_parser.add_argument("archive", type=Path, help="Path to the .zip archive to analyze")
+    analyze_parser.add_argument("archive", type=str, help="Path to the .zip archive to analyze")
     analyze_parser.add_argument(
         "--metadata-output",
         type=Path,
@@ -96,7 +96,13 @@ def _handle_consent(args: argparse.Namespace) -> int:
 
 
 def _handle_analyze(args: argparse.Namespace) -> int:
-    archive_path = args.archive.expanduser()
+    archive_arg = (args.archive or "").strip()
+    if not archive_arg:
+        payload = {"error": "InvalidInput", "detail": "Archive path must not be empty"}
+        print(json.dumps(payload), file=sys.stderr)
+        return 5
+
+    archive_path = Path(archive_arg).expanduser()
     if not archive_path.exists() or not archive_path.is_file():
         detail = f"Archive not found: {archive_path}"
         payload = {"error": "FileNotFound", "detail": detail}

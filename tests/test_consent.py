@@ -11,7 +11,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import config
-from capstone.consent import ConsentError, ensure_consent, grant_consent, revoke_consent
+from capstone.consent import (
+    ConsentError,
+    ensure_consent,
+    grant_consent,
+    prompt_for_consent,
+    revoke_consent,
+)
 
 
 class ConsentFlowTestCase(unittest.TestCase):
@@ -43,6 +49,24 @@ class ConsentFlowTestCase(unittest.TestCase):
         self.assertTrue(stored.exists())
         payload = json.loads(stored.read_text("utf-8"))
         self.assertIn("consent", payload)
+
+    def test_prompt_for_consent_reprompts_until_valid(self) -> None:
+        inputs = iter(["maybe", "Y"])
+        messages: list[str] = []
+
+        def fake_input(prompt: str) -> str:
+            return next(inputs)
+
+        def fake_output(message: str) -> None:
+            messages.append(message)
+
+        result = prompt_for_consent(fake_input, fake_output)
+        self.assertEqual(result, "accepted")
+        self.assertTrue(any("Invalid input" in msg for msg in messages))
+
+        inputs_decline = iter(["no"])
+        result_decline = prompt_for_consent(lambda _: next(inputs_decline), fake_output)
+        self.assertEqual(result_decline, "rejected")
 
 
 if __name__ == "__main__":

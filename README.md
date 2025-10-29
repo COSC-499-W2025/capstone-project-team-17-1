@@ -33,6 +33,7 @@ Key features:
 - Automatic fallback to local analysis whenever external processing is unavailable or not approved.
 - Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
 - Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
+- Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
 
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)

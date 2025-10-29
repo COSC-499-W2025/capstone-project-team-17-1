@@ -67,6 +67,29 @@ class ConfigModuleTestCase(unittest.TestCase):
         self.assertEqual(updated.consent.source, "test")
         self.assertTrue(updated.consent.timestamp.startswith("2024-01-01T12:00:00"))
 
+    def test_reset_config_restores_defaults(self) -> None:
+        config.update_preferences(theme="dark")
+        reset = config.reset_config()
+        self.assertEqual(reset.preferences.theme, "light")
+        self.assertFalse(reset.consent.granted)
+
+        payload = self._load_raw_payload()
+        decrypted = config._decrypt(payload["preferences"])  # type: ignore[attr-defined]
+        self.assertEqual(decrypted["theme"], "light")
+
+    def test_validate_config_shape_enforces_structure(self) -> None:
+        config.load_config()
+        payload = self._load_raw_payload()
+        config.validate_config_shape(payload)
+
+        with self.assertRaises(ValueError):
+            config.validate_config_shape({"consent": "not_encrypted"})
+
+        bad_payload = payload.copy()
+        bad_payload["consent"] = config._encrypt({"granted": True})  # type: ignore[attr-defined]
+        with self.assertRaises(ValueError):
+            config.validate_config_shape(bad_payload)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,8 +17,18 @@ from capstone.language_detection import (  # noqa: E402
     detect_language,
 )
 from capstone.collaboration import analyze_git_logs  # noqa: E402
+from capstone.collaboration_analysis import (  # noqa: E402
+    build_collaboration_analysis,
+    collect_git_contributions,
+    format_analysis_as_csv,
+)
 from capstone.metrics import FileMetric, compute_metrics  # noqa: E402
 from capstone.modes import resolve_mode  # noqa: E402
+from capstone.skills import (  # noqa: E402
+    SkillObservation,
+    compute_skill_scores,
+    drop_under_threshold,
+)
 
 
 class LanguageDetectionTests(unittest.TestCase):
@@ -63,6 +73,26 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(summary.contributors, {})
         self.assertIsNone(summary.primary_contributor)
 
+    def test_collect_git_contributions_filters_bots(self) -> None:
+        entries = [
+            {"author": "Alice", "email": "alice@example.com", "commits": 5},
+            {"author": "CI Bot", "email": "ci@bot.com", "commits": 50, "is_bot": True},
+        ]
+        summary = collect_git_contributions(entries)
+        self.assertEqual(summary["classification"], "individual")
+        self.assertEqual(summary["human_contributors"], {"Alice": 5})
+        self.assertIn("CI Bot", summary["bot_contributors"])
+
+    def test_collect_git_contributions_honours_main_user(self) -> None:
+        entries = [
+            {"author": "Alice", "email": "alice@example.com", "commits": 3},
+            {"author": "Bob", "email": "bob@example.com", "commits": 5},
+            {"author": "Carol", "email": "carol@example.com", "commits": 2},
+        ]
+        summary = collect_git_contributions(entries, main_user="Bob")
+        self.assertEqual(summary["classification"], "collaborative")
+        self.assertEqual(summary["primary_contributor"], "Bob")
+
 
 class MetricsTests(unittest.TestCase):
     def test_compute_metrics_summary(self) -> None:
@@ -98,6 +128,95 @@ class ModeResolutionTests(unittest.TestCase):
         result = resolve_mode("auto", self._consent(False, "deny"))
         self.assertEqual(result.resolved, "local")
         self.assertIn("Local analysis", result.reason)
+
+
+class AdvancedCollaborationAnalysisTests(unittest.TestCase):
+    def _sample_entries(self) -> list[dict]:
+        return [
+            {
+                "author": "Alice",
+                "email": "alice@example.com",
+                "commits": 3,
+                "reviews": 1,
+                "coauthors": ["Carol"],
+            },
+            {
+                "author": "Bob",
+                "email": "bob@example.com",
+                "commits": 2,
+                "reviews": 3,
+                "kind": "review",
+                "coauthors": ["Alice"],
+            },
+        ]
+
+    def test_build_collaboration_analysis_captures_reviews_and_exports(self) -> None:
+        analysis = build_collaboration_analysis(self._sample_entries(), main_user="Alice")
+        self.assertEqual(analysis.classification, "collaborative")
+        self.assertEqual(analysis.primary_contributor, "Alice")
+        self.assertIn("Alice", analysis.coauthors)
+        self.assertIn("csv", analysis.exports)
+        csv_output = analysis.exports["csv"]
+        self.assertIn("Alice", csv_output)
+        self.assertIn("Bob", csv_output)
+
+    def test_build_collaboration_analysis_normalizes_scores_and_flags_shared(self) -> None:
+        entries = [
+            {
+                "author": "SharedAccount",
+                "email": "team+shared@example.com",
+                "commits": 1,
+                "shared": True,
+            },
+            {
+                "author": "Dana",
+                "email": "dana@example.com",
+                "commits": 4,
+                "lines": 100,
+            },
+        ]
+        analysis = build_collaboration_analysis(entries, weights={"commit": 1.0, "lines": 0.01})
+        self.assertAlmostEqual(sum(analysis.scores.values()), 1.0, places=4)
+        self.assertIn("SharedAccount", analysis.flags["shared_accounts"])
+
+    def test_build_collaboration_analysis_handles_empty(self) -> None:
+        analysis = build_collaboration_analysis([])
+        self.assertEqual(analysis.classification, "unknown")
+        self.assertEqual(analysis.human_contributors, {})
+        self.assertIn("csv", analysis.exports)
+
+    def test_format_analysis_as_csv_includes_bots_when_requested(self) -> None:
+        entries = [
+            {"author": "Alice", "email": "alice@example.com", "commits": 1},
+            {"author": "CI Bot", "email": "ci@bot.com", "commits": 1, "is_bot": True},
+        ]
+        analysis = build_collaboration_analysis(entries, include_bots=True)
+        csv_output = format_analysis_as_csv(analysis, include_bots=True)
+        self.assertIn("Alice", csv_output)
+        self.assertIn("CI Bot", csv_output)
+
+
+class SkillScoringTests(unittest.TestCase):
+    def test_compute_dynamic_confidence_and_ordering(self) -> None:
+        observations = [
+            SkillObservation(skill="JavaScript", weight=60.0),
+            SkillObservation(skill="SQL", weight=25.0),
+            SkillObservation(skill="Python", weight=15.0),
+        ]
+        results = compute_skill_scores(observations, min_confidence=0.01)
+        self.assertGreater(results[0].confidence, results[1].confidence)
+        skills = [result.skill for result in results]
+        self.assertEqual(skills, ["JavaScript", "SQL", "Python"])
+
+    def test_drop_under_threshold_filters_noise(self) -> None:
+        observations = [
+            SkillObservation(skill="JavaScript", weight=5.0),
+            SkillObservation(skill="Markdown", weight=0.1),
+        ]
+        scores = compute_skill_scores(observations, min_confidence=0.0)
+        filtered = drop_under_threshold(scores, threshold=0.05)
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0].skill, "JavaScript")
 
 
 if __name__ == "__main__":

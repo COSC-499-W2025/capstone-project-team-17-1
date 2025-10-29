@@ -3,12 +3,32 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Callable
 
 from .config import Config, ConsentState, load_config, save_config, update_consent
 
 
 class ConsentError(RuntimeError):
     """Raised when consent is missing for a sensitive operation."""
+
+
+def prompt_for_consent(
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> str:
+    """Prompt the user repeatedly until a valid y/n input is provided.
+
+    Returns "accepted" for affirmative answers and "rejected" otherwise.
+    """
+
+    prompt = "Please enter 'y' for yes or 'n' for no: "
+    while True:
+        response = input_fn(prompt).strip().lower()
+        if response in {"y", "yes"}:
+            return "accepted"
+        if response in {"n", "no"}:
+            return "rejected"
+        output_fn("Invalid input :( Please enter 'y' for yes or 'n' for no. Thanks :)")
 
 
 def ensure_consent(require_granted: bool = True) -> ConsentState:
