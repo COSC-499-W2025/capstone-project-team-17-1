@@ -1,3 +1,38 @@
+# Capstone Analyzer (Python)
+
+Local, consent-aware archive analysis implemented entirely in Python – no Electron dependencies required. Use the `capstone` CLI to manage consent preferences and to extract metadata, collaboration insights, languages, frameworks, and timeline metrics from zipped projects.
+
+## Quickstart
+
+```bash
+# (Optional) create and activate a virtual environment before running commands
+python -m venv .venv
+source .venv/bin/activate
+
+# Install the package in editable mode
+pip install -e .
+
+# Record consent for analysis
+capstone consent grant
+
+# Analyse an archive (results saved to analysis_output/ by default)
+capstone analyze /path/to/project.zip
+
+# Stream the summary JSON to the terminal
+capstone analyze /path/to/project.zip --summary-to-stdout
+
+# Run the unit tests
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Key features:
+- Encrypted local configuration that stores consent decisions, analysis preferences, and last-opened folders.
+- Consent workflow that blocks analysis until users explicitly grant permission.
+- JSONL metadata with per-file language classification and activity type (code, documentation, asset, other).
+- Collaboration labelling (individual vs collaborative) driven by Git log evidence found within the archive.
+- Automatic fallback to local analysis whenever external processing is unavailable or not approved.
+- Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
+
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)
 # Milestone #1
@@ -234,4 +269,3 @@ The document proposes a local first app that mines a user’s own files to help 
 Functionally, the system lets a user pick sources, crawls and classifies artifacts, builds searchable indexes and filters by time, type, project, and path, and produces insights like activity timelines and type distributions. Non functional goals stress fast setup, efficient and resumable scans, responsiveness, accessibility, and strong privacy and security. Data stays local with least privilege, encrypted storage using the operating system keystore, a localhost only API with per session tokens, secure deletion, and redaction of sensitive patterns in cached snippets. Maintainability expectations include straightforward developer setup, high automated test coverage, pinned dependencies, signed releases, and clear documentation.
 
 For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
-
