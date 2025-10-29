@@ -14,3 +14,15 @@
 2025-10-29 10:22:27,881 [INFO] capstone.modes: External analysis not available; using local mode
 2025-10-29 10:22:27,885 [ERROR] capstone.zip_analyzer: Invalid input format for /private/var/folders/br/y_ghfgsj0pl286c147dy45sh0000gn/T/tmpqizl_xgo/not_a_zip.txt
 2025-10-29 10:23:49,266 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:26:49,042 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:26:49,047 [ERROR] capstone.zip_analyzer: Invalid input format for /private/var/folders/br/y_ghfgsj0pl286c147dy45sh0000gn/T/tmpk5igklfa/not_a_zip.txt
+2025-10-29 10:27:22,828 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:27:22,835 [ERROR] capstone.zip_analyzer: Invalid input format for /private/var/folders/br/y_ghfgsj0pl286c147dy45sh0000gn/T/tmp1hw3_sa6/not_a_zip.txt
+2025-10-29 10:34:40,981 [WARNING] capstone.modes: Unknown analysis mode 'invalid', defaulting to local
+2025-10-29 10:34:40,982 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:34:41,097 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:34:41,111 [ERROR] capstone.zip_analyzer: Invalid input format for /private/var/folders/br/y_ghfgsj0pl286c147dy45sh0000gn/T/tmp_8yn_0hl/not_a_zip.txt
+2025-10-29 10:36:37,053 [WARNING] capstone.modes: Unknown analysis mode 'invalid', defaulting to local
+2025-10-29 10:36:37,054 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:36:37,081 [INFO] capstone.modes: External analysis not available; using local mode
+2025-10-29 10:36:37,089 [ERROR] capstone.zip_analyzer: Invalid input format for /private/var/folders/br/y_ghfgsj0pl286c147dy45sh0000gn/T/tmpuph3h_wt/not_a_zip.txt

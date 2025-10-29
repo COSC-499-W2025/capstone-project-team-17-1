@@ -21,7 +21,7 @@ capstone analyze /path/to/project.zip
 # Stream the summary JSON to the terminal
 capstone analyze /path/to/project.zip --summary-to-stdout
 
-# Run the unit tests
+# Run the Python unit test suite (config, consent, CLI, metrics, etc.)
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
@@ -32,6 +32,7 @@ Key features:
 - Collaboration labelling (individual vs collaborative) driven by Git log evidence found within the archive.
 - Automatic fallback to local analysis whenever external processing is unavailable or not approved.
 - Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
+- Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
 
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)
