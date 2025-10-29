@@ -21,6 +21,10 @@ capstone analyze /path/to/project.zip
 # Stream the summary JSON to the terminal
 capstone analyze /path/to/project.zip --summary-to-stdout
 
+# Inspect or reset stored preferences/consent
+capstone config show
+capstone config reset
+
 # Run the Python unit test suite (config, consent, CLI, metrics, etc.)
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
@@ -34,6 +38,7 @@ Key features:
 - Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
 - Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
 - Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
+- Git collaboration analysis now parses `git log --numstat` output, filters bots/shared accounts, weights commits/reviews/line changes, and stores JSON snapshots in a local SQLite db for future dashboards.
 
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)

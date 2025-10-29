@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -14,6 +15,22 @@ logger = get_logger(__name__)
 DB_DIR = Path("data")
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
+
+
+def _initialize_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            classification TEXT NOT NULL,
+            primary_contributor TEXT,
+            snapshot JSON NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
 
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
@@ -38,6 +55,7 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
     logger.info("Opening database at %s", db_path)
     _DB_PATH = db_path
     _DB_HANDLE = sqlite3.connect(db_path)
+    _initialize_schema(_DB_HANDLE)
     return _DB_HANDLE
 
 
@@ -51,4 +69,47 @@ def close_db() -> None:
     _DB_PATH = None
 
 
-__all__ = ["open_db", "close_db", "DB_DIR"]
+def store_analysis_snapshot(
+    conn: sqlite3.Connection,
+    project_id: str,
+    classification: str,
+    primary_contributor: str | None,
+    snapshot: dict,
+) -> None:
+    """Persist a project analysis snapshot to the database."""
+
+    payload = json.dumps(snapshot)
+    conn.execute(
+        """
+        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
+        VALUES (?, ?, ?, ?)
+        """,
+        (project_id, classification, primary_contributor, payload),
+    )
+    conn.commit()
+
+
+def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    """Return the most recent snapshot for the given project, if any."""
+
+    cursor = conn.execute(
+        """
+        SELECT snapshot
+        FROM project_analysis
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    )
+    row = cursor.fetchone()
+    return json.loads(row[0]) if row else None
+
+
+__all__ = [
+    "open_db",
+    "close_db",
+    "DB_DIR",
+    "store_analysis_snapshot",
+    "fetch_latest_snapshot",
+]

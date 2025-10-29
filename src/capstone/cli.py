@@ -7,8 +7,15 @@ import json
 import sys
 from pathlib import Path
 
-from .config import load_config
-from .consent import ConsentError, ensure_consent, export_consent, grant_consent, revoke_consent
+from .config import load_config, reset_config
+from .consent import (
+    ConsentError,
+    ensure_consent,
+    export_consent,
+    grant_consent,
+    prompt_for_consent,
+    revoke_consent,
+)
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
@@ -42,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     consent_sub.add_parser("status", help="Show current consent state")
 
+    config_parser = subparsers.add_parser("config", help="Manage configuration")
+    config_sub = config_parser.add_subparsers(dest="config_action", required=True)
+    config_sub.add_parser("show", help="Display current configuration (decrypted in-memory)")
+    config_sub.add_parser("reset", help="Reset configuration to defaults")
+
     analyze_parser = subparsers.add_parser("analyze", help="Scan a zip archive for metadata")
     analyze_parser.add_argument("archive", type=str, help="Path to the .zip archive to analyze")
     analyze_parser.add_argument(
@@ -72,6 +84,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print summary JSON directly to stdout",
     )
+    analyze_parser.add_argument(
+        "--project-id",
+        type=str,
+        default=None,
+        help="Identifier used when persisting analysis snapshots",
+    )
+    analyze_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where the analysis database (SQLite) should be stored",
+    )
 
     return parser
 
@@ -95,6 +119,25 @@ def _handle_consent(args: argparse.Namespace) -> int:
     return 1
 
 
+def _handle_config(args: argparse.Namespace) -> int:
+    config_state = load_config()
+    if args.config_action == "show":
+        payload = {
+            "consent": config_state.consent.__dict__,
+            "preferences": config_state.preferences.__dict__,
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+    if args.config_action == "reset":
+        reset = reset_config()
+        logger.info("Configuration reset to defaults")
+        print("Configuration reset. Current preferences:")
+        print(json.dumps(reset.preferences.__dict__, indent=2))
+        return 0
+    print("Unknown config action", file=sys.stderr)
+    return 1
+
+
 def _handle_analyze(args: argparse.Namespace) -> int:
     archive_arg = (args.archive or "").strip()
     if not archive_arg:
@@ -112,9 +155,23 @@ def _handle_analyze(args: argparse.Namespace) -> int:
     try:
         consent = ensure_consent(require_granted=True)
     except ConsentError as exc:
-        payload = {"error": "ConsentRequired", "detail": str(exc)}
-        print(json.dumps(payload), file=sys.stderr)
-        return 2
+        privacy_message = (
+            "This analysis runs locally and reads file metadata (paths, sizes, timestamps). "
+            "No data leaves your machine unless you later export results."
+        )
+        print(privacy_message)
+        decision = prompt_for_consent()
+        if decision == "accepted":
+            config_state = grant_consent()
+            consent = config_state.consent
+            logger.info("Consent granted interactively: %s", consent)
+        else:
+            payload = {
+                "error": "ConsentRequired",
+                "detail": str(exc),
+            }
+            print(json.dumps(payload), file=sys.stderr)
+            return 2
 
     config = load_config()
     mode: ModeResolution = resolve_mode(args.analysis_mode, consent)
@@ -126,6 +183,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             summary_path=args.summary_output,
             mode=mode,
             preferences=config.preferences,
+            project_id=args.project_id,
+            db_dir=args.db_dir,
         )
     except InvalidArchiveError as exc:
         payload = getattr(exc, "payload", {"error": "InvalidInput", "detail": str(exc)})
@@ -171,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "consent":
         return _handle_consent(args)
+    if args.command == "config":
+        return _handle_config(args)
     if args.command == "analyze":
         return _handle_analyze(args)
 

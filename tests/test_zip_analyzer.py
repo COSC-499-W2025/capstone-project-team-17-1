@@ -11,7 +11,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone import config
+from capstone import config, storage
 from capstone.config import load_config
 from capstone.consent import grant_consent
 from capstone.modes import ModeResolution, resolve_mode
@@ -32,6 +32,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.addCleanup(self._tmpdir.cleanup)
+        self.addCleanup(storage.close_db)
 
     def _make_archive(self, name: str = "sample.zip") -> Path:
         archive_path = self.tmp_path / name
@@ -66,6 +67,8 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             summary_path=summary_path,
             mode=mode,
             preferences=load_config().preferences,
+            project_id="sample",
+            db_dir=self.tmp_path / "db",
         )
 
         self.assertEqual(summary["resolved_mode"], "local")
@@ -73,6 +76,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.assertEqual(summary["collaboration"]["classification"], "collaborative")
         self.assertIn("Flask", summary["frameworks"])
         self.assertIn("Python", summary["languages"])
+        self.assertTrue(summary["skills"])
 
         self.assertTrue(metadata_path.exists())
         records = [json.loads(line) for line in metadata_path.read_text("utf-8").splitlines() if line]
@@ -89,6 +93,10 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         updated_prefs = load_config().preferences
         self.assertEqual(updated_prefs.analysis_mode, "local")
         self.assertIsNotNone(updated_prefs.last_opened_path)
+
+        conn = storage.open_db(self.tmp_path / "db")
+        cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
+        self.assertEqual(cursor.fetchone()[0], 1)
 
     def test_invalid_extension_raises(self) -> None:
         analyzer = ZipAnalyzer()
