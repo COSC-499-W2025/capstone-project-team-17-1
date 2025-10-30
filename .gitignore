@@ -1,0 +1,4 @@
+__pycache__/
+*.py[cod]
+log/*.log
+src/capstone_analyzer.egg-info/
