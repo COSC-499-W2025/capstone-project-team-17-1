@@ -106,10 +106,34 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     return json.loads(row[0]) if row else None
 
 
+def fetch_latest_snapshots(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Return the latest snapshot for each project currently stored."""
+
+    cursor = conn.execute(
+        """
+        SELECT project_id, snapshot
+        FROM project_analysis
+        ORDER BY project_id ASC, created_at DESC, id DESC
+        """
+    )
+    snapshots: dict[str, dict] = {}
+    for project_id, payload in cursor:
+        # Results are sorted newest-first per project, so first hit wins.
+        if project_id in snapshots:
+            continue
+        try:
+            # Pick only the first row per project_id thanks to ORDER BY above.
+            snapshots[project_id] = json.loads(payload)
+        except json.JSONDecodeError:  # pragma: no cover - defensive parsing
+            logger.warning("Skipping invalid snapshot payload for project %s", project_id)
+    return snapshots
+
+
 __all__ = [
     "open_db",
     "close_db",
     "DB_DIR",
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
+    "fetch_latest_snapshots",
 ]
