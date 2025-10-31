@@ -18,6 +18,7 @@ from capstone.storage import open_db, store_analysis_snapshot  # noqa: E402
 
 class ProjectRankingTests(unittest.TestCase):
     def test_rank_projects_prefers_recent_and_diverse_projects(self) -> None:
+        # Crafted snapshots emphasise recency/diversity so we can check ordering and scaling.
         now = datetime(2025, 1, 1, tzinfo=timezone.utc)
         snapshots = {
             "alpha": {
@@ -60,6 +61,7 @@ class ProjectRankingTests(unittest.TestCase):
         self.assertGreater(top.breakdown["diversity"], rankings[1].breakdown["diversity"])
 
     def test_cli_rank_projects_output(self) -> None:
+        # Smoke test the CLI handler to ensure ranked output is surfaced to stdout with metrics.
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
         db_dir = Path(tmpdir.name)

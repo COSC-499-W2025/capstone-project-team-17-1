@@ -34,7 +34,8 @@ class ProjectRanking:
     details: Dict[str, float]
 
 
-# Each factor holds equal weight to keep scoring interpretable across projects.
+# Each factor holds equal weight so per-project scores stay easy to interpret when
+# we normalise metrics against the current comparison set.
 WEIGHTS = {
     "artifact": 0.2,
     "bytes": 0.2,
@@ -72,6 +73,7 @@ def extract_features(
     active_days = int(file_summary.get("active_days", 0) or 0)
     activity_breakdown = file_summary.get("activity_breakdown", {}) or {}
 
+    # Treat languages and frameworks as distinct diversity knobs.
     languages = snapshot.get("languages", {}) or {}
     frameworks = snapshot.get("frameworks", []) or []
     language_diversity = len(languages) + len(frameworks)
@@ -94,6 +96,7 @@ def extract_features(
             contribution_ratio = 0.1
 
     # Guarantee a minimum multiplier so sparse data still yields a sortable score.
+    # This avoids a user with shared ownership being penalised into a zero-score project.
     contribution_ratio = max(contribution_ratio, 0.1)
 
     return ProjectFeatureSet(
@@ -119,6 +122,7 @@ def _normalise(values: Iterable[int]) -> Dict[int, float]:
 
 
 def _recency_weight(latest: Optional[datetime], *, now: datetime) -> float:
+    # Hyperbolic decay keeps very recent work near 1 while tapering smoothly over time.
     if not latest:
         return 0.0
     delta = now - latest
@@ -136,6 +140,7 @@ def rank_projects(
 
     now = now or datetime.now(tz=timezone.utc)
 
+    # Normalise counts per factor so the weights act as relative importance only.
     artifact_norm = _normalise(feature.artifact_count for feature in features)
     byte_norm = _normalise(feature.total_bytes for feature in features)
     activity_norm = _normalise(feature.active_days for feature in features)

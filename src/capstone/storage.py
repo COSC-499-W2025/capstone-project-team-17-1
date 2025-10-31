@@ -118,9 +118,11 @@ def fetch_latest_snapshots(conn: sqlite3.Connection) -> dict[str, dict]:
     )
     snapshots: dict[str, dict] = {}
     for project_id, payload in cursor:
+        # Results are sorted newest-first per project, so first hit wins.
         if project_id in snapshots:
             continue
         try:
+            # Pick only the first row per project_id thanks to ORDER BY above.
             snapshots[project_id] = json.loads(payload)
         except json.JSONDecodeError:  # pragma: no cover - defensive parsing
             logger.warning("Skipping invalid snapshot payload for project %s", project_id)
