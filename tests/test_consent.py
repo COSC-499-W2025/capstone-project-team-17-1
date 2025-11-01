@@ -131,7 +131,7 @@ class ConsentFlowTestCase(unittest.TestCase):
         )
         self.assertTrue(auto)
 
-    def test_external_permission_deny_blocks_future_requests(self) -> None:
+    def test_external_permission_deny_this_session_does_not_persist(self) -> None:
         granted = request_external_service_permission(
             "demo.service",
             data_types=["metadata"],
@@ -142,10 +142,27 @@ class ConsentFlowTestCase(unittest.TestCase):
         )
         self.assertFalse(granted)
         prefs = config.load_config().preferences
+        self.assertEqual(prefs.external_permissions, {})
+        log_file = consent_module._CONSENT_JOURNAL
+        entry = json.loads(log_file.read_text("utf-8").strip().splitlines()[-1])
+        self.assertEqual(entry["decision"], "deny_once")
+        self.assertFalse(entry["remember"])
+
+    def test_external_permission_deny_always_blocks_future_requests(self) -> None:
+        granted = request_external_service_permission(
+            "demo.service",
+            data_types=["metadata"],
+            purpose="Remote processing",
+            destination="https://example.com",
+            input_fn=lambda _: "4",
+            output_fn=lambda _: None,
+        )
+        self.assertFalse(granted)
+        prefs = config.load_config().preferences
         stored = prefs.external_permissions["demo.service"]
         self.assertFalse(stored["granted"])
         self.assertTrue(stored["remember"])
-        self.assertEqual(stored["decision"], "deny")
+        self.assertEqual(stored["decision"], "deny_always")
 
         with self.assertRaises(ExternalPermissionDenied):
             ensure_external_permission(

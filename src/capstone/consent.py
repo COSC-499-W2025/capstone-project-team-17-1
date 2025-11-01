@@ -147,9 +147,10 @@ def _format_transparency_message(
     yield f"- Storage & privacy: {privacy_note}"
     yield ""
     yield "Options:"
-    yield "  [1] Allow once (this session)"
+    yield "  [1] Allow this session"
     yield "  [2] Always allow for this service"
-    yield "  [3] Deny (block this and future requests)"
+    yield "  [3] Deny this session"
+    yield "  [4] Always deny for this service"
 
 
 def _prompt_for_external_decision(
@@ -158,25 +159,17 @@ def _prompt_for_external_decision(
 ) -> str:
     options = {
         "1": "allow_once",
-        "allow": "allow_once",
-        "allow once": "allow_once",
-        "y": "allow_once",
-        "yes": "allow_once",
         "2": "allow_always",
-        "always": "allow_always",
-        "always allow": "allow_always",
-        "3": "deny",
-        "n": "deny",
-        "no": "deny",
-        "deny": "deny",
+        "3": "deny_once",
+        "4": "deny_always",
     }
-    prompt = "Enter 1, 2, or 3 to continue: "
+    prompt = "Enter 1, 2, 3, or 4 to continue: "
     while True:
         choice = input_fn(prompt).strip().lower()
         decision = options.get(choice)
         if decision:
             return decision
-        output_fn("Sorry, that option is not recognised. Please choose 1, 2, or 3.")
+        output_fn("Please enter valid option, choose 1, 2, 3, or 4.")
 
 
 def request_external_service_permission(
