@@ -11,6 +11,7 @@ from .config import load_config, reset_config
 from .consent import (
     ConsentError,
     ensure_consent,
+    ensure_external_permission,
     export_consent,
     grant_consent,
     prompt_for_consent,
@@ -175,6 +176,15 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 
     config = load_config()
     mode: ModeResolution = resolve_mode(args.analysis_mode, consent)
+    if mode.resolved == "external":
+        ensure_external_permission(
+            "capstone.external.analysis",
+            data_types=["artifact metadata", "language statistics", "collaboration summaries"],
+            purpose="Generate remote analytics for the selected archive",
+            destination="Configured external analysis provider",
+            privacy="No source code is transmitted; only derived metadata is shared.",
+            source="cli",
+        )
     analyzer = ZipAnalyzer()
     try:
         summary = analyzer.analyze(

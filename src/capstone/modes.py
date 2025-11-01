@@ -19,7 +19,9 @@ class ModeResolution:
 
 
 _VALID_MODES = {"local", "external", "auto"}
-_EXTERNAL_SUPPORTED = False
+# to test external share option, white this _EXTERNAL_SUPPORTED to True,
+# otherwise, keep it False to save analyse steps
+_EXTERNAL_SUPPORTED = True
 
 
 def _consent_allows_external(consent: ConsentState) -> bool:
