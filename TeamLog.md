@@ -232,7 +232,37 @@ During Week 8, the team focused on advancing core analysis capabilities and impr
 <img width="595" height="247" alt="Screenshot 2025-10-26 at 10 59 53 PM" src="https://github.com/user-attachments/assets/df9b0e29-477e-4815-a2ca-b4bb78e6efae" />
 
 
-## WEEK 9 TEAM LOG
+## WEEK 9 TEAM LOG (Oct 27 - Nov 2, 2025)
+
+### Recap of Milestone Goal - Week 9
+
+In Week 9, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 9
+<img width="1073" height="129" alt="Screenshot 2025-11-01 at 1 54 43 PM" src="https://github.com/user-attachments/assets/77b4fce2-5bef-4a8c-9bcb-baa0b6cb9966" />
+
+### Burnup chart Week 9
+<img width="1027" height="527" alt="Screenshot 2025-11-01 at 1 52 55 PM" src="https://github.com/user-attachments/assets/069e8cb5-b057-44d6-ad50-04ea12cd8101" />
+
+### In Progress Tasks Week 9
+<img width="1233" height="402" alt="Screenshot 2025-11-01 at 1 54 25 PM" src="https://github.com/user-attachments/assets/b9b83cc4-555e-433a-b3e6-365e4ad97c71" />
+
+### Test Report Week 9
+During Week 9, the team concentrated on refining backend intelligence and preparing the system for full Python migration. #72 (Rank Importance of Each Project Based on User’s Contributions) introduced a weighted ranking algorithm that scores projects by artifact count, total bytes, recency, activity, and diversity. The module was tested through 38 automated unit cases (ProjectRankingTests) and validated manually using generated demo archives, confirming correct score normalization, consistent CLI output, and database persistence of ranked results.
+
+#73 (Request User Permission Before Using External Services) implemented a granular consent mechanism ensuring that users explicitly authorize any external data sharing. The feature was tested via both automated (tests.test_consent, tests.test_cli) and manual workflows, verifying preference persistence, prompt logic, and proper reset behavior when re-running analyses.
+
+In addition, the team began migrating Electron components to Python, ensuring compatibility across command-line interfaces, backend modules, and data persistence layers. Functionality was validated through direct CLI testing and integration with the ranking and consent modules.
 
 ## WEEK 10 TEAM LOG
 
