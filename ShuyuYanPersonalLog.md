@@ -120,5 +120,28 @@ Besides coding, I also helped organize the team by assigning some new tasks for 
 
 Overall, this week helped me improve both system design thinking and team coordination skills.
   
-### Completed Tasks Week 7
+### Completed Tasks Week 8
 'Collaboration Analysis Module' task #42
+
+
+## WEEK 9 Personal LOG (Oct27 - Nov2, 2025)
+### 1. Type of Tasks Worked On
+<img width="1067" height="553" alt="Screenshot 2025-11-01 at 1 33 56 PM" src="https://github.com/user-attachments/assets/41c9c7b7-5a4a-478f-8a4b-2727bd4a486d" />
+
+### 2. Weekly Goals Recap
+- complete 'Rank importance of each project based on user's contributions' task #64
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+- transfer our electron code to python code
+
+This week, I completed the “Rank importance of each project based on user’s contributions” task (#64). I implemented a ranking algorithm that evaluates each project by multiple weighted factors, including artifact count, total bytes, recency, activity level, and contribution diversity. The system extracts these features, converts them into numeric weight values, and then computes a composite score to produce a ranked list with detailed breakdowns of the influencing factors.
+
+To support this feature, I designed and implemented the weight calculation algorithm, feature extraction logic, and sorting pipeline. The ranked results are now output in a structured format for both display and further analysis.
+
+Beyond coding, I also coordinated with team members to review pull requests, assign new tasks, and guide development for the next phase. I discussed code details with teammates to ensure consistent design and data handling across modules. Additionally, I worked on transferring our Electron codebase to Python, focusing on maintaining compatibility and preparing for future backend integration.
+
+Overall, this week strengthened my understanding of algorithm design, feature engineering, and project management in a collaborative development environment.
+
+### Completed Tasks Week 9
+'Rank importance of each project based on user's contributions' task #64
