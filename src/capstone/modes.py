@@ -19,6 +19,8 @@ class ModeResolution:
 
 
 _VALID_MODES = {"local", "external", "auto"}
+# to test external share option, white this _EXTERNAL_SUPPORTED to True,
+# otherwise, keep it False to save analyse steps
 _EXTERNAL_SUPPORTED = False
 
 
