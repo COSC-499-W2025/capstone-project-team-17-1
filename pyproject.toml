@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capstone-analyzer"
+version = "0.1.0"
+description = "Local zip analysis CLI for capstone project"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Capstone Team 17", email = "team17@example.com" }]
+dependencies = []
+
+[project.scripts]
+capstone = "capstone.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

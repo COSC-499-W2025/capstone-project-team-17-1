@@ -12,3 +12,7 @@ Thumbs.db
 **/app.db
 # SQLite
 src/db/*.db*
+__pycache__/
+*.py[cod]
+log/*.log
+src/capstone_analyzer.egg-info/
