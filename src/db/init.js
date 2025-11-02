@@ -1,40 +1,47 @@
-const fs = require('node:fs');
+// src/db/init.js
+const fs   = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { openDb } = require('./connection');
 
+/** Run schema.sql once on startup (idempotent). */
 function initSchema() {
   const db = openDb();
-  // Load the schema definition that initializes all required tables.
-  const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const sql = fs.readFileSync(schemaPath, 'utf8');
 
+  console.log('[db:init] applying schema from', schemaPath);
+
+  db.exec('PRAGMA foreign_keys = ON');
   db.exec('BEGIN');
   try {
-    // Apply the schema inside a transaction so partial failures are rolled back.
-    db.exec(sql); 
+    db.exec(sql);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');
+    console.error('[db:init] schema failed:', e);
     throw e;
   }
 
-  // For right now test we create a few sample data in db
-  sampleDataInsert();
-  seedSampleProject();
+  // Optional: sanity log of created tables
+  const tables = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY 1"
+  ).all().map(r => r.name);
+  console.log('[db:init] tables:', tables);
+
+  // Dev seeds (okay to keep for now)
+  seedArtifacts();
+  seedDefaultProject();
 }
 
-//------------------- This whole function is used to clean the existed db and generate sample data to test, remove it at later development ---------------------//
-function sampleDataInsert() {
+/** Dev-only: sample artifacts so UI has something to show. */
+function seedArtifacts() {
   const db = openDb();
-
-  // Reset the artifact table so the seed data starts from a clean slate.
-  db.exec('DELETE FROM artifact;');
-  db.exec('DELETE FROM sqlite_sequence WHERE name = \'artifact\';');
+  db.exec("DELETE FROM artifact;");
+  db.exec("DELETE FROM sqlite_sequence WHERE name='artifact';");
 
   const now = Math.floor(Date.now() / 1000);
-
-  // try edit the data below and rerun "npm start" to test the data changing
-  const sampleRows = [
+  const rows = [
     {
       project_id: null,
       path: 'sample/demo-file-1.txt',
@@ -43,9 +50,9 @@ function sampleDataInsert() {
       size_bytes: 120,
       created_at: now - 120,
       modified_at: now - 60,
-      tag: 'doc', 
+      tag: 'doc',
       sha256: crypto.createHash('sha256').update('demo-file-1').digest('hex'),
-      meta_json: JSON.stringify({ note: 'sample data inserted by init.js' }),
+      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
     },
     {
       project_id: null,
@@ -57,7 +64,7 @@ function sampleDataInsert() {
       modified_at: now - 240,
       tag: 'code',
       sha256: crypto.createHash('sha256').update('demo-script.js').digest('hex'),
-      meta_json: JSON.stringify({ note: 'seed .js artifact inserted by init.js' }),
+      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
     },
     {
       project_id: null,
@@ -69,47 +76,52 @@ function sampleDataInsert() {
       modified_at: now - 120,
       tag: 'report',
       sha256: crypto.createHash('sha256').update('project-report.pdf').digest('hex'),
-      meta_json: JSON.stringify({ note: 'seed .pdf artifact inserted by init.js' }),
+      meta_json: JSON.stringify({ note: 'seeded by init.js' }),
     },
   ];
 
-  // Prepare a reusable statement to insert each artifact row efficiently.
   const insert = db.prepare(`
     INSERT INTO artifact
-    (project_id, path, name, ext, size_bytes, created_at, modified_at, tag, sha256, meta_json)
-    VALUES (@project_id, @path, @name, @ext, @size_bytes, @created_at, @modified_at, @tag, @sha256, @meta_json)
+      (project_id, path, name, ext, size_bytes, created_at, modified_at, tag, sha256, meta_json)
+    VALUES
+      (@project_id, @path, @name, @ext, @size_bytes, @created_at, @modified_at, @tag, @sha256, @meta_json)
   `);
+  db.transaction((all) => { for (const r of all) insert.run(r); })(rows);
 
-  // Batch insert all rows inside a transaction for integrity and speed.
-  const tx = db.transaction((rows) => {
-    for (const row of rows) insert.run(row);
-  });
-  tx(sampleRows);
-  console.log(`[seed] ${sampleRows.length} demo artifacts inserted`);
+  console.log(`[seed] ${rows.length} demo artifacts inserted`);
 }
 
-function seedSampleProject() {
+/** Dev-only: ensure a default project + repo row exists. */
+function seedDefaultProject() {
   const db = openDb();
-  const defaultProjectName = 'Capstone Team Workspace';
+  const name = 'Capstone Team Workspace';
   const repoPath = path.resolve(process.cwd());
   const now = Math.floor(Date.now() / 1000);
 
-  const existing = db.prepare('SELECT id FROM project WHERE name = ?').get(defaultProjectName);
-  let projectId = existing?.id;
-  if (!projectId) {
-    const info = db.prepare('INSERT INTO project (name, created_at) VALUES (?, ?)').run(defaultProjectName, now);
-    projectId = info.lastInsertRowid;
-  }
+  const existing = db.prepare('SELECT id FROM project WHERE name=?').get(name);
+  const projectId = existing?.id
+    ?? db.prepare('INSERT INTO project (name, created_at) VALUES (?, ?)').run(name, now).lastInsertRowid;
 
-  const upsertRepo = db.prepare(`
+  db.prepare(`
     INSERT INTO project_repository (project_id, repo_path, updated_at)
-    VALUES (@project_id, @repo_path, @updated_at)
+    VALUES (?, ?, ?)
     ON CONFLICT(project_id) DO UPDATE SET
       repo_path = excluded.repo_path,
       updated_at = excluded.updated_at
-  `);
-
-  upsertRepo.run({ project_id: projectId, repo_path: repoPath, updated_at: now });
+  `).run(projectId, repoPath, now);
 }
 
-module.exports = { initSchema };
+/** Optional helper if you want a plain “apply schema” entry elsewhere. */
+function runMigrationsFromFile() {
+  const db = openDb();
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const sql = fs.readFileSync(schemaPath, 'utf8');
+  db.exec('PRAGMA foreign_keys = ON');
+  db.exec(sql);
+  db.exec('PRAGMA user_version = 1');
+}
+
+module.exports = {
+  initSchema,
+  runMigrationsFromFile,
+};
