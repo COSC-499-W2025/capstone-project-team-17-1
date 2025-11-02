@@ -1,0 +1,54 @@
+"""Consent utilities to guard data processing."""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import Callable
+
+from .config import Config, ConsentState, load_config, save_config, update_consent
+
+
+class ConsentError(RuntimeError):
+    """Raised when consent is missing for a sensitive operation."""
+
+
+def prompt_for_consent(
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> str:
+    """Prompt the user repeatedly until a valid y/n input is provided.
+
+    Returns "accepted" for affirmative answers and "rejected" otherwise.
+    """
+
+    prompt = "Please enter 'y' for yes or 'n' for no: "
+    while True:
+        response = input_fn(prompt).strip().lower()
+        if response in {"y", "yes"}:
+            return "accepted"
+        if response in {"n", "no"}:
+            return "rejected"
+        output_fn("Invalid input :( Please enter 'y' for yes or 'n' for no. Thanks :)")
+
+
+def ensure_consent(require_granted: bool = True) -> ConsentState:
+    config = load_config()
+    consent = config.consent
+    if require_granted and not consent.granted:
+        raise ConsentError(
+            "User consent required before processing archives. Run 'capstone consent grant' to proceed."
+        )
+    return consent
+
+
+def grant_consent(decision: str = "allow") -> Config:
+    return update_consent(granted=True, decision=decision, source="cli")
+
+
+def revoke_consent(decision: str = "deny") -> Config:
+    return update_consent(granted=False, decision=decision, source="cli")
+
+
+def export_consent() -> dict[str, object]:
+    config = load_config()
+    return asdict(config.consent)

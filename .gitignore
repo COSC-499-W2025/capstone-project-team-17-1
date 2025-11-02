@@ -17,3 +17,7 @@ src/db/*.db*
 app.db
 app.db-*
 *.db-journal
+__pycache__/
+*.py[cod]
+log/*.log
+src/capstone_analyzer.egg-info/

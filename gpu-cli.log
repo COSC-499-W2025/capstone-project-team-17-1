@@ -1,0 +1,2 @@
+[31765:1012/212948.402834:VERBOSE1:components/device_event_log/device_event_log_impl.cc:200] [21:29:48.383] Display: EVENT: screen_mac.mm:464 Displays updated, count: 1
+[31765:1012/212948.403454:VERBOSE1:components/device_event_log/device_event_log_impl.cc:200] [21:29:48.403] Display: EVENT: screen_mac.mm:466 Display[1] bounds=[0,0 1470x956], workarea=[0,37 1470x867], scale=2, rotation=0, panel_rotation=0 internal detected

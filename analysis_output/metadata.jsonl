@@ -1,0 +1,2 @@
+{"id": "6295ac176c025bf68b5f033c3c9d7814", "path": "sample-project/README.md", "size": 9, "compressed_size": 9, "modified": "2025-10-29T10:23:36", "language": "Markdown", "activity": "documentation", "analysis_mode": "local"}
+{"id": "e10ddb15482a5449bab39c1661d3bd35", "path": "sample-project/src/app.py", "size": 15, "compressed_size": 15, "modified": "2025-10-29T10:23:36", "language": "Python", "activity": "code", "analysis_mode": "local"}
