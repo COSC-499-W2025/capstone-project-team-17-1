@@ -134,7 +134,7 @@ Overall, this week helped me improve both system design thinking and team coordi
 - Asssgin members to their tasks and create new tasks for picking up
 - review member's PR and help them
 - transfer our electron code to python code
-
+- fix syntax error of member's work
 This week, I completed the “Rank importance of each project based on user’s contributions” task (#64). I implemented a ranking algorithm that evaluates each project by multiple weighted factors, including artifact count, total bytes, recency, activity level, and contribution diversity. The system extracts these features, converts them into numeric weight values, and then computes a composite score to produce a ranked list with detailed breakdowns of the influencing factors.
 
 To support this feature, I designed and implemented the weight calculation algorithm, feature extraction logic, and sorting pipeline. The ranked results are now output in a structured format for both display and further analysis.
