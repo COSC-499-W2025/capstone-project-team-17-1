@@ -145,5 +145,5 @@ Beyond coding, I also coordinated with team members to review pull requests, ass
 Overall, this week strengthened my understanding of algorithm design, feature engineering, and project management in a collaborative development environment.
 
 ### Completed Tasks Week 9
-'Rank importance of each project based on user's contributions' task #64
-fix syntax error of cli.py #77
+- 'Rank importance of each project based on user's contributions' task #64
+- fix syntax error of cli.py #77
