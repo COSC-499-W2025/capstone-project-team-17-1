@@ -57,6 +57,48 @@ def parse_mock_data(directory):
     
 class TestMetricsExtractor(unittest.TestCase):
     
+    # create mock db and data
+    def setUp(self):
+        self.temp_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.db_path = self.temp_db_file.name
+        self.temp_db_file.close()
+        self.conn = init_db(self.db_path)
+        
+        # contributor data
+        self.contributor_details = [
+            {
+                "name": "Obama",
+                "files": [
+                    {
+                        "name": "mcchicken.cvs",
+                        "extension": ".cvs",
+                        "lastModified": datetime.now(),
+                        "duration": 27,
+                        "activity": 156,
+                        "contributions": 238,
+                    },
+                    {
+                        "name": "mcnugget.png",
+                        "extension": ".png",
+                        "lastModified": datetime.now(),
+                        "duration": 2,
+                        "activity": 4,
+                        "contributions": 1,
+                    },
+                ],
+            }
+        ]
+        
+        self.metrics = analyze_metrics({"contributorDetails": self.contributor_details})
+        self.proj_name = "MetricsTest"
+        
+    # clean up mock run
+    def tearDown(self):
+        self.conn.close()
+        Path(self.db_path).unlink(missing_ok=True)
+        
+        
+    # TESTS START HERE
     # tests if metrics were calculated correctly
     def test_analyze_metrics_summary(self):
         with create_temp_dir() as temp_dir:
@@ -135,6 +177,64 @@ class TestMetricsExtractor(unittest.TestCase):
             self.assertEqual(metrics["summary"]["durationDays"], 1)
             self.assertEqual(metrics["summary"]["volume"], 1)
         
+    # tests if metrics saves to db
+    def test_save_metrics_to_db(self):
+        save_metrics(self.conn, self.proj_name, self.metrics)
+        cursor = self.conn.cursor()
+        
+        # check all three tables
+        cursor.execute("SELECT proj_name, duration_days, frequency, volume FROM metrics_summary")
+        summary_rows = cursor.fetchall()
+        self.assertEqual(len(summary_rows), 1)
+        self.assertEqual(summary_rows[0][0], self.proj_name)
+        self.assertGreater(summary_rows[0][1], 0)
+        self.assertGreater(summary_rows[0][2], 0)
+        self.assertGreater(summary_rows[0][3], 0)
+        
+        cursor.execute("SELECT proj_name, type, count FROM metrics_types")
+        type_rows = cursor.fetchall()
+        self.assertTrue(any(row[0] == self.proj_name for row in type_rows))
+        self.assertTrue(len(type_rows) >= 1)
+        
+        cursor.execute("SELECT proj_name, date, count FROM metrics_timeline")
+        timeline_rows = cursor.fetchall()
+        self.assertTrue(any(row[0] == self.proj_name for row in timeline_rows))
+        self.assertTrue(len(timeline_rows) >= 1)
+    
+    # tests that api computes and stores metrics to database
+    def test_metrics_api(self):
+        result = metrics_api({"contributorDetails": self.contributor_details}, proj_name = self.proj_name, db_path = self.db_path)
+        
+        # check metric objects exist
+        self.assertIsNotNone(result)
+        self.assertIn("summary", result)
+        self.assertIn("contributionTypes", result)
+        self.assertIn("primaryContributors", result)
+        self.assertIn("timeLine", result)
+        self.assertGreater(result["summary"]["volume"], 0)
+        
+        # verify db entries
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # check table inserts
+        cursor.execute("SELECT proj_name FROM metrics_summary")
+        summary_rows = cursor.fetchall()
+        self.assertEqual(len(summary_rows), 1)
+        self.assertEqual(summary_rows[0][0], self.proj_name)
+        
+        cursor.execute("SELECT proj_name FROM metrics_types")
+        type_rows = cursor.fetchall()
+        self.assertTrue(any(row[0] == self.proj_name for row in type_rows))
+        self.assertTrue(len(type_rows) >= 1)
+        
+        cursor.execute("SELECT proj_name FROM metrics_timeline")
+        timeline_rows = cursor.fetchall()
+        self.assertTrue(any(row[0] == self.proj_name for row in timeline_rows))
+        self.assertTrue(len(type_rows) >= 1)
+        
+        conn.close()
+
 if __name__ == "__main__":
     unittest.main()
     
