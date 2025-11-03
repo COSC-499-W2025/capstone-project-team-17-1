@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to wipe (default: analysis_output)",
     )
     clean_parser.add_argument(
-        "--all", action="store_true", help="Also remove ./out if it exists"
+        "--all", action="store_true", help="Also remove ./out if it exists")
     rank_parser = subparsers.add_parser("rank-projects", help="Rank analysed projects by contribution weights")
     rank_parser.add_argument(
         "--user",
