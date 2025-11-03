@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import cli  # noqa: E402
+from capstone.consent import ExternalPermissionDenied  # noqa: E402
 from capstone.modes import ModeResolution  # noqa: E402
 
 
@@ -148,6 +149,39 @@ class CLITestCase(unittest.TestCase):
         prompt_mock.assert_called_once()
         grant_mock.assert_called_once()
         analyze_mock.assert_called_once()
+
+    def test_analyze_external_permission_denied_returns_error(self) -> None:
+        archive_path = Path(self._tmpdir.name) / "sample.zip"
+        from zipfile import ZipFile
+
+        with ZipFile(archive_path, "w"):
+            pass
+
+        args = SimpleNamespace(
+            archive=str(archive_path),
+            metadata_output=Path(self._tmpdir.name) / "meta.jsonl",
+            summary_output=Path(self._tmpdir.name) / "summary.json",
+            analysis_mode="external",
+            summary_to_stdout=False,
+            quiet=False,
+            project_id=None,
+            db_dir=None,
+        )
+
+        fake_preferences = SimpleNamespace(labels={"local_mode": "Local Analysis Mode"})
+        fake_config = SimpleNamespace(preferences=fake_preferences)
+
+        with patch.object(cli, "ensure_consent", return_value=SimpleNamespace(granted=True, decision="allow")), \
+            patch.object(cli, "load_config", return_value=fake_config), \
+            patch.object(cli, "resolve_mode", return_value=ModeResolution(requested="external", resolved="external", reason="External allowed")), \
+            patch.object(cli, "ensure_external_permission", side_effect=ExternalPermissionDenied("Blocked by user")), \
+            patch("sys.stderr", new_callable=io.StringIO) as fake_err:
+            exit_code = cli._handle_analyze(args)
+
+        self.assertEqual(exit_code, 6)
+        error_output = fake_err.getvalue()
+        self.assertIn("ExternalPermissionDenied", error_output)
+        self.assertIn("Blocked by user", error_output)
 
     def test_config_show_and_reset(self) -> None:
         fake_consent = SimpleNamespace(granted=True, decision="allow", timestamp="2024-01-01", source="cli")
