@@ -1,9 +1,9 @@
 """Command-line entrypoint for the capstone analyzer."""
-
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,18 +22,23 @@ from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapsho
 from .storage import fetch_latest_snapshots, open_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 
-
 logger = get_logger(__name__)
 
 
+# ----------------------------- Parsers ---------------------------------
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Capstone zip analyzer (Python implementation).")
+    parser = argparse.ArgumentParser(
+        description="Capstone zip analyzer (Python implementation)."
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # consent
     consent_parser = subparsers.add_parser("consent", help="Manage user consent")
     consent_sub = consent_parser.add_subparsers(dest="consent_action", required=True)
 
-    grant_parser = consent_sub.add_parser("grant", help="Grant consent for local/external processing")
+    grant_parser = consent_sub.add_parser(
+        "grant", help="Grant consent for local/external processing"
+    )
     grant_parser.add_argument(
         "--decision",
         choices=["allow", "allow_once", "allow_always"],
@@ -48,16 +53,23 @@ def build_parser() -> argparse.ArgumentParser:
         default="deny",
         help="Revocation detail",
     )
-
     consent_sub.add_parser("status", help="Show current consent state")
 
+    # config
     config_parser = subparsers.add_parser("config", help="Manage configuration")
     config_sub = config_parser.add_subparsers(dest="config_action", required=True)
-    config_sub.add_parser("show", help="Display current configuration (decrypted in-memory)")
+    config_sub.add_parser(
+        "show", help="Display current configuration (decrypted in-memory)"
+    )
     config_sub.add_parser("reset", help="Reset configuration to defaults")
 
-    analyze_parser = subparsers.add_parser("analyze", help="Scan a zip archive for metadata")
-    analyze_parser.add_argument("archive", type=str, help="Path to the .zip archive to analyze")
+    # analyze
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="Scan a zip archive for metadata"
+    )
+    analyze_parser.add_argument(
+        "archive", type=str, help="Path to the .zip archive to analyze"
+    )
     analyze_parser.add_argument(
         "--metadata-output",
         type=Path,
@@ -77,9 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Requested analysis mode",
     )
     analyze_parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress terminal output and only write files",
+        "--quiet", action="store_true", help="Suppress terminal output and only write files"
     )
     analyze_parser.add_argument(
         "--summary-to-stdout",
@@ -99,6 +109,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory where the analysis database (SQLite) should be stored",
     )
 
+    # clean (Req. 18)
+    clean_parser = subparsers.add_parser(
+        "clean", help="Delete generated analysis outputs safely"
+    )
+    clean_parser.add_argument(
+        "--path",
+        type=Path,
+        default=Path("analysis_output"),
+        help="Directory to wipe (default: analysis_output)",
+    )
+    clean_parser.add_argument(
+        "--all", action="store_true", help="Also remove ./out if it exists"
     rank_parser = subparsers.add_parser("rank-projects", help="Rank analysed projects by contribution weights")
     rank_parser.add_argument(
         "--user",
@@ -122,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ----------------------------- Handlers --------------------------------
 def _handle_consent(args: argparse.Namespace) -> int:
     if args.consent_action == "grant":
         config = grant_consent(decision=args.decision)
@@ -188,10 +211,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             consent = config_state.consent
             logger.info("Consent granted interactively: %s", consent)
         else:
-            payload = {
-                "error": "ConsentRequired",
-                "detail": str(exc),
-            }
+            payload = {"error": "ConsentRequired", "detail": str(exc)}
             print(json.dumps(payload), file=sys.stderr)
             return 2
 
@@ -217,7 +237,6 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(summary, indent=2))
     elif not args.quiet:
         _print_human_summary(summary, args)
-
     return 0
 
 
@@ -271,13 +290,47 @@ def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -
         print(f"Identified frameworks: {', '.join(frameworks)}")
     collaboration = summary.get("collaboration", {})
     if collaboration:
-        print(
-            "Collaboration classification:",
-            collaboration.get("classification", "unknown"),
-        )
+        print("Collaboration classification:", collaboration.get("classification", "unknown"))
     print(f"Scan duration: {summary.get('scan_duration_seconds', 0)} seconds")
 
 
+# ----------------------------- Clean -----------------------------------
+def _safe_wipe_dir(target: Path, repo_root: Path) -> int:
+    """Remove a file/dir under repo_root. Refuse anything outside."""
+    try:
+        target = target.resolve()
+        repo_root = repo_root.resolve()
+        try:
+            target.relative_to(repo_root)  # raises ValueError if outside
+        except ValueError:
+            print(f"[clean] Refusing to delete outside repo: {target}", file=sys.stderr)
+            return 2
+
+        if not target.exists():
+            print(f"[clean] Nothing to remove at: {target}")
+            return 0
+
+        if target.is_dir():
+            shutil.rmtree(target)
+            print(f"[clean] Removed directory: {target}")
+        else:
+            target.unlink()
+            print(f"[clean] Removed file: {target}")
+        return 0
+    except Exception as e:
+        print(f"[clean] Error removing {target}: {e}", file=sys.stderr)
+        return 1
+
+
+def _handle_clean(args: argparse.Namespace) -> int:
+    repo_root = Path.cwd()
+    rc = _safe_wipe_dir(Path(args.path), repo_root)
+    if args.all:
+        rc |= _safe_wipe_dir(repo_root / "out", repo_root)
+    return rc
+
+
+# ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -288,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_config(args)
     if args.command == "analyze":
         return _handle_analyze(args)
+    if args.command == "clean":
+        return _handle_clean(args)
     if args.command == "rank-projects":
         return _handle_rank_projects(args)
 
