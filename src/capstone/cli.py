@@ -6,7 +6,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
-
+from .insight_store import InsightStore
 from .config import load_config, reset_config
 from .consent import (
     ConsentError,
@@ -24,6 +24,8 @@ from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 
 logger = get_logger(__name__)
 
+def _print(obj):
+    print(json.dumps(obj, indent=2))
 
 # ----------------------------- Parsers ---------------------------------
 def build_parser() -> argparse.ArgumentParser:
@@ -347,8 +349,60 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_rank_projects(args)
 
     parser.print_help()
-    return 1
+    p = argparse.ArgumentParser(prog="capstone")
+    p.add_argument("--db", default="capstone.db", help="SQLite DB path")
+    sub = p.add_subparsers(dest="cmd", required=True)
 
+    sc = sub.add_parser("insight-create", help="Create a new insight")
+    sc.add_argument("--title", required=True)
+    sc.add_argument("--owner", required=True)
+    sc.add_argument("--uri")
+
+    sd = sub.add_parser("dep-add", help="Add dependency (insight -> insight)")
+    sd.add_argument("--from", dest="from_id", required=True)
+    sd.add_argument("--to", dest="to_id", required=True)
+
+    sdd = sub.add_parser("delete", help="Safe delete workflow")
+    sdd.add_argument("--id", required=True)
+    sdd.add_argument("--strategy", choices=["block", "cascade"], default="block")
+    sdd.add_argument("--dry-run", action="store_true")
+    sdd.add_argument("--who", default="cli")
+
+    sr = sub.add_parser("restore", help="Restore from trash by root id")
+    sr.add_argument("--id", required=True)
+    sr.add_argument("--who", default="cli")
+
+    sp = sub.add_parser("purge", help="Hard delete a single insight (must be free)")
+    sp.add_argument("--id", required=True)
+    sp.add_argument("--who", default="cli")
+
+    st = sub.add_parser("trash", help="List trash")
+    sa = sub.add_parser("audit", help="List audit")
+    sa.add_argument("--target")
+
+    args = p.parse_args()
+    store = InsightStore(args.db)
+
+    if args.cmd == "insight-create":
+        iid = store.create_insight(args.title, args.owner, args.uri)
+        _print({"id": iid})
+    elif args.cmd == "dep-add":
+        store.add_dep_on_insight(args.from_id, args.to_id)
+        _print({"ok": True})
+    elif args.cmd == "delete":
+        if args.dry_run:
+            _print(store.dry_run_delete(args.id, args.strategy))
+        else:
+            _print(store.soft_delete(args.id, who=args.who, strategy=args.strategy))
+    elif args.cmd == "restore":
+        _print(store.restore(args.id, who=args.who))
+    elif args.cmd == "purge":
+        _print(store.purge(args.id, who=args.who))
+    elif args.cmd == "trash":
+        _print(store.list_trash())
+    elif args.cmd == "audit":
+        _print(store.get_audit(args.target))
+    return 1
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     sys.exit(main())
