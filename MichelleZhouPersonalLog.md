@@ -71,3 +71,24 @@ Aside from my own code, I assisted in troubleshooting pr's where feature/extract
 ### Next Week:
 - Finish Metrics Calculation Module
 - Start developing "Chronological List of Projects" task #67
+
+
+## Week 9 Personal Log
+
+- (Oct 27 - Nov 2, 2025)<br />
+
+<img width="966" height="567" alt="image" src="https://github.com/user-attachments/assets/74837693-afd9-4c70-8351-38561a420fb0" />
+
+### Week Recap: 
+- Focused on converting codebase from javascript to python
+- Started working on 'Chronologica List of Projects' task #67
+- Discussed new feature implementations with team (outside of wbs)
+- Reviewed team member's PR
+
+This week I
+
+### Next Week:
+- Finalize features to implement outside wbs and delegate tasks
+- Continue working on "Chronological List of Projects" task #67
+- Start "Outputting Key Information for Project" task #54
+
