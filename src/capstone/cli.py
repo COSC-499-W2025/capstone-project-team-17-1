@@ -18,6 +18,8 @@ from .consent import (
 )
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
+from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
+from .storage import fetch_latest_snapshots, open_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 
 logger = get_logger(__name__)
@@ -119,6 +121,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     clean_parser.add_argument(
         "--all", action="store_true", help="Also remove ./out if it exists"
+    rank_parser = subparsers.add_parser("rank-projects", help="Rank analysed projects by contribution weights")
+    rank_parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Contributor name to weight when ranking (defaults to primary contributor)",
+    )
+    rank_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the analysis database (defaults to internal storage)",
+    )
+    rank_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of projects to display",
     )
 
     return parser
@@ -220,6 +240,38 @@ def _handle_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_rank_projects(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    snapshots = fetch_latest_snapshots(conn)
+    if not snapshots:
+        print("No project analyses available for ranking.")
+        return 0
+
+    rankings = rank_projects_from_snapshots(snapshots, user=args.user)
+    if args.limit is not None and args.limit >= 0:
+        rankings = rankings[: args.limit]
+
+    contributor_label = args.user or "primary contributor"
+    print(f"Project rankings for {contributor_label}:")
+    for index, ranking in enumerate(rankings, start=1):
+        print(f"{index}. {ranking.project_id} — score {ranking.score:.4f}")
+        for factor in ("artifact", "bytes", "recency", "activity", "diversity"):
+            weight = RANK_WEIGHTS[factor]
+            print(f"   - {factor}: weight {weight:.2f}, contribution {ranking.breakdown[factor]:.3f}")
+        details = ranking.details
+        # Expose raw metrics so users understand how each factor influenced the score.
+        print(
+            "     raw metrics: "
+            f"files={details['artifact_count']:.0f}, "
+            f"bytes={details['total_bytes']:.0f}, "
+            f"recency_days={details['recency_days']:.1f}, "
+            f"active_days={details['active_days']:.0f}, "
+            f"diversity={details['diversity_elements']:.0f}, "
+            f"contribution_ratio={details['contribution_ratio']:.2f}"
+        )
+    return 0
+
+
 def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -> None:
     print(summary["local_mode_label"], f"({summary['resolved_mode']})")
     print(f"Metadata written to: {summary['metadata_output']}")
@@ -291,6 +343,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_analyze(args)
     if args.command == "clean":
         return _handle_clean(args)
+    if args.command == "rank-projects":
+        return _handle_rank_projects(args)
 
     parser.print_help()
     return 1
