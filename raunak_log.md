@@ -7,6 +7,7 @@
 - [Week 6 Personal Log](#week-6-personal-log)
 - [Week 7 Personal Log](#week-7-personal-log)
 - [Week 8 Personal Log](#week-8-personal-log)
+- [Week 9 Personal Log](#week-9-personal-log)
 
 ---
 
@@ -237,4 +238,79 @@ What I built
 <img width="1046" height="615" alt="WEEK8PERSONALLOG" src="https://github.com/user-attachments/assets/aec99609-0910-4b78-8a2b-9c75daaa0d36" />
 
 ---
+### WEEK 9 PERSONAL LOG 
 
+
+## Context
+- Repo migrated from Electron app to Python CLI (`capstone` in `src/` layout).
+- Local environment had multiple Python versions; needed venv + `PYTHONPATH=src`.
+
+---
+
+## Timeline
+
+1) Pull latest + align with remote
+- `git fetch origin`
+- `git checkout develop`
+- `git reset --hard origin/develop`
+
+2) Virtualenv + install package
+- `python3 -m venv .venv && source .venv/bin/activate`
+- `export PATH="$VIRTUAL_ENV/bin:$PATH"; hash -r`
+- `pip install -e .`
+- Ensure imports work with src-layout: `export PYTHONPATH=src`
+- Verified CLI help: `PYTHONPATH=src python3 -m capstone.cli --help`
+
+3) Confirmed demo runner exists
+- Noted `sample_project.py` calls `capstone.cli.main([...])` (no standalone `main.py` required).
+
+4) Implemented new feature: `clean` subcommand (Req. 18)
+- Edited `src/capstone/cli.py`:
+  - Added **subparser** for `clean` (placed *before* `return parser`).
+  - Implemented `_safe_wipe_dir(target, repo_root)` with repo-root safety.
+  - Implemented `_handle_clean(args)`.
+  - Routed in `main()` via `if args.command == "clean": return _handle_clean(args)`.
+- Fixed ordering bug (moved parser block above `return parser`).
+
+5) Manual validation
+- `PYTHONPATH=src python3 -m capstone.cli --help` → shows `consent, config, analyze, clean`.
+- `PYTHONPATH=src python3 -m capstone.cli clean` → removed `./analysis_output`.
+- `PYTHONPATH=src python3 -m capstone.cli clean --all` → idempotent “Nothing to remove” OK.
+
+6) Commit & push branch
+- `git checkout -b feat/clean-subcommand`
+- `git add src/capstone/cli.py`
+- `git commit -m "feat(cli): add clean subcommand to safely delete generated outputs (Req. 18)"`
+- `git push -u origin feat/clean-subcommand`
+- GitHub printed PR link.
+
+7) Testing setup + unit test
+- Installed pytest in correct interpreter: `python3 -m pip install -U pytest`
+- Wrote `tests/test_clean.py`:
+  - Uses `tmp_path`, sets `PYTHONPATH` to repo `src/`, runs CLI with `cwd=tmp_path` to satisfy safety.
+  - First attempt failed (outside-repo safety) → fixed with `cwd=tmp_path`.
+- Run: `export PYTHONPATH=src && python3 -m pytest -q tests/test_clean.py` → **1 passed**.
+
+8) Commit test
+- `git add tests/test_clean.py`
+- `git commit -m "test(cli): add unit test for clean subcommand"`
+- `git push`
+
+---
+
+## Key Commands Used
+```bash
+# Env
+source .venv/bin/activate
+export PATH="$VIRTUAL_ENV/bin:$PATH"; hash -r
+export PYTHONPATH=src
+which python3
+
+# CLI
+python3 -m capstone.cli --help
+python3 -m capstone.cli clean
+python3 -m capstone.cli clean --all
+
+# Tests
+python3 -m pip install -U pytest
+python3 -m pytest -q tests/test_clean.py
