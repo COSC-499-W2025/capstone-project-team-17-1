@@ -8,6 +8,7 @@
 - [Week 6 Personal Log](#week-6-personal-log)
 - [Week 7 Personal Log](#week-7-personal-log)
 - [Week 8 Personal Log](#week-8-personal-log)
+- [Week 9 Personal Log](#week-9-personal-log)
 
 ## Week 3 Personal Log
 
