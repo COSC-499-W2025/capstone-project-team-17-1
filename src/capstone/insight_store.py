@@ -30,6 +30,19 @@ class InsightStore:
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
         self._init_schema()
+# --- add this near the top-level class methods ---
+    def close(self):
+        """Close the underlying SQLite connection (important on Windows)."""
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+    # optional: make it usable as a context manager
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
     # ----- schema -----
     def _init_schema(self) -> None:
@@ -144,16 +157,34 @@ class InsightStore:
         ).fetchall()]
         return {"insights": ins, "files": files}
 
+    # --- replace get_dependents() so it ignores soft-deleted dependents ---
     def get_dependents(self, iid: str) -> List[str]:
-        """Return who uses iid (incoming edges)."""
+        """
+        Who uses iid (incoming edges), counting only ACTIVE dependents.
+        If a dependent insight was soft-deleted, it shouldn't block purges.
+        """
         rows = self._conn.execute(
-            "SELECT from_insight FROM deps WHERE to_kind='insight' AND to_id=?", (iid,)
+            """
+            SELECT d.from_insight
+            FROM deps d
+            JOIN insights s ON s.id = d.from_insight
+            WHERE d.to_kind='insight' AND d.to_id=? AND s.deleted_at IS NULL
+            """,
+            (iid,),
         ).fetchall()
         return [r["from_insight"] for r in rows]
 
+
+    # --- replace refcount() to match the new rule (active dependents only) ---
     def refcount(self, iid: str) -> int:
         return self._conn.execute(
-            "SELECT COUNT(*) AS c FROM deps WHERE to_kind='insight' AND to_id=?", (iid,)
+            """
+            SELECT COUNT(*) AS c
+            FROM deps d
+            JOIN insights s ON s.id = d.from_insight
+            WHERE d.to_kind='insight' AND d.to_id=? AND s.deleted_at IS NULL
+            """,
+            (iid,),
         ).fetchone()["c"]
 
     def _closure_over_dependents(self, roots: Iterable[str]) -> Set[str]:
