@@ -249,20 +249,16 @@ In Week 9, team members self-assigned issues based on the tasks assigned in the 
 | Michelle Zhou | mltzhou |
 
 ### Completed Tasks Week 9
-<img width="1073" height="129" alt="Screenshot 2025-11-01 at 1 54 43 PM" src="https://github.com/user-attachments/assets/77b4fce2-5bef-4a8c-9bcb-baa0b6cb9966" />
+<img width="1077" height="256" alt="Screenshot 2025-11-02 at 7 00 52 PM" src="https://github.com/user-attachments/assets/b3f4796a-b792-4d99-865b-9245c90ce6ff" />
 
 ### Burnup chart Week 9
-<img width="1027" height="527" alt="Screenshot 2025-11-01 at 1 52 55 PM" src="https://github.com/user-attachments/assets/069e8cb5-b057-44d6-ad50-04ea12cd8101" />
+<img width="1015" height="511" alt="Screenshot 2025-11-02 at 7 00 01 PM" src="https://github.com/user-attachments/assets/4037a778-15f5-4675-8876-9452f637bbce" />
 
 ### In Progress Tasks Week 9
-<img width="1233" height="402" alt="Screenshot 2025-11-01 at 1 54 25 PM" src="https://github.com/user-attachments/assets/b9b83cc4-555e-433a-b3e6-365e4ad97c71" />
+<img width="1232" height="339" alt="Screenshot 2025-11-02 at 6 58 41 PM" src="https://github.com/user-attachments/assets/4f55494f-dcf4-494f-81a1-c72b4ae1a497" />
 
 ### Test Report Week 9
-During Week 9, the team concentrated on refining backend intelligence and preparing the system for full Python migration. #72 (Rank Importance of Each Project Based on User’s Contributions) introduced a weighted ranking algorithm that scores projects by artifact count, total bytes, recency, activity, and diversity. The module was tested through 38 automated unit cases (ProjectRankingTests) and validated manually using generated demo archives, confirming correct score normalization, consistent CLI output, and database persistence of ranked results.
-
-#73 (Request User Permission Before Using External Services) implemented a granular consent mechanism ensuring that users explicitly authorize any external data sharing. The feature was tested via both automated (tests.test_consent, tests.test_cli) and manual workflows, verifying preference persistence, prompt logic, and proper reset behavior when re-running analyses.
-
-In addition, the team began migrating Electron components to Python, ensuring compatibility across command-line interfaces, backend modules, and data persistence layers. Functionality was validated through direct CLI testing and integration with the ranking and consent modules.
+During Week 9, the team focused on strengthening backend intelligence, expanding test coverage, and advancing the system’s full Python migration. #72 introduced a weighted ranking algorithm that evaluates projects by contribution metrics, validated through tests and manual demo archives; #73 delivered a granular consent mechanism requiring explicit user authorization for external data sharing, verified via automated and CLI workflows; #74 added a `clean` subcommand to safely remove generated outputs with both unit and manual tests confirming correct directory handling; and #76 implemented safe insight deletion with comprehensive unittest coverage for refcount blocking, cascade dry-run, purge safety, audit trail, and soft-delete restoration. Together, these updates enhanced reliability, user control, and the consistency of Python-based backend operations.
 
 ## WEEK 10 TEAM LOG
 
