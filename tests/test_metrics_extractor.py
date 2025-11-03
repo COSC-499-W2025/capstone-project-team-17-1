@@ -1,16 +1,25 @@
+import sys
+import unittest
+from pathlib import Path
+import tempfile
 import os
 import sqlite3
-import tempfile
-from pathlib import Path
 from datetime import datetime
-from metrics_extractor import analyze_metrics, metrics_api, init_db, save_metrics
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+    
+from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db, save_metrics, handle_int
+
 
 # helpers to make mock data -> files and db
 def create_temp_dir():
     return tempfile.TemporaryDirectory()
 
 def create_temp_db():
-    temp_db = tempfile.NameTemporaryFile(suffix = ".sqlite", delete = false)
+    temp_db = tempfile.NamedTemporaryFile(suffix = ".sqlite", delete = False)
     temp_db.close()
     conn = sqlite3.connect(temp_db.name)
     return conn, temp_db.name
@@ -18,19 +27,33 @@ def create_temp_db():
 # extracts 
 def parse_mock_data(directory):
     files = os.listdir(directory)
-    return [{
-        "name": "TestData",
-        "files": [
-            {
+    data = []
+    
+    for f in files:
+        file_path = os.path.join(directory, f)
+        with open(file_path, "r", encoding="utf-8") as file:
+            content = file.read().splitlines()
+        
+        def get_value(index, key):
+            if index < len(content) and key in content[index]:
+                try:
+                    return handle_int(content[index].split(":")[1].strip())
+                except (ValueError, TypeError):
+                    return 0
+            return 0
+        
+        data.append({
+            "name": "TestData",
+            "files": [{
                 "name": f,
                 "extension": Path(f).suffix,
                 "lastModified": datetime.now(),
-                "duration": int(open(os.path.join(directory, f)).read().splitlines()[0].split(":")[1].strip()) if "duration" in open(os.path.join(directory, f)).read() else 0,
-                "activity": int(open(os.path.join(directory, f)).read().splitlines()[1].split(":")[1].strip()) if "activity" in open(os.path.join(directory, f)).read() else 0,
-                "contributions": int(open(os.path.join(directory, f)).read().splitlines()[2].split(":")[1].strip()) if "contributions" in open(os.path.join(directory, f)).read() else 0,
-            } for f in files
-        ]
-    }]
+                "duration": get_value(0, "duration"),
+                "activity": get_value(1, "activity"),
+                "contributions": get_value(2, "contributions"),
+            }]
+        })
+        return data
     
 class TestMetricsExtractor(unittest.TestCase):
     
@@ -51,7 +74,7 @@ class TestMetricsExtractor(unittest.TestCase):
             contributor_details = parse_mock_data(temp_path)
             metrics = analyze_metrics({"contributorDetails": contributor_details})
             
-            self.assertIsNotNon(metrics)
+            self.assertIsNotNone(metrics)
             self.assertGreater(metrics["summary"]["durationDays"], 0)
             self.assertGreater(metrics["summary"]["frequency"], 0)
             self.assertGreater(metrics["summary"]["volume"], 0)
@@ -59,7 +82,7 @@ class TestMetricsExtractor(unittest.TestCase):
             
     # tests if extracted metrics are saved to db
     def test_metrics_api_save_to_db(self):
-        with create_temp_dir as temp_dir:
+        with create_temp_dir() as temp_dir:
             temp_path = Path(temp_dir)
             conn, db_path = create_temp_db()
             
@@ -67,7 +90,7 @@ class TestMetricsExtractor(unittest.TestCase):
                 # mock files
                 files = [
                     {"name": "data1.txt", "content": "duration: 5\nactivity: 30\ncontributions: 16"},
-                    {"name": "data2.txt", "content": "durationL 28\nactivity: 256\ncontributions: 186"},
+                    {"name": "data2.txt", "content": "duration: 28\nactivity: 256\ncontributions: 186"},
                 ]
                 
                 # iterate through 
