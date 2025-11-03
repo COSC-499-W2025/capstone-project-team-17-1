@@ -8,6 +8,7 @@
 - [Week 6 [Oct 6 – Oct 12, 2025]](#week-6)
 - [Week 7 [Oct 13 – Oct 19, 2025]](#week-7)
 - [Week 8 [Oct 20 – Oct 26, 2025]](#week-8)
+- [Week 9 [Oct 27 – Nov 2, 2025]](#week-9)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -68,5 +69,15 @@
 - Reviewed PRs
 
 <img width="1559" height="914" alt="506411721a7d673d8b1cf8572f6f0d18" src="https://github.com/user-attachments/assets/e2bd4959-d041-494f-af1c-7e7a16ab4236" />
+
+[Back](#table-of-contents)
+
+## Week 9
+[Oct 27 – Nov 2, 2025]
+- Completed user permission request module (Issue #22)
+- Helped converting lauguage to Python
+- Reviewed PRs
+
+<img width="1558" height="914" alt="bd94c866cf799deb01f35359ab5a54ad" src="https://github.com/user-attachments/assets/6cd1f6a1-eac7-4a0b-9ff1-19f540dd202d" />
 
 [Back](#table-of-contents)

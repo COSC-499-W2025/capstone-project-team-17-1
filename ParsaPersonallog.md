@@ -350,3 +350,72 @@ This week felt like a legit product turn instead of just raw data plumbing:
 
 The coolest part was watching the Key Skills panel evolve from “dump some JSON” to a proper dashboard with impact bars, % confidence, and CSV export. It feels like the first real version of our collaboration analytics story.
 
+---
+
+## Week 9 Personal Log [Oct 27 – Nov 2, 2025] 
+
+This week our team shifted the project backbone from Electron to Python because the spec requires all code to be in Python. We paired up to move backend logic into a clean Python package and kept Electron only as a future shell for the desktop UI. I focused on designing and shipping the Safe Insight Deletion workflow and wiring tests so the feature is reliable.
+
+**Peer Eval**  
+>
+> ![Week 9 — Data Mining App]
+> <img width="1064" height="623" alt="image" src="https://github.com/user-attachments/assets/261a17cc-9332-420f-937a-ac80ec4a54de" />
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### Backend migration to Python
+
+* Coordinated with the team to move core analysis and storage into a `capstone` Python package.
+* Added an insight catalog with stable identifiers and a dependency graph so we can answer who uses what.
+* Exposed a simple CLI for now and left a FastAPI surface ready for later so Electron can call into Python when the UI returns.
+* Documented the new structure and how to run unit tests with `python -m unittest`.
+
+**Result**  
+We now have a Python first backend that matches the course requirement and is easier to test and ship.
+
+---
+
+### Feature: Safe Insight Deletion
+
+Built an end to end safe delete pipeline so no one can accidentally remove an insight that others still need.
+
+* **Reference model**  
+  * Incoming edges count as references. The system counts only active dependents so soft deleted items do not block a purge.
+* **Workflow**  
+  * Dry run gives a full impact report and a plan.  
+  * Soft delete moves items into a trash area and keeps a JSON snapshot for restore.  
+  * Restore recreates insights and their edges exactly as before.  
+  * Purge removes data for real and leaves an audit trail.
+* **Storage**  
+  * SQLite tables for insights, deps, files, trash, and audit.
+
+**CLI usage now available**  
+Create insights, add dependencies, dry run, soft delete, restore, purge, list trash, and view audit log.
+
+---
+
+### Testing and stability
+
+* Wrote a `unittest` suite that covers block versus cascade behavior, round trip restore, purge rules, and the audit trail.  
+* Fixed a Windows file lock issue by explicitly closing the SQLite connection between tests.  
+* All tests pass locally.
+
+**Command**  
+`python -m unittest discover -s tests -p "test_safe_delete.py" -v`
+
+---
+
+### PR and process
+
+* Opened a PR titled **Safe Insight Deletion and Python backend migration**.  
+* Filled the template with a summary, manual steps, and unit test instructions.  
+* Linked the work to **Issue 66 Safe Insight Deletion** so it closes on merge.  
+* Left optional `api.py` in the repo so future Electron work can call the backend through HTTP without more plumbing.
+
+---
+
+### Reflection
+
+This week was a pivot and a level up. We aligned the tech stack with the course rules and built a real safety net for our data. The safe delete feature feels like a platform piece since everything else can rely on it without fear of breaking references. The best part was seeing green tests after the Windows fix which gives the team confidence to keep building on top. Next I want to add a small retention policy for the trash and connect the CLI flows to FastAPI so the future UI can call the same paths.

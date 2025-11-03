@@ -232,7 +232,34 @@ During Week 8, the team focused on advancing core analysis capabilities and impr
 <img width="595" height="247" alt="Screenshot 2025-10-26 at 10 59 53 PM" src="https://github.com/user-attachments/assets/df9b0e29-477e-4815-a2ca-b4bb78e6efae" />
 
 
-## WEEK 9 TEAM LOG
+## WEEK 9 TEAM LOG (Oct 27 - Nov 2, 2025)
+
+### Recap of Milestone Goal - Week 9
+
+In Week 9, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 9
+<img width="1077" height="256" alt="Screenshot 2025-11-02 at 7 00 52 PM" src="https://github.com/user-attachments/assets/b3f4796a-b792-4d99-865b-9245c90ce6ff" />
+
+### Burnup chart Week 9
+<img width="1015" height="511" alt="Screenshot 2025-11-02 at 7 00 01 PM" src="https://github.com/user-attachments/assets/4037a778-15f5-4675-8876-9452f637bbce" />
+
+### In Progress Tasks Week 9
+<img width="1232" height="339" alt="Screenshot 2025-11-02 at 6 58 41 PM" src="https://github.com/user-attachments/assets/4f55494f-dcf4-494f-81a1-c72b4ae1a497" />
+
+### Test Report Week 9
+During Week 9, the team focused on strengthening backend intelligence, expanding test coverage, and advancing the system’s full Python migration. #72 introduced a weighted ranking algorithm that evaluates projects by contribution metrics, validated through tests and manual demo archives; #73 delivered a granular consent mechanism requiring explicit user authorization for external data sharing, verified via automated and CLI workflows; #74 added a `clean` subcommand to safely remove generated outputs with both unit and manual tests confirming correct directory handling; and #76 implemented safe insight deletion with comprehensive unittest coverage for refcount blocking, cascade dry-run, purge safety, audit trail, and soft-delete restoration. Together, these updates enhanced reliability, user control, and the consistency of Python-based backend operations.
+<img width="797" height="487" alt="Screenshot 2025-11-02 at 7 09 47 PM" src="https://github.com/user-attachments/assets/a5812076-38ad-44e1-9b4a-0df8ba56647c" />
 
 ## WEEK 10 TEAM LOG
 
