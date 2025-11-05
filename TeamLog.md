@@ -261,7 +261,27 @@ In Week 9, team members self-assigned issues based on the tasks assigned in the 
 During Week 9, the team focused on strengthening backend intelligence, expanding test coverage, and advancing the system’s full Python migration. #72 introduced a weighted ranking algorithm that evaluates projects by contribution metrics, validated through tests and manual demo archives; #73 delivered a granular consent mechanism requiring explicit user authorization for external data sharing, verified via automated and CLI workflows; #74 added a `clean` subcommand to safely remove generated outputs with both unit and manual tests confirming correct directory handling; and #76 implemented safe insight deletion with comprehensive unittest coverage for refcount blocking, cascade dry-run, purge safety, audit trail, and soft-delete restoration. Together, these updates enhanced reliability, user control, and the consistency of Python-based backend operations.
 <img width="797" height="487" alt="Screenshot 2025-11-02 at 7 09 47 PM" src="https://github.com/user-attachments/assets/a5812076-38ad-44e1-9b4a-0df8ba56647c" />
 
-## WEEK 10 TEAM LOG
+## WEEK 10 TEAM LOG (Nov 3 - Nov 9, 2025)
+
+### Recap of Milestone Goal - Week 10
+
+In Week 10, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 10
+### Burnup chart Week 10
+### In Progress Tasks Week 10
+### Test Report Week 10
+
 
 ## WEEK 11 TEAM LOG
 
