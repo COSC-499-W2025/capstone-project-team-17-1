@@ -8,6 +8,7 @@
 - [Week 6 Personal Log](#week-6-personal-log)
 - [Week 7 Personal Log](#week-7-personal-log)
 - [Week 8 Personal Log](#week-8-personal-log)
+- [Week 9 Personal Log](#week-9-personal-log)
 
 ## Week 3 Personal Log
 
@@ -85,7 +86,9 @@ Aside from my own code, I assisted in troubleshooting pr's where feature/extract
 - Discussed new feature implementations with team (outside of wbs)
 - Reviewed team member's PR
 
-This week I
+This week, after our Wednesday check-in, my group and I prioritized converting our existing JavaScript codebase to Python. This transition took precedence over implementing any new features before any further development. In addition, I completed and refined the metrics calculation module feature. I added more comprehensive tests to cover edge cases such as empty contributors, invalid numeric entries, and mixed file types. The implementation was modified to accomodate these scenarios, and helper functions were added to ensure the code is maintainable. These improvements enture that the result outputted are accurate and reliable.
+
+During our team check-in, we discussed exploring additional features outside of our current WBS. We are aiming to solidify enhancements that will make our application more appealing with real-world benefits for end users.
 
 ### Next Week:
 - Finalize features to implement outside wbs and delegate tasks
