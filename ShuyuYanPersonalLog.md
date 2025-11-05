@@ -162,7 +162,7 @@ This week, I completed the “Top Project Summaries” feature set (#65), which 
 
 To support this functionality, I developed the generate_top_project_summaries orchestration module and implemented full unit coverage in tests/test_top_project_summaries.py to ensure reliability and reproducibility. I also cleaned the repository to make it fully Python-only by removing outdated Electron/JS assets, sample bundles, generated HTML, logs, and build artifacts.
 
-Beyond implementation, I reviewed teammates’ pull requests, discussed integration details, and helped assign new development tasks for the next milestone. Overall, this week enhanced my experience in automated summarization design, factual verification, and collaborative backend development within a large-scale system.
+Beyond implementation, I reviewed teammates’ pull requests, discussed integration details, and helped assign new development tasks for the next week. Overall, this week enhanced my experience in automated summarization design, factual verification, and collaborative backend development within a large-scale system.
   
   ### Completed Tasks Week 10
   'Top Project Summaries' task #65
