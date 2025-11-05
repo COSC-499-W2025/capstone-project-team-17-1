@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
+    # Make the project importable.
     sys.path.insert(0, str(SRC))
 
 from capstone.project_ranking import ProjectRanking
@@ -21,6 +22,7 @@ from capstone.top_project_summaries import (
 
 
 SAMPLE_SNAPSHOT = {
+    # Shared fixture like file_count.
     "file_summary": {
         "file_count": 8,
         "total_bytes": 4096,
@@ -36,6 +38,7 @@ SAMPLE_SNAPSHOT = {
 }
 
 
+# tests:
 class TopProjectSummariesTests(unittest.TestCase):
     def test_create_summary_template_includes_metadata(self) -> None:
         ranking = ProjectRanking(project_id="projA", score=0.91, breakdown={}, details={})

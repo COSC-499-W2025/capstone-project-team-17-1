@@ -86,6 +86,7 @@ class ProjectSummary:
         }
 
 
+# this is templete for summary
 def create_summary_template(project_id: str, snapshot: Mapping[str, object], ranking: ProjectRanking | None = None) -> SummaryTemplate:
     file_summary = snapshot.get("file_summary", {}) or {}
     languages = snapshot.get("languages", {}) or {}
@@ -108,6 +109,7 @@ def create_summary_template(project_id: str, snapshot: Mapping[str, object], ran
     return SummaryTemplate(project_id=project_id, title=title, sections=sections, metadata=metadata, score_hint=score_hint)
 
 
+#add evidence 
 def _add_evidence(evidence: List[EvidenceItem], kind: str, reference: str, detail: str, source: str, weight: float = 1.0) -> None:
     evidence.append(
         EvidenceItem(
@@ -125,6 +127,7 @@ def gather_evidence(
     snapshot: Mapping[str, object],
     external: Mapping[str, Iterable[Mapping[str, object]]] | None = None,
 ) -> List[EvidenceItem]:
+    # collecting the concrete facts.
     evidence: List[EvidenceItem] = []
     file_summary = snapshot.get("file_summary", {}) or {}
     if file_summary:
@@ -203,6 +206,7 @@ class AutoWriter:
         use_llm: bool = False,
     ) -> ProjectSummary:
         normalised_evidence = [replace(item, id=f"E{index}") for index, item in enumerate(evidence, start=1)]
+        # keep the enumerated references. 
         references = [item.format_reference(index) for index, item in enumerate(normalised_evidence, start=1)]
 
         offline_summary = self._compose_offline(template, normalised_evidence, snapshot, ranking, rank_position)
@@ -318,7 +322,7 @@ class AutoWriter:
         if framework_list:
             parts.append(f"Frameworks: {', '.join(sorted(framework_list))}")
         return "Stack overview:\n- " + "\n- ".join(parts)
-
+#build prompt
     def _build_prompt(
         self,
         template: SummaryTemplate,
@@ -397,6 +401,7 @@ class AutoWriter:
         return {"overall": round(overall, 2), "signals": signals, "flags": flags}
 
 
+#export to markdown 
 def export_markdown(summary: ProjectSummary | Mapping[str, object]) -> str:
     data = summary.to_dict() if isinstance(summary, ProjectSummary) else dict(summary)
     title = data.get("title", "Project Summary")
@@ -417,6 +422,7 @@ def export_markdown(summary: ProjectSummary | Mapping[str, object]) -> str:
     return "\n".join(line for line in lines if line is not None)
 
 
+#export 
 def export_readme_snippet(summary: ProjectSummary | Mapping[str, object]) -> str:
     data = summary.to_dict() if isinstance(summary, ProjectSummary) else dict(summary)
     title = data.get("title", "Project Summary")
@@ -485,6 +491,7 @@ def _build_simple_pdf(text: str) -> bytes:
     return buffer.getvalue()
 
 
+# generate the summray.
 def generate_top_project_summaries(
     snapshots: Mapping[str, Mapping[str, object]],
     *,
