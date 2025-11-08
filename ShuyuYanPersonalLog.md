@@ -150,6 +150,7 @@ Overall, this week strengthened my understanding of algorithm design, feature en
 
 ## WEEK 10 Personal LOG (Nov3 - Nov9, 2025)
 ### 1. Type of Tasks Worked On
+<img width="1057" height="529" alt="Screenshot 2025-11-07 at 7 46 56 PM" src="https://github.com/user-attachments/assets/0d78fb71-7df1-47a1-934c-d32c8fb6a049" />
 
 ### 2. Weekly Goals Recap
 - complete 'Top Project Summaries' task #65
