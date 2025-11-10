@@ -419,3 +419,68 @@ Create insights, add dependencies, dry run, soft delete, restore, purge, list tr
 ### Reflection
 
 This week was a pivot and a level up. We aligned the tech stack with the course rules and built a real safety net for our data. The safe delete feature feels like a platform piece since everything else can rely on it without fear of breaking references. The best part was seeing green tests after the Windows fix which gives the team confidence to keep building on top. Next I want to add a small retention policy for the trash and connect the CLI flows to FastAPI so the future UI can call the same paths.
+
+---
+
+## Week 10 Personal Log [Nov 3 – Nov 9, 2025]
+
+This week I delivered the backend for **Retrieve Previously Generated Portfolio Information** and hardened our SQLite usage on Windows. I implemented clean read paths with pagination and a small REST surface, then hunted down a persistent file lock by guaranteeing the cached DB connection closes after CLI runs.
+
+**Peer Eval**  
+>
+> ![Week 10 — Data Mining App]
+> <img width="1064" height="615" alt="image" src="https://github.com/user-attachments/assets/1ab940a9-122d-444f-9bb6-58a40236c2ca" />
+
+
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### Feature: Portfolio Retrieval backend and API
+
+* Added `capstone/portfolio_retrieval.py` with:
+  * `list_snapshots` (pagination, sorting, optional filters)  
+  * `get_latest_snapshot` (latest per project)
+  * `ensure_indexes` creating `(project_id, created_at)` index for fast reads
+* Exposed minimal Flask endpoints:
+  * `GET /portfolios/latest?projectId=...`
+  * `GET /portfolios?projectId=...&page=&pageSize=&sort=created_at:desc`
+* Standardized response envelope and simple Bearer token auth.
+
+**Result**  
+We can reliably retrieve previously generated portfolio snapshots by project, either the latest or a paginated list, and we are ready to plug a UI on top later for milestone 2.
+
+---
+
+### Stability: Windows SQLite lock fix
+
+* Introduced a `_db_session` context manager that:
+  * Normalizes `db_dir` to `Path` before calling `open_db`
+  * Sets `PRAGMA journal_mode=DELETE` in tests
+  * Always calls `close_db()` or `conn.close()` on exit
+* Updated the CLI ranking handler to `finally: close_db()` so temp dirs can delete `capstone.db` without `[WinError 32]`.
+
+---
+
+### Testing and verification
+
+* Wrote `tests/test_portfolio_retrieval.py` covering:
+  * `test_get_latest_snapshot`
+  * `test_list_snapshots_pagination`
+  * `test_flask_latest_endpoint` (runs when Flask is installed)
+* Full suite now passes locally on Windows:
+
+---
+
+### PR and process
+
+* Opened PR for **Portfolio Retrieval Backend + Windows DB lock fix**.
+* Filled template with summary, manual API steps, and unit test instructions.
+* Linked to Issue **#60 Retrieve Previously Generated Portfolio Information** so it closes on merge.
+
+---
+
+### Reflection
+
+This week was about making data access production ready and removing flaky platform issues. The retrieval layer gives us clean, testable reads with room to grow into GraphQL or richer filtering later. Fixing the Windows lock was a big quality of life win because it keeps our CI and local runs green. Next I want to add richer filters for contributor and classification, expose total counts consistently across endpoints, and draft a tiny frontend panel to verify results visually when the team prioritizes UI again.
