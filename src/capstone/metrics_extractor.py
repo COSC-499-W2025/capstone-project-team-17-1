@@ -14,7 +14,7 @@ def classify_extensions(ext: str) -> str:
         return "code"
     if ext in [".md", ".txt", ".rst"]:
         return "doc"
-    if ext in [".cvs", ".json", ".xml", ".yaml", ".yml"]:
+    if ext in [".csv", ".json", ".xml", ".yaml", ".yml"]:
         return "text"
     if ext in [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"]:
         return "graphic"
