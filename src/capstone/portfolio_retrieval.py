@@ -6,14 +6,57 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
-
+from contextlib import contextmanager
+from pathlib import Path
 # If you already have these in capstone.storage, import it.
 # We'll fall back to local SQL if not present (keeps this module standalone for tests).
+
+# also try to import close_db from storage
+# SAFE imports from storage
 try:
-    from .storage import open_db as _open_db, fetch_latest_snapshot as _fetch_latest_snapshot
+    from .storage import (
+        open_db as _open_db,
+        close_db as _close_db,
+        fetch_latest_snapshot as _fetch_latest_snapshot,
+    )
 except Exception:  # pragma: no cover
     _open_db = None
+    _close_db = None
     _fetch_latest_snapshot = None
+
+@contextmanager
+def _db_session(db_dir: str | None):
+    """
+    Always close the SQLite handle (critical on Windows).
+    Uses capstone.storage.open_db/close_db if available.
+    """
+    # Normalize to Path for storage.open_db()
+    base_path = Path(db_dir) if db_dir else None
+
+    if _open_db is not None:
+        conn = _open_db(base_path)  # <— pass Path or None, not str
+    else:
+        # Fallback: local sqlite3 connection in a folder
+        target = Path(db_dir) if db_dir else Path("data")
+        target.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(target / "capstone.db")
+
+    try:
+        # Avoid WAL side files in tests on Windows
+        try:
+            conn.execute("PRAGMA journal_mode=DELETE;")
+        except Exception:
+            pass
+        yield conn
+    finally:
+        # Ensure the cached/global handle is released
+        try:
+            if _close_db is not None:
+                _close_db()
+            else:
+                conn.close()
+        except Exception:
+            pass
 
 
 @dataclass(frozen=True)
@@ -167,9 +210,10 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         project_id = request.args.get("projectId", "")
         if not project_id:
             return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}), 400
-        with _conn() as c:
+        with _db_session(db_dir) as c:
             ensure_indexes(c)
             data = get_latest_snapshot(c, project_id)
+
         if data is None:
             return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No snapshots found"}}), 404
         return jsonify({"data": data, "meta": {"projectId": project_id}, "error": None})
@@ -182,7 +226,7 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}), 400
         sort = q.get("sort", "created_at:desc")
         sort_field, _, sort_dir = sort.partition(":")
-        with _conn() as c:
+        with _db_session(db_dir) as c:
             ensure_indexes(c)
             items, total = list_snapshots(
                 c,
@@ -193,7 +237,8 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
                 sort_dir=sort_dir or "desc",
                 classification=q.get("classification"),
                 primary_contributor=q.get("primaryContributor"),
-            )
+    )
+
         payload = [s.snapshot for s in items]
         return jsonify({
             "data": payload,
