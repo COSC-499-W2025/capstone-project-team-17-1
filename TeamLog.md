@@ -282,7 +282,7 @@ In Week 10, team members self-assigned issues based on the tasks assigned in the
 
 ### Completed Tasks Week 10
 <img width="1928" height="105" alt="image" src="https://github.com/user-attachments/assets/15f9a698-2671-42c6-9e15-b30779cf3a67" />
-<img width="1921" height="310" alt="image" src="https://github.com/user-attachments/assets/dc2390c2-1174-4887-b8b5-913cc305fcc9" />
+<img width="1916" height="405" alt="image" src="https://github.com/user-attachments/assets/ea7370e7-25ef-48e9-87f4-9ac903825146" />
 
 ### Burnup chart Week 10
 <img width="1635" height="953" alt="image" src="https://github.com/user-attachments/assets/27b9ec82-8fea-45d5-94d8-431dc62b2ac8" />
@@ -291,7 +291,7 @@ In Week 10, team members self-assigned issues based on the tasks assigned in the
 <img width="1944" height="309" alt="image" src="https://github.com/user-attachments/assets/a3237e66-c121-48a6-bb7f-3b4b8eacb3d0" />
 
 ### Test Report Week 10
-During week 10, the team cleaned all js legacy and developed with full python language. #81 ships the Top Project Summaries suite, while removing unused Electron/JS assets and generated artifacts. #80 refactors metrics to Python with analyze_metrics(), and persistence via save_metrics(), init_db(), and metrics_api(). #82 introduces a backend to retrieve previously generated portfolio info, plus a _db_session that normalizes paths, disables WAL in tests, and always closes cached connections. #83 adjusts default analyse mode, syncs README, and halves config I/O. Together these changes improve reliability, portability, and maintainability, and set a solid base for downstream UI and analytics.
+During week 10, the team cleaned all js legacy and developed with full python language. #81 ships the Top Project Summaries suite, while removing unused Electron/JS assets and generated artifacts. #80 refactors metrics to Python with analyze_metrics(), and persistence via save_metrics(), init_db(), and metrics_api(). #82 introduces a backend to retrieve previously generated portfolio info, plus a _db_session that normalizes paths, disables WAL in tests, and always closes cached connections. #83 adjusts default analyse mode, syncs README, and halves config I/O. Together these changes improve reliability, portability, and maintainability, and set a solid base for downstream UI and analytics. #84 adds two CSV exports — project timelines and skills timelines — to chronologically track analyzed artifacts and skills across projects, also includes a schema-agnostic smoke test that validates CSV generation independent of database schema or uncommitted transactions, ensuring reliability across environments.
 
 ## WEEK 11 TEAM LOG
 
