@@ -8,13 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Sequence
 
-from .config import (
-    Config,
-    ConsentState,
-    load_config,
-    update_consent,
-    update_preferences,
-)
+from .config import Config, ConsentState, load_config, save_config, update_consent
 
 
 class ConsentError(RuntimeError):
@@ -106,15 +100,22 @@ def _load_permissions() -> Dict[str, Dict[str, object]]:
     return {key: dict(value) for key, value in permissions.items()}
 
 
-def _store_permission(service: str, payload: Dict[str, object] | None) -> Config:
-    config = load_config()
+def _store_permission(
+    service: str,
+    payload: Dict[str, object] | None,
+    *,
+    config: Config | None = None,
+) -> Config:
+    config = config or load_config()
     permissions = config.preferences.external_permissions or {}
-    new_permissions = {key: dict(value) for key, value in permissions.items()}
+    new_permissions = dict(permissions)
     if payload is None:
         new_permissions.pop(service, None)
     else:
         new_permissions[service] = dict(payload)
-    return update_preferences(external_permissions=new_permissions)
+    config.preferences.external_permissions = new_permissions
+    save_config(config)
+    return config
 
 
 def get_external_permission(service: str) -> Dict[str, object] | None:
@@ -230,10 +231,10 @@ def request_external_service_permission(
             "purpose": purpose,
             "data": list(data_types) if data_types else [],
         }
-        _store_permission(service, payload)
+        _store_permission(service, payload, config=config)
     else:
         # Ensure prior remembered decisions are cleared for one-time responses.
-        _store_permission(service, None)
+        _store_permission(service, None, config=config)
 
     _log(decision, granted, remember, auto_usage=False if auto is None else auto)
     return granted
