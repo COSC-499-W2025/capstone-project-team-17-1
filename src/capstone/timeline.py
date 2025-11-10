@@ -1,25 +1,40 @@
-# src/timeline.py
 from __future__ import annotations
-import csv
-from pathlib import Path
-from typing import Iterable, Tuple
-from .storage import open_db
 
-def _iter_snapshots(conn) -> Iterable[Tuple[str, dict]]:
-    cur = conn.cursor()
-    cur.execute("SELECT project_id, snapshot FROM analysis_snapshots ORDER BY created_at ASC")
-    for pid, snap_json in cur.fetchall():
-        # sqlite row factory may give str; ensure dict via json1 extension or python json
-        if isinstance(snap_json, str):
-            import json
-            snap = json.loads(snap_json)
+import csv
+import json
+from pathlib import Path
+from typing import Iterable, Tuple, Dict, Any
+
+from .storage import open_db, fetch_latest_snapshots
+
+
+def _iter_snapshots(conn) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    """
+    Yield (project_id, snapshot_dict) using the storage API so we don't depend
+    on internal table names or uncommitted transactions.
+    """
+    rows = fetch_latest_snapshots(conn)
+    for rec in rows:
+        if isinstance(rec, dict):
+            pid = rec.get("project_id")
+            snap = rec.get("snapshot")
         else:
-            snap = snap_json
-        yield pid, snap
+            pid = getattr(rec, "project_id", None)
+            snap = getattr(rec, "snapshot", None)
+        if pid is None or snap is None:
+            continue
+        if isinstance(snap, str):
+            try:
+                snap = json.loads(snap)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(snap, dict):
+            yield pid, snap
+
 
 def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
     conn = open_db(db_dir)
-    rows = []
+    rows: list[Dict[str, Any]] = []
     for pid, snap in _iter_snapshots(conn):
         fs = snap.get("file_summary", {}) or {}
         langs = snap.get("languages", {}) or {}
@@ -38,29 +53,44 @@ def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
         })
     rows.sort(key=lambda r: (r["first_seen"], r["project_id"]))
     out_csv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["project_id","first_seen","last_seen","classification","primary_contributor",
+                  "languages","frameworks","total_files","total_bytes"]
     with out_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else
-            ["project_id","first_seen","last_seen","classification","primary_contributor","languages","frameworks","total_files","total_bytes"])
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        if rows:
+            writer.writerows(rows)
     return len(rows)
+
 
 def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
     conn = open_db(db_dir)
-    agg: dict[Tuple[str, str], dict] = {}  # (skill, category) -> stats
+    agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
     for _, snap in _iter_snapshots(conn):
         fs = snap.get("file_summary", {}) or {}
         first = fs.get("first_modified") or fs.get("earliest_modified")
         last  = fs.get("last_modified") or fs.get("latest_modified")
         for s in snap.get("skills", []) or []:
             skill = s.get("skill")
+            if not skill:
+                continue
             cat = s.get("category", "unspecified")
-            w = float(s.get("score", s.get("weight", 1.0)))
+            try:
+                w = float(s.get("score", s.get("weight", 1.0)))
+            except (TypeError, ValueError):
+                w = 1.0
             key = (skill, cat)
-            d = agg.setdefault(key, {"skill": skill, "category": cat, "first_seen": first, "last_seen": last, "total_weight": 0.0, "count": 0})
-            # expand time range
-            d["first_seen"] = min(filter(None, [d["first_seen"], first])) if d["first_seen"] and first else (d["first_seen"] or first or "")
-            d["last_seen"]  = max(filter(None, [d["last_seen"], last]))   if d["last_seen"]  and last  else (d["last_seen"]  or last  or "")
+            d = agg.setdefault(key, {
+                "skill": skill, "category": cat,
+                "first_seen": first or "", "last_seen": last or "",
+                "total_weight": 0.0, "count": 0
+            })
+            if first:
+                d["first_seen"] = (min(filter(None, [d["first_seen"], first]))
+                                   if d["first_seen"] else first)
+            if last:
+                d["last_seen"] = (max(filter(None, [d["last_seen"], last]))
+                                  if d["last_seen"] else last)
             d["total_weight"] += w
             d["count"] += 1
     rows = sorted(agg.values(), key=lambda r: (r["first_seen"], r["skill"]))
@@ -68,5 +98,6 @@ def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
     with out_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["skill","category","first_seen","last_seen","total_weight","count"])
         writer.writeheader()
-        writer.writerows(rows)
+        if rows:
+            writer.writerows(rows)
     return len(rows)
