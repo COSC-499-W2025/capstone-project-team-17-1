@@ -1,4 +1,3 @@
-# capstone/portfolio_retrieval.py
 from __future__ import annotations
 
 import os
@@ -8,18 +7,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from contextlib import contextmanager
 from pathlib import Path
-# If you already have these in capstone.storage, import it.
-# We'll fall back to local SQL if not present (keeps this module standalone for tests).
 
-# also try to import close_db from storage
-# SAFE imports from storage
 try:
     from .storage import (
         open_db as _open_db,
         close_db as _close_db,
         fetch_latest_snapshot as _fetch_latest_snapshot,
     )
-except Exception:  # pragma: no cover
+except Exception: 
     _open_db = None
     _close_db = None
     _fetch_latest_snapshot = None
@@ -97,9 +92,6 @@ def list_snapshots(
     classification: Optional[str] = None,
     primary_contributor: Optional[str] = None,
 ) -> Tuple[List[SnapshotRow], int]:
-    """
-    Return a page of snapshots plus the total count.
-    """
     sort_field, sort_dir = _validate_sort(sort_field, sort_dir)
     page = max(1, int(page))
     page_size = max(1, min(200, int(page_size)))  # keep it sane
@@ -165,8 +157,6 @@ def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[d
     return json.loads(row[0]) if row else None
 
 
-# ---------- Minimal REST API (Flask) ----------
-
 def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
     """
     create_app() returns a Flask app with two routes:
@@ -181,13 +171,11 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
 
     def _conn():
         if _open_db is not None:
-            # capstone.storage handles directory creation & reuse
             base = None
             if db_dir:
                 from pathlib import Path
                 base = Path(db_dir)
             return _open_db(base)
-        # Fallback: open in provided or default dir
         import sqlite3
         from pathlib import Path
         base = Path(db_dir) if db_dir else Path("data")
