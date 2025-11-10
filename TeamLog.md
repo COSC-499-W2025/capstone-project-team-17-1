@@ -199,7 +199,8 @@ During Week 7, the team closed five issues: **#39** finalized the tech stack (El
 <img width="465" height="195" alt="image" src="https://github.com/user-attachments/assets/ad338bd1-f2c0-4161-a193-1bee2ad5b34f" />
 
 
-## WEEK 8 TEAM LOG (Oct 20 - Oct 26, 2025)
+## WEEK 8 TEAM LOG
+(Oct 20 - Oct 26, 2025)
 
 ### Recap of Milestone Goal - Week 8
 
@@ -219,7 +220,6 @@ In Week 8, team members self-assigned issues based on the tasks assigned in the 
 <img width="1216" height="263" alt="Screenshot 2025-10-26 at 10 52 02 PM" src="https://github.com/user-attachments/assets/93985ea8-80e3-4b83-9e36-c6a6b9ac3c02" />
 <img width="1150" height="52" alt="Screenshot 2025-10-26 at 11 04 57 PM" src="https://github.com/user-attachments/assets/59e57b61-19fb-435f-a0d8-6bc4e55f4db2" />
 
-
 ### Burnup chart Week 8
 <img width="1085" height="610" alt="Screenshot 2025-10-26 at 10 54 11 PM" src="https://github.com/user-attachments/assets/1a6bbf93-43e6-49b2-b738-ea948cd81197" />
 
@@ -232,7 +232,8 @@ During Week 8, the team focused on advancing core analysis capabilities and impr
 <img width="595" height="247" alt="Screenshot 2025-10-26 at 10 59 53 PM" src="https://github.com/user-attachments/assets/df9b0e29-477e-4815-a2ca-b4bb78e6efae" />
 
 
-## WEEK 9 TEAM LOG (Oct 27 - Nov 2, 2025)
+## WEEK 9 TEAM LOG 
+(Oct 27 - Nov 2, 2025)
 
 ### Recap of Milestone Goal - Week 9
 
@@ -261,7 +262,9 @@ In Week 9, team members self-assigned issues based on the tasks assigned in the 
 During Week 9, the team focused on strengthening backend intelligence, expanding test coverage, and advancing the system’s full Python migration. #72 introduced a weighted ranking algorithm that evaluates projects by contribution metrics, validated through tests and manual demo archives; #73 delivered a granular consent mechanism requiring explicit user authorization for external data sharing, verified via automated and CLI workflows; #74 added a `clean` subcommand to safely remove generated outputs with both unit and manual tests confirming correct directory handling; and #76 implemented safe insight deletion with comprehensive unittest coverage for refcount blocking, cascade dry-run, purge safety, audit trail, and soft-delete restoration. Together, these updates enhanced reliability, user control, and the consistency of Python-based backend operations.
 <img width="797" height="487" alt="Screenshot 2025-11-02 at 7 09 47 PM" src="https://github.com/user-attachments/assets/a5812076-38ad-44e1-9b4a-0df8ba56647c" />
 
-## WEEK 10 TEAM LOG (Nov 3 - Nov 9, 2025)
+
+## WEEK 10 TEAM LOG 
+(Nov 3 - Nov 9, 2025)
 
 ### Recap of Milestone Goal - Week 10
 
@@ -278,10 +281,17 @@ In Week 10, team members self-assigned issues based on the tasks assigned in the
 | Michelle Zhou | mltzhou |
 
 ### Completed Tasks Week 10
-### Burnup chart Week 10
-### In Progress Tasks Week 10
-### Test Report Week 10
+<img width="1928" height="105" alt="image" src="https://github.com/user-attachments/assets/15f9a698-2671-42c6-9e15-b30779cf3a67" />
+<img width="1921" height="310" alt="image" src="https://github.com/user-attachments/assets/dc2390c2-1174-4887-b8b5-913cc305fcc9" />
 
+### Burnup chart Week 10
+<img width="1635" height="953" alt="image" src="https://github.com/user-attachments/assets/27b9ec82-8fea-45d5-94d8-431dc62b2ac8" />
+
+### In Progress Tasks Week 10
+<img width="1944" height="309" alt="image" src="https://github.com/user-attachments/assets/a3237e66-c121-48a6-bb7f-3b4b8eacb3d0" />
+
+### Test Report Week 10
+During week 10, the team cleaned all js legacy and developed with full python language. #81 ships the Top Project Summaries suite, while removing unused Electron/JS assets and generated artifacts. #80 refactors metrics to Python with analyze_metrics(), and persistence via save_metrics(), init_db(), and metrics_api(). #82 introduces a backend to retrieve previously generated portfolio info, plus a _db_session that normalizes paths, disables WAL in tests, and always closes cached connections. #83 adjusts default analyse mode, syncs README, and halves config I/O. Together these changes improve reliability, portability, and maintainability, and set a solid base for downstream UI and analytics.
 
 ## WEEK 11 TEAM LOG
 
