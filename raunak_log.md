@@ -8,6 +8,7 @@
 - [Week 7 Personal Log](#week-7-personal-log)
 - [Week 8 Personal Log](#week-8-personal-log)
 - [Week 9 Personal Log](#week-9-personal-log)
+- [Week 10 Personal Log](#week-10-personal-log)
 
 ---
 
@@ -314,3 +315,42 @@ python3 -m capstone.cli clean --all
 # Tests
 python3 -m pip install -U pytest
 python3 -m pytest -q tests/test_clean.py
+
+
+```
+### WEEK 10 PERSONAL LOG 
+
+#### 🧠 **Focus Area**
+
+Milestones #19 & #20 – Timeline Exports (Projects + Skills)
+
+---
+
+#### 🧩 **Tasks Completed**
+- Implemented the **`timeline.py` module** to export chronological data:
+  - `write_projects_timeline()` → generates `projects_timeline.csv`
+  - `write_skills_timeline()` → generates `skills_timeline.csv`
+- Replaced legacy raw SQL calls with the **storage API** (`fetch_latest_snapshots`) for safer, schema-independent data access.
+- Integrated the new timeline feature into the **CLI** (`capstone.cli`) via a `timeline` subcommand.
+- Wrote and refined **`test_timeline_smoke.py`** to verify export behavior.
+  - Created a schema-agnostic smoke test using a stubbed `_iter_snapshots` to avoid DB schema dependency.
+  - Ensured both CSVs are created correctly with valid headers and counts.
+- Debugged multiple test failures related to SQLite visibility and uncommitted transactions.
+  - Resolved by isolating logic and mocking data in the test.
+- Confirmed full test suite passes (`pytest -q` ✅).
+
+---
+
+#### 🧪 **Verification**
+- Ran manual CLI verification:
+  ```bash
+  python -m capstone.cli consent grant
+  python -m capstone.cli analyze ~/sample.zip --analysis-mode local
+  python -m capstone.cli timeline --out-dir out
+
+<img width="1470" height="956" alt="WEEK10EVAL" src="https://github.com/user-attachments/assets/bc51ffab-18df-49da-9bb6-8f4622780cc7" />
+
+
+
+
+

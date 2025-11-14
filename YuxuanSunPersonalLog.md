@@ -9,6 +9,7 @@
 - [Week 7 [Oct 13 – Oct 19, 2025]](#week-7)
 - [Week 8 [Oct 20 – Oct 26, 2025]](#week-8)
 - [Week 9 [Oct 27 – Nov 2, 2025]](#week-9)
+- [Week 10 [Nov 3 – Nov 9, 2025]](#week-10)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -79,5 +80,13 @@
 - Reviewed PRs
 
 <img width="1558" height="914" alt="bd94c866cf799deb01f35359ab5a54ad" src="https://github.com/user-attachments/assets/6cd1f6a1-eac7-4a0b-9ff1-19f540dd202d" />
+
+[Back](#table-of-contents)
+
+## Week 10
+[Nov 3 – Nov 9, 2025]
+Last week, I implemented basic external module user permissions. When external support is enabled, users can choose whether to allow external modules to analyze their data or use it for other purposes(in future). Their selection is recorded in the config. However, since the previous default analysis mode was set to auto, this caused the system to always execute external module and request user permission when external support = true. This impacted convenience during development and polluted the config. Therefore, I set external support to false and plan to enable it only when testing external modules. This week, I discovered this approach still generated unnecessary operations. I realized I could set the default analysis mode to `local`, allowing `external support` to remain enabled by default while enabling explicit entry into external analysis via command-line instructions. I made this modification and added corresponding usage instructions to the README. Additionally, I observed that `_store_permission` previously read the config file each time, then read/wrote again within `update_preferences`. This meant users' decisions triggered redundant I/O operations. I addressed this by passing the existing Config directly into `_store_permission`. After modifying `external_permissions` internally, it now calls `save_config` once, reducing system read/write operations to a single pass. Next week, I plan to continue refining the external module. The current CLI lacks substantive endpoint detection, making it impossible to verify the feasibility of external target endpoints. I'm planning to complete this feature next week.
+
+<img width="1550" height="910" alt="1b7b3c6db90ddd3cf4d90a0f3907d5ec" src="https://github.com/user-attachments/assets/fdc6fad6-da5f-4e55-9548-12ff01a68dbe" />
 
 [Back](#table-of-contents)

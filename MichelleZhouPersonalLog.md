@@ -9,6 +9,8 @@
 - [Week 7 Personal Log](#week-7-personal-log)
 - [Week 8 Personal Log](#week-8-personal-log)
 - [Week 9 Personal Log](#week-9-personal-log)
+- [Week 10 Personal Log](#week-10-personal-log)
+
 
 ## Week 3 Personal Log
 
@@ -95,3 +97,21 @@ During our team check-in, we discussed exploring additional features outside of 
 - Continue working on "Chronological List of Projects" task #67
 - Start "Outputting Key Information for Project" task #54
 
+## Week 10 Personal Log
+
+- (Nov 3 - Nov 9, 2025)<br />
+
+<img width="969" height="566" alt="image" src="https://github.com/user-attachments/assets/5f6ae3a9-0c03-4205-9956-31dadbcc61e3" />
+
+### Week Recap: 
+- Worked on finishing 'Chronologica List of Projects' and 'Outputting Key Information for Project'
+- Reviewed PR's
+- Discussed with team more feature implementations and additional considerations for refinement
+- Discussed frontend implementations specifics
+- Flushed out my feature specifics and requirements to align more with instructor feedback (tailored for user resumes)
+
+### Next Week:
+- Finish and submit PR's for task #67 and #54
+- Start frontend development
+- Start new feature implementation
+- Team check-in for milestone #1
