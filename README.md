@@ -18,6 +18,9 @@ capstone consent grant
 # Analyse an archive (results saved to analysis_output/ by default)
 capstone analyze /path/to/project.zip
 
+# Request external processing explicitly (default mode is local)
+capstone analyze /path/to/project.zip --analysis-mode external
+
 # Stream the summary JSON to the terminal
 capstone analyze /path/to/project.zip --summary-to-stdout
 

@@ -1,4 +1,3 @@
-"""Command-line entrypoint for the capstone analyzer."""
 from __future__ import annotations
 
 import argparse
@@ -89,8 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--analysis-mode",
         choices=["local", "external", "auto"],
-        default="auto",
-        help="Requested analysis mode",
+        default="local",
+        help="Requested analysis mode (default: local)",
     )
     analyze_parser.add_argument(
         "--quiet", action="store_true", help="Suppress terminal output and only write files"
