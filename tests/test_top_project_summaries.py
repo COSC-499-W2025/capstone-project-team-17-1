@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -54,6 +55,52 @@ class TopProjectSummariesTests(unittest.TestCase):
         self.assertIn("benchmark", kinds)
         self.assertTrue(any("collaboration" in item.reference for item in evidence))
         self.assertTrue(all(item.id is not None for item in evidence))
+
+    def test_gather_evidence_includes_external_artifacts(self) -> None:
+        snapshot = dict(SAMPLE_SNAPSHOT)
+        snapshot["external_artifacts"] = {
+            "pull_requests": [
+                {
+                    "number": 7,
+                    "title": "Add reporting API",
+                    "state": "merged",
+                    "url": "https://example.invalid/pr/7",
+                    "merged_at": "2024-01-02T10:00:00Z",
+                    "user": "Alice",
+                }
+            ],
+            "issues": [
+                {
+                    "number": 12,
+                    "title": "Fix crash on export",
+                    "state": "closed",
+                    "url": "https://example.invalid/issues/12",
+                    "user": "Bob",
+                }
+            ],
+        }
+        evidence = gather_evidence(snapshot)
+        kinds = {item.kind for item in evidence}
+        self.assertIn("pull_request", kinds)
+        self.assertIn("issue", kinds)
+        self.assertTrue(any(item.reference == "https://example.invalid/pr/7" for item in evidence))
+
+    def test_gather_evidence_fetches_external_when_missing(self) -> None:
+        snapshot = dict(SAMPLE_SNAPSHOT)
+        snapshot["repository"] = {
+            "provider": "github",
+            "owner": "acme",
+            "name": "demo",
+            "url": "https://github.com/acme/demo",
+        }
+        fetched = {
+            "pull_requests": [{"number": 5, "title": "LLM summary", "state": "open", "url": "https://example/pr/5"}],
+            "issues": [],
+        }
+        with patch("capstone.top_project_summaries.fetch_snapshot_artifacts", return_value=fetched) as fetch_mock:
+            evidence = gather_evidence(snapshot)
+        fetch_mock.assert_called_once()
+        self.assertTrue(any(item.kind == "pull_request" for item in evidence))
 
     def test_auto_writer_generates_summary_with_references(self) -> None:
         ranking = ProjectRanking(project_id="projA", score=0.88, breakdown={}, details={})
