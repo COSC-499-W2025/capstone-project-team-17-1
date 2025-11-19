@@ -167,3 +167,15 @@ Beyond implementation, I reviewed teammates’ pull requests, discussed integrat
   
   ### Completed Tasks Week 10
   'Top Project Summaries' task #65
+
+  ## WEEK 12 Personal LOG (Nov17 - Nov23, 2025)
+### 1. Type of Tasks Worked On
+
+### 2. Weekly Goals Recap
+- complete 'Section 13.4 – Storage Validation and Backup' #87
+- complete 'Section 9.1.1 + 17.2 – Pull-Request / Issue Evidence' #86
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+
+  
