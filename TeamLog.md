@@ -295,7 +295,22 @@ During week 10, the team cleaned all js legacy and developed with full python la
 
 ## WEEK 11 TEAM LOG
 
-## WEEK 12 TEAM LOG
+## WEEK 12 TEAM LOG 
+(Nov 17 - Nov 23, 2025)
+
+### Recap of Milestone Goal - Week 12
+
+In Week 12, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
 
 ## WEEK 13 TEAM LOG
 
