@@ -162,7 +162,7 @@ def analyze_repository(
     conn = open_db(db_dir)
     store_analysis_snapshot(
         conn,
-        project_id=project_id,
+        project_name=project_id,
         classification=analysis.classification,
         primary_contributor=analysis.primary_contributor,
         snapshot=snapshot,
