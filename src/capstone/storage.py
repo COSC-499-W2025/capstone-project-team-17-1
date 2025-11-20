@@ -22,7 +22,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS project_analysis (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
+            project_name TEXT NOT NULL,
             classification TEXT NOT NULL,
             primary_contributor TEXT,
             snapshot JSON NOT NULL,
@@ -31,6 +31,15 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+
+    # Backwards compatibility: rename project_id -> project_name if needed.
+    columns = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(project_analysis)").fetchall()
+    }
+    if "project_name" not in columns and "project_id" in columns:
+        conn.execute("ALTER TABLE project_analysis RENAME COLUMN project_id TO project_name")
+        conn.commit()
 
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
@@ -71,7 +80,7 @@ def close_db() -> None:
 
 def store_analysis_snapshot(
     conn: sqlite3.Connection,
-    project_id: str,
+    project_name: str,
     classification: str,
     primary_contributor: str | None,
     snapshot: dict,
@@ -81,26 +90,26 @@ def store_analysis_snapshot(
     payload = json.dumps(snapshot)
     conn.execute(
         """
-        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
+        INSERT INTO project_analysis (project_name, classification, primary_contributor, snapshot)
         VALUES (?, ?, ?, ?)
         """,
-        (project_id, classification, primary_contributor, payload),
+        (project_name, classification, primary_contributor, payload),
     )
     conn.commit()
 
 
-def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | None:
+def fetch_latest_snapshot(conn: sqlite3.Connection, project_name: str) -> dict | None:
     """Return the most recent snapshot for the given project, if any."""
 
     cursor = conn.execute(
         """
         SELECT snapshot
         FROM project_analysis
-        WHERE project_id = ?
+        WHERE project_name = ?
         ORDER BY created_at DESC
         LIMIT 1
         """,
-        (project_id,),
+        (project_name,),
     )
     row = cursor.fetchone()
     return json.loads(row[0]) if row else None
@@ -111,21 +120,21 @@ def fetch_latest_snapshots(conn: sqlite3.Connection) -> dict[str, dict]:
 
     cursor = conn.execute(
         """
-        SELECT project_id, snapshot
+        SELECT project_name, snapshot
         FROM project_analysis
-        ORDER BY project_id ASC, created_at DESC, id DESC
+        ORDER BY project_name ASC, created_at DESC, id DESC
         """
     )
     snapshots: dict[str, dict] = {}
-    for project_id, payload in cursor:
+    for project_name, payload in cursor:
         # Results are sorted newest-first per project, so first hit wins.
-        if project_id in snapshots:
+        if project_name in snapshots:
             continue
         try:
-            # Pick only the first row per project_id thanks to ORDER BY above.
-            snapshots[project_id] = json.loads(payload)
+            # Pick only the first row per project thanks to ORDER BY above.
+            snapshots[project_name] = json.loads(payload)
         except json.JSONDecodeError:  # pragma: no cover - defensive parsing
-            logger.warning("Skipping invalid snapshot payload for project %s", project_id)
+            logger.warning("Skipping invalid snapshot payload for project %s", project_name)
     return snapshots
 
 
