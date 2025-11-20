@@ -124,7 +124,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     clean_parser.add_argument(
         "--all", action="store_true", help="Also remove ./out if it exists")
-)
     rank_parser = subparsers.add_parser("rank-projects", help="Rank analysed projects by contribution weights")
 
     rank_parser.add_argument(
