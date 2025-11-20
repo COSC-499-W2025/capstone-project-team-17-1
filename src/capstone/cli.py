@@ -195,11 +195,18 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         return 5
 
     archive_path = Path(archive_arg).expanduser()
-    if not archive_path.exists() or not archive_path.is_file():
+    if not archive_path.exists():
         detail = f"Archive not found: {archive_path}"
         payload = {"error": "FileNotFound", "detail": detail}
         print(json.dumps(payload), file=sys.stderr)
         return 4
+    if archive_path.suffix.lower() != ".zip":
+        payload = {
+            "error": "InvalidInput",
+            "detail": "Unsupported file format. Please provide a .zip archive.",
+        }
+        print(json.dumps(payload), file=sys.stderr)
+        return 3
 
     try:
         consent = ensure_consent(require_granted=True)
