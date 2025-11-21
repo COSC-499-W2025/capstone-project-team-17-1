@@ -312,6 +312,14 @@ In Week 12, team members self-assigned issues based on the tasks assigned in the
 | Shuyu Yan | yanshuyu280042 |
 | Michelle Zhou | mltzhou |
 
+### Completed Tasks Week 12
+<img width="1228" height="72" alt="Screenshot 2025-11-21 at 3 43 50 PM" src="https://github.com/user-attachments/assets/0f06fa11-6348-4aa7-9a44-80fffd438406" />
+
+### Burnup chart Week 12
+### In Progress Tasks Week 12
+### Test Report Week 12
+
+
 ## WEEK 13 TEAM LOG
 
 ## WEEK 14 TEAM LOG
