@@ -13,7 +13,7 @@ class ModeResolution:
     
 
 _VALID_MODES = {"local", "external", "auto"}
-_EXTERNAL_SUPPORTED = True
+_EXTERNAL_SUPPORTED = False
 
 
 def _consent_allows_external(consent: ConsentState) -> bool:

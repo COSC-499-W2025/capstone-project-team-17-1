@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import storage  # noqa: E402
+from capstone.external_artifacts import RepositoryDescriptor  # noqa: E402
 from capstone.git_analysis import analyze_repository, parse_git_log_stream, summarize_to_json  # noqa: E402
 
 
@@ -47,7 +48,9 @@ class RepositoryAnalysisTests(unittest.TestCase):
 
     def test_analyze_repository_persists_snapshot(self) -> None:
         db_dir = Path(self._tmpdir.name) / "db"
-        with patch("capstone.git_analysis.run_git_log", return_value=_SAMPLE_GIT_LOG):
+        with patch("capstone.git_analysis.run_git_log", return_value=_SAMPLE_GIT_LOG), patch(
+            "capstone.git_analysis.discover_repository", return_value=None
+        ):
             snapshot = analyze_repository(
                 self.repo_dir,
                 project_id="sample",
@@ -69,6 +72,26 @@ class RepositoryAnalysisTests(unittest.TestCase):
         self.assertIsNotNone(latest)
         self.assertEqual(latest["project_id"], "sample")
         self.assertIn("scores", latest)
+
+    def test_analyze_repository_adds_external_artifacts(self) -> None:
+        descriptor = RepositoryDescriptor(provider="github", owner="acme", name="demo", url="https://github.com/acme/demo")
+        external = {
+            "pull_requests": [{"number": 2, "title": "Add feature", "url": "https://example/pr/2", "state": "merged"}],
+            "issues": [],
+        }
+        with patch("capstone.git_analysis.run_git_log", return_value=_SAMPLE_GIT_LOG), patch(
+            "capstone.git_analysis.discover_repository", return_value=descriptor
+        ), patch("capstone.git_analysis.fetch_repository_artifacts", return_value=external):
+            snapshot = analyze_repository(
+                self.repo_dir,
+                project_id="external",
+                include_bots=True,
+            )
+
+        self.assertIn("repository", snapshot)
+        self.assertEqual(snapshot["repository"]["name"], "demo")
+        self.assertIn("external_artifacts", snapshot)
+        self.assertEqual(snapshot["external_artifacts"]["pull_requests"], external["pull_requests"])
 
     def test_summarize_to_json(self) -> None:
         payload = {"project_id": "demo", "classification": "individual"}

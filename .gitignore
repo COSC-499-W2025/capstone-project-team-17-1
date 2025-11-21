@@ -16,6 +16,7 @@ Thumbs.db
 src/db/*.db*
 app.db
 app.db-*
+capstone.db
 *.db-journal
 __pycache__/
 *.py[cod]
