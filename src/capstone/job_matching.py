@@ -10,10 +10,6 @@ from .skills import SkillScore  # existing class from skills.py
 from .storage import open_db, fetch_latest_snapshot
 
 
-# -------------------------------------------------------------------
-#  Job description parsing from free text (step 1+2)
-# -------------------------------------------------------------------
-
 # Expand / tweak this as needed
 JOB_SKILL_KEYWORDS: Dict[str, List[str]] = {
     # Programming languages
@@ -188,11 +184,6 @@ def has_matching_skills(job_text: str, project_id: str, db_dir: Path | None = No
     """Convenience helper: just yes or no."""
     result = match_job_to_project(job_text, project_id, db_dir)
     return bool(result.matched_skills)
-
-
-# -------------------------------------------------------------------
-#  Scoring and ranking multiple projects (your original code)
-# -------------------------------------------------------------------
 
 
 @dataclass
