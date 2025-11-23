@@ -24,3 +24,6 @@ log/*.log
 src/capstone_analyzer.egg-info/
 config/user_config.json
 log/consent_decisions.jsonl
+analysis_output/
+config/user_config.json
+demo.zip
