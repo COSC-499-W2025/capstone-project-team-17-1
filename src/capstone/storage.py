@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -17,7 +18,7 @@ _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
 
-def _initialize_schema(conn: sqlite3.Connection) -> None:
+def _ensure_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS project_analysis (
@@ -30,23 +31,19 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+def _ensure_indexes(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_pa_project_created
         ON project_analysis(project_name, created_at DESC)
         """
     )
+
+def _initialize_schema(conn: sqlite3.Connection) -> None:
+    _ensure_table(conn)
+    _ensure_indexes(conn)
     conn.commit()
-
-    # Backwards compatibility: rename project_id -> project_name if needed.
-    columns = {
-        row[1]
-        for row in conn.execute("PRAGMA table_info(project_analysis)").fetchall()
-    }
-    if "project_name" not in columns and "project_id" in columns:
-        conn.execute("ALTER TABLE project_analysis RENAME COLUMN project_id TO project_name")
-        conn.commit()
-
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
     """Open (or create) a sqlite database stored under the configured directory."""
@@ -94,14 +91,19 @@ def store_analysis_snapshot(
     """Persist a project analysis snapshot to the database."""
 
     payload = json.dumps(snapshot)
+    created_at = _current_timestamp()
     conn.execute(
         """
-        INSERT INTO project_analysis (project_name, classification, primary_contributor, snapshot)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO project_analysis (project_name, classification, primary_contributor, snapshot, created_at)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (project_name, classification, primary_contributor, payload),
+        (project_name, classification, primary_contributor, payload, created_at),
     )
     conn.commit()
+
+
+def _current_timestamp() -> str:
+    return datetime.now().isoformat(timespec="seconds")
 
 
 def fetch_latest_snapshot(conn: sqlite3.Connection, project_name: str) -> dict | None:
