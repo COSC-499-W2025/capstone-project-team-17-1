@@ -188,7 +188,7 @@ def save_metrics(conn, proj_name, metrics):
         
     conn.commit()
     
-# sort by start date and output projects in chronological order
+# sort multiple projects by start date and output them in chronological order
 def chronological_proj(all_proj: dict) -> list:
     projects = []
     
