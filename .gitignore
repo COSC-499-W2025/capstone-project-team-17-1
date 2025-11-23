@@ -25,3 +25,4 @@ src/capstone_analyzer.egg-info/
 config/user_config.json
 log/consent_decisions.jsonl
 /.venvanalysis_output/
+analysis_output/
