@@ -30,6 +30,12 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_pa_project_created
+        ON project_analysis(project_name, created_at DESC)
+        """
+    )
     conn.commit()
 
     # Backwards compatibility: rename project_id -> project_name if needed.
