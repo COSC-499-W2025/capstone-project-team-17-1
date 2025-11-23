@@ -27,6 +27,29 @@ class StorageTests(unittest.TestCase):
         conn2 = storage.open_db(base_dir)
         self.assertIs(conn1, conn2)
 
+    def test_store_snapshot_validates_and_exports(self) -> None:
+        base_dir = Path(self._tmpdir.name) / "db"
+        conn = storage.open_db(base_dir)
+        snapshot = {"file_summary": {"file_count": 1}}
+        storage.store_analysis_snapshot(conn, project_id="demo", classification="individual", primary_contributor="alice", snapshot=snapshot)
+
+        latest = storage.fetch_latest_snapshot(conn, "demo")
+        self.assertEqual(latest["project_id"], "demo")
+        self.assertEqual(latest["classification"], "individual")
+        self.assertEqual(latest["primary_contributor"], "alice")
+
+        backup_path = Path(self._tmpdir.name) / "backup" / "db-copy.db"
+        result_path = storage.backup_database(conn, backup_path)
+        self.assertTrue(result_path.exists())
+        self.assertGreater(result_path.stat().st_size, 0)
+
+        export_path = Path(self._tmpdir.name) / "exports" / "snapshots.json"
+        count = storage.export_snapshots_to_json(conn, export_path)
+        self.assertEqual(count, 1)
+        exported = json.loads(export_path.read_text(encoding="utf-8"))
+        self.assertEqual(exported[0]["project_id"], "demo")
+        self.assertIn("snapshot", exported[0])
+
     def tearDown(self) -> None:
         storage.close_db()
 
