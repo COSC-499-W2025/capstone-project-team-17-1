@@ -1,10 +1,198 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, List, Dict, Any, Optional
+
 import math
 
 from .skills import SkillScore  # existing class from skills.py
+from .storage import open_db, fetch_latest_snapshot
+
+
+# -------------------------------------------------------------------
+#  Job description parsing from free text (step 1+2)
+# -------------------------------------------------------------------
+
+# Expand / tweak this as needed
+JOB_SKILL_KEYWORDS: Dict[str, List[str]] = {
+    # Programming languages
+    "python": ["python"],
+    "java": ["java"],
+    "javascript": ["javascript", "js"],
+    "typescript": ["typescript", "ts"],
+    "c": [" c ", " c,", " c.", "embedded c"],
+    "c++": ["c++", "modern c++"],
+    "c#": ["c#", "c sharp"],
+    "go": ["golang", " go "],
+    "rust": ["rust"],
+    "php": ["php"],
+    "ruby": ["ruby", "ruby on rails"],
+    "swift": ["swift"],
+    "kotlin": ["kotlin"],
+    "r": [" r ", " r language "],
+    "sql": ["sql", "postgres", "postgresql", "mysql", "mariadb", "sql server", "oracle"],
+    "bash": ["bash", "shell scripting"],
+    "powershell": ["powershell"],
+
+    # Web frontend
+    "html": ["html", "html5"],
+    "css": ["css", "css3", "scss", "sass"],
+    "react": ["react", "react.js", "reactjs"],
+    "vue": ["vue", "vue.js", "vuejs"],
+    "angular": ["angular", "angular.js", "angularjs"],
+    "next.js": ["next.js", "nextjs"],
+    "tailwind": ["tailwind", "tailwind css"],
+
+    # Backend and frameworks
+    "node.js": ["node", "node.js", "nodejs"],
+    "express": ["express", "express.js"],
+    "django": ["django"],
+    "flask": ["flask"],
+    "fastapi": ["fastapi"],
+    "spring": ["spring", "spring boot"],
+    ".net": [".net", "asp.net", "asp net", "dotnet"],
+    "laravel": ["laravel"],
+    "rails": ["rails", "ruby on rails"],
+
+    # Data and ML
+    "pandas": ["pandas"],
+    "numpy": ["numpy"],
+    "scikit learn": ["scikit learn", "sklearn"],
+    "tensorflow": ["tensorflow"],
+    "pytorch": ["pytorch"],
+    "machine learning": ["machine learning", "ml engineer"],
+    "deep learning": ["deep learning", "neural network"],
+
+    # Cloud and devops
+    "aws": ["aws", "amazon web services"],
+    "azure": ["azure", "microsoft azure"],
+    "gcp": ["gcp", "google cloud"],
+    "docker": ["docker", "containerization"],
+    "kubernetes": ["kubernetes", "k8s"],
+    "ci cd": ["ci cd", "continuous integration", "continuous delivery"],
+    "linux": ["linux"],
+
+    # General tools
+    "git": ["git", "version control"],
+    "github": ["github"],
+    "gitlab": ["gitlab"],
+    "jira": ["jira"],
+    "agile": ["agile", "scrum", "kanban"],
+}
+
+
+@dataclass
+class JobMatchResult:
+    """
+    Simple match result for one project versus one free text job description.
+    Used for step 1+2: "do any of our project skills match the JD skills".
+    """
+
+    project_id: str
+    job_skills: List[str]
+    matched_skills: List[Dict[str, Any]]
+    missing_skills: List[str]
+
+
+def extract_job_skills(text: str) -> List[str]:
+    """Pull out skills from a raw job description string using JOB_SKILL_KEYWORDS."""
+    tl = text.lower()
+    found: set[str] = set()
+    for skill, variants in JOB_SKILL_KEYWORDS.items():
+        for term in variants:
+            if term in tl:
+                found.add(skill)
+                break
+    return sorted(found)
+
+
+def load_project_skills(project_id: str, db_dir: Path | None = None) -> List[Dict[str, Any]]:
+    """
+    Load the skills list from the latest snapshot for a project.
+
+    This reuses the existing mining pipeline: we just read the JSON snapshot
+    that zip_analyzer stored in the database.
+    """
+    conn = open_db(db_dir)
+    snapshot = fetch_latest_snapshot(conn, project_id)
+    if not snapshot:
+        return []
+    return snapshot.get("skills", []) or []
+
+
+def match_job_to_project(
+    job_text: str,
+    project_id: str,
+    db_dir: Path | None = None,
+) -> JobMatchResult:
+    """
+    Compare a free text job description with one project and return
+    which job skills are matched or missing.
+    """
+
+    job_skills = extract_job_skills(job_text)
+    project_skills = load_project_skills(project_id, db_dir)
+
+    job_set = {s.lower() for s in job_skills}
+
+    matched: List[Dict[str, Any]] = []
+    for row in project_skills:
+        name = str(row.get("skill", "")).lower()
+        if name in job_set:
+            matched.append(row)
+
+    matched_names = {row.get("skill", "").lower() for row in matched}
+    missing = sorted(job_set - matched_names)
+
+    return JobMatchResult(
+        project_id=project_id,
+        job_skills=job_skills,
+        matched_skills=matched,
+        missing_skills=missing,
+    )
+
+
+def build_resume_snippet(match: JobMatchResult) -> str:
+    """
+    Tiny helper to turn a JobMatchResult into human readable text.
+    You can feed this into the UI or into the later resume generator.
+    """
+
+    if not match.matched_skills:
+        return (
+            "For this job posting we could not find strong matches between your "
+            "project skills and the required skills. You may want to add more "
+            "relevant projects or build new experience for this role."
+        )
+
+    lines: List[str] = []
+    lines.append("Relevant Skills for this Role:")
+
+    for row in match.matched_skills:
+        name = row.get("skill", "Unknown")
+        category = row.get("category", "technical")
+        confidence = float(row.get("confidence", 0.0))
+        lines.append(f"• {name} ({category}, confidence {confidence:.2f})")
+
+    if match.missing_skills:
+        lines.append("")
+        lines.append("Skills the job mentions that are not clearly shown in this project:")
+        for name in match.missing_skills:
+            lines.append(f"• {name}")
+
+    return "\n".join(lines)
+
+
+def has_matching_skills(job_text: str, project_id: str, db_dir: Path | None = None) -> bool:
+    """Convenience helper: just yes or no."""
+    result = match_job_to_project(job_text, project_id, db_dir)
+    return bool(result.matched_skills)
+
+
+# -------------------------------------------------------------------
+#  Scoring and ranking multiple projects (your original code)
+# -------------------------------------------------------------------
 
 
 @dataclass
@@ -23,11 +211,11 @@ class ProjectMatch:
 def _normalise(tokens: Iterable[str]) -> List[str]:
     """
     Normalise a sequence of tokens:
-    - strip whitespace
-    - lowercase
-    - drop empty items
-    - deduplicate
-    - return sorted list
+      strip whitespace
+      lowercase
+      drop empty items
+      deduplicate
+      return sorted list
     """
     return sorted({t.strip().lower() for t in tokens if t and t.strip()})
 
@@ -52,9 +240,9 @@ def _recency_factor(recency_days: Optional[float], half_life_days: float = 365.0
     """
     Map recency (days since last activity) to [0, 1].
 
-    - 0 days          -> ~1.0
-    - half_life_days  -> ~0.5
-    - older           -> decays smoothly towards 0
+    0 days          -> ~1.0
+    half_life_days  -> ~0.5
+    older           -> decays smoothly towards 0
 
     If recency_days is missing or invalid, return a neutral value of 0.5.
     """
@@ -114,29 +302,26 @@ def score_project_for_job(
             "recency": 0.1,
         }
 
-    # --- JD side ---
+    # JD side
     jd_required = _normalise(jd_profile.get("required_skills", []))
     jd_preferred = _normalise(jd_profile.get("preferred_skills", []))
     jd_keywords = _normalise(jd_profile.get("keywords", []))
 
-    # --- Project side: skills from SkillScore list or dict list ---
+    # Project side: skills from SkillScore list or dict list
     raw_skills = project_snapshot.get("skills", []) or []
     proj_skill_terms = _normalise(_iter_skill_names(raw_skills))
 
-    # For now, reuse skills as "keywords". Later we can add tags/descriptions.
+    # For now, reuse skills as "keywords".
     proj_keyword_terms = proj_skill_terms
 
-    # coverage
     required_cov, matched_required = _coverage(jd_required, proj_skill_terms)
     preferred_cov, matched_preferred = _coverage(jd_preferred, proj_skill_terms)
     keyword_ov, matched_keywords = _coverage(jd_keywords, proj_keyword_terms)
 
-    # recency
     metrics = project_snapshot.get("metrics", {}) or {}
     recency_days = metrics.get("recency_days")
     rec_factor = _recency_factor(recency_days)
 
-    # weighted total score
     score = (
         weights["required"] * required_cov
         + weights["preferred"] * preferred_cov
@@ -162,9 +347,7 @@ def rank_projects_for_job(
     project_snapshots: List[Dict[str, Any]],
     weights: Optional[Dict[str, float]] = None,
 ) -> List[ProjectMatch]:
-    """
-    Score all projects and return them sorted best -> worst.
-    """
+    """Score all projects and return them sorted best to worst."""
     matches = [
         score_project_for_job(jd_profile, snap, weights=weights)
         for snap in project_snapshots
@@ -174,9 +357,7 @@ def rank_projects_for_job(
 
 
 def matches_to_json(matches: List[ProjectMatch]) -> Dict[str, Any]:
-    """
-    Convert a list of ProjectMatch objects into a JSON-friendly dict.
-    """
+    """Convert a list of ProjectMatch objects into a JSON friendly dict."""
     return {
         "matches": [
             {
