@@ -81,7 +81,7 @@ class ProjectRankingTests(unittest.TestCase):
                 "primary_contributor": "me",
             },
         }
-        store_analysis_snapshot(conn, project_id="gamma", classification="individual", primary_contributor="me", snapshot=snapshot)
+        store_analysis_snapshot(conn, project_name="gamma", classification="individual", primary_contributor="me", snapshot=snapshot)
 
         args = type("Args", (), {"db_dir": db_dir, "user": "me", "limit": None})
         with io.StringIO() as buffer, mock.patch("sys.stdout", buffer):
