@@ -22,6 +22,8 @@ from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
 from .storage import fetch_latest_snapshots, open_db, close_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
+from .job_matching import match_job_to_project, build_resume_snippet
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -147,11 +149,40 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum number of projects to display",
     )
+    job_parser = subparsers.add_parser(
+        "job-match",
+        help="Compare a job description with a project and print a resume snippet",
+    )
+    job_parser.add_argument(
+        "--project-id",
+        required=True,
+        help="Project id to compare",
+    )
+    job_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    job_parser.add_argument(
+        "--job-file",
+        type=Path,
+        required=True,
+        help="Path to a text file that contains the job description",
+    )
 
     return parser
 
 
 # ----------------------------- Handlers --------------------------------
+def _handle_job_match(args: argparse.Namespace) -> int:
+    job_text = args.job_file.read_text(encoding="utf-8", errors="ignore")
+    result = match_job_to_project(job_text, args.project_id, args.db_dir)
+    snippet = build_resume_snippet(result)
+    print(snippet)
+    return 0
+
+
 def _handle_consent(args: argparse.Namespace) -> int:
     if args.consent_action == "grant":
         config = grant_consent(decision=args.decision)
@@ -369,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_clean(args)
     if args.command == "rank-projects":
         return _handle_rank_projects(args)
+    if args.command == "job-match":
+        return _handle_job_match(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")
