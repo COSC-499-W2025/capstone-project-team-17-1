@@ -142,8 +142,26 @@ def run_demo() -> None:
             }
         ]
     }
+    projC = {
+        "ongoing": True,
+        "contributorDetails": [
+            {
+                "name": "bob",
+                "files": [
+                    {
+                        "name": "welp.md",
+                        "extension": ".md",                            
+                        "lastModified": datetime.now() - timedelta(days=30),
+                        "duration":8,
+                        "activity": 2,
+                        "contributions": 3,
+                    }
+                ],
+            }
+        ]
+    }
         
-    all_proj = {"ProjA": projA, "ProjB": projB}
+    all_proj = {"ProjA": projA, "ProjB": projB, "ProjC": projC}
         
     for proj_name, proj_details in all_proj.items():
         metrics_api(proj_details, proj_name=proj_name, db_path=db_path)

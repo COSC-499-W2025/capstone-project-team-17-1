@@ -5,6 +5,7 @@ import tempfile
 import os
 import sqlite3
 from datetime import datetime
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -211,6 +212,37 @@ class TestMetricsExtractor(unittest.TestCase):
         self.assertEqual(result[0]["end"].date(), date2.date())
         self.assertEqual(result[1]["end"].date(), date1.date())
         
+    # tests that from extracted metrics, dates of ongoing projects are outputted as start-present
+    def test_chronological_proj_ongoing(self):
+        start = datetime(2025, 9, 23)
+        
+        mock_metrics = {
+            "summary": {"durationDays": 1, "frequency": 1, "volume": 1},
+            "contributionTypes": {},
+            "primaryContributors": [],
+            "timeLine": {"activityTimeline": [], "periods": {"active": [], "inactive": []}},
+            "start": start,
+            "end": None
+        }
+        
+        # make metrics_api use mock data from above
+        with patch("capstone.metrics_extractor.metrics_api", return_value=mock_metrics):
+            all_proj = {"ProjC": {"contributorDetails": []}}
+            result = chronological_proj(all_proj)
+        
+        # list should only contain 1 proj
+        self.assertEqual(len(result), 1)
+        p = result[0]
+            
+        self.assertEqual(p["name"], "ProjC")
+        self.assertEqual(p["start"], start)
+        self.assertIsNone(p["end"])
+        
+        start_str = p["start"].strftime("%Y-%m-%d") if p["start"] else "Undated"
+        end_str = p["end"].strftime("%Y-%m-%d") if p["end"] else "Present"
+        output = f"{start_str} - {end_str}: {p["name"]}"
+        
+        self.assertEqual(output, "2025-09-23 - Present: ProjC")
     
     # tests that api computes and stores metrics to database
     def test_metrics_api(self):

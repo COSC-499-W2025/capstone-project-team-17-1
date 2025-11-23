@@ -71,6 +71,7 @@ def handle_int(value):
 # helps handle empty contributors
 def analyze_metrics(details):
     contributors = details.get("contributorDetails", [])
+    ongoing = details.get("ongoing", False) # to check if project is still being worked on
     if not contributors:
         return {
             "summary": {"durationDays": 1, "frequency": 1, "volume": 1},
@@ -123,13 +124,15 @@ def analyze_metrics(details):
     time_line = build_timeline(all_dates)
     primary_contributors = sorted(contributor_summary, key=lambda x: x["count"], reverse=True)[:5]
     
+    end_value = None if ongoing else last
+    
     return {
             "summary": {"durationDays": duration_days, "frequency": frequency, "volume": total_files},
             "contributionTypes": contribution_types,
             "primaryContributors": primary_contributors,
             "timeLine": time_line,
             "start": first,
-            "end": last
+            "end": end_value
     }
         
 # initialize db tables
@@ -192,14 +195,33 @@ def chronological_proj(all_proj: dict) -> list:
     # get output info for each proj
     for proj_name, details in all_proj.items():
         metrics = metrics_api(details, proj_name)
+        
+        # scenario for explicit start/end dates
+        start = metrics.get("start")
+        end = metrics.get('end')
+        
+        # scenario for missing date info/ongoing projects
+        if start is None:
+            time_line = metrics.get("timeLine", {}).get("activityTimeline", [])
+            if time_line:
+                try:
+                    parsed_dates = [
+                        datetime.fromisoformat(entry["date"])
+                        for entry in time_line
+                    ]
+                    if parsed_dates:
+                        start = min(parsed_dates)
+                except Exception:
+                    pass # leave start/end as it
+        
         projects.append({
             "name": proj_name,
             "start": metrics.get("start"),
-            "end": metrics.get("end")
+            "end": metrics.get("end") # if None prints Present
         })
     
     # sort in order
-    projects.sort(key=lambda x: x["start"] if x["start"] else datetime.max, reverse=True) # reverse must be True for latest-oldest
+    projects.sort(key=lambda x: x["start"] if x["start"] else datetime.min, reverse=True) # reverse must be True for latest-oldest
     
     return projects
     
