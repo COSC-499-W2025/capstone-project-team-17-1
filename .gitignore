@@ -16,6 +16,7 @@ Thumbs.db
 src/db/*.db*
 app.db
 app.db-*
+capstone.db
 *.db-journal
 __pycache__/
 *.py[cod]
@@ -23,4 +24,4 @@ log/*.log
 src/capstone_analyzer.egg-info/
 config/user_config.json
 log/consent_decisions.jsonl
-.venv
+/.venv

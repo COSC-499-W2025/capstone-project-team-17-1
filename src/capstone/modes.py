@@ -1,26 +1,18 @@
-"""Analysis mode resolution utilities."""
-
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 from .consent import ConsentState
 from .logging_utils import get_logger
 
-
 logger = get_logger(__name__)
-
 
 @dataclass(frozen=True)
 class ModeResolution:
     requested: str
     resolved: str
     reason: str
-
+    
 
 _VALID_MODES = {"local", "external", "auto"}
-# to test external share option, white this _EXTERNAL_SUPPORTED to True,
-# otherwise, keep it False to save analyse steps
 _EXTERNAL_SUPPORTED = False
 
 

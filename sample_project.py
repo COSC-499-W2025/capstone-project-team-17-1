@@ -3,7 +3,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
-
+from datetime import datetime
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent
@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone.cli import main
+from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db
 
 
 def create_sample_zip(base_dir: Path) -> Path:
@@ -74,6 +75,37 @@ def run_demo() -> None:
                 print(project_id, classification, primary_contributor)
                 snap = json.loads(snapshot)
                 print(json.dumps({"skills": snap.get("skills"), "collaboration": snap.get("collaboration")}, indent=2))
+
+        print("\n--- Metrics Extractor ---")
+        # mock data
+        contributor_details = [
+            {
+                "name": "jerrycan",
+                "files": [
+                    {
+                        "name": "speed.py",
+                        "extension": ".py",
+                        "lastModified": datetime.now(),
+                        "duration": 45,
+                        "activity": 3,
+                        "contributions": 12,
+                    },
+                    {
+                        "name": "todo.md",
+                        "extension": ".md",
+                        "lastModified": datetime.now(),
+                        "duration": 15,
+                        "activity": 2,
+                        "contributions": 8,
+                    },
+                ],
+            }
+        ]
+        
+        db_path = db_dir / "metrics.db"
+        metrics = metrics_api({"contributorDetails": contributor_details}, proj_name = "TestMetrics", db_path=db_path)
+        print(json.dumps(metrics, indent=2, default=str))
+
 
 
 if __name__ == "__main__":

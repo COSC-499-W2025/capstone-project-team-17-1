@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Iterable, List, Mapping, MutableMapping, Optional
 
+from .external_artifacts import fetch_snapshot_artifacts
 from .project_ranking import ProjectRanking, rank_projects_from_snapshots
 
 
@@ -170,25 +171,113 @@ def gather_evidence(
             detail = f"Collaboration classified as {classification}"
             _add_evidence(evidence, "commit", "collaboration:classification", detail, "snapshot", weight=0.4)
 
-    if external:
-        for source_kind, entries in external.items():
+    # external evidence can come from the snapshot, caller overrides, or live fetches
+    external_sources = _resolve_external_sources(snapshot, external)
+    if external_sources:
+        for source_kind, entries in external_sources.items():
+            normalized_kind = _canonical_external_kind(source_kind)
             for entry in entries or []:
-                reference = (
-                    str(entry.get("url"))
-                    or str(entry.get("reference"))
-                    or str(entry.get("id"))
-                    or source_kind
-                )
-                detail = (
-                    entry.get("title")
-                    or entry.get("summary")
-                    or entry.get("description")
-                    or "External artifact"
-                )
-                weight = float(entry.get("weight", 0.9))
-                _add_evidence(evidence, source_kind, reference, str(detail), "external", weight=weight)
+                if not isinstance(entry, Mapping):
+                    continue
+                reference = _resolve_external_reference(normalized_kind, entry) or source_kind
+                detail, weight_hint = _format_external_detail(normalized_kind, entry)
+                weight = float(entry.get("weight", weight_hint))
+                _add_evidence(evidence, normalized_kind, reference, detail, "external", weight=weight)
 
     return evidence
+
+
+def _resolve_external_sources(
+    snapshot: Mapping[str, object],
+    provided: Mapping[str, Iterable[Mapping[str, object]]] | None,
+) -> Mapping[str, Iterable[Mapping[str, object]]]:
+    if provided:
+        return provided
+    stored = snapshot.get("external_artifacts") if isinstance(snapshot, Mapping) else None
+    if stored:
+        return stored 
+    # when the snapshot didn't store the refs
+    fetched = fetch_snapshot_artifacts(snapshot)
+    return fetched
+
+
+def _canonical_external_kind(source_kind: str) -> str:
+    lowered = source_kind.lower()
+    if lowered in {"pull_request", "pull_requests", "prs"}:
+        return "pull_request"
+    if lowered in {"issue", "issues"}:
+        return "issue"
+    return lowered
+
+
+def _resolve_external_reference(kind: str, entry: Mapping[str, object]) -> str:
+    if entry.get("url"):
+        return str(entry["url"])
+    if entry.get("reference"):
+        return str(entry["reference"])
+    if entry.get("id"):
+        return f"{kind}:{entry['id']}"
+    if entry.get("number"):
+        return f"{kind}:{entry['number']}"
+    return kind
+
+
+def _format_external_detail(kind: str, entry: Mapping[str, object]) -> tuple[str, float]:
+    if kind == "pull_request":
+        return _format_pull_request_detail(entry)
+    if kind == "issue":
+        return _format_issue_detail(entry)
+    detail = (
+        entry.get("title")
+        or entry.get("summary")
+        or entry.get("description")
+        or entry.get("detail")
+        or "External artifact"
+    )
+    return str(detail), 0.9
+
+
+def _format_pull_request_detail(entry: Mapping[str, object]) -> tuple[str, float]:
+    number = entry.get("number")
+    prefix = f"PR #{number}" if number is not None else "Pull request"
+    title = entry.get("title") or ""
+    state = (entry.get("state") or "").lower()
+    merged_at = entry.get("merged_at")
+    merged_by = entry.get("merged_by") or entry.get("user")
+    descriptor = prefix
+    if title:
+        descriptor += f": {title}"
+    meta_parts = []
+    if state:
+        meta_parts.append(state)
+    if merged_at:
+        meta_parts.append(f"merged {str(merged_at)[:10]}")
+    if merged_by:
+        meta_parts.append(f"by {merged_by}")
+    if meta_parts:
+        descriptor += f" ({', '.join(meta_parts)})"
+    weight = 1.2 if merged_at or state == "merged" else 0.9
+    return descriptor, weight
+
+
+def _format_issue_detail(entry: Mapping[str, object]) -> tuple[str, float]:
+    number = entry.get("number")
+    prefix = f"Issue #{number}" if number is not None else "Issue"
+    title = entry.get("title") or ""
+    state = (entry.get("state") or "").lower()
+    user = entry.get("user")
+    descriptor = prefix
+    if title:
+        descriptor += f": {title}"
+    meta_parts = []
+    if state:
+        meta_parts.append(state)
+    if user:
+        meta_parts.append(f"by {user}")
+    if meta_parts:
+        descriptor += f" ({', '.join(meta_parts)})"
+    weight = 0.8 if state == "closed" else 0.6
+    return descriptor, weight
 
 
 class AutoWriter:
