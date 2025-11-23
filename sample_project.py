@@ -3,7 +3,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent
@@ -12,8 +12,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone.cli import main
-from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db
-
+from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db, chronological_proj
+from capstone.storage import close_db
 
 def create_sample_zip(base_dir: Path) -> Path:
     project_dir = base_dir / "project"
@@ -32,16 +32,19 @@ def create_sample_zip(base_dir: Path) -> Path:
 
 
 def run_demo() -> None:
+    # keep db outside temp dir so windows doesn't delete an open .db file
+    db_dir = ROOT / "demo_db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+
+    # temp dir only for zip + json outputs
     with tempfile.TemporaryDirectory() as temp:
         temp_path = Path(temp)
         zip_path = create_sample_zip(temp_path)
         metadata_output = temp_path / "meta.jsonl"
         summary_output = temp_path / "summary.json"
-        db_dir = temp_path / "db"
 
-        # Grant consent programmatically
+        # grant consent
         from capstone.consent import grant_consent
-
         grant_consent()
 
         args = [
@@ -65,48 +68,62 @@ def run_demo() -> None:
         print("\n--- summary.json ---")
         print(summary_output.read_text("utf-8"))
 
-        with sqlite3.connect(db_dir / "capstone.db") as conn:
-            cursor = conn.execute("SELECT project_id, classification, primary_contributor, snapshot FROM project_analysis")
-            rows = cursor.fetchall()
-            
-            print("\n--- project_analysis rows ---")
-            for row in rows:
-                project_id, classification, primary_contributor, snapshot = row
-                print(project_id, classification, primary_contributor)
-                snap = json.loads(snapshot)
-                print(json.dumps({"skills": snap.get("skills"), "collaboration": snap.get("collaboration")}, indent=2))
+    with sqlite3.connect(db_dir / "capstone.db") as conn:
+        cursor = conn.execute(
+            "SELECT project_id, classification, primary_contributor, snapshot FROM project_analysis"
+        )
+        rows = cursor.fetchall()
 
-        print("\n--- Metrics Extractor ---")
-        # mock data
-        contributor_details = [
-            {
-                "name": "jerrycan",
-                "files": [
+        print("\n--- project_analysis rows ---")
+        for row in rows:
+            project_id, classification, primary_contributor, snapshot = row
+            print(project_id, classification, primary_contributor)
+            snap = json.loads(snapshot)
+            print(
+                json.dumps(
                     {
-                        "name": "speed.py",
-                        "extension": ".py",
-                        "lastModified": datetime.now(),
-                        "duration": 45,
-                        "activity": 3,
-                        "contributions": 12,
+                        "skills": snap.get("skills"),
+                        "collaboration": snap.get("collaboration"),
                     },
-                    {
-                        "name": "todo.md",
-                        "extension": ".md",
-                        "lastModified": datetime.now(),
-                        "duration": 15,
-                        "activity": 2,
-                        "contributions": 8,
-                    },
-                ],
-            }
-        ]
-        
-        db_path = db_dir / "metrics.db"
-        metrics = metrics_api({"contributorDetails": contributor_details}, proj_name = "TestMetrics", db_path=db_path)
-        print(json.dumps(metrics, indent=2, default=str))
+                    indent=2,
+                )
+            )
 
+    print("\n--- Metrics Extractor ---")
+    # mock data
+    contributor_details = [
+        {
+            "name": "jerrycan",
+            "files": [
+                {
+                    "name": "speed.py",
+                    "extension": ".py",
+                    "lastModified": datetime.now(),
+                    "duration": 45,
+                    "activity": 3,
+                    "contributions": 12,
+                },
+                {
+                    "name": "todo.md",
+                    "extension": ".md",
+                    "lastModified": datetime.now(),
+                    "duration": 15,
+                    "activity": 2,
+                    "contributions": 8,
+                },
+            ],
+        }
+    ]
 
+    db_path = db_dir / "metrics.db"
+    metrics = metrics_api(
+        {"contributorDetails": contributor_details},
+        proj_name="TestMetrics",
+        db_path=db_path,
+    )
+    
+    print(json.dumps(metrics, indent=2, default=str))
+    close_db()
 
 if __name__ == "__main__":
     run_demo()
