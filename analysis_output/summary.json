@@ -1,0 +1,27 @@
+{
+  "archive": "C:\\Users\\chicken\\Desktop\\brain cells\\uni\\yr 4\\COSC499\\capstone-project-team-17-1\\demo.zip",
+  "requested_mode": "auto",
+  "resolved_mode": "local",
+  "mode_reason": "External analysis not available; using local mode",
+  "local_mode_label": "Local Analysis Mode",
+  "file_summary": {
+    "file_count": 0,
+    "total_bytes": 0,
+    "earliest_modification": null,
+    "latest_modification": null,
+    "duration_days": null,
+    "active_days": 0,
+    "activity_breakdown": {},
+    "timeline": {}
+  },
+  "languages": {},
+  "frameworks": [],
+  "collaboration": {
+    "classification": "unknown",
+    "contributors": {},
+    "primary_contributor": null
+  },
+  "metadata_output": "analysis_output\\metadata.jsonl",
+  "scan_duration_seconds": 0.0211,
+  "skills": []
+}
