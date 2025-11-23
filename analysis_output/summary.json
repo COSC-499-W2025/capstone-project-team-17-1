@@ -1,0 +1,39 @@
+{
+  "archive": "C:\\Users\\amirp\\capstone-project-team-17-1\\demo1.zip",
+  "requested_mode": "local",
+  "resolved_mode": "local",
+  "mode_reason": "Local analysis enforced",
+  "local_mode_label": "Local Analysis Mode",
+  "file_summary": {
+    "file_count": 1,
+    "total_bytes": 3832,
+    "earliest_modification": "2025-11-19T10:29:44",
+    "latest_modification": "2025-11-19T10:29:44",
+    "duration_days": 0,
+    "active_days": 1,
+    "activity_breakdown": {
+      "code": 1
+    },
+    "timeline": {
+      "2025-11": 1
+    }
+  },
+  "languages": {
+    "Python": 1
+  },
+  "frameworks": [],
+  "collaboration": {
+    "classification": "unknown",
+    "contributors": {},
+    "primary_contributor": null
+  },
+  "metadata_output": "analysis_output\\metadata.jsonl",
+  "scan_duration_seconds": 0.004,
+  "skills": [
+    {
+      "skill": "Python",
+      "confidence": 1.0,
+      "category": "language"
+    }
+  ]
+}
