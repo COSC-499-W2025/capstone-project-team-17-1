@@ -66,13 +66,13 @@ def run_demo() -> None:
         print(summary_output.read_text("utf-8"))
 
         with sqlite3.connect(db_dir / "capstone.db") as conn:
-            cursor = conn.execute("SELECT project_id, classification, primary_contributor, snapshot FROM project_analysis")
+            cursor = conn.execute("SELECT project_name, classification, primary_contributor, snapshot FROM project_analysis")
             rows = cursor.fetchall()
             
             print("\n--- project_analysis rows ---")
             for row in rows:
-                project_id, classification, primary_contributor, snapshot = row
-                print(project_id, classification, primary_contributor)
+                project_name, classification, primary_contributor, snapshot = row
+                print(project_name, classification, primary_contributor)
                 snap = json.loads(snapshot)
                 print(json.dumps({"skills": snap.get("skills"), "collaboration": snap.get("collaboration")}, indent=2))
 

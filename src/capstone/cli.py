@@ -198,11 +198,18 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         return 5
 
     archive_path = Path(archive_arg).expanduser()
-    if not archive_path.exists() or not archive_path.is_file():
+    if not archive_path.exists():
         detail = f"Archive not found: {archive_path}"
         payload = {"error": "FileNotFound", "detail": detail}
         print(json.dumps(payload), file=sys.stderr)
         return 4
+    if archive_path.suffix.lower() != ".zip":
+        payload = {
+            "error": "InvalidInput",
+            "detail": "Unsupported file format. Please provide a .zip archive.",
+        }
+        print(json.dumps(payload), file=sys.stderr)
+        return 3
 
     try:
         consent = ensure_consent(require_granted=True)
@@ -297,13 +304,13 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
 
 
 def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -> None:
-    print(summary["local_mode_label"], f"({summary['resolved_mode']})")
+    print(f"Analysis mode: {summary['resolved_mode']}")
     print(f"Metadata written to: {summary['metadata_output']}")
     print(f"Summary written to: {args.summary_output}")
     file_summary = summary.get("file_summary", {})
     if file_summary:
         print(
-            f"Processed {file_summary.get('file_count', 0)} files totaling {file_summary.get('total_bytes', 0)} bytes"
+            f"Processed {file_summary.get('file_count', 0)} files, total {file_summary.get('total_bytes', 0)} bytes"
         )
     languages = summary.get("languages", {})
     if languages:
