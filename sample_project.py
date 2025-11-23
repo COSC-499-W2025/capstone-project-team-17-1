@@ -98,7 +98,7 @@ def run_demo() -> None:
                 {
                     "name": "speed.py",
                     "extension": ".py",
-                    "lastModified": datetime.now(),
+                    "lastModified": datetime.now() - timedelta(days=10),
                     "duration": 45,
                     "activity": 3,
                     "contributions": 12,
@@ -106,7 +106,7 @@ def run_demo() -> None:
                 {
                     "name": "todo.md",
                     "extension": ".md",
-                    "lastModified": datetime.now(),
+                    "lastModified": datetime.now() - timedelta(days=5),
                     "duration": 15,
                     "activity": 2,
                     "contributions": 8,
@@ -123,6 +123,39 @@ def run_demo() -> None:
     )
     
     print(json.dumps(metrics, indent=2, default=str))
+    
+    print("\n--- Chronological Projects ---")
+    projA = {"contributorDetails": contributor_details}
+    projB = {"contributorDetails": [
+            {
+                "name": "bob",
+                "files": [
+                    {
+                        "name": "hello.js",
+                        "extension": ".js",                            
+                        "lastModified": datetime.now() - timedelta(days=15),
+                        "duration": 20,
+                        "activity": 3,
+                        "contributions": 8,
+                    }
+                ],
+            }
+        ]
+    }
+        
+    all_proj = {"ProjA": projA, "ProjB": projB}
+        
+    for proj_name, proj_details in all_proj.items():
+        metrics_api(proj_details, proj_name=proj_name, db_path=db_path)
+            
+    chron_list = chronological_proj(all_proj)
+        
+    for p in chron_list:
+        start_str = p["start"].strftime("%Y-%m-%d") if p["start"] else "Undated"
+        end_str = p["end"].strftime("%Y-%m-%d") if p["end"] else "Present"
+        print(f"{start_str} - {end_str}: {p["name"]}")
+    
+    
     close_db()
 
 if __name__ == "__main__":

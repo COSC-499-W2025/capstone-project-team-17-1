@@ -77,6 +77,8 @@ def analyze_metrics(details):
             "contributionTypes": {},
             "primaryContributors": [],
             "timeLine": {"activityTimeline": [], "periods": {"active": [], "inactive": []}},
+            "startDate": None,
+            "endDate": None
         }
     
     # loops to process contributors
@@ -110,6 +112,8 @@ def analyze_metrics(details):
             "contributionTypes": contribution_types,
             "primaryContributors": contributor_summary,
             "timeLine": {"activityTimeline": [], "periods": {"active": [], "inactive": []}},
+            "start": None,
+            "end": None
         }
         
     first = min(all_dates)
@@ -124,6 +128,8 @@ def analyze_metrics(details):
             "contributionTypes": contribution_types,
             "primaryContributors": primary_contributors,
             "timeLine": time_line,
+            "start": first,
+            "end": last
     }
         
 # initialize db tables
@@ -178,6 +184,24 @@ def save_metrics(conn, proj_name, metrics):
                        (proj_name, t["date"], t["count"]))
         
     conn.commit()
+    
+# sort by start date and output projects in chronological order
+def chronological_proj(all_proj: dict) -> list:
+    projects = []
+    
+    # get output info for each proj
+    for proj_name, details in all_proj.items():
+        metrics = metrics_api(details, proj_name)
+        projects.append({
+            "name": proj_name,
+            "start": metrics.get("start"),
+            "end": metrics.get("end")
+        })
+    
+    # sort in order
+    projects.sort(key=lambda x: x["start"] if x["start"] else datetime.max, reverse=True) # reverse must be True for latest-oldest
+    
+    return projects
     
 # metrics API
 def metrics_api(details, proj_name="UnknownProject", db_path=None):
