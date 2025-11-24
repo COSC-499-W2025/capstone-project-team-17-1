@@ -130,7 +130,7 @@ During our team check-in, we discussed exploring additional features outside of 
 ### Week Recap: 
 - Finished and submitted task #67
 - Reviewed PR's and assisted in debugging errors in team member's code
-- Met with team and collaborated on step 1 + 2 of matching job description to user projects feature
+- Collaborated on step 1 + 2 of matching job description to user projects feature
 - Started working on task #89 Step 3 Extract Company-Specific Qualities
 
 ### Next Week:
