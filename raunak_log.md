@@ -9,6 +9,7 @@
 - [Week 8 Personal Log](#week-8-personal-log)
 - [Week 9 Personal Log](#week-9-personal-log)
 - [Week 10 Personal Log](#week-10-personal-log)
+- [Week 12 Personal Log](#week-12-personal-log)
 
 ---
 
@@ -351,6 +352,54 @@ Milestones #19 & #20 – Timeline Exports (Projects + Skills)
 <img width="1470" height="956" alt="WEEK10EVAL" src="https://github.com/user-attachments/assets/bc51ffab-18df-49da-9bb6-8f4622780cc7" />
 
 
+### WEEK 12 PERSONAL LOG 
+-Today while reviewing Michelle’s work on the feature/chronological-projects branch, I found and fixed a small bug in the sample project demo. The code was trying to read a column from the project_analysis table that doesn’t actually exist in the database, which was causing the demo to crash at runtime. 
 
 
+-I tracked the issue down to the query pulling the wrong column name and updated it so that it matches the actual database schema. After the change, the demo runs smoothly without errors. It was a tiny tweak, but it unblocked Michelle’s code and made the chronological projects output work as intended
+
+- Explored existing **CLI analyzer**:
+  - Ran `capstone analyze demo.zip` to understand how project snapshots are generated.
+  - Created a tiny `demo_project/` (src/app.py, docs/README.md, requirements.txt) and zipped it.
+  - Verified `analysis_output/metadata.jsonl` + `summary.json` and saw languages/frameworks in CLI output.
+
+- Implemented **project–job scoring logic** in `src/capstone/job_matching.py`:
+  - Added `ProjectMatch` dataclass with:
+    - `score`, `required_coverage`, `preferred_coverage`, `keyword_overlap`, `recency_factor`
+    - `matched_required`, `matched_preferred`, `matched_keywords`
+  - Helper functions:
+    - `_normalise(tokens)` – lowercases, trims, de-dupes skill tokens.
+    - `_coverage(jd_terms, project_terms)` – returns `(coverage_ratio, matched_terms)`.
+    - `_recency_factor(recency_days)` – exponential decay; recent projects get higher scores.
+    - `_iter_skill_names(...)` – supports `SkillScore`, dicts, or objects with `.skill`.
+  - Main APIs:
+    - `score_project_for_job(jd_profile, project_snapshot, weights=None)`
+      - Combines required, preferred, keywords, recency with default weights `{0.6, 0.2, 0.1, 0.1}`.
+    - `rank_projects_for_job(jd_profile, project_snapshots)`
+      - Scores all projects and sorts best → worst.
+    - `matches_to_json(matches)`
+      - Converts `ProjectMatch` list into JSON-ready dict for UI / resume generator.
+
+- Created **manual scoring demo** `job_match_manual_demo.py` (repo root):
+  - Hard-coded sample JD: “Backend Python Intern” with `["python", "flask", "sql"]`.
+  - Defined 3 fake snapshots:
+    - `flask_backend` (good match, recent).
+    - `data_science_notebook` (partial match).
+    - `old_php_site` (almost no match, very old).
+  - Called `rank_projects_for_job(...)` and printed a breakdown per project.
+  - Ran via:
+    ```bash
+    PYTHONPATH=src python3 job_match_manual_demo.py
+    ```
+  - Confirmed ranking: `flask_backend` > `data_science_notebook` > `old_php_site` with sensible scores.
+
+- Git / collaboration:
+  - Worked on `feature/parse-job-description`.
+  - Resolved merge conflict in `job_matching.py` (kept new scoring implementation).
+  - Re-ran manual demo after resolving, then pushed and opened PR describing:
+  - Michelle helped me with some changes and that can be seen on the Pull request that I have put up
+    - New scoring logic,
+    - Demo script,
+    -  this supports step 1+2 job–project matching.
+<img width="1059" height="625" alt="WEEK12PEEREVAL" src="https://github.com/user-attachments/assets/d138a0e3-38bf-4640-a6cb-b35628a83ed4" />
 
