@@ -302,21 +302,17 @@ During week 10, the team cleaned all js legacy and developed with full python la
 
 In Week 12, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
 
-### Username and Student Name for Team 17
-
-| Student Name | Github Username |
-| ------------ | --------------- |
-| Yuxuan Sun | ErenSun408 |
-| Parsa Aminian | Pmoney1383 |
-| Raunak Khanna | ronziekhanna |
-| Shuyu Yan | yanshuyu280042 |
-| Michelle Zhou | mltzhou |
-
 ### Completed Tasks Week 12
-<img width="1228" height="72" alt="Screenshot 2025-11-21 at 3 43 50 PM" src="https://github.com/user-attachments/assets/0f06fa11-6348-4aa7-9a44-80fffd438406" />
+<img width="1920" height="203" alt="image" src="https://github.com/user-attachments/assets/c8510e53-4095-4ee1-8bde-bec9958d95b5" />
+<img width="1920" height="208" alt="image" src="https://github.com/user-attachments/assets/1227145c-af67-429c-8484-621dc482ee2f" />
 
 ### Burnup chart Week 12
+<img width="1626" height="950" alt="image" src="https://github.com/user-attachments/assets/c289db01-dbed-4977-807e-e08f0d0de000" />
+
 ### In Progress Tasks Week 12
+<img width="1948" height="204" alt="image" src="https://github.com/user-attachments/assets/3c2e20f5-3c80-44ae-86de-f472fc40dfa5" />
+<img width="1945" height="96" alt="image" src="https://github.com/user-attachments/assets/ad231d1f-5ecd-4d72-94c3-7851ab60832b" />
+
 ### Test Report Week 12
 
 
