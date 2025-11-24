@@ -10,6 +10,8 @@
 - [Week 8 Personal Log](#week-8-personal-log)
 - [Week 9 Personal Log](#week-9-personal-log)
 - [Week 10 Personal Log](#week-10-personal-log)
+- [Week 11 Personal Log](#week-11-personal-log)
+- [Week 12 Personal Log](#week-12-personal-log)
 
 
 ## Week 3 Personal Log
@@ -107,11 +109,32 @@ During our team check-in, we discussed exploring additional features outside of 
 - Worked on finishing 'Chronologica List of Projects' and 'Outputting Key Information for Project'
 - Reviewed PR's
 - Discussed with team more feature implementations and additional considerations for refinement
-- Discussed frontend implementations specifics
+- Discussed future frontend implementations
 - Flushed out my feature specifics and requirements to align more with instructor feedback (tailored for user resumes)
 
 ### Next Week:
 - Finish and submit PR's for task #67 and #54
-- Start frontend development
 - Start new feature implementation
 - Team check-in for milestone #1
+
+## Week 11 Personal Log (Reading Week)
+
+- (Nov 10 - Nov 16, 2025)<br />
+
+## Week 12 Personal Log
+
+- (Nov 17 - Nov 23, 2025)<br />
+
+<img width="1006" height="706" alt="image" src="https://github.com/user-attachments/assets/f6478465-1457-4bfd-a1a4-9eb85735a17a" />
+
+### Week Recap: 
+- Finished and submitted task #67
+- Reviewed PR's and assisted in debugging errors in team member's code
+- Met with team and collaborated on step 1 + 2 of matching job description to user projects feature
+- Started working on task #89 Step 3 Extract Company-Specific Qualities
+
+### Next Week:
+- Collaborate with team to finish job description matching feature (last feature)
+- Finalize code for Milestone #1
+- Convert outputs to match resume-style writing for M1 demo
+- Prepare for M1 presentation
