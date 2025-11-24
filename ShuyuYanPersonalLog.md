@@ -167,3 +167,26 @@ Beyond implementation, I reviewed teammates’ pull requests, discussed integrat
   
   ### Completed Tasks Week 10
   'Top Project Summaries' task #65
+
+  ## WEEK 12 Personal LOG (Nov17 - Nov23, 2025)
+### 1. Type of Tasks Worked On
+<img width="1056" height="596" alt="Screenshot 2025-11-21 at 6 00 05 PM" src="https://github.com/user-attachments/assets/d54808d7-f2c3-4f7e-84b0-5724be148923" />
+
+### 2. Weekly Goals Recap
+- complete 'Section 13.4 – Storage Validation and Backup' #87
+- complete 'Section 9.1.1 + 17.2 – Pull-Request / Issue Evidence' #86
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+
+This week, I completed the full-system verification task covering terminal output auditing and Milestone Demo readiness. I conducted an end-to-end pass across all implemented features to ensure every CLI command, analysis routine, and storage operation is producing correct, complete, and consistent terminal output. This work guarantees that the current build can reliably support the milestone demo scenario from ZIP ingestion to insight generation.
+
+To achieve this, I reviewed the entire codebase, ran each pipeline component in isolation and in sequence, and validated all output formats against the expected behavior specified in our milestone documentation. Several modules received targeted fixes for missing messages, inconsistent formatting, and edge-case handling. The final demo path (upload → extract metadata → analyze repos → rank contributions → generate summaries → store insights) now runs smoothly without errors.
+
+Beyond verification, I coordinated with team members to clarify responsibilities, helped them debug implementation issues, and ensured their new tasks align with the overall milestone plan. I also reviewed multiple PRs, provided feedback on integration points, and confirmed that storage validation, snapshot integrity, and external reference resolution behave correctly under the updated workflow.
+
+Overall, this week strengthened the system’s reliability and ensured that our milestone demo operates cohesively across all modules. The work improved my familiarity with our CLI ecosystem, integration boundaries, and full-pipeline debugging, contributing to a more stable and demonstrable Python-only backend system.
+
+ ### Completed Tasks Week 12
+- 'Section 13.4 – Storage Validation and Backup' #87
+- 'Section 9.1.1 + 17.2 – Pull-Request / Issue Evidence' #86

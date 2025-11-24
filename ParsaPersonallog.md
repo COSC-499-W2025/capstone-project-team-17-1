@@ -484,3 +484,83 @@ We can reliably retrieve previously generated portfolio snapshots by project, ei
 ### Reflection
 
 This week was about making data access production ready and removing flaky platform issues. The retrieval layer gives us clean, testable reads with room to grow into GraphQL or richer filtering later. Fixing the Windows lock was a big quality of life win because it keeps our CI and local runs green. Next I want to add richer filters for contributor and classification, expose total counts consistently across endpoints, and draft a tiny frontend panel to verify results visually when the team prioritizes UI again.
+
+---
+
+## Week 12 Personal Log [Nov 17 – Nov 23, 2025]
+
+This week I focused on getting our CLI workflow feeling like a real tool and shipping the first version of the job–matching pipeline. I wired up a `capstone` command that works cleanly inside a virtualenv, debugged the demo project so it writes proper snapshots to `project_analysis`, and built a backend that can take a pasted job description, extract skills, and compare them against a stored project.
+
+**Peer Eval**  
+>
+> ![Week 12 — Data Mining App]
+> <img width="1068" height="623" alt="image" src="https://github.com/user-attachments/assets/6ca71695-c9ae-4005-aaea-aea2ee76fc86" />
+
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### Feature: End-to-end job description → project match (Step 1+2+3)
+
+* Added a new `capstone.job_matching` module that:
+  * Normalizes job descriptions and extracts skills using a curated `JOB_SKILL_KEYWORDS` dictionary (Python, C++, React, SQL, Docker, cloud tools, data/ML keywords, etc.).
+  * Computes simple coverage scores so we know which required/preferred skills from the JD are actually present in a project’s skill list.
+  * Returns a structured `JobMatchResult` that includes matched skills, coverage percentage, and a high-level “good match vs no strong match” verdict.
+* Extended the CLI with a `job-match` subcommand:
+  * `capstone job-match --project-id demo --db-dir data --job-file job_description.txt`
+  * Loads the job text, fetches the latest snapshot for the given project from SQLite, runs the matching logic, and prints a friendly message (either listing matched skills or telling the user there isn’t a strong match yet).
+* Laid groundwork for later steps:
+  * The result object already exposes enough information for Step 4 to generate tailored resume snippets later.
+  * The same extraction code can be reused by Step 3 when we start aggregating company-specific traits from multiple postings.
+
+---
+
+### Stability: Demo pipeline + metrics fixes
+
+* Cleaned up the “demo” path so `run_demo()` now runs a full archive analysis, prints the summary, and then reads rows from `project_analysis` without schema errors (aliasing the internal `id` column as `project_id` in the sample query).  
+* Used the demo output to verify that:
+  * Collaboration snapshots now store `classification`, `primary_contributor`, and `skills` in a stable schema.
+  * The skills JSON actually flows through end-to-end into the database, which is required for the new job-matching feature.
+* Revisited the metrics extractor and chronological project view:
+  * Confirmed that the `ongoing` flag works correctly so projects with no explicit end date show `Present` as their end when printing the timeline.
+  * Checked that our metrics API still saves per-project summaries into `metrics.db` without Windows locking issues.
+
+---
+
+### CLI + environment wiring
+
+* Installed the package in editable mode (`python -m pip install -e .`) so `capstone` is available as a command in the virtualenv instead of only as `python -m capstone.cli`.
+* Verified that the job-matching command works inside the venv and that our new subcommand doesn’t interfere with existing ones like `analyze`, `clean`, or `rank-projects`.
+* Documented the basic workflow for teammates:
+  * Activate venv → run `capstone analyze ...` to ingest a zip.
+  * Then run `capstone job-match ...` against that project to test the new feature.
+
+---
+
+### Testing and verification
+
+* Created `tests/test_job_matching.py` using `unittest` to cover:
+  * Basic keyword extraction from a realistic job description (ensuring keywords like “Python”, “C++”, “SQL”, “Docker”, “cloud” are picked up even when buried in text).
+  * Matching logic on a fake project snapshot so we get deterministic coverage scores.
+  * A CLI-level test that patches `open_db` / `fetch_latest_snapshot` to simulate both “good match” and “no match” scenarios.
+* Re-ran the full test suite after the demo/schema fixes to confirm that:
+  * The previous `project_analysis` mismatch is resolved.
+  * Our metrics and demo helpers still behave the same from the tests’ perspective.
+
+---
+
+### PR and process
+
+* Opened a PR for **Job Description Matching (Step 1+2) + Demo Pipeline Fixes**.
+* Wrote a short summary explaining:
+  * New `job-match` CLI and backend module.
+  * Fix for the demo’s `project_analysis` SELECT that used the wrong column name earlier.
+  * How to reproduce the flow locally (run `run_demo()` or `capstone analyze`, then `capstone job-match` with a JD file).
+* Left notes in the issue thread to clarify that Step 3 (company-specific traits) and Step 4 (resume generation) will build on the JSON profile produced by the current code.
+
+---
+
+### Reflection
+
+This week felt like moving from “toy script” to “actual product.” Getting `capstone` working as a first-class CLI command and debugging the demo DB issues gave me a much clearer picture of how all the pieces fit together. The new job-matching pipeline is still simple, but it already supports a realistic UX: paste a job posting, point at a project, and see whether your portfolio lines up or not. Next I want to 1) tighten the keyword extraction so it handles more phrasing variations, 2) support matching across *all* projects instead of just one `--project-id`, and 3) start shaping the JSON output so Step 4 can generate a polished resume section directly from these matches.
