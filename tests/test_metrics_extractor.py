@@ -5,13 +5,14 @@ import tempfile
 import os
 import sqlite3
 from datetime import datetime
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
     
-from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db, save_metrics, handle_int
+from capstone.metrics_extractor import (analyze_metrics, metrics_api, init_db, save_metrics, handle_int, chronological_proj,)
 
 
 # helpers to make mock data -> files and db
@@ -46,7 +47,7 @@ def parse_mock_data(directory):
                 "lastModified": datetime.now(),
                 "duration": duration,
                 "activity": activity,
-                "contributions": contributions,
+                "contributions": contributions
             }]
         })
         return [{"name": "TestData", "files": data}]
@@ -71,7 +72,7 @@ class TestMetricsExtractor(unittest.TestCase):
                         "lastModified": datetime.now(),
                         "duration": 27,
                         "activity": 156,
-                        "contributions": 238,
+                        "contributions": 238
                     },
                     {
                         "name": "mcnugget.png",
@@ -79,7 +80,7 @@ class TestMetricsExtractor(unittest.TestCase):
                         "lastModified": datetime.now(),
                         "duration": 2,
                         "activity": 4,
-                        "contributions": 1,
+                        "contributions": 1
                     },
                 ],
             }
@@ -103,7 +104,7 @@ class TestMetricsExtractor(unittest.TestCase):
             files = [
                 {"name": "projectX.txt", "content": "duration: 24\nactivity: 32\ncontributions: 82"},
                 {"name": "projectY.txt", "content": "duration: 3\nactivity: 5\ncontributions: 82"},
-                {"name": "projectZ.txt", "content": "duration: 16\nactivity: 60\ncontributions: 82"}, 
+                {"name": "projectZ.txt", "content": "duration: 16\nactivity: 60\ncontributions: 82"}
             ]
             for f in files:
                 with open(temp_path / f["name"], "w") as file:
@@ -152,6 +153,97 @@ class TestMetricsExtractor(unittest.TestCase):
             count = cursor.fetchone()[0]
             self.assertGreaterEqual(count, 1)
     
+    # tests if analyzed projects are returned in order for resume output        
+    def test_chronological_proj(self):
+        # mock dates and multiple project inputs
+        date1 = datetime(2024, 1, 20)
+        date2 = datetime(2025, 8, 21)
+        
+        all_proj = {
+            "ProjA": {
+                "contributorDetails": [
+                    {
+                        "name": "jericho",
+                        "files": [
+                            {
+                                "name": "frog.py",
+                                "extension": ".py",                            
+                                "lastModified": date1,
+                                "duration": 25,
+                                "activity": 4,
+                                "contributions": 3
+                            }
+                        ],
+                    }
+                ]
+            },
+            "ProjB": {
+                "contributorDetails": [
+                    {
+                        "name": "steve",
+                        "files": [
+                            {
+                                "name": "minecraft.md",
+                                "extension": ".md",                            
+                                "lastModified": date2,
+                                "duration": 14,
+                                "activity": 8,
+                                "contributions": 5
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+        
+        # there should be 2 projects in output
+        result = chronological_proj(all_proj)
+        self.assertEqual(len(result), 2)
+        
+        # order should be earliest to latest
+        ordered_names = [p["name"] for p in result]
+        self.assertEqual(ordered_names, ['ProjB', "ProjA"])
+        
+        self.assertIsNotNone(result[0]["start"])
+        self.assertIsNotNone(result[1]["start"])
+        self.assertEqual(result[0]["start"].date(), date2.date())
+        self.assertEqual(result[1]["start"].date(), date1.date())
+        
+        self.assertEqual(result[0]["end"].date(), date2.date())
+        self.assertEqual(result[1]["end"].date(), date1.date())
+        
+    # tests that from extracted metrics, dates of ongoing projects are outputted as start-present
+    def test_chronological_proj_ongoing(self):
+        start = datetime(2025, 9, 23)
+        
+        mock_metrics = {
+            "summary": {"durationDays": 1, "frequency": 1, "volume": 1},
+            "contributionTypes": {},
+            "primaryContributors": [],
+            "timeLine": {"activityTimeline": [], "periods": {"active": [], "inactive": []}},
+            "start": start,
+            "end": None
+        }
+        
+        # make metrics_api use mock data from above
+        with patch("capstone.metrics_extractor.metrics_api", return_value=mock_metrics):
+            all_proj = {"ProjC": {"contributorDetails": []}}
+            result = chronological_proj(all_proj)
+        
+        # list should only contain 1 proj
+        self.assertEqual(len(result), 1)
+        p = result[0]
+            
+        self.assertEqual(p["name"], "ProjC")
+        self.assertEqual(p["start"], start)
+        self.assertIsNone(p["end"])
+        
+        start_str = p["start"].strftime("%Y-%m-%d") if p["start"] else "Undated"
+        end_str = p["end"].strftime("%Y-%m-%d") if p["end"] else "Present"
+        output = f"{start_str} - {end_str}: {p["name"]}"
+        
+        self.assertEqual(output, "2025-09-23 - Present: ProjC")
+    
     # tests that api computes and stores metrics to database
     def test_metrics_api(self):
         result = metrics_api({"contributorDetails": self.contributor_details}, proj_name = self.proj_name, db_path = self.db_path)
@@ -174,6 +266,7 @@ class TestMetricsExtractor(unittest.TestCase):
             self.assertGreaterEqual(count, 1)
             
         conn.close()
+        
 if __name__ == "__main__":
     unittest.main()
     

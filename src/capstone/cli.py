@@ -20,7 +20,7 @@ from .consent import (
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshots, open_db, close_db
+from .storage import fetch_latest_snapshot, open_db, close_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from pathlib import Path
