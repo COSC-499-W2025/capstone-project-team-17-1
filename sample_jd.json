@@ -1,0 +1,6 @@
+{
+  "title": "Software Engineer Intern",
+  "required_skills": ["python", "flask", "sql"],
+  "preferred_skills": ["docker", "linux"],
+  "keywords": ["backend", "rest api"]
+}

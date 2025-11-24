@@ -1,20 +1,26 @@
 {
-  "archive": "C:\\Users\\chicken\\Desktop\\brain cells\\uni\\yr 4\\COSC499\\capstone-project-team-17-1\\demo.zip",
-  "requested_mode": "auto",
+  "archive": "C:\\Users\\amirp\\capstone-project-team-17-1\\demo1.zip",
+  "requested_mode": "local",
   "resolved_mode": "local",
-  "mode_reason": "External analysis not available; using local mode",
+  "mode_reason": "Local analysis enforced",
   "local_mode_label": "Local Analysis Mode",
   "file_summary": {
-    "file_count": 0,
-    "total_bytes": 0,
-    "earliest_modification": null,
-    "latest_modification": null,
-    "duration_days": null,
-    "active_days": 0,
-    "activity_breakdown": {},
-    "timeline": {}
+    "file_count": 1,
+    "total_bytes": 3832,
+    "earliest_modification": "2025-11-19T10:29:44",
+    "latest_modification": "2025-11-19T10:29:44",
+    "duration_days": 0,
+    "active_days": 1,
+    "activity_breakdown": {
+      "code": 1
+    },
+    "timeline": {
+      "2025-11": 1
+    }
   },
-  "languages": {},
+  "languages": {
+    "Python": 1
+  },
   "frameworks": [],
   "collaboration": {
     "classification": "unknown",
@@ -22,6 +28,12 @@
     "primary_contributor": null
   },
   "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.0211,
-  "skills": []
+  "scan_duration_seconds": 0.004,
+  "skills": [
+    {
+      "skill": "Python",
+      "confidence": 1.0,
+      "category": "language"
+    }
+  ]
 }
