@@ -174,7 +174,7 @@ class ZipAnalyzer:
         conn = open_db(db_dir)
         store_analysis_snapshot(
             conn,
-            project_name=project_name,
+            project_id=project_name,
             classification=classification,
             primary_contributor=primary_contributor,
             snapshot=summary,
