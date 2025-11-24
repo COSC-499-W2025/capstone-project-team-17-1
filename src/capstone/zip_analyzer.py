@@ -168,18 +168,18 @@ class ZipAnalyzer:
             analysis_mode=mode.resolved,
         )
 
-        project_identifier = project_id or zip_path.stem
+        project_name = project_id or zip_path.stem
         classification = collaboration.classification
         primary_contributor = collaboration.primary_contributor
         conn = open_db(db_dir)
         store_analysis_snapshot(
             conn,
-            project_id=project_identifier,
+            project_name=project_name,
             classification=classification,
             primary_contributor=primary_contributor,
             snapshot=summary,
         )
-        self._logger.info("Stored zip analysis snapshot for %s", project_identifier)
+        self._logger.info("Stored zip analysis snapshot for %s", project_name)
 
         return summary
 
