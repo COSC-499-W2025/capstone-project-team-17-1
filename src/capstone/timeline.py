@@ -75,8 +75,14 @@ def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
             if not skill:
                 continue
             cat = s.get("category", "unspecified")
+            # FIX: respect 'confidence' as well as older 'score'/'weight'
+            raw = s.get("score")
+            if raw is None:
+                raw = s.get("confidence")
+            if raw is None:
+                raw = s.get("weight", 1.0)
             try:
-                w = float(s.get("score", s.get("weight", 1.0)))
+                w = float(raw)
             except (TypeError, ValueError):
                 w = 1.0
             key = (skill, cat)

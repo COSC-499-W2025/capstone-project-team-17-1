@@ -24,6 +24,24 @@ def create_sample_zip(base_dir: Path) -> Path:
     (project_dir / "docs" / "README.md").write_text("# Sample\n", encoding="utf-8")
     (project_dir / "requirements.txt").write_text("flask==2.2.0\n", encoding="utf-8")
 
+    # NEW: add a tiny fake git log so collaboration detection has data
+    git_logs_dir = project_dir / ".git" / "logs"
+    git_logs_dir.mkdir(parents=True, exist_ok=True)
+    head_path = git_logs_dir / "HEAD"
+    head_path.write_text(
+        (
+            "0000000000000000000000000000000000000000 "
+            "1111111111111111111111111111111111111111 "
+            "Demo User <demo@example.com> 1710000000 +0000\t"
+            "clone: from https://example.com/demo.git\n"
+            "1111111111111111111111111111111111111111 "
+            "2222222222222222222222222222222222222222 "
+            "Demo User <demo@example.com> 1710003600 +0000\t"
+            "commit: Initial commit\n"
+        ),
+        encoding="utf-8",
+    )
+
     zip_path = base_dir / "sample.zip"
     with ZipFile(zip_path, "w") as archive:
         for file in project_dir.rglob("*"):
@@ -70,7 +88,7 @@ def run_demo() -> None:
 
     with sqlite3.connect(db_dir / "capstone.db") as conn:
         cursor = conn.execute(
-    "SELECT id AS project_id, classification, primary_contributor, snapshot "
+    "SELECT project_id, classification, primary_contributor, snapshot "
     "FROM project_analysis"
 )
 
