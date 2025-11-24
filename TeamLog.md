@@ -294,6 +294,7 @@ In Week 10, team members self-assigned issues based on the tasks assigned in the
 During week 10, the team cleaned all js legacy and developed with full python language. #81 ships the Top Project Summaries suite, while removing unused Electron/JS assets and generated artifacts. #80 refactors metrics to Python with analyze_metrics(), and persistence via save_metrics(), init_db(), and metrics_api(). #82 introduces a backend to retrieve previously generated portfolio info, plus a _db_session that normalizes paths, disables WAL in tests, and always closes cached connections. #83 adjusts default analyse mode, syncs README, and halves config I/O. Together these changes improve reliability, portability, and maintainability, and set a solid base for downstream UI and analytics. #84 adds two CSV exports — project timelines and skills timelines — to chronologically track analyzed artifacts and skills across projects, also includes a schema-agnostic smoke test that validates CSV generation independent of database schema or uncommitted transactions, ensuring reliability across environments.
 
 ## WEEK 11 TEAM LOG
+(Nov 10 - Nov 16, 2025)
 
 ## WEEK 12 TEAM LOG 
 (Nov 17 - Nov 23, 2025)
@@ -303,18 +304,19 @@ During week 10, the team cleaned all js legacy and developed with full python la
 In Week 12, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
 
 ### Completed Tasks Week 12
-<img width="1920" height="203" alt="image" src="https://github.com/user-attachments/assets/c8510e53-4095-4ee1-8bde-bec9958d95b5" />
-<img width="1920" height="208" alt="image" src="https://github.com/user-attachments/assets/1227145c-af67-429c-8484-621dc482ee2f" />
+<img width="1188" height="287" alt="image" src="https://github.com/user-attachments/assets/499889f6-8e29-4eae-8c64-5fa7746525ed" />
+
 
 ### Burnup chart Week 12
-<img width="1626" height="950" alt="image" src="https://github.com/user-attachments/assets/c289db01-dbed-4977-807e-e08f0d0de000" />
+<img width="833" height="624" alt="image" src="https://github.com/user-attachments/assets/06858518-edd7-4c65-81fa-44a7ae2e6f9a" />
 
 ### In Progress Tasks Week 12
-<img width="1948" height="204" alt="image" src="https://github.com/user-attachments/assets/3c2e20f5-3c80-44ae-86de-f472fc40dfa5" />
-<img width="1945" height="96" alt="image" src="https://github.com/user-attachments/assets/ad231d1f-5ecd-4d72-94c3-7851ab60832b" />
+<img width="1217" height="282" alt="image" src="https://github.com/user-attachments/assets/86482330-dc40-4910-9311-72c59a6da3ff" />
 
 ### Test Report Week 12
+This week, the team focused on building the job description matching feature. We worked on parsing a job description from a text file, detecting important requirements, and comparing those against the skills and technologies extracted from user projects. From there, basic weights for overlap/similarity was calculated so that projects are ordered based on the strongest alignment. We also spent time wiring this into the existing analysis pipeline, making sure the new logic works well with the current database and structure.
 
+For next cycle, the team will focus on completing the remaining parts of the job description feature so it runs smoothly from input zip file to final results output. We will clean up and refractor the code so everything fits together without duplicated logic or confusing paths. Additionally, we will revise the output format so the projects appear similar to resume style wording. The team will also concentrate on preparing the presentation for Milestone #1, including a video demo showing the features and process of our digital artifacts mining application.
 
 ## WEEK 13 TEAM LOG
 
