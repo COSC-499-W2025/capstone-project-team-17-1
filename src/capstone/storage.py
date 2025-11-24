@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -18,12 +17,12 @@ _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
 
-def _ensure_table(conn: sqlite3.Connection) -> None:
+def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS project_analysis (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_name TEXT NOT NULL,
+            project_id TEXT NOT NULL,
             classification TEXT NOT NULL,
             primary_contributor TEXT,
             snapshot JSON NOT NULL,
@@ -31,19 +30,8 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
-
-def _ensure_indexes(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_pa_project_created
-        ON project_analysis(project_name, created_at DESC)
-        """
-    )
-
-def _initialize_schema(conn: sqlite3.Connection) -> None:
-    _ensure_table(conn)
-    _ensure_indexes(conn)
     conn.commit()
+
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
     """Open (or create) a sqlite database stored under the configured directory."""
@@ -83,7 +71,7 @@ def close_db() -> None:
 
 def store_analysis_snapshot(
     conn: sqlite3.Connection,
-    project_name: str,
+    project_id: str,
     classification: str,
     primary_contributor: str | None,
     snapshot: dict,
@@ -91,59 +79,31 @@ def store_analysis_snapshot(
     """Persist a project analysis snapshot to the database."""
 
     payload = json.dumps(snapshot)
-    created_at = _current_timestamp()
     conn.execute(
         """
-        INSERT INTO project_analysis (project_name, classification, primary_contributor, snapshot, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
+        VALUES (?, ?, ?, ?)
         """,
-        (project_name, classification, primary_contributor, payload, created_at),
+        (project_id, classification, primary_contributor, payload),
     )
     conn.commit()
 
 
-def _current_timestamp() -> str:
-    return datetime.now().isoformat(timespec="seconds")
-
-
-def fetch_latest_snapshot(conn: sqlite3.Connection, project_name: str) -> dict | None:
+def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | None:
     """Return the most recent snapshot for the given project, if any."""
 
     cursor = conn.execute(
         """
         SELECT snapshot
         FROM project_analysis
-        WHERE project_name = ?
+        WHERE project_id = ?
         ORDER BY created_at DESC
         LIMIT 1
         """,
-        (project_name,),
+        (project_id,),
     )
     row = cursor.fetchone()
     return json.loads(row[0]) if row else None
-
-
-def fetch_latest_snapshots(conn: sqlite3.Connection) -> dict[str, dict]:
-    """Return the latest snapshot for each project currently stored."""
-
-    cursor = conn.execute(
-        """
-        SELECT project_name, snapshot
-        FROM project_analysis
-        ORDER BY project_name ASC, created_at DESC, id DESC
-        """
-    )
-    snapshots: dict[str, dict] = {}
-    for project_name, payload in cursor:
-        # Results are sorted newest-first per project, so first hit wins.
-        if project_name in snapshots:
-            continue
-        try:
-            # Pick only the first row per project thanks to ORDER BY above.
-            snapshots[project_name] = json.loads(payload)
-        except json.JSONDecodeError:  # pragma: no cover - defensive parsing
-            logger.warning("Skipping invalid snapshot payload for project %s", project_name)
-    return snapshots
 
 
 __all__ = [
@@ -152,5 +112,4 @@ __all__ = [
     "DB_DIR",
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
-    "fetch_latest_snapshots",
 ]
