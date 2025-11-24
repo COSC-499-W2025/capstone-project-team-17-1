@@ -70,8 +70,10 @@ def run_demo() -> None:
 
     with sqlite3.connect(db_dir / "capstone.db") as conn:
         cursor = conn.execute(
-            "SELECT project_id, classification, primary_contributor, snapshot FROM project_analysis"
-        )
+    "SELECT id AS project_id, classification, primary_contributor, snapshot "
+    "FROM project_analysis"
+)
+
         rows = cursor.fetchall()
 
         print("\n--- project_analysis rows ---")
