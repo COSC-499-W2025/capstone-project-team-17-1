@@ -9,7 +9,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 from zipfile import BadZipFile, ZipFile
 
 from .collaboration import CollaborationSummary, analyze_git_logs
@@ -23,7 +23,7 @@ from .language_detection import (
 from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
-from .skills import SkillObservation, compute_skill_scores
+from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
 from .storage import open_db, store_analysis_snapshot
 
 
@@ -96,6 +96,7 @@ class ZipAnalyzer:
         language_counter: Counter[str] = Counter()
         frameworks = set()
         git_logs: list[str] = []
+        skill_events: List[Tuple[str, str, datetime, float]] = []
 
         for info in archive.infolist():
             if info.is_dir():
@@ -105,6 +106,7 @@ class ZipAnalyzer:
 
             if record.get("language"):
                 language_counter[record["language"]] += 1
+                skill_events.append((record["language"], "language", datetime.fromisoformat(record["modified"]), 1.0))
 
             metrics_inputs.append(
                 FileMetric(
@@ -118,13 +120,24 @@ class ZipAnalyzer:
             path_lower = info.filename.lower()
             if path_lower.endswith("package.json"):
                 content = archive.read(info).decode("utf-8", errors="ignore")
-                frameworks.update(detect_frameworks_from_package_json(content))
+                detected = detect_frameworks_from_package_json(content)
+                frameworks.update(detected)
+                for fw in detected:
+                    skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
             elif path_lower.endswith("requirements.txt"):
                 content = archive.read(info).decode("utf-8", errors="ignore").splitlines()
-                frameworks.update(detect_frameworks_from_python_requirements(content))
+                detected = detect_frameworks_from_python_requirements(content)
+                frameworks.update(detected)
+                for fw in detected:
+                    skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
             elif ".git/logs/" in path_lower:
                 content = archive.read(info).decode("utf-8", errors="ignore")
                 git_logs.extend(content.splitlines())
+            tool_skills = self._detect_tool_skills(path_lower)
+            if tool_skills:
+                ts = datetime.fromisoformat(record["modified"])
+                for skill_name, category in tool_skills:
+                    skill_events.append((skill_name, category, ts, 1.0))
 
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         with metadata_path.open("w", encoding="utf-8") as fh:
@@ -143,6 +156,7 @@ class ZipAnalyzer:
         for framework in frameworks:
             skill_observations.append(SkillObservation(skill=framework, weight=1.0, category="framework"))
         skills = [score.__dict__ for score in compute_skill_scores(skill_observations, min_confidence=0.05)]
+        skill_timeline = build_skill_timeline(skill_events)
 
         summary = {
             "archive": str(zip_path),
@@ -157,6 +171,10 @@ class ZipAnalyzer:
             "metadata_output": str(metadata_path),
             "scan_duration_seconds": round(duration, 4),
             "skills": skills,
+            "skill_timeline": {
+                "generated_at": datetime.utcnow().isoformat(),
+                "skills": list(skill_timeline.values()),
+            },
         }
 
         summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -168,18 +186,18 @@ class ZipAnalyzer:
             analysis_mode=mode.resolved,
         )
 
-        project_name = project_id or zip_path.stem
+        project_id = project_id or zip_path.stem
         classification = collaboration.classification
         primary_contributor = collaboration.primary_contributor
         conn = open_db(db_dir)
         store_analysis_snapshot(
             conn,
-            project_id=project_name,
+            project_id=project_id,
             classification=classification,
             primary_contributor=primary_contributor,
             snapshot=summary,
         )
-        self._logger.info("Stored zip analysis snapshot for %s", project_name)
+        self._logger.info("Stored zip analysis snapshot for %s", project_id)
 
         return summary
 
@@ -199,6 +217,26 @@ class ZipAnalyzer:
             "analysis_mode": mode.resolved,
         }
         return record
+
+    def _detect_tool_skills(self, path_lower: str) -> List[Tuple[str, str]]:
+        """
+        Lightweight taxonomy for tools/domains inferred from filenames.
+        Expands the skill set beyond languages/frameworks when obvious markers exist.
+        """
+        skills: List[Tuple[str, str]] = []
+        if "dockerfile" in path_lower:
+            skills.append(("docker", "tool"))
+        if path_lower.endswith((".sh", ".bash")) or "/scripts/" in path_lower:
+            skills.append(("bash", "tool"))
+        if path_lower.endswith("makefile"):
+            skills.append(("make", "tool"))
+        if path_lower.endswith(".sql"):
+            skills.append(("sql", "language"))
+        if path_lower.endswith(".ipynb"):
+            skills.append(("jupyter", "tool"))
+        if "terraform" in path_lower:
+            skills.append(("terraform", "tool"))
+        return skills
 
     def _summarize_collaboration(self, git_logs: Iterable[str]) -> CollaborationSummary:
         if not git_logs:

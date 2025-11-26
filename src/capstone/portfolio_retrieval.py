@@ -71,7 +71,7 @@ def ensure_indexes(conn: sqlite3.Connection) -> None:
     """
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pa_project_created "
-        "ON project_analysis(project_name, created_at DESC)"
+        "ON project_analysis(project_id, created_at DESC)"
     )
     conn.commit()
 
@@ -97,7 +97,7 @@ def list_snapshots(
     page_size = max(1, min(200, int(page_size)))  # keep it sane
     offset = (page - 1) * page_size
 
-    where = ["project_name = ?"]
+    where = ["project_id = ?"]
     params: List[Any] = [project_id]
     if classification:
         where.append("classification = ?")
@@ -114,7 +114,7 @@ def list_snapshots(
 
     rows = conn.execute(
         f"""
-        SELECT project_name, classification, primary_contributor, snapshot, created_at
+        SELECT project_id, classification, primary_contributor, snapshot, created_at
         FROM project_analysis
         WHERE {where_sql}
         ORDER BY {sort_field} {sort_dir}
@@ -148,7 +148,7 @@ def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[d
         """
         SELECT snapshot
         FROM project_analysis
-        WHERE project_name = ?
+        WHERE project_id = ?
         ORDER BY created_at DESC
         LIMIT 1
         """,

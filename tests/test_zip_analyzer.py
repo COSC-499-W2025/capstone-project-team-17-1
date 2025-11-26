@@ -95,7 +95,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.assertIsNotNone(updated_prefs.last_opened_path)
 
         conn = storage.open_db(self.tmp_path / "db")
-        cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_name = ?", ("sample",))
+        cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
         self.assertEqual(cursor.fetchone()[0], 1)
 
     def test_invalid_extension_raises(self) -> None:

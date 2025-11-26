@@ -30,6 +30,14 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+    # backfill legacy rows that only had project_name, can be deleted at end
+    info = conn.execute("PRAGMA table_info(project_analysis)").fetchall()
+    columns = {row[1] for row in info}
+    if "project_id" not in columns:
+        conn.execute("ALTER TABLE project_analysis ADD COLUMN project_id TEXT")
+    if "project_name" in columns:
+        conn.execute("UPDATE project_analysis SET project_id = COALESCE(project_id, project_name) WHERE project_id IS NULL")
     conn.commit()
 
 
@@ -72,13 +80,18 @@ def close_db() -> None:
 def store_analysis_snapshot(
     conn: sqlite3.Connection,
     project_id: str,
-    classification: str,
-    primary_contributor: str | None,
-    snapshot: dict,
+    classification: str = "unknown",
+    primary_contributor: str | None = None,
+    snapshot: dict | None = None,
 ) -> None:
-    """Persist a project analysis snapshot to the database."""
 
-    payload = json.dumps(snapshot)
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    doc = dict(snapshot or {})
+    doc.setdefault("project_id", project_id)
+    doc.setdefault("classification", classification)
+    doc.setdefault("primary_contributor", primary_contributor)
+    payload = json.dumps(doc)
     conn.execute(
         """
         INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
@@ -106,10 +119,88 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     return json.loads(row[0]) if row else None
 
 
+def fetch_latest_snapshots(conn: sqlite3.Connection) -> list[dict]:
+    # return newest snapshot for every project saved in the database
+    # each item contains the same structure as fetch_latest_snapshot plus metadata
+    cursor = conn.execute(
+        """
+        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
+        FROM project_analysis a
+        JOIN (
+            SELECT project_id AS pid, MAX(created_at) AS created_at
+            FROM project_analysis
+            GROUP BY project_id
+        ) latest ON latest.pid = a.project_id AND latest.created_at = a.created_at
+        ORDER BY a.project_id
+        """
+    )
+    rows = cursor.fetchall()
+    payload: list[dict] = []
+    for project_id, classification, contributor, snapshot_json, created_at in rows:
+        try:
+            snapshot = json.loads(snapshot_json)
+        except Exception:
+            snapshot = {}
+        payload.append(
+            {
+                "project_id": project_id,
+                "classification": classification,
+                "primary_contributor": contributor,
+                "created_at": created_at,
+                "snapshot": snapshot,
+            }
+        )
+    return payload
+
+
+def backup_database(conn: sqlite3.Connection, destination: Path) -> Path:
+    # create a SQLite backup at the provided destination path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    backup_conn = sqlite3.connect(destination)
+    try:
+        conn.backup(backup_conn)
+    finally:
+        backup_conn.close()
+    return destination
+
+
+def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int:
+    # export all project_analysis rows (latest snapshot per row) to a JSON file
+    # Returns the number of records written
+    rows = conn.execute(
+        """
+        SELECT project_id, classification, primary_contributor, snapshot, created_at
+        FROM project_analysis
+        ORDER BY created_at
+        """
+    ).fetchall()
+    payload: list[dict] = []
+    for project_id, classification, contributor, blob, created_at in rows:
+        try:
+            snapshot = json.loads(blob)
+        except Exception:
+            snapshot = {}
+        payload.append(
+            {
+                "project_id": project_id,
+                "classification": classification,
+                "primary_contributor": contributor,
+                "created_at": created_at,
+                "snapshot": snapshot,
+            }
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return len(payload)
+
+
 __all__ = [
     "open_db",
     "close_db",
     "DB_DIR",
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
+    "fetch_latest_snapshots",
+    "backup_database",
+    "export_snapshots_to_json",
 ]

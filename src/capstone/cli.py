@@ -20,7 +20,7 @@ from .consent import (
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshot, open_db, close_db
+from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from pathlib import Path
@@ -302,12 +302,20 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     conn = open_db(args.db_dir)
     try:
-        snapshots = fetch_latest_snapshots(conn)
-        if not snapshots:
+        raw_snapshots = fetch_latest_snapshots(conn)
+        snapshot_map: dict[str, dict] = {}
+        for row in raw_snapshots:
+            pid = row.get("project_id")
+            snap = row.get("snapshot")
+            if not pid or not isinstance(snap, dict):
+                continue
+            snapshot_map[pid] = snap
+
+        if not snapshot_map:
             print("No project analyses available for ranking.")
             return 0
 
-        rankings = rank_projects_from_snapshots(snapshots, user=args.user)
+        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
         if args.limit is not None and args.limit >= 0:
             rankings = rankings[: args.limit]
 
