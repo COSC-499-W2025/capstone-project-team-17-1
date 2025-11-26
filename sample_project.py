@@ -66,14 +66,17 @@ def run_demo() -> None:
         print(metadata_output.read_text("utf-8"))
 
         print("\n--- summary.json ---")
-        print(summary_output.read_text("utf-8"))
+        summary_text = summary_output.read_text("utf-8")
+        print(summary_text)
+        summary_data = json.loads(summary_text)
 
     with sqlite3.connect(db_dir / "capstone.db") as conn:
         cursor = conn.execute(
-    "SELECT id AS project_id, classification, primary_contributor, snapshot "
-    "FROM project_analysis"
-)
-
+            """
+            SELECT id AS project_id, classification, primary_contributor, snapshot
+            FROM project_analysis
+            """
+        )
         rows = cursor.fetchall()
 
         print("\n--- project_analysis rows ---")
@@ -169,13 +172,25 @@ def run_demo() -> None:
         metrics_api(proj_details, proj_name=proj_name, db_path=db_path)
             
     chron_list = chronological_proj(all_proj)
-        
     for p in chron_list:
         start_str = p["start"].strftime("%Y-%m-%d") if p["start"] else "Undated"
         end_str = p["end"].strftime("%Y-%m-%d") if p["end"] else "Present"
-        print(f"{start_str} - {end_str}: {p["name"]}")
-    
-    
+        print(f"{start_str} - {end_str}: {p['name']}")
+
+    print("\n--- Chronological Skills ---")
+    print("skill | category | first_seen -> last_seen | years(year:weight)")
+    skill_timeline = (summary_data.get("skill_timeline") or {}).get("skills") or []
+    for entry in skill_timeline:
+        years = ", ".join(f"{y}:{w}" for y, w in (entry.get("year_counts") or {}).items())
+        print(f"{entry.get('skill')} | {entry.get('category')} | {entry.get('first_seen')} -> {entry.get('last_seen')} | {years}")
+
+    top_by_year = summary_data.get("top_skills_by_year") or {}
+    if top_by_year:
+        print("Top skills by year:")
+        for year, rows in sorted(top_by_year.items()):
+            names = ", ".join(f"{r['skill']}({r['weight']})" for r in rows)
+            print(f"  {year}: {names}")
+
     close_db()
 
 if __name__ == "__main__":

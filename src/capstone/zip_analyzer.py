@@ -9,7 +9,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Dict
 from zipfile import BadZipFile, ZipFile
 
 from .collaboration import CollaborationSummary, analyze_git_logs
@@ -157,6 +157,7 @@ class ZipAnalyzer:
             skill_observations.append(SkillObservation(skill=framework, weight=1.0, category="framework"))
         skills = [score.__dict__ for score in compute_skill_scores(skill_observations, min_confidence=0.05)]
         skill_timeline = build_skill_timeline(skill_events)
+        top_skills_by_year = _compute_top_skills_by_year(skill_timeline, top_n=5)
 
         summary = {
             "archive": str(zip_path),
@@ -175,6 +176,7 @@ class ZipAnalyzer:
                 "generated_at": datetime.utcnow().isoformat(),
                 "skills": list(skill_timeline.values()),
             },
+            "top_skills_by_year": top_skills_by_year,
         }
 
         summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -242,3 +244,19 @@ class ZipAnalyzer:
         if not git_logs:
             return CollaborationSummary("unknown", {}, None)
         return analyze_git_logs(git_logs)
+
+
+def _compute_top_skills_by_year(skill_timeline: Dict[str, Dict[str, object]], top_n: int = 5) -> Dict[str, List[Dict[str, float]]]:
+    """
+    Reduce skill_timeline into a per-year top-N structure for easy rendering/export.
+    """
+    years: Dict[str, Dict[str, float]] = {}
+    for entry in skill_timeline.values():
+        for year, weight in (entry.get("year_counts") or {}).items():
+            bucket = years.setdefault(year, {})
+            bucket[entry["skill"]] = bucket.get(entry["skill"], 0.0) + float(weight or 0.0)
+    payload: Dict[str, List[Dict[str, float]]] = {}
+    for year, data in years.items():
+        ranked = sorted(data.items(), key=lambda item: (-item[1], item[0]))
+        payload[year] = [{"skill": skill, "weight": weight} for skill, weight in ranked[: max(1, top_n)]]
+    return dict(sorted(payload.items()))
