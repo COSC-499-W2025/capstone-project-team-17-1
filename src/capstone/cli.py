@@ -20,9 +20,15 @@ from .consent import (
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshot, open_db, close_db
+from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
+from .resume_retrieval import (
+    build_resume_preview,
+    export_resume,
+    query_resume_entries,
+    ensure_resume_schema,
+)
 from pathlib import Path
 
 logger = get_logger(__name__)
@@ -171,6 +177,69 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a text file that contains the job description",
     )
 
+    resume_parser = subparsers.add_parser(
+        "resume",
+        help="Retrieve previously generated resume entries and export them",
+    )
+    resume_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    resume_parser.add_argument(
+        "--section",
+        dest="sections",
+        action="append",
+        help="Filter resume entries by section (can be repeated)",
+    )
+    resume_parser.add_argument(
+        "--keyword",
+        dest="keywords",
+        action="append",
+        help="Filter entries that mention the keyword in title, summary, or body",
+    )
+    resume_parser.add_argument(
+        "--start-date",
+        dest="start_date",
+        type=str,
+        help="Only include entries created on/after this ISO date",
+    )
+    resume_parser.add_argument(
+        "--end-date",
+        dest="end_date",
+        type=str,
+        help="Only include entries created on/before this ISO date",
+    )
+    resume_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum number of resume entries to load",
+    )
+    resume_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Offset for pagination when retrieving resume entries",
+    )
+    resume_parser.add_argument(
+        "--format",
+        choices=["preview", "markdown", "json", "pdf"],
+        default="preview",
+        help="How to render the retrieved resume data",
+    )
+    resume_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional file path for exports (recommended for PDF output)",
+    )
+    resume_parser.add_argument(
+        "--include-outdated",
+        action="store_true",
+        help="Include entries flagged as outdated or expired",
+    )
+
     return parser
 
 
@@ -181,6 +250,47 @@ def _handle_job_match(args: argparse.Namespace) -> int:
     snippet = build_resume_snippet(result)
     print(snippet)
     return 0
+
+
+def _handle_resume(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        ensure_resume_schema(conn)
+        result = query_resume_entries(
+            conn,
+            sections=args.sections,
+            keywords=args.keywords,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            include_outdated=args.include_outdated,
+            limit=args.limit,
+            offset=args.offset,
+        )
+        if args.format == "preview":
+            preview = build_resume_preview(result, conn=conn)
+            print(json.dumps(preview, indent=2))
+            return 0
+
+        entries = result.entries
+        if not entries:
+            print("No resume entries found that match the provided filters.")
+            return 0
+
+        data = export_resume(entries, fmt=args.format, destination=args.output)
+        if args.output:
+            print(f"Wrote resume {args.format} export to {args.output}")
+            return 0
+
+        if args.format == "pdf":
+            import base64
+            encoded = base64.b64encode(data).decode("ascii")
+            print("base64_pdf_payload:")
+            print(encoded)
+        else:
+            print(data.decode("utf-8"))
+        return 0
+    finally:
+        close_db()
 
 
 def _handle_consent(args: argparse.Namespace) -> int:
@@ -302,12 +412,20 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     conn = open_db(args.db_dir)
     try:
-        snapshots = fetch_latest_snapshots(conn)
-        if not snapshots:
+        raw_snapshots = fetch_latest_snapshots(conn)
+        snapshot_map: dict[str, dict] = {}
+        for row in raw_snapshots:
+            pid = row.get("project_id")
+            snap = row.get("snapshot")
+            if not pid or not isinstance(snap, dict):
+                continue
+            snapshot_map[pid] = snap
+
+        if not snapshot_map:
             print("No project analyses available for ranking.")
             return 0
 
-        rankings = rank_projects_from_snapshots(snapshots, user=args.user)
+        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
         if args.limit is not None and args.limit >= 0:
             rankings = rankings[: args.limit]
 
@@ -409,6 +527,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_rank_projects(args)
     if args.command == "job-match":
         return _handle_job_match(args)
+    if args.command == "resume":
+        return _handle_resume(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")
