@@ -64,7 +64,7 @@ class RepositoryAnalysisTests(unittest.TestCase):
         self.assertIn("csv", snapshot["exports"])
 
         conn = storage.open_db(db_dir)
-        cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_name = ?", ("sample",))
+        cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
 

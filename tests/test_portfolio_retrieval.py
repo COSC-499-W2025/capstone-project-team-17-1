@@ -11,7 +11,7 @@ from capstone.portfolio_retrieval import ensure_indexes, list_snapshots, get_lat
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS project_analysis(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_name TEXT NOT NULL,
+  project_id TEXT NOT NULL,
   classification TEXT,
   primary_contributor TEXT,
   snapshot TEXT NOT NULL,
@@ -24,7 +24,7 @@ def seed(conn: sqlite3.Connection, project_id: str, n: int = 3):
     for i in range(n):
         snap = {"n": i, "meta": f"s{i}"}
         conn.execute(
-            "INSERT INTO project_analysis(project_name, classification, primary_contributor, snapshot, created_at) "
+            "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (project_id, "ok", "alice", json.dumps(snap), f"2025-01-0{i+1}T00:00:00"),
         )
