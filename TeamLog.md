@@ -318,6 +318,24 @@ This week, the team focused on building the job description matching feature. We
 
 For next cycle, the team will focus on completing the remaining parts of the job description feature so it runs smoothly from input zip file to final results output. We will clean up and refractor the code so everything fits together without duplicated logic or confusing paths. Additionally, we will revise the output format so the projects appear similar to resume style wording. The team will also concentrate on preparing the presentation for Milestone #1, including a video demo showing the features and process of our digital artifacts mining application.
 
-## WEEK 13 TEAM LOG
+## WEEK 13 TEAM LOG 
+(Nov24 - Nov 30, 2025)
+
+### Recap of Milestone Goal - Week 13
+
+In Week 13, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 13
+
 
 ## WEEK 14 TEAM LOG
