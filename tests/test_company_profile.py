@@ -31,7 +31,7 @@ class MockMatch:
 
 
 class CompanyMatchingTests(unittest.TestCase):
-    def test_extract_traits_basic(self):
+    def test_extract_traits(self):
         text = """
         We value strong communication and collaboration.
         You should be a team player who takes ownership of your work.
@@ -69,7 +69,7 @@ class CompanyMatchingTests(unittest.TestCase):
             self.assertIn(item, keywords)
 
     @patch("capstone.company_profile.fetch_company_text")
-    def test_build_company_profile_empty_text(self, mock_fetch):
+    def test_build_company_profile_with_empty_text(self, mock_fetch):
         mock_fetch.return_value = "   "
 
         jd_profile = build_company_profile("Some Company")
@@ -78,7 +78,7 @@ class CompanyMatchingTests(unittest.TestCase):
         self.assertEqual(jd_profile["preferred_skills"], [])
         self.assertEqual(jd_profile["keywords"], [])
 
-    def test_build_company_resume_points_basic(self):
+    def test_build_resume_points(self):
         company_name = "McDonalds"
 
         jd_profile = {
