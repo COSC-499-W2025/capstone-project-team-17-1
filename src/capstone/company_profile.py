@@ -10,12 +10,12 @@ from capstone.job_matching import extract_job_skills
 # softskills dictionary
 TRAIT_KEYWORDS: Dict[str, List[str]] = {
     "teamwork": ["teamwork", "team player", "collaboration", "collaborative"],
-    "communication": ["strong communication", "communication skills", "communicator"],
+    "communication": ["communication", "strong communication", "communication skills", "communicator"],
     "ownership": ["ownership", "takes initiative", "self starter"],
     "leadership": ["leadership", "mentor", "coaching"],
     "problem solving": ["problem solving", "analytical", "critical thinking"],
     "adaptability": ["fast paced environment", "adaptable", "fast-paced"],
-    "quality mindset": ["best practices", "clean code", "testing culture", "quality focused"],
+    "company culture": ["best practices", "clean code", "testing culture", "quality focused"],
 }
 
 # extract softskills
@@ -85,7 +85,7 @@ def fetch_company_text(company_name: str) -> str:
     return "\n\n".join(chunks)
 
 # builds profile for company
-def build_company_jd_profile(company_name: str) -> Dict[str, Any]:
+def build_company_profile(company_name: str) -> Dict[str, Any]:
     text = fetch_company_text(company_name)
     if not text.strip():
         return {
@@ -111,7 +111,7 @@ def build_company_jd_profile(company_name: str) -> Dict[str, Any]:
     }
 
 # convert matched traits into resume bullet points
-def build_company_resume_bullets(
+def build_company_resume_points(
     company_name: str,
     jd_profile: Dict[str, Any],
     matches: List[Any],
@@ -119,7 +119,7 @@ def build_company_resume_bullets(
     max_skills_per_project: int = 4,
 ) -> List[str]:
 
-    bullets: List[str] = []
+    points: List[str] = []
 
     company_skills = jd_profile.get("required_skills") or jd_profile.get("preferred_skills") or []
     company_skills = list(dict.fromkeys(company_skills))  # dedupe
@@ -147,7 +147,7 @@ def build_company_resume_bullets(
         else:
             skills_part = main_skills[0]
 
-        bullet = f"• Built {m.project_id} using {skills_part}{focus_part}."
-        bullets.append(bullet)
+        point = f"• Built {m.project_id} using {skills_part}{focus_part}."
+        points.append(point)
 
-    return bullets
+    return points

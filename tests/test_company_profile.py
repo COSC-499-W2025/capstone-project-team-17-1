@@ -13,13 +13,12 @@ if str(SRC) not in sys.path:
 
 from capstone.company_profile import (
     extract_traits,
-    build_company_jd_profile,
-    build_company_resume_bullets,
+    build_company_profile,
+    build_company_resume_points,
 )
 
-
 @dataclass
-class FakeMatch:
+class MockMatch:
     project_id: str
     score: float
     required_coverage: float
@@ -35,9 +34,8 @@ class CompanyMatchingTests(unittest.TestCase):
     def test_extract_traits_basic(self):
         text = """
         We value strong communication and collaboration.
-        You should be a real team player who takes ownership of your work.
+        You should be a team player who takes ownership of your work.
         """
-
         traits = extract_traits(text)
 
         self.assertIn("communication", traits)
@@ -45,15 +43,16 @@ class CompanyMatchingTests(unittest.TestCase):
         self.assertIn("ownership", traits)
         self.assertEqual(len(traits), len(set(traits)))  # no duplicates
 
+    # patch to simulate mock http calls
     @patch("capstone.company_profile.fetch_company_text")
-    def test_build_company_jd_profile_from_company_name(self, mock_fetch):
+    def test_build_company_profile_from_company_name(self, mock_fetch):
         mock_fetch.return_value = """
-        At Acme Corp we build backend services in Python and Django.
-        We deploy on AWS and use SQL databases.
+        At McDonalds we build backend services in Python and Django.
+        We deploy on AWS and use SQL for databases.
         We value strong communication and teamwork.
         """
 
-        jd_profile = build_company_jd_profile("Acme Corp")
+        jd_profile = build_company_profile("Mcdonalds")
 
         required_skills = jd_profile["required_skills"]
         preferred_skills = jd_profile["preferred_skills"]
@@ -70,26 +69,26 @@ class CompanyMatchingTests(unittest.TestCase):
             self.assertIn(item, keywords)
 
     @patch("capstone.company_profile.fetch_company_text")
-    def test_build_company_jd_profile_empty_text(self, mock_fetch):
+    def test_build_company_profile_empty_text(self, mock_fetch):
         mock_fetch.return_value = "   "
 
-        jd_profile = build_company_jd_profile("Some Company")
+        jd_profile = build_company_profile("Some Company")
 
         self.assertEqual(jd_profile["required_skills"], [])
         self.assertEqual(jd_profile["preferred_skills"], [])
         self.assertEqual(jd_profile["keywords"], [])
 
-    def test_build_company_resume_bullets_basic(self):
-        company_name = "Acme Corp"
+    def test_build_company_resume_points_basic(self):
+        company_name = "McDonalds"
 
         jd_profile = {
             "required_skills": ["python", "django", "sql"],
             "preferred_skills": ["python", "django", "sql"],
-            "keywords": ["python", "django", "sql", "communication", "teamwork"],
+            "keywords": ["python", "django", "sql", "communication", "teamwork"]
         }
 
         matches = [
-            FakeMatch(
+            MockMatch(
                 project_id="payments-api",
                 score=0.9,
                 required_coverage=1.0,
@@ -98,10 +97,10 @@ class CompanyMatchingTests(unittest.TestCase):
                 recency_factor=0.9,
                 matched_required=["python", "django", "sql"],
                 matched_preferred=["python", "django", "sql"],
-                matched_keywords=["python", "django", "sql"],
+                matched_keywords=["python", "django", "sql"]
             ),
-            FakeMatch(
-                project_id="infra-tools",
+            MockMatch(
+                project_id="sensor-api",
                 score=0.6,
                 required_coverage=0.33,
                 preferred_coverage=0.33,
@@ -109,31 +108,30 @@ class CompanyMatchingTests(unittest.TestCase):
                 recency_factor=0.8,
                 matched_required=["python"],
                 matched_preferred=["python"],
-                matched_keywords=["python"],
+                matched_keywords=["python"]
             ),
         ]
 
-        bullets = build_company_resume_bullets(
+        points = build_company_resume_points(
             company_name=company_name,
             jd_profile=jd_profile,
             matches=matches,
             max_projects=2,
-            max_skills_per_project=3,
+            max_skills_per_project=3
         )
 
-        self.assertEqual(len(bullets), 2)
+        self.assertEqual(len(points), 2)
 
-        self.assertIn("payments-api", bullets[0])
-        self.assertIn("python", bullets[0])
-        self.assertIn("django", bullets[0])
-        self.assertIn("sql", bullets[0])
+        self.assertIn("payments-api", points[0])
+        self.assertIn("python", points[0])
+        self.assertIn("django", points[0])
+        self.assertIn("sql", points[0])
 
-        self.assertIn("infra-tools", bullets[1])
-        self.assertIn("python", bullets[1])
+        self.assertIn("sensor-api", points[1])
+        self.assertIn("python", points[1])
 
-        self.assertIn("Acme Corp", bullets[0])
-        self.assertIn("Acme Corp", bullets[1])
-
+        self.assertIn("McDonalds", points[0])
+        self.assertIn("McDonalds", points[1])
 
 if __name__ == "__main__":
     unittest.main()
