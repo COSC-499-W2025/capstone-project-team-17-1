@@ -32,7 +32,7 @@ def create_sample_zip(base_dir: Path) -> Path:
     return zip_path
 
 
-# ------------------------ Pretty printing helpers ------------------------
+# using all the pretty printing helpers
 
 
 def _banner(title: str) -> None:
@@ -142,7 +142,7 @@ def print_metrics(metrics: dict) -> None:
                   f" : {row.get('count', 0)} change(s)")
 
 
-# ------------------------ Main demo script ------------------------
+# main demo script
 
 
 def run_demo() -> None:
@@ -190,28 +190,31 @@ def run_demo() -> None:
 
     # Open the capstone DB and inspect project_analysis rows
     with sqlite3.connect(db_dir / "capstone.db") as conn:
-        cursor = conn.execute(
-            """
-            SELECT id AS project_id, classification, primary_contributor, snapshot
-            FROM project_analysis
-            """
-        )
-        rows = cursor.fetchall()
+     cursor = conn.execute(
+        """
+        SELECT id AS project_id, classification, primary_contributor, snapshot
+        FROM project_analysis
+        ORDER BY rowid DESC
+        LIMIT 1
+        """
+    )
+    row = cursor.fetchone()
 
-        print("\n--- project_analysis rows ---")
-        for row in rows:
-            project_id, classification, primary_contributor, snapshot = row
-            print(project_id, classification, primary_contributor)
-            snap = json.loads(snapshot)
-            print(
-                json.dumps(
-                    {
-                        "skills": snap.get("skills"),
-                        "collaboration": snap.get("collaboration"),
-                    },
-                    indent=2,
-                )
+    print("\n--- project_analysis (latest snapshot) ---")
+    if row:
+        project_id, classification, primary_contributor, snapshot = row
+        print(project_id, classification, primary_contributor)
+        snap = json.loads(snapshot)
+        print(
+            json.dumps(
+                {
+                    "skills": snap.get("skills"),
+                    "collaboration": snap.get("collaboration"),
+                },
+                indent=2,
             )
+        )
+
 
     print("\n--- Metrics Extractor ---")
     # mock data
