@@ -10,6 +10,7 @@
 - [Week 9 Personal Log](#week-9-personal-log)
 - [Week 10 Personal Log](#week-10-personal-log)
 - [Week 12 Personal Log](#week-12-personal-log)
+- [Week 13 Personal Log](#week-13-personal-log)
 
 ---
 
@@ -403,3 +404,13 @@ Milestones #19 & #20 – Timeline Exports (Projects + Skills)
     -  this supports step 1+2 job–project matching.
 <img width="1059" height="625" alt="WEEK12PEEREVAL" src="https://github.com/user-attachments/assets/d138a0e3-38bf-4640-a6cb-b35628a83ed4" />
 
+### WEEK 13 PERSONAL LOG 
+**Personal Log – Improving Demo Output (feature/demo-friendly-output)**
+
+**29 November Saturday**
+
+
+- Today I worked on refining the usability and presentation quality of our capstone project’s CLI demo. The original `sample_project.py` script printed large JSON objects directly to the terminal, which made the demo cluttered and difficult to interpret. To improve clarity and communication for supervisors and evaluators, I added a structured, human-readable reporting layer on top of the existing analysis pipeline.
+- I implemented helper functions (`_banner`, `_section`, `print_project_summary`, and `print_metrics`) to create a clean, formatted terminal report. This update preserves all raw JSON outputs for debugging while introducing a professional, readable summary that highlights the detected languages, frameworks, skills, collaboration classification, and metrics such as project duration, frequency, activity timeline, and contributions.
+- The biggest improvement was replacing the raw `summary.json` (I basically commented that section) dump with a polished **“Project Analysis”** section and a **“Metrics Summary”** block that communicates the analysis results at a glance. I also ensured that the database snapshot information (skills + collaboration) and chronological project ordering integrate cleanly after the analysis output.
+- Overall, this change significantly enhances how the project is showcased and makes the demo more intuitive and evaluative-friendly for the proffesors/TA. This will help us articulate the value of our tool Loom more effectively during presentations and checkpoints.
