@@ -17,6 +17,7 @@ from capstone.company_profile import (
     build_company_resume_lines,
 )
 
+
 @dataclass
 class MockMatch:
     project_id: str
@@ -58,6 +59,7 @@ class CompanyMatchingTests(unittest.TestCase):
         preferred_skills = jd_profile["preferred_skills"]
         keywords = jd_profile["keywords"]
 
+        # core skills behaviour
         for skill in ["python", "django", "aws", "sql"]:
             self.assertIn(skill, required_skills)
             self.assertIn(skill, preferred_skills)
@@ -67,6 +69,19 @@ class CompanyMatchingTests(unittest.TestCase):
 
         for item in ["python", "django", "aws", "sql", "communication", "teamwork"]:
             self.assertIn(item, keywords)
+
+        # new structured JSON fields
+        self.assertIn("company", jd_profile)
+        self.assertIn("source", jd_profile)
+        self.assertIn("values", jd_profile)
+        self.assertIn("work_style", jd_profile)
+        self.assertIn("traits", jd_profile)
+        self.assertIn("preferred_skills_from_profile", jd_profile)
+
+        self.assertIsInstance(jd_profile["values"], list)
+        self.assertIsInstance(jd_profile["work_style"], list)
+        self.assertIsInstance(jd_profile["traits"], list)
+        self.assertIsInstance(jd_profile["preferred_skills_from_profile"], list)
 
     @patch("capstone.company_profile.fetch_company_text")
     def test_build_company_profile_with_empty_text(self, mock_fetch):
@@ -78,13 +93,19 @@ class CompanyMatchingTests(unittest.TestCase):
         self.assertEqual(jd_profile["preferred_skills"], [])
         self.assertEqual(jd_profile["keywords"], [])
 
+        # also empty structured fields
+        self.assertEqual(jd_profile["values"], [])
+        self.assertEqual(jd_profile["work_style"], [])
+        self.assertEqual(jd_profile["traits"], [])
+        self.assertEqual(jd_profile["preferred_skills_from_profile"], [])
+
     def test_build_resume_points(self):
         company_name = "McDonalds"
 
         jd_profile = {
             "required_skills": ["python", "django", "sql"],
             "preferred_skills": ["python", "django", "sql"],
-            "keywords": ["python", "django", "sql", "communication", "teamwork"]
+            "keywords": ["python", "django", "sql", "communication", "teamwork"],
         }
 
         matches = [
@@ -97,7 +118,7 @@ class CompanyMatchingTests(unittest.TestCase):
                 recency_factor=0.9,
                 matched_required=["python", "django", "sql"],
                 matched_preferred=["python", "django", "sql"],
-                matched_keywords=["python", "django", "sql"]
+                matched_keywords=["python", "django", "sql"],
             ),
             MockMatch(
                 project_id="sensor-api",
@@ -108,7 +129,7 @@ class CompanyMatchingTests(unittest.TestCase):
                 recency_factor=0.8,
                 matched_required=["python"],
                 matched_preferred=["python"],
-                matched_keywords=["python"]
+                matched_keywords=["python"],
             ),
         ]
 
@@ -117,7 +138,7 @@ class CompanyMatchingTests(unittest.TestCase):
             jd_profile=jd_profile,
             matches=matches,
             max_projects=2,
-            max_skills_per_project=3
+            max_skills_per_project=3,
         )
 
         self.assertEqual(len(points), 2)
@@ -132,6 +153,7 @@ class CompanyMatchingTests(unittest.TestCase):
 
         self.assertIn("McDonalds", points[0])
         self.assertIn("McDonalds", points[1])
+
 
 if __name__ == "__main__":
     unittest.main()

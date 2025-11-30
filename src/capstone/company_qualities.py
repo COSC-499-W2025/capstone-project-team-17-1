@@ -1,13 +1,10 @@
 # capstone/company_qualities.py
-
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from typing import Dict, List
 
-
 # Simple dictionaries of phrases -> normalized qualities.
-# You can grow these as you see more companies.
 COMPANY_VALUE_KEYWORDS: Dict[str, List[str]] = {
     "innovation": [
         "innovative",
@@ -184,7 +181,7 @@ WORK_STYLE_KEYWORDS: Dict[str, List[str]] = {
     ],
 }
 
-# Optionally reuse your tech skill dict from job_matching
+# tech skill dict from job_matching
 from .job_matching import JOB_SKILL_KEYWORDS
 
 
@@ -194,6 +191,7 @@ class CompanyQualities:
     values: List[str]
     work_style: List[str]
     preferred_skills: List[str]
+    keywords: List[str]  # 👈 MUST exist
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -214,16 +212,19 @@ def extract_company_qualities(
     company_name: str | None = None,
 ) -> CompanyQualities:
     """Extract company values, work style, and preferred skills from raw text."""
-
     tl = text.lower()
 
     values = _extract_from_dict(tl, COMPANY_VALUE_KEYWORDS)
     work_style = _extract_from_dict(tl, WORK_STYLE_KEYWORDS)
     preferred_skills = _extract_from_dict(tl, JOB_SKILL_KEYWORDS)
 
+    # combined keyword universe for resume matching
+    keywords = sorted(set(values + work_style + preferred_skills))
+
     return CompanyQualities(
         company_name=company_name,
         values=values,
         work_style=work_style,
         preferred_skills=preferred_skills,
+        keywords=keywords,
     )
