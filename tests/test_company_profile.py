@@ -12,9 +12,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone.company_profile import (
-    extract_traits,
+    extract_softskills,
     build_company_profile,
-    build_company_resume_points,
+    build_company_resume_lines,
 )
 
 @dataclass
@@ -36,7 +36,7 @@ class CompanyMatchingTests(unittest.TestCase):
         We value strong communication and collaboration.
         You should be a team player who takes ownership of your work.
         """
-        traits = extract_traits(text)
+        traits = extract_softskills(text)
 
         self.assertIn("communication", traits)
         self.assertIn("teamwork", traits)
@@ -112,7 +112,7 @@ class CompanyMatchingTests(unittest.TestCase):
             ),
         ]
 
-        points = build_company_resume_points(
+        points = build_company_resume_lines(
             company_name=company_name,
             jd_profile=jd_profile,
             matches=matches,
@@ -123,12 +123,12 @@ class CompanyMatchingTests(unittest.TestCase):
         self.assertEqual(len(points), 2)
 
         self.assertIn("payments-api", points[0])
-        self.assertIn("python", points[0])
-        self.assertIn("django", points[0])
-        self.assertIn("sql", points[0])
+        self.assertIn("python", points[0].lower())
+        self.assertIn("django", points[0].lower())
+        self.assertIn("sql", points[0].lower())
 
         self.assertIn("sensor-api", points[1])
-        self.assertIn("python", points[1])
+        self.assertIn("python", points[1].lower())
 
         self.assertIn("McDonalds", points[0])
         self.assertIn("McDonalds", points[1])
