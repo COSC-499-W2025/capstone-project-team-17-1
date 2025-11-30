@@ -4,6 +4,51 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, List
 
+<<<<<<< Updated upstream
+=======
+
+@dataclass
+class CompanyQuery:
+    """
+    Normalized representation of a user's target company.
+
+    raw_input       - whatever the user typed
+    normalized_name - cleaned-up version we will use downstream
+    """
+    raw_input: str
+    normalized_name: str
+
+    def to_json(self) -> dict:
+        return asdict(self)
+
+
+def normalize_company_name(raw: str) -> str:
+    """
+    Normalize a free-text company name.
+
+    - trim whitespace
+    - collapse multiple spaces
+    - strip trailing commas/periods
+    - drop leading 'the ' (case-insensitive)
+    """
+    s = " ".join(raw.split())              # collapse internal spaces
+    s = s.strip().strip(",. ")             # trim + trailing comma/period
+
+    if s.lower().startswith("the "):
+        s = s[4:]
+
+    return s
+
+
+def build_company_query(user_input: str) -> CompanyQuery:
+    """
+    Convert raw user input into a CompanyQuery object.
+    Frontend / CLI can call this as the first step.
+    """
+    normalized = normalize_company_name(user_input)
+    return CompanyQuery(raw_input=user_input, normalized_name=normalized)
+
+>>>>>>> Stashed changes
 # Simple dictionaries of phrases -> normalized qualities.
 COMPANY_VALUE_KEYWORDS: Dict[str, List[str]] = {
     "innovation": [
