@@ -414,3 +414,54 @@ Milestones #19 & #20 – Timeline Exports (Projects + Skills)
 - I implemented helper functions (`_banner`, `_section`, `print_project_summary`, and `print_metrics`) to create a clean, formatted terminal report. This update preserves all raw JSON outputs for debugging while introducing a professional, readable summary that highlights the detected languages, frameworks, skills, collaboration classification, and metrics such as project duration, frequency, activity timeline, and contributions.
 - The biggest improvement was replacing the raw `summary.json` (I basically commented that section) dump with a polished **“Project Analysis”** section and a **“Metrics Summary”** block that communicates the analysis results at a glance. I also ensured that the database snapshot information (skills + collaboration) and chronological project ordering integrate cleanly after the analysis output.
 - Overall, this change significantly enhances how the project is showcased and makes the demo more intuitive and evaluative-friendly for the proffesors/TA. This will help us articulate the value of our tool Loom more effectively during presentations and checkpoints.
+
+**Co-authoring Michelle's PR(3 Part 1 Feature: Extract Company-Specific Qualities):**
+
+
+**Summary**
+
+Implemented the Company Qualities extraction subsystem and wired it into the company profile backend so we can return structured JSON for resume matching (not just flat skill lists).
+
+**Implementation**
+
+- Added `capstone/company_qualities.py`:
+  - Defined keyword maps:
+    - `COMPANY_VALUE_KEYWORDS` (e.g., innovation, customer_focus, diversity, impact, sustainability, excellence, etc.)
+    - `WORK_STYLE_KEYWORDS` (e.g., remote, hybrid, fast_paced, agile, mentorship, flexible_hours, etc.)
+  - Implemented `CompanyQualities` dataclass:
+    - `company_name`
+    - `values`
+    - `work_style`
+    - `preferred_skills`
+    - `keywords` (combined universe for matching)
+  - Implemented `extract_company_qualities(text, company_name)` to:
+    - parse raw company text
+    - infer `values`, `work_style`, and `preferred_skills` (via `JOB_SKILL_KEYWORDS`)
+    - build a unified `keywords` list for resume matching
+
+- Updated `capstone/company_profile.py`:
+  - `build_company_profile(company_name, url=None)` now:
+    - fetches text via `fetch_company_text()` / `fetch_from_url()`
+    - calls `extract_job_skills()`, `extract_softskills()`, and `extract_company_qualities()`
+    - returns a structured JSON-ready dict with:
+      - `company`, `source`
+      - `required_skills`, `preferred_skills`, `keywords`
+      - `values`, `work_style`, `traits`
+      - `preferred_skills_from_profile`
+  - Kept backward compatibility for existing matching logic while enriching the profile with values + work style information.
+  - Cleaned up `build_company_resume_lines()` so bullets clearly reference the company and avoid duplicated “aligning with…” text.
+
+**Testing**
+
+- Added `tests/test_company_qualities.py`:
+  - Verifies extraction of `values`, `work_style`, `preferred_skills`, and `keywords` from realistic sample text.
+- Updated `tests/test_company_profile.py`:
+  - Verifies that `build_company_profile()` returns the new structured JSON fields.
+  - Asserts that core skill/keyword behaviour is preserved.
+- All tests passing locally (`78 passed, 1 skipped`).
+
+**Impact**
+
+- Completes the “Extract company-preferred skills, traits, and keywords” part of Step 3 (Part 1).
+- Backend now exposes a richer company profile that the resume-matching pipeline can consume, capturing not just tech stack alignment but also company values and work style.
+
