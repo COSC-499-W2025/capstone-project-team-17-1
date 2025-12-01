@@ -1,7 +1,8 @@
 node_modules/
-**/node_modules/
 dist/
 out/
+analysis_output/
+**/capstone.db
 log/
 !log/.gitkeep
 *.log
@@ -9,19 +10,11 @@ npm-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
-**/app.db
-**/app.dp-shm
-**/app.dp-wal
 # SQLite
-src/db/*.db*
-app.db
-app.db-*
-capstone.db
 *.db-journal
 __pycache__/
 *.py[cod]
-log/*.log
+*.db-journal
 src/capstone_analyzer.egg-info/
-config/user_config.json
 log/consent_decisions.jsonl
 /.venv

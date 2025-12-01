@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +30,14 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+    # backfill legacy rows that only had project_name, can be deleted at end
+    info = conn.execute("PRAGMA table_info(project_analysis)").fetchall()
+    columns = {row[1] for row in info}
+    if "project_id" not in columns:
+        conn.execute("ALTER TABLE project_analysis ADD COLUMN project_id TEXT")
+    if "project_name" in columns:
+        conn.execute("UPDATE project_analysis SET project_id = COALESCE(project_id, project_name) WHERE project_id IS NULL")
     conn.commit()
 
 
@@ -73,36 +80,26 @@ def close_db() -> None:
 def store_analysis_snapshot(
     conn: sqlite3.Connection,
     project_id: str,
-    classification: str,
-    primary_contributor: str | None,
-    snapshot: dict,
+    classification: str = "unknown",
+    primary_contributor: str | None = None,
+    snapshot: dict | None = None,
 ) -> None:
-    """Persist a project analysis snapshot to the database."""
 
-    # make sure every stored snapshot includes the key identifiers 
-    prepared_snapshot = _prepare_snapshot_payload(snapshot, project_id, classification, primary_contributor)
-    payload = json.dumps(prepared_snapshot)
-    try:
-        cursor = conn.execute(
-            """
-            INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
-            VALUES (?, ?, ?, ?)
-            """,
-            (project_id, classification, primary_contributor, payload),
-        )
-        row_id = cursor.lastrowid
-        _validate_snapshot_insert(
-            conn,
-            row_id,
-            project_id=project_id,
-            classification=classification,
-            primary_contributor=primary_contributor,
-        )
-    except Exception:
-        conn.rollback()
-        raise
-    else:
-        conn.commit()
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    doc = dict(snapshot or {})
+    doc.setdefault("project_id", project_id)
+    doc.setdefault("classification", classification)
+    doc.setdefault("primary_contributor", primary_contributor)
+    payload = json.dumps(doc)
+    conn.execute(
+        """
+        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
+        VALUES (?, ?, ?, ?)
+        """,
+        (project_id, classification, primary_contributor, payload),
+    )
+    conn.commit()
 
 
 def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | None:
@@ -122,129 +119,79 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     return json.loads(row[0]) if row else None
 
 
-def fetch_latest_snapshots(conn: sqlite3.Connection) -> dict[str, dict]:
-    """Return the latest snapshot for each project currently stored."""
-
+def fetch_latest_snapshots(conn: sqlite3.Connection) -> list[dict]:
+    # return newest snapshot for every project saved in the database
+    # each item contains the same structure as fetch_latest_snapshot plus metadata
     cursor = conn.execute(
         """
-        SELECT project_id, snapshot
-        FROM project_analysis
-        ORDER BY project_id ASC, created_at DESC, id DESC
+        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
+        FROM project_analysis a
+        JOIN (
+            SELECT project_id AS pid, MAX(created_at) AS created_at
+            FROM project_analysis
+            GROUP BY project_id
+        ) latest ON latest.pid = a.project_id AND latest.created_at = a.created_at
+        ORDER BY a.project_id
         """
     )
-    snapshots: dict[str, dict] = {}
-    for project_id, payload in cursor:
-        # Results are sorted newest-first per project, so first hit wins.
-        if project_id in snapshots:
-            continue
+    rows = cursor.fetchall()
+    payload: list[dict] = []
+    for project_id, classification, contributor, snapshot_json, created_at in rows:
         try:
-            # Pick only the first row per project_id thanks to ORDER BY above.
-            snapshots[project_id] = json.loads(payload)
-        except json.JSONDecodeError:  # pragma: no cover - defensive parsing
-            logger.warning("Skipping invalid snapshot payload for project %s", project_id)
-    return snapshots
+            snapshot = json.loads(snapshot_json)
+        except Exception:
+            snapshot = {}
+        payload.append(
+            {
+                "project_id": project_id,
+                "classification": classification,
+                "primary_contributor": contributor,
+                "created_at": created_at,
+                "snapshot": snapshot,
+            }
+        )
+    return payload
 
 
-def backup_database(conn: sqlite3.Connection, destination: Path | None = None) -> Path:
-    """Create a sqlite backup file so snapshots can be versioned."""
-
-    if destination is None:
-        # we can keep multiple copies
-        if _DB_PATH is None:
-            raise ValueError("Database path unknown; open_db must be called before backup.")
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
-        backup_dir = _DB_PATH.parent / "backups"
-        destination = backup_dir / f"capstone-backup-{timestamp}.db"
+def backup_database(conn: sqlite3.Connection, destination: Path) -> Path:
+    # create a SQLite backup at the provided destination path
     destination.parent.mkdir(parents=True, exist_ok=True)
     backup_conn = sqlite3.connect(destination)
     try:
         conn.backup(backup_conn)
     finally:
         backup_conn.close()
-    logger.info("Created database backup at %s", destination)
     return destination
 
 
 def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int:
-    """Export all stored snapshots to a JSON file for external backup."""
-
-    cursor = conn.execute(
+    # export all project_analysis rows (latest snapshot per row) to a JSON file
+    # Returns the number of records written
+    rows = conn.execute(
         """
         SELECT project_id, classification, primary_contributor, snapshot, created_at
         FROM project_analysis
-        ORDER BY created_at ASC, id ASC
+        ORDER BY created_at
         """
-    )
-    records = []
-    for project_id, classification, primary, payload, created_at in cursor:
+    ).fetchall()
+    payload: list[dict] = []
+    for project_id, classification, contributor, blob, created_at in rows:
         try:
-            snapshot = json.loads(payload)
-        except json.JSONDecodeError:
-            logger.warning("Skipping corrupt snapshot for %s during export", project_id)
-            continue
-        record = {
-            "project_id": project_id,
-            "classification": classification,
-            "primary_contributor": primary,
-            "created_at": created_at,
-            "snapshot": snapshot,
-        }
-        records.append(record)
+            snapshot = json.loads(blob)
+        except Exception:
+            snapshot = {}
+        payload.append(
+            {
+                "project_id": project_id,
+                "classification": classification,
+                "primary_contributor": contributor,
+                "created_at": created_at,
+                "snapshot": snapshot,
+            }
+        )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as fh:
-        json.dump(records, fh, indent=2)
-    logger.info("Exported %s snapshot(s) to %s", len(records), output_path)
-    return len(records)
-
-
-def _prepare_snapshot_payload(
-    snapshot: dict,
-    project_id: str,
-    classification: str,
-    primary_contributor: str | None,
-) -> dict:
-    prepared = dict(snapshot)
-    # downstream readers expect these keys 
-    prepared.setdefault("project_id", project_id)
-    prepared.setdefault("classification", classification)
-    if primary_contributor is not None:
-        prepared.setdefault("primary_contributor", primary_contributor)
-    return prepared
-
-
-def _validate_snapshot_insert(
-    conn: sqlite3.Connection,
-    row_id: int,
-    *,
-    project_id: str,
-    classification: str,
-    primary_contributor: str | None,
-) -> None:
-    cursor = conn.execute(
-        """
-        SELECT project_id, classification, primary_contributor, snapshot
-        FROM project_analysis
-        WHERE id = ?
-        """,
-        (row_id,),
-    )
-    row = cursor.fetchone()
-    if row is None:
-        # can't find the row – treat as corruption
-        raise sqlite3.DatabaseError(f"Inserted snapshot row {row_id} is missing.")
-    stored_project_id, stored_classification, stored_primary, payload = row
-    if stored_project_id != project_id or stored_classification != classification:
-        raise sqlite3.DatabaseError("Integrity check failed: stored metadata mismatch.")
-    try:
-        decoded = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        raise sqlite3.DatabaseError("Stored snapshot payload is not valid JSON.") from exc
-    if decoded.get("project_id") != project_id:
-        raise sqlite3.DatabaseError("Snapshot payload missing expected project_id.")
-    if decoded.get("classification") != classification:
-        raise sqlite3.DatabaseError("Snapshot payload missing expected classification.")
-    if primary_contributor and decoded.get("primary_contributor") != primary_contributor:
-        raise sqlite3.DatabaseError("Snapshot payload missing expected primary_contributor.")
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return len(payload)
 
 
 __all__ = [
