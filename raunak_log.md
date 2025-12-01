@@ -10,6 +10,7 @@
 - [Week 9 Personal Log](#week-9-personal-log)
 - [Week 10 Personal Log](#week-10-personal-log)
 - [Week 12 Personal Log](#week-12-personal-log)
+- [Week 13 Personal Log](#week-13-personal-log)
 
 ---
 
@@ -402,4 +403,86 @@ Milestones #19 & #20 – Timeline Exports (Projects + Skills)
     - Demo script,
     -  this supports step 1+2 job–project matching.
 <img width="1059" height="625" alt="WEEK12PEEREVAL" src="https://github.com/user-attachments/assets/d138a0e3-38bf-4640-a6cb-b35628a83ed4" />
+
+### WEEK 13 PERSONAL LOG 
+**Personal Log – Improving Demo Output (feature/demo-friendly-output)**
+
+**29 November Saturday**
+
+
+- Today I worked on refining the usability and presentation quality of our capstone project’s CLI demo. The original `sample_project.py` script printed large JSON objects directly to the terminal, which made the demo cluttered and difficult to interpret. To improve clarity and communication for supervisors and evaluators, I added a structured, human-readable reporting layer on top of the existing analysis pipeline.
+- I implemented helper functions (`_banner`, `_section`, `print_project_summary`, and `print_metrics`) to create a clean, formatted terminal report. This update preserves all raw JSON outputs for debugging while introducing a professional, readable summary that highlights the detected languages, frameworks, skills, collaboration classification, and metrics such as project duration, frequency, activity timeline, and contributions.
+- The biggest improvement was replacing the raw `summary.json` (I basically commented that section) dump with a polished **“Project Analysis”** section and a **“Metrics Summary”** block that communicates the analysis results at a glance. I also ensured that the database snapshot information (skills + collaboration) and chronological project ordering integrate cleanly after the analysis output.
+- Overall, this change significantly enhances how the project is showcased and makes the demo more intuitive and evaluative-friendly for the proffesors/TA. This will help us articulate the value of our tool Loom more effectively during presentations and checkpoints.
+
+**Co-authoring Michelle's PR(3 Part 1 Feature: Extract Company-Specific Qualities):**
+
+
+**Summary**
+
+Implemented the Company Qualities extraction subsystem and wired it into the company profile backend so we can return structured JSON for resume matching (not just flat skill lists).
+
+**Implementation**
+
+- Added `capstone/company_qualities.py`:
+  - Defined keyword maps:
+    - `COMPANY_VALUE_KEYWORDS` (e.g., innovation, customer_focus, diversity, impact, sustainability, excellence, etc.)
+    - `WORK_STYLE_KEYWORDS` (e.g., remote, hybrid, fast_paced, agile, mentorship, flexible_hours, etc.)
+  - Implemented `CompanyQualities` dataclass:
+    - `company_name`
+    - `values`
+    - `work_style`
+    - `preferred_skills`
+    - `keywords` (combined universe for matching)
+  - Implemented `extract_company_qualities(text, company_name)` to:
+    - parse raw company text
+    - infer `values`, `work_style`, and `preferred_skills` (via `JOB_SKILL_KEYWORDS`)
+    - build a unified `keywords` list for resume matching
+
+- Updated `capstone/company_profile.py`:
+  - `build_company_profile(company_name, url=None)` now:
+    - fetches text via `fetch_company_text()` / `fetch_from_url()`
+    - calls `extract_job_skills()`, `extract_softskills()`, and `extract_company_qualities()`
+    - returns a structured JSON-ready dict with:
+      - `company`, `source`
+      - `required_skills`, `preferred_skills`, `keywords`
+      - `values`, `work_style`, `traits`
+      - `preferred_skills_from_profile`
+  - Kept backward compatibility for existing matching logic while enriching the profile with values + work style information.
+  - Cleaned up `build_company_resume_lines()` so bullets clearly reference the company and avoid duplicated “aligning with…” text.
+
+**Testing**
+
+- Added `tests/test_company_qualities.py`:
+  - Verifies extraction of `values`, `work_style`, `preferred_skills`, and `keywords` from realistic sample text.
+- Updated `tests/test_company_profile.py`:
+  - Verifies that `build_company_profile()` returns the new structured JSON fields.
+  - Asserts that core skill/keyword behaviour is preserved.
+- All tests passing locally (`78 passed, 1 skipped`).
+
+**Impact**
+
+- Completes the “Extract company-preferred skills, traits, and keywords” part of Step 3 (Part 1).
+- Backend now exposes a richer company profile that the resume-matching pipeline can consume, capturing not just tech stack alignment but also company values and work style.
+
+**Weekly Personal Log — Integration Pipeline (Step 5)**
+ **Overview**
+
+
+This week I completed **Step 5: Integration with the Mining Pipeline**, which required me to connect all earlier backend stages (Steps 1–3) into one cohesive workflow. I implemented a new pipeline module that stitches together project detection, job matching, company profiling, and company quality extraction.
+
+
+**What I Completed**
+- Added a new module: **`capstone/pipeline.py`** and test_pipeline.py (This is crucial for future frontend application)
+- Implemented **`run_full_pipeline()`**, which integrates:
+  - **Project detection** via a wrapper around `detect_node_electron_project`
+  - **Job → project relevance scoring** using `rank_projects_for_job`
+  - **Company profile extraction** from `build_company_profile`
+  - **Company values, work-style, and preferred skills extraction** using `extract_company_qualities`
+- Created `_detect_projects_wrapper()` to generate a minimal project snapshot, allowing integration even when full mined data is not available.
+- Ensured the pipeline can be executed directly using:
+  ```bash
+  python3 -m capstone.pipeline
+
+<img width="1077" height="619" alt="WEEK13PEEREVAL" src="https://github.com/user-attachments/assets/fac58d47-93e4-4f87-8a48-24fd26ae4cca" />
 

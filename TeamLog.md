@@ -318,6 +318,39 @@ This week, the team focused on building the job description matching feature. We
 
 For next cycle, the team will focus on completing the remaining parts of the job description feature so it runs smoothly from input zip file to final results output. We will clean up and refractor the code so everything fits together without duplicated logic or confusing paths. Additionally, we will revise the output format so the projects appear similar to resume style wording. The team will also concentrate on preparing the presentation for Milestone #1, including a video demo showing the features and process of our digital artifacts mining application.
 
-## WEEK 13 TEAM LOG
+## WEEK 13 TEAM LOG 
+(Nov24 - Nov 30, 2025)
+
+### Recap of Milestone Goal - Week 13
+
+In Week 13, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 13
+<img width="1209" height="324" alt="Screenshot 2025-11-30 at 6 57 39 PM" src="https://github.com/user-attachments/assets/604bf101-6c6b-4d60-ba0d-b23e3406319e" />
+<img width="1180" height="193" alt="Screenshot 2025-11-30 at 6 57 22 PM" src="https://github.com/user-attachments/assets/2044d584-431e-4695-868b-bd130740bbcb" />
+
+### Burnup chart Week 13
+<img width="1018" height="576" alt="Screenshot 2025-11-30 at 7 06 43 PM" src="https://github.com/user-attachments/assets/ee1f3ad5-8c9d-4761-8725-a3e0eb403dc1" />
+
+### In Progress Tasks Week 13
+<img width="1221" height="195" alt="Screenshot 2025-11-30 at 7 00 42 PM" src="https://github.com/user-attachments/assets/f4b9d0d8-42dd-482b-aa18-52290226d058" />
+<img width="1227" height="63" alt="Screenshot 2025-11-30 at 7 01 00 PM" src="https://github.com/user-attachments/assets/aa72e629-f93b-467a-beda-2bd5f5b72e77" />
+
+### Test Report Week 13
+During week 13, the team validated new résumé, skills-timeline, and demo-output features through a mix of automated tests and manual checks. For the résumé module, pytest covers schema creation, filter behavior, preview-JSON mapping, and all export formats (Markdown/JSON/PDF). Manual preview was verified via python -m capstone.cli resume.
+
+The chronological-skills feature includes a unittest (tests.test_skill_timeline) plus manual inspection through sample_project.py. The demo-friendly company-profile output was tested with unittests confirming multi-skill extraction, company-profile construction, empty-text handling, and formatted bullet points. Résumé generation was manually tested by running capstone analyze demo.zip and producing JSON + PDF outputs, confirming correct snapshot saving and stable PDF generation.
+
+Overall, the week’s tests confirm correctness across schema, filters, previews, exports, skill timelines, and company-specific résumé generation.
 
 ## WEEK 14 TEAM LOG

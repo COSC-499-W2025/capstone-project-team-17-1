@@ -12,6 +12,7 @@
 - [Week 10 Personal Log](#week-10-personal-log)
 - [Week 11 Personal Log](#week-11-personal-log)
 - [Week 12 Personal Log](#week-12-personal-log)
+- [Week 13 Personal Log](#week-13-personal-log)
 
 
 ## Week 3 Personal Log
@@ -138,3 +139,47 @@ During our team check-in, we discussed exploring additional features outside of 
 - Finalize code for Milestone #1
 - Convert outputs to match resume-style writing for M1 demo
 - Prepare for M1 presentation
+
+## Week 13 Personal Log
+
+- (Nov 24 - Nov 30, 2025)<br />
+
+<img width="1206" height="705" alt="image" src="https://github.com/user-attachments/assets/e9c43e78-53e1-413f-9fdd-eb7efc9df79e" />
+
+### Week Recap: 
+Worked on finishing our final feature implementation which extracts target company qualities and matches them with existing user projects skills. This moves from generic job skill matching to company specific matching, capturing not only technical skills but also values and work styles. It provides a concrete bridge from mined project skills to company aligned, resume ready bullet points.
+
+System can now:
+  - Parse public company text and infer what they value (technical skills, traits, culture, work style)
+  - Cross reference inferred qualities against a user's extracted project skills
+  - Generate taulored resume bullet points for a specific target company
+      
+Skill Matching and Extraction
+- Reused existing extract_job_skills as the core building block
+    - Scans raw text (job ad, careers page, company description)
+    - Normalizes everything for consistent matching
+- Maps high level traits to phrases commonly seen in job ads.
+- Implemented helpers for safer string matching (as suggested in previous pr's)
+    - Avoids false triggers on partial words
+    - Uses word boundaries for single word terms
+- Implemented extract_softskills() for each trait/phrase to return a sorted list
+
+Building Company Profile
+- Uses user input url to fetch data from company webpage
+- Implemented simple HTTP helper to fetch page contents
+- Makes sure the profile is intentionally minimal but compatible with downstream ranking and bullet generation logic
+
+Resume Bullet Point Generation
+- Uses matched skills and traits from user projects and target company specific skills to generate resume-style bullet points
+    - Aggregates all matched skills
+- Outputs a list of tailored resume strings that can later be directly pasted into targeted resume sections
+
+Team Meetings
+- Collaborated and finished Team Contract
+- Discussed and collaborated on presentation slides
+- Distributed tasks for presentation 
+
+### Next Week:
+- Finalize presentation slides + present
+- Final revision/refractor of code and update ReadMe for demo
+- Work on Milestone #1 video demo

@@ -564,3 +564,94 @@ This week I focused on getting our CLI workflow feeling like a real tool and shi
 ### Reflection
 
 This week felt like moving from “toy script” to “actual product.” Getting `capstone` working as a first-class CLI command and debugging the demo DB issues gave me a much clearer picture of how all the pieces fit together. The new job-matching pipeline is still simple, but it already supports a realistic UX: paste a job posting, point at a project, and see whether your portfolio lines up or not. Next I want to 1) tighten the keyword extraction so it handles more phrasing variations, 2) support matching across *all* projects instead of just one `--project-id`, and 3) start shaping the JSON output so Step 4 can generate a polished resume section directly from these matches.
+
+---
+
+## Week 13 Personal Log [Nov 24 – Nov 30, 2025]
+
+This week I focused heavily on finishing **Step 4: Full Resume Generation**, wiring it into our CLI, and transforming it into a real feature rather than a placeholder. I also worked on our capstone presentation slides for Wednesday.
+
+**Peer Eval**  
+>
+> ![Week 13 — Capstone Resume Builder]
+> <img width="645" height="689" alt="image" src="https://github.com/user-attachments/assets/83912a6c-fc4d-48bd-a86c-4dadda9ceb54" />
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### Feature: End-to-end resume generation (Step 4)
+
+This week I implemented the complete resume generator pipeline, taking the job-description matching output (Step 2), company profile (Step 3), and building a tailored resume with scored, ranked projects. Major pieces:
+
+* Added a new `resume_pdf_builder.py` that converts the structured resume into Markdown and then a polished PDF using **Pandoc + wkhtmltopdf**, replacing the original toy PDF generator.
+* Updated `resume_generator.py` so `resume_to_pdf()` now calls the new builder and produces clean, professional PDFs.
+* Added Markdown formatting for skills, project bullets, values, and company traits to consistently render across systems.
+* Ensured that JSON output still works for debugging and alternative formatting.
+
+---
+
+### SQLite persistence + CLI fixes
+
+* Modified `_handle_analyze` so it properly writes project snapshots to SQLite using `store_analysis_snapshot()`—a critical requirement for Step 4 to read real data.
+* Fixed SQLite file-lock issues on Windows by properly closing DB connections in both `analyze` and `generate-resume`. This resolved several `WinError 32` test failures.
+* Reworked `--summary-to-stdout` so it outputs **pure JSON only** and does not pollute stdout with debug text, fixing the `JSONDecodeError: Extra data` failures in `test_cli`.
+* Cleaned the code path so resume generation correctly loads all snapshots from SQLite via `fetch_latest_snapshots()`.
+
+---
+
+### PDF engine setup + environment work
+
+Because we switched away from the toy PDF renderer, I debugged and resolved issues around dependency setup:
+
+* Installed **Pandoc** system-wide and verified detection in the CLI.
+* Installed **wkhtmltopdf** for Windows, fixed PATH issues, and documented how contributors should install it.
+* Patched the PDF builder to use `wkhtmltopdf` instead of LaTeX engines, avoiding MiKTeX version mismatch errors.
+* Confirmed that the CLI now renders PDF resumes without LaTeX-related failures.
+
+---
+
+### Testing and verification
+
+I added a complete test suite for the resume generator:
+
+* `tests/test_resume_generator.py` covers:
+  * top-K project ranking  
+  * skill-flag correctness  
+  * JSON serialization  
+  * PDF builder delegation (mocked Pandoc call)  
+* Test suite also required documenting installation steps for Pandoc + wkhtmltopdf so teammates can reproduce the tests locally.
+* Fixed several failures in `test_cli` including:
+  * JSON pollution from debug prints  
+  * open SQLite connection blocking temp folder cleanup  
+  * missing return codes causing `exit_code is None`
+
+After these patches, the test suite returns cleanly with all resume-related tests passing.
+
+---
+
+### Presentation preparation (Milestone demo)
+
+I also worked on the **presentation** scheduled for Wednesday:
+
+* Updated slide spacing and layout based on feedback.
+* Reorganized content flow for the 5-step pipeline and ensured consistency with the resume-builder architecture.
+* Included visuals and explanations from this week's work so the team can clearly present Step 4.
+
+---
+
+### PR and process
+
+* Opened a PR titled **“Complete Resume Generator (Step 4) + PDF Engine + SQLite Snapshot Integration”**.
+* Filled out the full PR template including instructions for installing Pandoc and wkhtmltopdf during testing.
+* Included detailed code review notes, clear testing steps, and context on how the resume generator links previous steps together.
+* Mentioned all breaking changes (new external dependencies) and described how they strengthen the overall pipeline.
+
+---
+
+### Reflection
+
+This week was one of the most productive and challenging ones so far. I had to connect everything we built across Steps 1–3 and make it behave like a polished, real-world CLI tool. Debugging Windows path issues, Pandoc engines, JSON output, SQLite persistence, and test failures helped me fully understand how all the parts of our system interact. Seeing the pipeline finally produce a clean, well-formatted resume PDF felt like a massive milestone. We now have a full end-to-end workflow—from analyzing projects to generating a company-specific resume—working inside our CLI.
+
+Next goals are to refine the resume layout, improve project bullet quality, and prepare the demo for Milestone #1.
+

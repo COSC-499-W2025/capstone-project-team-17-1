@@ -190,3 +190,24 @@ Overall, this week strengthened the system’s reliability and ensured that our 
  ### Completed Tasks Week 12
 - 'Section 13.4 – Storage Validation and Backup' #87
 - 'Section 9.1.1 + 17.2 – Pull-Request / Issue Evidence' #86
+
+  ## WEEK 13 Personal LOG (Nov24 - Nov30, 2025)
+### 1. Type of Tasks Worked On
+<img width="1069" height="545" alt="Screenshot 2025-11-29 at 1 44 41 PM" src="https://github.com/user-attachments/assets/a2163a02-f2f1-4bc0-b7f2-10fbb8d7a0f4" />
+
+### 2. Weekly Goals Recap
+- complete 'Retrieve Previously Generated Résumé Item'#101
+- discussed the code details with members
+- Asssgin members to their tasks and create new tasks for picking up
+- review member's PR and help them
+
+This week, I completed the résumé-retrieval feature (Task #101) and integrated it into the full Python-only backend. The work introduced a complete storage and retrieval pipeline for résumé items, including new database tables for resume_entries and resume_entry_links, insertion utilities, and CLI commands for querying, filtering, previewing, and exporting résumé content. Users can now retrieve previously generated résumé components and export them in Markdown, JSON, or offline PDF through a lightweight integrated generator.
+
+To support this new workflow, I extended the storage helpers with updated schema migrations, strengthened snapshot backup and export utilities, and refined the ranking CLI so it can consume the expanded snapshot format. I also added a dedicated test suite (tests/test_resume_retrieval.py) to validate schema introspection, filtering logic, preview formatting, and export correctness, ensuring the entire path from storage to output behaves predictably.
+
+Beyond the feature implementation, I discussed code details with team members, clarified technical responsibilities, and assigned new tasks to maintain development momentum. I reviewed multiple PRs, provided feedback on integration boundaries, and helped resolve issues in modules that interact with the snapshot system.
+
+Overall, this week strengthened our résumé-related tooling and improved backend consistency. The system now supports richer artifact retrieval, more robust export options, and a cleaner developer workflow for future milestone work.
+
+### Completed Tasks Week 13
+'Retrieve Previously Generated Résumé Item'#101

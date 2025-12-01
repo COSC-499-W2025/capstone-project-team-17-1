@@ -10,7 +10,8 @@
 - [Week 8 [Oct 20 – Oct 26, 2025]](#week-8)
 - [Week 9 [Oct 27 – Nov 2, 2025]](#week-9)
 - [Week 10 [Nov 3 – Nov 9, 2025]](#week-10)
-- [Week 12 [Nov 17 – Nov 23, 2025]](#week-10)
+- [Week 12 [Nov 17 – Nov 23, 2025]](#week-12)
+- [Week 13 [Nov 24 – Nov 30, 2025]](#week-13)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -97,5 +98,13 @@ Last week, I implemented basic external module user permissions. When external s
 In Week 10, I improved system performance by refactoring the user config read/write and updating the external functionality. I originally planned to continully complete the external module this week, but I may not have enough time. Instead, I focused on revising and optimizing the existing database structure. During the migration from the old Electron codebase to Python, some functionality had been unintentionally forgot, such as file format validation and proper feedback for unsupported uploads, so I restored those missing features and fixed several scattered bugs and inconsistencies. I also refactored the storage module to improve it's structure and maintainability. Next week, I plan to continue reviewing the overall integrity of the project, and if time allows, I will aim to finish the complete external module implementation.
 
 <img width="1553" height="910" alt="080647a95a177212c360942e8d74cc16" src="https://github.com/user-attachments/assets/9ec84235-d6ae-42ab-914c-b17a8d8228a8" />
+
+[Back](#table-of-contents)
+
+## Week 13
+[Nov 24 – Nov 30, 2025]
+Last week, I refactored some database related parts of the system, but the column name changes caused a few side effects, so I reverted them. This week, I implemented a previously forgotten WBS feature: chronological skills. It collects and organizes the skills that appear in projects, then outputs a summary and a timeline. With this, all 20 WBS features should now be implemented. I also reviewed the demo workflow and outputs, and I plan to make some refinements next week in preparation for recording the demo video.
+
+<img width="1549" height="906" alt="a503080e56676a2cd653b71f8b47fbb8" src="https://github.com/user-attachments/assets/d993a031-f2a5-4209-8c47-f799094f1ba2" />
 
 [Back](#table-of-contents)
