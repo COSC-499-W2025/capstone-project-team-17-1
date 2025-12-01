@@ -28,12 +28,39 @@
     "primary_contributor": null
   },
   "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.004,
+  "scan_duration_seconds": 0.0017,
   "skills": [
     {
       "skill": "Python",
       "confidence": 1.0,
       "category": "language"
     }
-  ]
+  ],
+  "skill_timeline": {
+    "generated_at": "2025-12-01T01:26:13.394909",
+    "skills": [
+      {
+        "skill": "Python",
+        "category": "language",
+        "first_seen": "2025-11-19T10:29:44",
+        "last_seen": "2025-11-19T10:29:44",
+        "total_weight": 1.0,
+        "year_counts": {
+          "2025": 1.0
+        },
+        "quarter_counts": {
+          "2025-Q4": 1.0
+        },
+        "intensity": 1.0
+      }
+    ]
+  },
+  "top_skills_by_year": {
+    "2025": [
+      {
+        "skill": "Python",
+        "weight": 1.0
+      }
+    ]
+  }
 }
