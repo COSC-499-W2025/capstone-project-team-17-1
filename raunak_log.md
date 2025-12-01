@@ -465,3 +465,24 @@ Implemented the Company Qualities extraction subsystem and wired it into the com
 - Completes the “Extract company-preferred skills, traits, and keywords” part of Step 3 (Part 1).
 - Backend now exposes a richer company profile that the resume-matching pipeline can consume, capturing not just tech stack alignment but also company values and work style.
 
+**Weekly Personal Log — Integration Pipeline (Step 5)**
+ **Overview**
+
+
+This week I completed **Step 5: Integration with the Mining Pipeline**, which required me to connect all earlier backend stages (Steps 1–3) into one cohesive workflow. I implemented a new pipeline module that stitches together project detection, job matching, company profiling, and company quality extraction.
+
+
+**What I Completed**
+- Added a new module: **`capstone/pipeline.py`** and test_pipeline.py (This is crucial for future frontend application)
+- Implemented **`run_full_pipeline()`**, which integrates:
+  - **Project detection** via a wrapper around `detect_node_electron_project`
+  - **Job → project relevance scoring** using `rank_projects_for_job`
+  - **Company profile extraction** from `build_company_profile`
+  - **Company values, work-style, and preferred skills extraction** using `extract_company_qualities`
+- Created `_detect_projects_wrapper()` to generate a minimal project snapshot, allowing integration even when full mined data is not available.
+- Ensured the pipeline can be executed directly using:
+  ```bash
+  python3 -m capstone.pipeline
+
+<img width="1077" height="619" alt="WEEK13PEEREVAL" src="https://github.com/user-attachments/assets/fac58d47-93e4-4f87-8a48-24fd26ae4cca" />
+
