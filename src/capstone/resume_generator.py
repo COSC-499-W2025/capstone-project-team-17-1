@@ -186,31 +186,11 @@ def resume_to_json(resume: TailoredResume) -> Dict[str, Any]:
     return resume.to_dict()
 
 
-def resume_to_pdf(resume: TailoredResume) -> bytes:
+def resume_to_pdf(resume: TailoredResume, output_path: Path) -> bytes:
     """
-    Render a simple one-page PDF for the tailored resume.
-
-    We piggy-back on the existing export_pdf_one_pager(), which
-    already takes a small summary dict and turns it into a PDF
-    without pulling in extra dependencies. :contentReference[oaicite:2]{index=2}
+    Render the resume as a professionally formatted PDF using Pandoc.
     """
-    data = resume.to_dict()
+    from .resume_pdf_builder import build_pdf_with_pandoc
 
-    # Flatten all project bullets for the highlights section
-    highlight_lines: List[str] = []
-    for project in data["projects"]:
-        title_prefix = project["project_id"]
-        bullet = project["resume_bullet"]
-        highlight_lines.append(f"{title_prefix}: {bullet}")
-
-    summary_payload = {
-        "title": f"Tailored Resume — {data['company']}",
-        "overview": (
-            f"Selected {len(data['projects'])} projects aligned with "
-            f"{data['company']} based on required and preferred skills."
-        ),
-        "highlights": highlight_lines,
-        "references": [],
-    }
-
-    return export_pdf_one_pager(summary_payload)
+    pdf_path = build_pdf_with_pandoc(resume.to_dict(), output_path)
+    return pdf_path.read_bytes()

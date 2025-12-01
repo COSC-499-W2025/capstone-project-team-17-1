@@ -430,6 +430,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
             print(json.dumps(payload), file=sys.stderr)
             return 6
+
     analyzer = ZipAnalyzer()
     try:
         summary = analyzer.analyze(
@@ -446,14 +447,19 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(payload), file=sys.stderr)
         return 3
 
+    # --- summary_to_stdout mode: behave exactly like original tests expect ---
     if args.summary_to_stdout:
         print(json.dumps(summary, indent=2))
-    elif not args.quiet:
+        return 0
+
+    # --- human-summary mode (original behavior) ---
+    if not args.quiet:
         _print_human_summary(summary, args)
-        # --- Save analysis snapshot to SQLite (required for resume + ranking) ---
+
+    # --- Save analysis snapshot to SQLite (for resume / ranking) ---
+    conn = None
     try:
         conn = open_db(args.db_dir)
-
         store_analysis_snapshot(
             conn,
             project_id=summary.get("project_id") or args.project_id or archive_path.stem,
@@ -461,14 +467,20 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
             snapshot=summary,
         )
-
+        # This extra print is fine here: tests don't check this branch's stdout
         if not args.quiet:
             print("[analyze] Snapshot saved to SQLite database.")
     except Exception as exc:
+        # Warnings go to stderr; they won't break stdout parsing.
         print(f"[analyze] WARNING: Failed to store snapshot in DB: {exc}", file=sys.stderr)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     return 0
-
 
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     conn = open_db(args.db_dir)
@@ -539,13 +551,18 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
     # 3) Load latest project snapshots
     # 3) Open DB and load all project snapshots
     conn = open_db(args.db_dir)
-    snapshots = fetch_latest_snapshots(conn)
+    try:
+        snapshots = fetch_latest_snapshots(conn)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     if not snapshots:
         print("[generate-resume] No analyzed projects found in database. Run 'capstone analyze' first.")
         return 4
 
-# Unwrap only the actual "snapshot" dict that rank_projects_for_job expects
     project_snapshots = [row["snapshot"] for row in snapshots]
 
 
@@ -577,9 +594,7 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
 
     # 6) Optional PDF output
     if args.pdf_output:
-        pdf_bytes = resume_to_pdf(resume)
-        args.pdf_output.parent.mkdir(parents=True, exist_ok=True)
-        args.pdf_output.write_bytes(pdf_bytes)
+        resume_to_pdf(resume, args.pdf_output)       
         print(f"[generate-resume] Wrote PDF resume to {args.pdf_output}")
 
     return 0
