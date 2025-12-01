@@ -347,9 +347,9 @@ In Week 13, team members self-assigned issues based on the tasks assigned in the
 <img width="1227" height="63" alt="Screenshot 2025-11-30 at 7 01 00 PM" src="https://github.com/user-attachments/assets/aa72e629-f93b-467a-beda-2bd5f5b72e77" />
 
 ### Test Report Week 13
-During week 13, the team validated new résumé, skills-timeline, and demo-output features through a mix of automated tests and manual checks. For the résumé module (#102), pytest covers schema creation, filter behavior, preview-JSON mapping, and all export formats (Markdown/JSON/PDF). Manual preview was verified via python -m capstone.cli resume.
+During week 13, the team validated new résumé, skills-timeline, and demo-output features through a mix of automated tests and manual checks. For the résumé module, pytest covers schema creation, filter behavior, preview-JSON mapping, and all export formats (Markdown/JSON/PDF). Manual preview was verified via python -m capstone.cli resume.
 
-The chronological-skills feature includes a unittest (tests.test_skill_timeline) plus manual inspection through sample_project.py. The demo-friendly company-profile output (#1) was tested with unittests confirming multi-skill extraction, company-profile construction, empty-text handling, and formatted bullet points. Résumé generation (#107/#108) was manually tested by running capstone analyze demo.zip and producing JSON + PDF outputs, confirming correct snapshot saving and stable PDF generation.
+The chronological-skills feature includes a unittest (tests.test_skill_timeline) plus manual inspection through sample_project.py. The demo-friendly company-profile output was tested with unittests confirming multi-skill extraction, company-profile construction, empty-text handling, and formatted bullet points. Résumé generation was manually tested by running capstone analyze demo.zip and producing JSON + PDF outputs, confirming correct snapshot saving and stable PDF generation.
 
 Overall, the week’s tests confirm correctness across schema, filters, previews, exports, skill timelines, and company-specific résumé generation.
 
