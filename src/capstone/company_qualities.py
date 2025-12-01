@@ -4,8 +4,6 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, List
 
-<<<<<<< Updated upstream
-=======
 
 @dataclass
 class CompanyQuery:
@@ -48,7 +46,6 @@ def build_company_query(user_input: str) -> CompanyQuery:
     normalized = normalize_company_name(user_input)
     return CompanyQuery(raw_input=user_input, normalized_name=normalized)
 
->>>>>>> Stashed changes
 # Simple dictionaries of phrases -> normalized qualities.
 COMPANY_VALUE_KEYWORDS: Dict[str, List[str]] = {
     "innovation": [
