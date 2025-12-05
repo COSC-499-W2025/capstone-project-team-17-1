@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from zipfile import ZipFile
+from dataclasses import dataclass
+from typing import List
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -12,6 +14,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone.cli import main
+from capstone.metrics_extractor import metrics_api
+from capstone.company_profile import build_company_resume_lines
+from capstone.company_qualities import extract_company_qualities
 from capstone.metrics_extractor import analyze_metrics, metrics_api, init_db, chronological_proj
 from capstone.storage import close_db
 
@@ -31,6 +36,25 @@ def create_sample_zip(base_dir: Path) -> Path:
             archive.write(file, file.relative_to(project_dir.parent))
     return zip_path
 
+@dataclass
+class ProjectMatch:
+    project_id: str
+    score: float = 0.0
+    required_coverage: float = 0.0
+    preferred_coverage: float = 0.0
+    keyword_overlap: float = 0.0
+    recency_factor: float = 0.0
+    matched_required: List[str] = None
+    matched_preferred: List[str] = None
+    matched_keywords: List[str] = None
+    
+    def post_init(self):
+        if self.matched_required is None:
+            self.matched_required = []
+        if self.matched_preferred is None:
+            self.matched_preferred = []
+        if self.matched_keywords is None:
+            self.matched_keywords = []
 
 # using all the pretty printing helpers
 
@@ -321,8 +345,42 @@ def run_demo() -> None:
             names = ", ".join(f"{r['skill']}({r['weight']})" for r in rows)
             print(f"  {year}: {names}")
 
+        print("\n--- Company Qualities ---")
+        company_desc = """At McDonalds, we build scalable backend services in Python and Flask. 
+                        We deploy to AWS and rely on SQL databases.
+                        We are an innovative and customer-focused company that values diversity, collaboration, and a fast-paced, agile environment."""
+        
+        qualities = extract_company_qualities(company_desc, company_name="Mcdonalds")
+        
+        print(json.dumps(qualities.to_json(), indent=2))
+        
+        jd_profile = {
+            "required_skills": qualities.preferred_skills,
+            "preferred_skills": qualities.preferred_skills,
+            "keywords": qualities.keywords
+        }
+        
+        matches = [
+            ProjectMatch(
+                project_id = "behemoth",
+                matched_required = ['python'],
+                matched_preferred = ["python"],
+                matched_keywords = ["python"]
+            ),
+            ProjectMatch(
+                project_id = "demo-backend",
+                matched_required = ['python', "flask", "sql"],
+                matched_preferred = ["python", "flask", "sql"],
+                matched_keywords = ["python", "flask", "sql", "aws"]
+            )
+        ]
+        
+        print("\n--- Resume Bullet Points ---")
+        points = build_company_resume_lines(company_name="Mcdonalds", jd_profile=jd_profile, matches=matches, max_projects=2, max_skills_per_project=3)
+        for line in points:
+            print(line)
+            
     close_db()
-
 
 if __name__ == "__main__":
     run_demo()
