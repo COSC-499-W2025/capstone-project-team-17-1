@@ -354,3 +354,23 @@ The chronological-skills feature includes a unittest (tests.test_skill_timeline)
 Overall, the week’s tests confirm correctness across schema, filters, previews, exports, skill timelines, and company-specific résumé generation.
 
 ## WEEK 14 TEAM LOG
+(Dec1 - Dec7, 2025)
+
+### Recap of Milestone Goal - Week 14
+
+In Week 14, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 14
+### Burnup chart Week 14
+### In Progress Tasks Week 14
+### Test Report Week 14
