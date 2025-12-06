@@ -1,15 +1,20 @@
 import json
+import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import pytest
 
-from capstone.consent import ExternalPermissionDenied, grant_consent, reset_config, ensure_external_permission
-from capstone.cli import main
-from capstone.project_ranking import rank_projects_from_snapshots
-from capstone.storage import fetch_latest_snapshots, open_db, close_db
-from sample_project import create_sample_zip
-from capstone.insight_store import InsightStore
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from capstone.consent import ExternalPermissionDenied, grant_consent, ensure_external_permission  # noqa: E402
+from capstone.config import reset_config  # noqa: E402
+from capstone.cli import main  # noqa: E402
+from capstone.project_ranking import rank_projects_from_snapshots  # noqa: E402
+from capstone.storage import fetch_latest_snapshots, open_db, close_db  # noqa: E402
+from sample_project import create_sample_zip  # noqa: E402
+from capstone.insight_store import InsightStore  # noqa: E402
 
 
 def test_invalid_input_returns_json_error(capsys, tmp_path):
@@ -98,8 +103,12 @@ def test_safe_delete_roundtrip():
     assert res["ok"] and res["deleted"]
     restored = store.restore(root, who="tester")
     assert restored["ok"]
-    purged = store.purge(root, who="tester")
-    assert purged["ok"]
+    # remove dependency to allow purge
+    store._conn.execute("DELETE FROM deps WHERE from_insight=?", (child,))
+    store._conn.commit()
+    purged_child = store.purge(child, who="tester")
+    purged_root = store.purge(root, who="tester")
+    assert purged_child["ok"] and purged_root["ok"]
     store.close()
 
 
