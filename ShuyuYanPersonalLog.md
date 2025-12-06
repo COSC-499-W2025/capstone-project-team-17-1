@@ -233,7 +233,7 @@ In addition, I assigned tasks to team members, created new tasks to support work
 Overall, this week strengthened the clarity of our project narrative, improved the technical accuracy of our documentation and architecture, and ensured that our demo reliably reflects the full capabilities of the system for Milestone #1.
 
 ### Completed Tasks Week 14
--'Enhance demo' #110
--team contract
--DFD and system architecture diagrams
--demo video
+- 'Enhance demo' #110
+- team contract
+- DFD and system architecture diagrams
+- demo video
