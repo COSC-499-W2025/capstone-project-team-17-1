@@ -298,6 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # top-project summary (exports markdown/readme)
+    # Generate top project summary exports.
     top_parser = subparsers.add_parser(
         "top-summary",
         help="Generate top project summary exports",
@@ -327,6 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # timelines
+    # Export chronological list of projects to CSV.
     pt_parser = subparsers.add_parser(
         "projects-timeline",
         help="Export chronological list of projects to CSV",
@@ -344,6 +346,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="CSV output path",
     )
 
+    # Export chronological list of skills to CSV.
     st_parser = subparsers.add_parser(
         "skills-timeline",
         help="Export chronological list of skills to CSV",
@@ -373,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # insight demo (create, link, dry-run, soft-delete)
+    # Create sample insights, wire dependencies, and run safe-delete demo.
     demo_parser = subparsers.add_parser(
         "insight-demo",
         help="Create sample insights, run dry-run and soft-delete, output summary",
@@ -497,6 +501,7 @@ def _handle_top_summary(args: argparse.Namespace) -> int:
             return 1
         ranking = next((r for r in rankings if r.project_id == target_id), None)
         template = create_summary_template(target_id, snapshot, ranking)
+        # Keep evidence explicit to ground the summary; no LLM used.
         evidence = [
             EvidenceItem(kind="metric", reference="analysis:file_count", detail=f"{snapshot.get('file_summary', {}).get('file_count', 0)} files", source="analysis"),
             EvidenceItem(kind="collaboration", reference="collaboration:contributors", detail="contributors weighted", source="analysis"),
@@ -555,6 +560,7 @@ def _handle_insight_demo(args: argparse.Namespace) -> int:
         db_path.unlink()
     store = InsightStore(str(db_path))
     try:
+        # Create two insights and link b -> a to exercise dependency and delete flow.
         a = store.create_insight(args.title_a, args.owner_a)
         b = store.create_insight(args.title_b, args.owner_b)
         store.add_dep_on_insight(b, a)

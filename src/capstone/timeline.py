@@ -53,6 +53,7 @@ def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
             or fs.get("latest_modification")
             or ""
         )
+        # Mark undated rows so consumers can bucket them separately.
         undated_reason = None
         if not first_seen or not last_seen:
             undated_reason = "missing_modification_dates"
