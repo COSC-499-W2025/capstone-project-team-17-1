@@ -348,6 +348,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory where capstone.db is stored",
     )
 
+    # skill summary (thin wrapper to inspect skills/timeline for a project)
+    skill_summary_parser = subparsers.add_parser(
+        "skill-summary",
+        help="Show skill summary (skills and timeline) for a project",
+    )
+    skill_summary_parser.add_argument("--project-id", required=True, help="Project id to inspect")
+    skill_summary_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+
     # top-project summary (exports markdown/readme)
     # Generate top project summary exports.
     top_parser = subparsers.add_parser(
@@ -564,6 +577,25 @@ def _handle_tech_summary(args: argparse.Namespace) -> int:
             "projectId": args.project_id,
             "languages": snapshot.get("languages", {}),
             "frameworks": snapshot.get("frameworks", []),
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+    finally:
+        close_db()
+
+
+def _handle_skill_summary(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        snapshot = fetch_latest_snapshot(conn, args.project_id)
+        if not snapshot:
+            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
+            return 0
+        payload = {
+            "projectId": args.project_id,
+            "skills": snapshot.get("skills", []),
+            "skillTimeline": (snapshot.get("skill_timeline") or {}).get("skills", []),
+            "topSkillsByYear": snapshot.get("top_skills_by_year", {}),
         }
         print(json.dumps(payload, indent=2))
         return 0
@@ -957,6 +989,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_collab_summary(args)
     if args.command == "tech-summary":
         return _handle_tech_summary(args)
+    if args.command == "skill-summary":
+        return _handle_skill_summary(args)
     if args.command == "top-summary":
         return _handle_top_summary(args)
     if args.command == "projects-timeline":
