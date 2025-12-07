@@ -322,6 +322,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional primary contributor filter",
     )
 
+    # collaboration summary (thin wrapper to inspect latest collab state)
+    collab_summary_parser = subparsers.add_parser(
+        "collab-summary",
+        help="Show collaboration summary (classification and contributors) for a project",
+    )
+    collab_summary_parser.add_argument("--project-id", required=True, help="Project id to inspect")
+    collab_summary_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+
     # top-project summary (exports markdown/readme)
     # Generate top project summary exports.
     top_parser = subparsers.add_parser(
@@ -503,6 +516,26 @@ def _handle_portfolio(args: argparse.Namespace) -> int:
 
         print("Unknown portfolio action", file=sys.stderr)
         return 1
+    finally:
+        close_db()
+
+
+def _handle_collab_summary(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        snapshot = fetch_latest_snapshot(conn, args.project_id)
+        if not snapshot:
+            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
+            return 0
+        collab = snapshot.get("collaboration") or {}
+        payload = {
+            "projectId": args.project_id,
+            "classification": collab.get("classification", "unknown"),
+            "primaryContributor": collab.get("primary_contributor"),
+            "contributors": collab.get("contributors", {}),
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
     finally:
         close_db()
 
@@ -889,6 +922,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_resume(args)
     if args.command == "portfolio":
         return _handle_portfolio(args)
+    if args.command == "collab-summary":
+        return _handle_collab_summary(args)
     if args.command == "top-summary":
         return _handle_top_summary(args)
     if args.command == "projects-timeline":

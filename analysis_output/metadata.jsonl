@@ -1,1 +1,7 @@
-{"id": "015fb302babc566ba13f8c42b7c75f2d", "path": "sample_project - Copy.py", "size": 3832, "compressed_size": 1234, "modified": "2025-11-19T10:29:44", "language": "Python", "activity": "code", "analysis_mode": "local"}
+{"id": "7fee61cc43ab53f9800f7ef8b1ded9ba", "path": "project/README.md", "size": 46, "compressed_size": 47, "modified": "2025-12-06T21:44:26", "language": "Markdown", "activity": "documentation", "analysis_mode": "local"}
+{"id": "2fd4557f68745aab996e33cc330faa9f", "path": "project/requirements.txt", "size": 26, "compressed_size": 28, "modified": "2025-12-06T21:44:26", "language": null, "activity": "documentation", "analysis_mode": "local"}
+{"id": "b1005a9e8628591999db5f6b7a5158d8", "path": "project/package.json", "size": 68, "compressed_size": 63, "modified": "2025-12-06T21:44:26", "language": "JSON", "activity": "other", "analysis_mode": "local"}
+{"id": "0915efb53ccc5d9bb4077c055d8bccce", "path": "project/src/app.py", "size": 25, "compressed_size": 27, "modified": "2025-12-06T21:44:26", "language": "Python", "activity": "code", "analysis_mode": "local"}
+{"id": "bcfd0c2cda485a5fa606b748a38c1ff9", "path": "project/src/routes.ts", "size": 25, "compressed_size": 27, "modified": "2025-12-06T21:44:26", "language": "TypeScript", "activity": "code", "analysis_mode": "local"}
+{"id": "e9d88ae8bef95c2783bc01c6b3dd59db", "path": "project/scripts/migrate.sql", "size": 31, "compressed_size": 33, "modified": "2025-12-06T21:44:26", "language": "SQL", "activity": "code", "analysis_mode": "local"}
+{"id": "b64adef0d9d35dbf9103e0427bb2fa19", "path": "project/.git/logs/HEAD", "size": 136, "compressed_size": 84, "modified": "2025-12-06T21:44:26", "language": null, "activity": "other", "analysis_mode": "local"}
