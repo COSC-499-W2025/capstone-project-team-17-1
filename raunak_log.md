@@ -11,6 +11,7 @@
 - [Week 10 Personal Log](#week-10-personal-log)
 - [Week 12 Personal Log](#week-12-personal-log)
 - [Week 13 Personal Log](#week-13-personal-log)
+- [Week 14 Personal Log](#week-14-personal-log)
 
 ---
 
@@ -485,4 +486,128 @@ This week I completed **Step 5: Integration with the Mining Pipeline**, which re
   python3 -m capstone.pipeline
 
 <img width="1077" height="619" alt="WEEK13PEEREVAL" src="https://github.com/user-attachments/assets/fac58d47-93e4-4f87-8a48-24fd26ae4cca" />
+
+### WEEK 14 PERSONAL LOG
+
+
+**Date:** 2025-12-07
+**Branch:** `feature/summarize-projects-cli`
+
+Today I implemented and wired up a new CLI subcommand called `summarize-projects` in the Capstone analyzer.
+
+**What I did**
+
+1. **Set up the branch**
+
+   * Created a new feature branch `feature/summarize-projects-cli` before touching anything.
+   * Verified `git status` was clean to avoid mixing old changes.
+
+2. **Extended the CLI**
+
+   * Opened `src/capstone/cli.py`.
+   * Added a new subcommand `summarize-projects` to the main `argparse` parser with flags:
+
+     * `--db-dir`
+     * `--user`
+     * `--limit`
+     * `--use-llm`
+     * `--format` (`markdown` | `json`)
+   * Hooked up a new handler `_handle_summarize_projects` that:
+
+     * Opens the DB with `open_db(args.db_dir)`.
+     * Uses `fetch_latest_snapshots` to collect the latest snapshot per project.
+     * Reuses `rank_projects_from_snapshots` to score and order projects.
+     * If `--use-llm` is set, builds an LLM via `build_default_llm()` and passes `llm` + `use_llm=True` into `generate_top_project_summaries`.
+     * Prints either:
+
+       * Markdown for each summary (via `export_markdown` / `.markdown`), or
+       * A JSON array of summary objects.
+     * Ensures `close_db()` is called in a `finally` block.
+   * Wired the new handler into `main()` with:
+
+     ```python
+     if args.command == "summarize-projects":
+         return _handle_summarize_projects(args)
+     ```
+
+3. **Dealt with the first breakage**
+
+   * First draft of the handler + tests didn’t line up (signature assumptions vs. real code).
+   * Adjusted the tests to be less opinionated about the internal structure:
+
+     * Focused only on:
+
+       * Whether `build_default_llm` is called (or not).
+       * Whether `generate_top_project_summaries` is invoked with the right `llm` and `use_llm` flags.
+       * Output being valid markdown-ish text or valid JSON.
+
+4. **Wrote tests for the new command**
+
+   * In `tests/test_cli.py`, inside `CLITestCase`, added:
+
+     * `test_summarize_projects_markdown_without_llm`
+
+       * Mocks `open_db`, `fetch_latest_snapshots`, `rank_projects_from_snapshots`, `generate_top_project_summaries`, and `export_markdown`.
+       * Asserts:
+
+         * Exit code is `0`.
+         * `build_default_llm` is **not** called.
+         * Output contains both mocked project titles.
+     * `test_summarize_projects_json_with_llm`
+
+       * Mocks the same DB + ranking pipeline plus `build_default_llm`.
+       * Asserts:
+
+         * Exit code is `0`.
+         * `build_default_llm` **is** called.
+         * `generate_top_project_summaries` gets `llm` and `use_llm=True`.
+         * Output parses as JSON and contains the expected `title` and `score`.
+
+5. **Got everything green**
+
+   * Ran the test suite for CLI:
+
+     ```bash
+     pytest tests/test_cli.py -k summarize
+     ```
+   * All tests passed after the adjustments.
+
+6. **Committed the work**
+
+   * Staged the modified files:
+
+     ```bash
+     git add src/capstone/cli.py tests/test_cli.py
+     ```
+   * Committed with message:
+
+     > Add summarize-projects CLI command and tests
+   * Pushed the branch:
+
+     ```bash
+     git push -u origin feature/summarize-projects-cli
+     ```
+
+7. **Prepared the PR**
+
+   * Drafted a PR titled **“Add `summarize-projects` CLI command and tests”**.
+   * Documented:
+
+     * What the new command does.
+     * How it reuses existing ranking + summary logic.
+     * Example usage for both markdown and JSON output.
+     * The tests that cover LLM vs non-LLM flows.
+
+---
+
+**Overall feeling**
+
+This change is pretty neat because it turns all the ranking and summary plumbing we already had into a single, user-facing CLI entry point. TAs / users can now just run one command and immediately see top project summaries, with the option to flip on LLM polishing when available. The tests give a decent safety net around DB usage, ranking, and LLM wiring, so future refactors shouldn’t break this silently.
+
+Additionally,
+
+I worked on the WBS 5-8 for the Demo video and helped in curating the overall presentation for this week. 
+
+
+<img width="1470" height="956" alt="WEEK14PEEREVAL" src="https://github.com/user-attachments/assets/fb2edcb1-c68f-407e-8cc4-c50ff9af4673" />
 
