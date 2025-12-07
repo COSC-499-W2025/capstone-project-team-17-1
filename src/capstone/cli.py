@@ -5,6 +5,8 @@ import json
 import shutil
 import sys
 from pathlib import Path
+
+from capstone.llm_client import build_default_llm
 from .insight_store import InsightStore
 from .config import load_config, reset_config
 from .consent import (
@@ -39,6 +41,7 @@ from .top_project_summaries import (
     EvidenceItem,
     export_markdown,
     export_readme_snippet,
+    generate_top_project_summaries
 )
 
 logger = get_logger(__name__)
@@ -190,6 +193,41 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum number of projects to display",
     )
+        # summarize-projects (Step 2 – CLI wrapper around top project summaries)
+    summarize_parser = subparsers.add_parser(
+        "summarize-projects",
+        help="Summarize top ranked projects for a user",
+    )
+    summarize_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    summarize_parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Contributor name/email to personalize ranking (defaults to primary contributor)",
+    )
+    summarize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of projects to summarize",
+    )
+    summarize_parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="Use the default LLM to polish summaries",
+    )
+    summarize_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format",
+    )
+
     job_parser = subparsers.add_parser(
         "job-match",
         help="Compare a job description with a project and print a resume snippet",
@@ -936,6 +974,79 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
     finally:
         close_db()
 
+def _handle_summarize_projects(args: argparse.Namespace) -> int:
+    """Summarize top ranked projects, optionally using an LLM."""
+    conn = open_db(args.db_dir)
+    try:
+        # 1. Load latest snapshots
+        raw_snapshots = fetch_latest_snapshots(conn)
+        snapshot_map: dict[str, dict] = {}
+        for row in raw_snapshots:
+            pid = row.get("project_id")
+            snap = row.get("snapshot")
+            if not pid or not isinstance(snap, dict):
+                continue
+            snapshot_map[pid] = snap
+
+        if not snapshot_map:
+            print("No project analyses available for summary.")
+            return 0
+
+        # 2. Rank projects (reuse existing ranking flow)
+        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
+        if not rankings:
+            print("No ranked projects available for summary.")
+            return 0
+
+        if args.limit is not None and args.limit >= 0:
+            rankings = rankings[: args.limit]
+
+        # 3. Optional LLM
+        llm = None
+        use_llm = bool(args.use_llm)
+        if use_llm:
+            llm = build_default_llm()
+
+        # 4. Generate summaries via helper
+        summaries = generate_top_project_summaries(
+            snapshots=snapshot_map,
+            rankings=rankings,
+            limit=args.limit,
+            llm=llm,
+            use_llm=use_llm,
+        )
+
+        # 5. Print in requested format
+        if args.format == "json":
+            def to_jsonable(s):
+                if isinstance(s, dict):
+                    return s
+                if hasattr(s, "model_dump"):
+                    return s.model_dump()
+                if hasattr(s, "__dict__"):
+                    return s.__dict__
+                return {"value": str(s)}
+
+            payload = [to_jsonable(s) for s in summaries]
+            print(json.dumps(payload, indent=2))
+        else:
+            # markdown: join each summary's markdown
+            parts = []
+            for s in summaries:
+                try:
+                    # if generate_top_project_summaries returns the same summary
+                    # objects used by export_markdown, use that for nice output
+                    parts.append(export_markdown(s))
+                except Exception:
+                    md = getattr(s, "markdown", None) or str(s)
+                    parts.append(md)
+            print("\n\n".join(parts))
+
+        return 0
+    finally:
+        close_db()
+
+
 
 def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -> None:
     print(f"Analysis mode: {summary['resolved_mode']}")
@@ -1012,6 +1123,13 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_clean(args)
     if args.command == "rank-projects":
         return _handle_rank_projects(args)
+    if args.command == "rank-projects":
+        return _handle_rank_projects(args)
+    if args.command == "summarize-projects":
+        return _handle_summarize_projects(args)
+    if args.command == "job-match":
+        return _handle_job_match(args)
+
     if args.command == "job-match":
         return _handle_job_match(args)
     if args.command == "resume":
