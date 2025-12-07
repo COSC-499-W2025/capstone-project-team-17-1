@@ -55,11 +55,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     # consent
     consent_parser = subparsers.add_parser("consent", help="Manage user consent")
-    consent_sub = consent_parser.add_subparsers(dest="consent_action", required=True)
+    consent_sub = consent_parser.add_subparsers(dest="consent_scope", required=True)
 
-    grant_parser = consent_sub.add_parser(
-        "grant", help="Grant consent for local/external processing"
-    )
+    # ─── General (local) consent ────────────────────────────────────────────────
+    general_parser = consent_sub.add_parser("local", help="Manage local analysis consent")
+    general_sub = general_parser.add_subparsers(dest="consent_action", required=True)
+
+    grant_parser = general_sub.add_parser("grant", help="Grant local consent")
     grant_parser.add_argument(
         "--decision",
         choices=["allow", "allow_once", "allow_always"],
@@ -67,14 +69,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Consent decision to record",
     )
 
-    revoke_parser = consent_sub.add_parser("revoke", help="Revoke consent")
+    revoke_parser = general_sub.add_parser("revoke", help="Revoke local consent")
     revoke_parser.add_argument(
         "--decision",
         choices=["deny", "deny_once", "deny_always"],
         default="deny",
         help="Revocation detail",
     )
-    consent_sub.add_parser("status", help="Show current consent state")
+
+    general_sub.add_parser("status", help="Show current local consent state")
+
+    # ─── External consent ───────────────────────────────────────────────────────
+    external_parser = consent_sub.add_parser("external", help="Manage external analysis consent")
+    external_sub = external_parser.add_subparsers(dest="consent_action", required=True)
+
+    external_grant = external_sub.add_parser("grant", help="Grant external analysis consent")
+    external_grant.add_argument(
+        "--decision",
+        choices=["allow", "allow_once", "allow_always"],
+        default="allow",
+        help="External consent decision to record",
+    )
+
+    external_revoke = external_sub.add_parser("revoke", help="Revoke external analysis consent")
+    external_revoke.add_argument(
+        "--decision",
+        choices=["deny", "deny_once", "deny_always"],
+        default="deny",
+        help="Revocation detail for external consent",
+    )
+
+    external_sub.add_parser("status", help="Show current external consent state")
 
     # config
     config_parser = subparsers.add_parser("config", help="Manage configuration")
@@ -584,22 +609,63 @@ def _handle_insight_demo(args: argparse.Namespace) -> int:
 
 
 def _handle_consent(args: argparse.Namespace) -> int:
-    if args.consent_action == "grant":
-        config = grant_consent(decision=args.decision)
-        logger.info("Consent granted: %s", config.consent)
-        print("Consent granted.")
-        return 0
-    if args.consent_action == "revoke":
-        config = revoke_consent(decision=args.decision)
-        logger.info("Consent revoked: %s", config.consent)
-        print("Consent revoked.")
-        return 0
-    if args.consent_action == "status":
-        state = export_consent()
-        print(json.dumps(state, indent=2))
-        return 0
+    # ---------------------------
+    # LOCAL CONSENT (existing)
+    # ---------------------------
+    if args.consent_scope == "local":
+        if args.consent_action == "grant":
+            config = grant_consent(decision=args.decision)
+            logger.info("Local consent granted: %s", config.consent)
+            print("Local consent granted.")
+            return 0
+
+        if args.consent_action == "revoke":
+            config = revoke_consent(decision=args.decision)
+            logger.info("Local consent revoked: %s", config.consent)
+            print("Local consent revoked.")
+            return 0
+
+        if args.consent_action == "status":
+            state = export_consent()
+            print(json.dumps(state, indent=2))
+            return 0
+
+    # ---------------------------
+    # EXTERNAL CONSENT (new)
+    # ---------------------------
+    if args.consent_scope == "external":
+        from capstone.consent import (
+            grant_external_consent,
+            revoke_external_consent,
+            show_external_consent_status,
+        )
+
+        if args.consent_action == "grant":
+            grant_external_consent(decision=args.decision)
+            logger.info("External consent granted (%s)", args.decision)
+            return 0
+
+        if args.consent_action == "revoke":
+            revoke_external_consent(decision=args.decision)
+            logger.info("External consent revoked (%s)", args.decision)
+            return 0
+
+        if args.consent_action == "status":
+            show_external_consent_status()
+            return 0
+
     print("Unknown consent action", file=sys.stderr)
     return 1
+
+def _handle_preview(args: argparse.Namespace) -> int:
+    from capstone.sample_preview import run_preview  # we will create this file
+
+    try:
+        run_preview(zip_path=args.zip_path)
+        return 0
+    except Exception as exc:
+        print(f"Preview failed: {exc}", file=sys.stderr)
+        return 1
 
 
 def _handle_config(args: argparse.Namespace) -> int:
@@ -807,6 +873,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "consent":
         return _handle_consent(args)
+    elif args.command == "preview":
+        return _handle_preview(args)
     if args.command == "config":
         return _handle_config(args)
     if args.command == "analyze":
