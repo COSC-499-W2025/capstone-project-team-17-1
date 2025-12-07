@@ -29,7 +29,17 @@ from .resume_retrieval import (
     query_resume_entries,
     ensure_resume_schema,
 )
-from pathlib import Path
+from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
+from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
+from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
+from .timeline import write_projects_timeline, write_skills_timeline
+from .top_project_summaries import (
+    create_summary_template,
+    AutoWriter,
+    EvidenceItem,
+    export_markdown,
+    export_readme_snippet,
+)
 
 logger = get_logger(__name__)
 
@@ -240,6 +250,142 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include entries flagged as outdated or expired",
     )
 
+    # portfolio retrieval
+    portfolio_parser = subparsers.add_parser(
+        "portfolio",
+        help="Retrieve stored portfolio snapshots",
+    )
+    portfolio_sub = portfolio_parser.add_subparsers(dest="portfolio_action", required=True)
+
+    portfolio_latest = portfolio_sub.add_parser(
+        "latest", help="Fetch the latest snapshot for a project"
+    )
+    portfolio_latest.add_argument("--project-id", required=True, help="Project id to fetch")
+    portfolio_latest.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+
+    portfolio_list = portfolio_sub.add_parser(
+        "list", help="List snapshots for a project (paginated)"
+    )
+    portfolio_list.add_argument("--project-id", required=True, help="Project id to list")
+    portfolio_list.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    portfolio_list.add_argument("--page", type=int, default=1, help="Page number (1-indexed)")
+    portfolio_list.add_argument("--page-size", type=int, default=20, help="Page size (max 200)")
+    portfolio_list.add_argument(
+        "--sort",
+        type=str,
+        default="created_at:desc",
+        help="Sort field and direction, e.g. created_at:desc or classification:asc",
+    )
+    portfolio_list.add_argument(
+        "--classification",
+        type=str,
+        help="Optional classification filter (e.g., collaborative/individual)",
+    )
+    portfolio_list.add_argument(
+        "--primary-contributor",
+        type=str,
+        help="Optional primary contributor filter",
+    )
+
+    # top-project summary (exports markdown/readme)
+    top_parser = subparsers.add_parser(
+        "top-summary",
+        help="Generate top project summary exports",
+    )
+    top_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    top_parser.add_argument(
+        "--project-id",
+        type=str,
+        help="Optional project id; defaults to top-ranked project",
+    )
+    top_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("analysis_output"),
+        help="Directory to write summary exports",
+    )
+    top_parser.add_argument(
+        "--pdf-output",
+        type=Path,
+        default=None,
+        help="Optional PDF one-pager path (writes markdown content with .pdf extension)",
+    )
+
+    # timelines
+    pt_parser = subparsers.add_parser(
+        "projects-timeline",
+        help="Export chronological list of projects to CSV",
+    )
+    pt_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    pt_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("analysis_output/projects_timeline.csv"),
+        help="CSV output path",
+    )
+
+    st_parser = subparsers.add_parser(
+        "skills-timeline",
+        help="Export chronological list of skills to CSV",
+    )
+    st_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    st_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("analysis_output/skills_timeline.csv"),
+        help="CSV output path",
+    )
+
+    # insight safe-delete dry-run
+    idr_parser = subparsers.add_parser(
+        "insight-dry-run",
+        help="Dry-run safe delete for an insight id",
+    )
+    idr_parser.add_argument("--db", default="analysis_output/insights_demo.db", help="Path to insight DB")
+    idr_parser.add_argument("--id", required=True, help="Insight id to delete")
+    idr_parser.add_argument(
+        "--strategy", choices=["block", "cascade"], default="block", help="Deletion strategy"
+    )
+
+    # insight demo (create, link, dry-run, soft-delete)
+    demo_parser = subparsers.add_parser(
+        "insight-demo",
+        help="Create sample insights, run dry-run and soft-delete, output summary",
+    )
+    demo_parser.add_argument("--db", default="analysis_output/insights_cli.db", help="Path to insight DB")
+    demo_parser.add_argument("--reset-db", action="store_true", help="Delete existing DB before running")
+    demo_parser.add_argument("--title-a", default="Perf", help="Title for insight A")
+    demo_parser.add_argument("--owner-a", default="alice", help="Owner for insight A")
+    demo_parser.add_argument("--title-b", default="Root cause", help="Title for insight B")
+    demo_parser.add_argument("--owner-b", default="bob", help="Owner for insight B")
+    demo_parser.add_argument("--dry-strategy", choices=["block", "cascade"], default="block")
+    demo_parser.add_argument("--soft-strategy", choices=["block", "cascade"], default="cascade")
+
     return parser
 
 
@@ -291,6 +437,144 @@ def _handle_resume(args: argparse.Namespace) -> int:
         return 0
     finally:
         close_db()
+
+def _handle_portfolio(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        ensure_portfolio_indexes(conn)
+        if args.portfolio_action == "latest":
+            data = get_portfolio_latest(conn, args.project_id)
+            if data is None:
+                print(json.dumps({"error": "NotFound", "detail": "No snapshots found"}, indent=2))
+                return 0
+            print(json.dumps({"data": data, "projectId": args.project_id}, indent=2))
+            return 0
+
+        if args.portfolio_action == "list":
+            sort_field, _, sort_dir = (args.sort or "created_at:desc").partition(":")
+            items, total = list_portfolio_snapshots(
+                conn,
+                project_id=args.project_id,
+                page=args.page,
+                page_size=args.page_size,
+                sort_field=sort_field or "created_at",
+                sort_dir=sort_dir or "desc",
+                classification=args.classification,
+                primary_contributor=args.primary_contributor,
+            )
+            payload = {
+                "total": total,
+                "page": args.page,
+                "pageSize": args.page_size,
+                "data": [s.snapshot for s in items],
+                "projectId": args.project_id,
+            }
+            print(json.dumps(payload, indent=2))
+            return 0
+
+        print("Unknown portfolio action", file=sys.stderr)
+        return 1
+    finally:
+        close_db()
+
+
+def _handle_top_summary(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        raw = fetch_latest_snapshots(conn)
+        snapshots = {row["project_id"]: row["snapshot"] for row in raw if row.get("project_id") and isinstance(row.get("snapshot"), dict)}
+        if not snapshots:
+            print("No project analyses available for summary.")
+            return 0
+        rankings = rank_projects_from_snapshots(snapshots)
+        target_id = args.project_id or (rankings[0].project_id if rankings else None)
+        if not target_id:
+            print("No project available for summary.")
+            return 0
+        snapshot = snapshots.get(target_id)
+        if not snapshot:
+            print(f"Project '{target_id}' not found in snapshots.")
+            return 1
+        ranking = next((r for r in rankings if r.project_id == target_id), None)
+        template = create_summary_template(target_id, snapshot, ranking)
+        evidence = [
+            EvidenceItem(kind="metric", reference="analysis:file_count", detail=f"{snapshot.get('file_summary', {}).get('file_count', 0)} files", source="analysis"),
+            EvidenceItem(kind="collaboration", reference="collaboration:contributors", detail="contributors weighted", source="analysis"),
+            EvidenceItem(kind="languages", reference="languages", detail=", ".join(snapshot.get("languages", {}).keys()), source="analysis"),
+        ]
+        summary = AutoWriter().compose(template, evidence, snapshot, ranking, rank_position=1, use_llm=False)
+        out_dir = args.output_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        md_path = out_dir / "top_project.md"
+        readme_path = out_dir / "top_project_README.md"
+        md_path.write_text(export_markdown(summary), encoding="utf-8")
+        readme_path.write_text(export_readme_snippet(summary), encoding="utf-8")
+        pdf_path = args.pdf_output or (out_dir / "top_project.pdf")
+        pdf_path.write_bytes(export_markdown(summary).encode("utf-8"))
+        payload = {
+            "top_project": summary.title,
+            "markdown": str(md_path),
+            "readme": str(readme_path),
+            "pdf": str(pdf_path),
+            "evidence": [e.__dict__ for e in evidence],
+            "confidence": {"llm_used": False, "mode": "offline", "guardrails": "facts quoted with references in markdown/readme/pdf"},
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+    finally:
+        close_db()
+
+
+def _handle_projects_timeline(args: argparse.Namespace) -> int:
+    rows = write_projects_timeline(args.db_dir, args.output)
+    print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
+    return 0
+
+
+def _handle_skills_timeline(args: argparse.Namespace) -> int:
+    rows = write_skills_timeline(args.db_dir, args.output)
+    print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
+    return 0
+
+
+def _handle_insight_dry_run(args: argparse.Namespace) -> int:
+    store = InsightStore(args.db)
+    try:
+        result = store.dry_run_delete(args.id, strategy=args.strategy)
+        print(json.dumps(result, indent=2))
+        return 0
+    finally:
+        try:
+            store.close()
+        except Exception:
+            pass
+
+def _handle_insight_demo(args: argparse.Namespace) -> int:
+    db_path = Path(args.db)
+    if args.reset_db and db_path.exists():
+        db_path.unlink()
+    store = InsightStore(str(db_path))
+    try:
+        a = store.create_insight(args.title_a, args.owner_a)
+        b = store.create_insight(args.title_b, args.owner_b)
+        store.add_dep_on_insight(b, a)
+        result = {
+            "db": str(db_path),
+            "a": a,
+            "b": b,
+            "dependents": store.get_dependents(a),
+            "dry_run": store.dry_run_delete(a, strategy=args.dry_strategy),
+            "soft_delete": store.soft_delete(a, who="cli", strategy=args.soft_strategy),
+            "trash": store.list_trash(),
+            "audit": store.get_audit(a),
+        }
+        print(json.dumps(result, indent=2))
+        return 0
+    finally:
+        try:
+            store.close()
+        except Exception:
+            pass
 
 
 def _handle_consent(args: argparse.Namespace) -> int:
@@ -529,6 +813,18 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_job_match(args)
     if args.command == "resume":
         return _handle_resume(args)
+    if args.command == "portfolio":
+        return _handle_portfolio(args)
+    if args.command == "top-summary":
+        return _handle_top_summary(args)
+    if args.command == "projects-timeline":
+        return _handle_projects_timeline(args)
+    if args.command == "skills-timeline":
+        return _handle_skills_timeline(args)
+    if args.command == "insight-dry-run":
+        return _handle_insight_dry_run(args)
+    if args.command == "insight-demo":
+        return _handle_insight_demo(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")
