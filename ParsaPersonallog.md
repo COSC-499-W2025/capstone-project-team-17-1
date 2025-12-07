@@ -655,3 +655,63 @@ This week was one of the most productive and challenging ones so far. I had to c
 
 Next goals are to refine the resume layout, improve project bullet quality, and prepare the demo for Milestone #1.
 
+---
+
+## Week 14 Personal Log [Dec 1 – Dec 7, 2025]
+
+This week I focused on laying the foundation for deeper LLM powered analysis in our capstone tool, so that later we can ask questions like whether a project has problems, how code or documentation can be improved, and get focused summaries for specific user needs. I also spent a lot of time finishing our presentation, doing mock practice, and helping the team get the video demo ready for the deadline.
+
+**Peer Eval**  
+>
+> ![Week 14 — LLM Client and Demo Prep]
+> <img width="644" height="692" alt="image" src="https://github.com/user-attachments/assets/bba0333a-e2cb-4090-822b-d6f0ca19cf49" />
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### LLM client infrastructure for deeper insights
+
+This week I implemented the first step of bringing an external LLM into our pipeline in a safe and testable way.
+
+* Added a new `llm_client.py` module with an `OpenAILlmClient` class that wraps the OpenAI Responses API behind a simple `generate_summary(prompt)` method that matches what our `AutoWriter` expects.
+* Implemented a `build_default_llm()` factory that only returns a real client when the OpenAI library is installed and `OPENAI_API_KEY` is present, otherwise it returns `None` so the rest of the system can fall back to offline analysis.
+* Added a guarded import of `build_default_llm` in `top_project_summaries.py` so future steps can plug in LLM support without changing any existing behavior yet, which keeps the current ranking and summary logic stable.
+* Made sure the new client fails softly by logging and returning an empty string when configuration is missing or a call fails, instead of crashing the CLI.
+
+---
+
+### Dummy LLM client and tests
+
+To avoid burning credits while still wiring everything up, I added a dummy LLM implementation and tests for this new layer.
+
+* Implemented `DummyLlmClient`, which never touches the network and returns a short, predictable prefix plus a trimmed snippet of the prompt so we can test prompts, formatting, and flow without using the real API.
+* Created `tests/test_llm_client.py` using `unittest` to verify that the dummy client behaves as expected, that `build_default_llm()` returns `None` when there is no API key, and that `OpenAILlmClient` safely skips calls when misconfigured.
+* Ran the tests locally and confirmed that the new module imports cleanly both with and without `OPENAI_API_KEY` set, which is important for contributors who may not have API access.
+* Opened a pull request describing this as the first building block for LLM based project and document insights, and filled out the PR template with testing steps.
+
+---
+
+### Presentation finalization and mock practice
+
+In parallel with coding, I continued working with my team to polish our presentation for the capstone milestone.
+
+* Helped refine wording on the slides so the explanation of our steps fits within the time limit and is easier for classmates and instructors to follow.
+* Did mock practice runs with the team before the actual presentation day, focusing on transitions between speakers and timing so we stay within our allotted slot and do not rush the important parts.
+
+---
+
+### Video demo preparation and coordination
+
+We also needed to prepare our video demo that is due on Sunday, so I contributed to making sure that recording goes smoothly.
+
+* Worked with my teammates to plan the demo flow so it clearly shows analysis, ranking, resume generation.
+* Helped double check that the commands we plan to record run correctly on our machines, including database reads and CLI output, to avoid last minute technical issues during recording.
+* Coordinated responsibilities for who records, who narrates, and who reviews the final cut so that the demo looks coherent and professional.
+* Spent time running through the demo script to catch any rough edges before we record, especially around explaining technical details in simple language.
+
+---
+
+### Reflection
+
+This week felt like a bridge between what we already built and the next level of intelligence we want from our tool. Adding the LLM client and dummy client did not change any user facing behavior yet, but it gives us a clean and safe way to start asking smarter questions about projects, code, and documents without breaking the existing system. At the same time, polishing the slides, doing mock presentations, and getting ready for the video demo helped me see the whole project as a unified story rather than separate features. Next steps are to hook the LLM adapter into `generate_top_project_summaries`, design prompts that target specific user questions, and finish strong with our final presentation and demo.
