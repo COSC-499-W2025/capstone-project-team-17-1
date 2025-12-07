@@ -8,6 +8,11 @@ from typing import Iterable, List, Mapping, MutableMapping, Optional
 from .external_artifacts import fetch_snapshot_artifacts
 from .project_ranking import ProjectRanking, rank_projects_from_snapshots
 
+try:
+    from .llm_client import build_default_llm
+except Exception:  # pragma: no cover
+    build_default_llm = None  # type: ignore[assignment]
+
 
 @dataclass(frozen=True)
 class SummarySection:
