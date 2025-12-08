@@ -120,6 +120,30 @@ def create_sample_zip(base_dir: Path) -> Path:
     return zip_path
 
 
+# ------------------------ Pretty printing helpers ------------------------
+
+
+def _banner(title: str) -> None:
+    line = "=" * 60
+    print(line)
+    print(title)
+    print(line)
+
+
+def _section(title: str) -> None:
+    print("\n" + "-" * 60)
+    print(title)
+    print("-" * 60)
+
+
+def print_project_summary(summary: dict) -> None:
+    """
+    Demo-friendly CLI summary for the project analysis (summary.json content).
+    """
+    _banner("📦 Project Analysis — Local Analysis Mode")
+
+    archive = summary.get("archive", "-")
+    mode_label = summary.get("local_mode_label", summary.get("resolved_mode", "-"))
 def _print_project_summary(summary: dict) -> None:
     _banner("Project Analysis — Local Mode")
 
@@ -190,6 +214,7 @@ def _print_metrics(metrics: dict) -> None:
             print(f"  • {row.get('date', '-')} : {row.get('count', 0)} change(s)")
 
 
+# ------------------------ Main demo script ------------------------
 def _milestone_snapshot() -> None:
     _section("Milestone #1 Coverage Snapshot")
     standards = [

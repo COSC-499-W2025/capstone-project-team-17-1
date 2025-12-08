@@ -1,0 +1,193 @@
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from capstone.resume_generator import (
+    generate_tailored_resume,
+    resume_to_json,
+    resume_to_pdf,
+)
+
+
+class DummyMatch:
+    """
+    Simple stand-in for JobMatchResult used in tests.
+    """
+    def __init__(self, project_id, score,
+                 matched_required=None,
+                 matched_preferred=None,
+                 matched_keywords=None):
+        self.project_id = project_id
+        self.score = score
+        self.matched_required = matched_required or []
+        self.matched_preferred = matched_preferred or []
+        self.matched_keywords = matched_keywords or []
+
+
+class ResumeGeneratorTests(unittest.TestCase):
+    @patch("capstone.resume_generator.build_company_resume_lines")
+    @patch("capstone.resume_generator.build_company_profile")
+    def test_generate_tailored_resume_uses_top_matches_and_builds_skills(
+        self,
+        mock_build_company_profile,
+        mock_build_resume_lines,
+    ):
+        """
+        generate_tailored_resume should:
+          * call build_company_profile when company_profile is None,
+          * sort matches by score and respect max_projects,
+          * build skills from JD + company profile.
+        """
+        # Fake company profile returned from step 3
+        mock_build_company_profile.return_value = {
+            "company": "Amazon",
+            "source": "test-source",
+            "values": ["customer obsession"],
+            "work_style": ["fast paced"],
+            "traits": ["ownership"],
+            "preferred_skills_from_profile": ["aws"],
+        }
+
+        # JD profile from step 2
+        jd_profile = {
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["docker"],
+        }
+
+        # Three matches in unsorted order
+        matches = [
+            DummyMatch("ProjLow", 0.20, ["sql"], [], []),
+            DummyMatch("ProjHigh", 0.90, ["python"], ["docker"], ["cloud"]),
+            DummyMatch("ProjMid", 0.50, ["python"], [], []),
+        ]
+
+        # Bullets that align with matches (the helper under test only zips)
+        mock_build_resume_lines.return_value = [
+            "High project bullet",
+            "Mid project bullet",
+            "Low project bullet",
+        ]
+
+        resume = generate_tailored_resume(
+            company_name="Amazon",
+            jd_profile=jd_profile,
+            matches=matches,
+            max_projects=2,
+        )
+
+        # Company data comes from profile, not the raw name
+        self.assertEqual(resume.company, "Amazon")
+        mock_build_company_profile.assert_called_once_with("Amazon")
+
+        # Only top 2 by score should be kept, in descending order
+        self.assertEqual(len(resume.projects), 2)
+        self.assertEqual(resume.projects[0].project_id, "ProjHigh")
+        self.assertEqual(resume.projects[1].project_id, "ProjMid")
+        self.assertAlmostEqual(resume.projects[0].relevance_score, 0.90)
+
+        # Bullets attached properly
+        self.assertEqual(resume.projects[0].resume_bullet, "High project bullet")
+
+        # Skills should include union of JD and company skills
+        skill_names = {s.name for s in resume.skills}
+        self.assertIn("python", skill_names)
+        self.assertIn("sql", skill_names)
+        self.assertIn("docker", skill_names)
+        self.assertIn("aws", skill_names)
+
+        # Flags set correctly for at least one example
+        aws_skill = next(s for s in resume.skills if s.name == "aws")
+        self.assertFalse(aws_skill.in_required)
+        self.assertFalse(aws_skill.in_preferred)
+        self.assertTrue(aws_skill.in_company_profile)
+
+    @patch("capstone.resume_generator.build_company_resume_lines")
+    @patch("capstone.resume_generator.build_company_profile")
+    def test_resume_to_json_structure(
+        self,
+        mock_build_company_profile,
+        mock_build_resume_lines,
+    ):
+        """
+        resume_to_json should return a JSON-serialisable dict with expected keys.
+        """
+        mock_build_company_profile.return_value = {
+            "company": "TestCo",
+            "source": "test-source",
+            "values": [],
+            "work_style": [],
+            "traits": [],
+            "preferred_skills_from_profile": [],
+        }
+        mock_build_resume_lines.return_value = ["Bullet"]
+
+        jd_profile = {"required_skills": ["python"], "preferred_skills": []}
+        matches = [DummyMatch("ProjA", 1.0, ["python"], [], [])]
+
+        resume = generate_tailored_resume(
+            company_name="TestCo",
+            jd_profile=jd_profile,
+            matches=matches,
+            max_projects=1,
+        )
+
+        data = resume_to_json(resume)
+
+        # Basic shape
+        self.assertIsInstance(data, dict)
+        for key in ["company", "source", "generated_at", "skills", "projects"]:
+            self.assertIn(key, data)
+
+        # Nested structures are serialisable (list of dicts, not dataclasses)
+        self.assertIsInstance(data["skills"], list)
+        self.assertIsInstance(data["projects"], list)
+        if data["skills"]:
+            self.assertIsInstance(data["skills"][0], dict)
+        if data["projects"]:
+            self.assertIsInstance(data["projects"][0], dict)
+
+    @patch("capstone.resume_pdf_builder.build_pdf_with_pandoc")
+    def test_resume_to_pdf_uses_pandoc_builder(self, mock_build_pdf):
+        """
+        resume_to_pdf should delegate to build_pdf_with_pandoc and return its bytes.
+        """
+        # Fake resume dict → the actual content is not important here
+        jd_profile = {"required_skills": [], "preferred_skills": []}
+        matches = []
+        resume = generate_tailored_resume(
+            company_name="AnyCorp",
+            jd_profile=jd_profile,
+            matches=matches,
+            max_projects=0,
+            company_profile={
+                "company": "AnyCorp",
+                "source": "test-source",
+                "values": [],
+                "work_style": [],
+                "traits": [],
+                "preferred_skills_from_profile": [],
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "resume.pdf"
+            # Create a fake PDF file and have the builder return its path
+            fake_bytes = b"%PDF-FAKE%"
+            output_path.write_bytes(fake_bytes)
+            mock_build_pdf.return_value = output_path
+
+            result = resume_to_pdf(resume, output_path)
+
+        mock_build_pdf.assert_called_once()
+        self.assertEqual(result, fake_bytes)
+
+
+if __name__ == "__main__":
+    unittest.main()
