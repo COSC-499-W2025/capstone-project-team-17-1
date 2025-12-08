@@ -13,6 +13,7 @@
 - [Week 11 Personal Log](#week-11-personal-log)
 - [Week 12 Personal Log](#week-12-personal-log)
 - [Week 13 Personal Log](#week-13-personal-log)
+- [Week 14 Personal Log](#week-14-personal-log)
 
 
 ## Week 3 Personal Log
