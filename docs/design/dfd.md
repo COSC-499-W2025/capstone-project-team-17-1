@@ -2,6 +2,10 @@
 
 <img width="1229" height="754" alt="image" src="https://github.com/user-attachments/assets/ee6a44e8-8e9b-46e8-8527-83f5b632fe49" /><br/>
 
+# Updated DFD Level 1
+
+<img width="1134" height="569" alt="image" src="https://github.com/user-attachments/assets/4c2d9c6b-ff7a-452c-85e7-b1f4403be251" />
+
 
 The Level 1 DFD outlines how user-selected sources are processed to extract, analyze, and visualize digital artifacts.The process begins when a User selects sources, triggering the upload module to scan and detect files. These are processed by identifying file types, eliminating corrupt files, and extracting information. During this stage, the system will record an error log for any unreadable or corrupted files in the logs database for troubleshooting.
 
