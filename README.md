@@ -237,7 +237,7 @@ Functionally, the system lets a user pick sources, crawls and classifies artifac
 For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
 
 ## Team Contract
-
+https://docs.google.com/document/d/1Lw_CeWKMtIAGRbn4z4xmESP87En25rSU8GsUcTXPijQ/edit?usp=sharing
 ## Vision and Goals
 
 We strive to be a team that is respectful, reliable, and supportive.
