@@ -357,8 +357,7 @@ Overall, the week’s tests confirm correctness across schema, filters, previews
 (Dec1 - Dec7, 2025)
 
 ### Recap of Milestone Goal - Week 14
-
-In Week 14, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
+We integrated the new pipeline into the CLI, added the resume-generation command, and wired in the LLM client. We also enhanced the demo and documentation so the Milestone 1 workflow now runs end-to-end.
 
 ### Username and Student Name for Team 17
 
@@ -371,6 +370,13 @@ In Week 14, team members self-assigned issues based on the tasks assigned in the
 | Michelle Zhou | mltzhou |
 
 ### Completed Tasks Week 14
+<img width="1453" height="833" alt="TEAMLOG14WEEK" src="https://github.com/user-attachments/assets/d09752a0-1fda-4cc4-a3e0-ec15db9fc1d2" />
+
 ### Burnup chart Week 14
+<img width="1023" height="536" alt="TEAMLOGBURNUP14" src="https://github.com/user-attachments/assets/71ef7829-74f3-4265-b807-fc803ce6c9d0" />
+
 ### In Progress Tasks Week 14
+<img width="920" height="398" alt="LEFTOVERSTUFF" src="https://github.com/user-attachments/assets/a45043d6-5e97-4d0c-b819-d3a711e83370" />
+
 ### Test Report Week 14
+During week 14, the team validated the new end-to-end CLI pipeline and updated résumé/analysis commands with a mix of automated and manual tests. Pytest/unittest cases now cover CLI argument parsing, error handling for missing/invalid archives, and the integration of the pipeline into capstone.cli analyze (including JSON/CSV export checks). Manually, we ran python -m capstone.cli analyze demo.zip and the new résumé command on multiple demo archives to confirm that snapshots, logs, and LLM-generated summaries are produced correctly and the tool runs to completion without crashes.
