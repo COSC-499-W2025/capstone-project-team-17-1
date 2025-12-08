@@ -375,8 +375,9 @@ We integrated the new pipeline into the CLI, added the resume-generation command
 ### Burnup chart Week 14
 <img width="1023" height="536" alt="TEAMLOGBURNUP14" src="https://github.com/user-attachments/assets/71ef7829-74f3-4265-b807-fc803ce6c9d0" />
 
-### In Progress Tasks Week 14
-<img width="920" height="398" alt="LEFTOVERSTUFF" src="https://github.com/user-attachments/assets/a45043d6-5e97-4d0c-b819-d3a711e83370" />
+### In Progress Tasks Week 14 -- tasks for Milestone2
+<img width="1277" height="335" alt="Screenshot 2025-12-07 at 5 59 59 PM" src="https://github.com/user-attachments/assets/c3e4e52a-b520-4fbf-a1ac-5dca7e691ba9" />
+
 
 ### Test Report Week 14
 During week 14, the team validated the new end-to-end CLI pipeline and updated résumé/analysis commands with a mix of automated and manual tests. Pytest/unittest cases now cover CLI argument parsing, error handling for missing/invalid archives, and the integration of the pipeline into capstone.cli analyze (including JSON/CSV export checks). Manually, we ran python -m capstone.cli analyze demo.zip and the new résumé command on multiple demo archives to confirm that snapshots, logs, and LLM-generated summaries are produced correctly and the tool runs to completion without crashes.
