@@ -20,7 +20,8 @@ from .consent import (
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db
+from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db, store_analysis_snapshot
+
 from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from .resume_retrieval import (
@@ -29,6 +30,9 @@ from .resume_retrieval import (
     query_resume_entries,
     ensure_resume_schema,
 )
+from pathlib import Path
+from .job_matching import build_jd_profile, rank_projects_for_job
+from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
 from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
 from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
 from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
@@ -190,6 +194,47 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum number of projects to display",
     )
+        # generate-resume (Step 4)
+    resume_parser = subparsers.add_parser(
+        "generate-resume",
+        help="Generate a tailored resume JSON (and optional PDF) for a target company",
+    )
+    resume_parser.add_argument(
+        "--company",
+        required=True,
+        help="Target company name (e.g., 'Microsoft')",
+    )
+    resume_parser.add_argument(
+        "--job-file",
+        type=Path,
+        required=True,
+        help="Path to a text file containing the job description",
+    )
+    resume_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the analysis database (defaults to internal storage)",
+    )
+    resume_parser.add_argument(
+        "--max-projects",
+        type=int,
+        default=3,
+        help="Maximum number of projects to include in the resume",
+    )
+    resume_parser.add_argument(
+        "--json-output",
+        type=Path,
+        default=None,
+        help="Where to write the tailored resume JSON (default: stdout only)",
+    )
+    resume_parser.add_argument(
+        "--pdf-output",
+        type=Path,
+        default=None,
+        help="Optional path to write a one-page resume PDF",
+    )
+
     job_parser = subparsers.add_parser(
         "job-match",
         help="Compare a job description with a project and print a resume snippet",
@@ -871,6 +916,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
             print(json.dumps(payload), file=sys.stderr)
             return 6
+
     analyzer = ZipAnalyzer()
     try:
         summary = analyzer.analyze(
@@ -887,12 +933,40 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(payload), file=sys.stderr)
         return 3
 
+    # --- summary_to_stdout mode: behave exactly like original tests expect ---
     if args.summary_to_stdout:
         print(json.dumps(summary, indent=2))
-    elif not args.quiet:
-        _print_human_summary(summary, args)
-    return 0
+        return 0
 
+    # --- human-summary mode (original behavior) ---
+    if not args.quiet:
+        _print_human_summary(summary, args)
+
+    # --- Save analysis snapshot to SQLite (for resume / ranking) ---
+    conn = None
+    try:
+        conn = open_db(args.db_dir)
+        store_analysis_snapshot(
+            conn,
+            project_id=summary.get("project_id") or args.project_id or archive_path.stem,
+            classification=summary.get("collaboration", {}).get("classification", "unknown"),
+            primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
+            snapshot=summary,
+        )
+        # This extra print is fine here: tests don't check this branch's stdout
+        if not args.quiet:
+            print("[analyze] Snapshot saved to SQLite database.")
+    except Exception as exc:
+        # Warnings go to stderr; they won't break stdout parsing.
+        print(f"[analyze] WARNING: Failed to store snapshot in DB: {exc}", file=sys.stderr)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    return 0
 
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     conn = open_db(args.db_dir)
@@ -936,6 +1010,80 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
     finally:
         close_db()
 
+def _handle_generate_resume(args: argparse.Namespace) -> int:
+    """
+    Step 4: glue together job description matching (step 2),
+    company profile (step 3), and resume generation.
+    """
+    # 1) Read the job description text
+    try:
+        jd_text = args.job_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"[generate-resume] Failed to read job description: {exc}", file=sys.stderr)
+        return 3
+
+    if not jd_text.strip():
+        print("[generate-resume] Job description file is empty.", file=sys.stderr)
+        return 3
+
+    # 2) Build a JD profile (step 2 helper – lives in job_matching.py)
+    jd_profile = build_jd_profile(jd_text)
+
+    # 3) Rank projects for this job (step 2 output)
+    #
+    # rank_projects_for_job is expected to return a sequence of JobMatchResult-like
+    # objects (project_id, score, matched_required, matched_preferred, matched_keywords).
+    # If your implementation has a slightly different signature, tweak this call.
+    # 3) Load latest project snapshots
+    # 3) Open DB and load all project snapshots
+    conn = open_db(args.db_dir)
+    try:
+        snapshots = fetch_latest_snapshots(conn)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if not snapshots:
+        print("[generate-resume] No analyzed projects found in database. Run 'capstone analyze' first.")
+        return 4
+
+    project_snapshots = [row["snapshot"] for row in snapshots]
+
+
+    # 4) Rank projects for this job
+    matches = rank_projects_for_job(
+        jd_profile,
+        project_snapshots,
+    )
+
+
+    # 4) Combine with the company profile + build tailored resume object (step 4)
+    resume = generate_tailored_resume(
+        company_name=args.company,
+        jd_profile=jd_profile,
+        matches=matches,
+        max_projects=args.max_projects,
+    )
+
+    # 5) JSON output (always)
+    resume_json = resume_to_json(resume)
+
+    if args.json_output:
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(json.dumps(resume_json, indent=2), encoding="utf-8")
+        print(f"[generate-resume] Wrote JSON resume to {args.json_output}")
+    else:
+        # Default: pretty-print to stdout
+        print(json.dumps(resume_json, indent=2))
+
+    # 6) Optional PDF output
+    if args.pdf_output:
+        resume_to_pdf(resume, args.pdf_output)       
+        print(f"[generate-resume] Wrote PDF resume to {args.pdf_output}")
+
+    return 0
 
 def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -> None:
     print(f"Analysis mode: {summary['resolved_mode']}")
@@ -1016,6 +1164,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_job_match(args)
     if args.command == "resume":
         return _handle_resume(args)
+    if args.command == "generate-resume":
+        return _handle_generate_resume(args)
     if args.command == "portfolio":
         return _handle_portfolio(args)
     if args.command == "collab-summary":

@@ -547,7 +547,7 @@ def _build_simple_pdf(text: str) -> bytes:
 
     def add_object(body: str) -> int:
         offset = buffer.tell()
-        content = f"{len(objects)+1} 0 obj\n{body}\nendobj\n".encode("latin-1")
+        content = f"{len(objects)+1} 0 obj\n{body}\nendobj\n".encode("utf-8")
         buffer.write(content)
         objects.append(content)
         return offset
@@ -569,19 +569,19 @@ def _build_simple_pdf(text: str) -> bytes:
             stream_lines.append(f"({safe}) Tj")
     stream_lines.append("ET")
     stream_content = "\n".join(stream_lines) + "\n"
-    stream_bytes = stream_content.encode("latin-1")
+    stream_bytes = stream_content.encode("utf-8")
     offsets.append(add_object(f"<< /Length {len(stream_bytes)} >>\nstream\n{stream_content}endstream"))
 
     offsets.append(add_object("<< /Type /Font /Subtype /Type1 /Name /F1 /BaseFont /Helvetica >>"))
 
     xref_pos = buffer.tell()
-    buffer.write(f"xref\n0 {len(offsets)+1}\n".encode("latin-1"))
+    buffer.write(f"xref\n0 {len(offsets)+1}\n".encode("utf-8"))
     buffer.write(b"0000000000 65535 f \n")
     for offset in offsets:
-        buffer.write(f"{offset:010d} 00000 n \n".encode("latin-1"))
+        buffer.write(f"{offset:010d} 00000 n \n".encode("utf-8"))
 
-    buffer.write(f"trailer\n<< /Size {len(offsets)+1} /Root 1 0 R >>\n".encode("latin-1"))
-    buffer.write(f"startxref\n{xref_pos}\n%%EOF".encode("latin-1"))
+    buffer.write(f"trailer\n<< /Size {len(offsets)+1} /Root 1 0 R >>\n".encode("utf-8"))
+    buffer.write(f"startxref\n{xref_pos}\n%%EOF".encode("utf-8"))
     return buffer.getvalue()
 
 

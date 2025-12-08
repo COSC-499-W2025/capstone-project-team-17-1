@@ -108,6 +108,25 @@ def extract_job_skills(text: str) -> List[str]:
                 break
     return sorted(found)
 
+def build_jd_profile(jd_text: str) -> Dict[str, Any]:
+    """
+    Build a simple 'job description profile' from raw JD text.
+
+    Right now we just treat all detected skills as both required and preferred,
+    similar to build_company_profile() for company profiles.
+    """
+    from .job_matching import extract_job_skills  # or use it directly if already in scope
+
+    skills = extract_job_skills(jd_text)
+    # de-duplicate while preserving order
+    skills = list(dict.fromkeys(skills))
+
+    return {
+        "required_skills": skills,
+        "preferred_skills": skills,
+        "keywords": skills,
+    }
+
 
 def load_project_skills(project_id: str, db_dir: Path | None = None) -> List[Dict[str, Any]]:
     """

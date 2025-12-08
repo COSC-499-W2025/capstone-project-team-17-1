@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, List
 
+
 @dataclass
 class CompanyQuery:
     """
