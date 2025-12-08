@@ -1,0 +1,174 @@
+from __future__ import annotations
+
+import csv
+import json
+from pathlib import Path
+from typing import Iterable, Tuple, Dict, Any
+
+from .storage import open_db, fetch_latest_snapshots
+
+
+def _iter_snapshots(conn) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    """
+    Yield (project_id, snapshot_dict) using the storage API so we don't depend
+    on internal table names or uncommitted transactions.
+    """
+    rows = fetch_latest_snapshots(conn)
+    for rec in rows:
+        if isinstance(rec, dict):
+            pid = rec.get("project_id")
+            snap = rec.get("snapshot")
+        else:
+            pid = getattr(rec, "project_id", None)
+            snap = getattr(rec, "snapshot", None)
+        if pid is None or snap is None:
+            continue
+        if isinstance(snap, str):
+            try:
+                snap = json.loads(snap)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(snap, dict):
+            yield pid, snap
+
+
+def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
+    conn = open_db(db_dir)
+    rows: list[Dict[str, Any]] = []
+    for pid, snap in _iter_snapshots(conn):
+        fs = snap.get("file_summary", {}) or {}
+        langs = snap.get("languages", {}) or {}
+        frameworks = snap.get("frameworks", []) or []
+        collab = snap.get("collaboration", {}) or {}
+        # Prefer normalized keys, fall back to legacy ones.
+        first_seen = (
+            fs.get("first_modified")
+            or fs.get("earliest_modified")
+            or fs.get("earliest_modification")
+            or ""
+        )
+        last_seen = (
+            fs.get("last_modified")
+            or fs.get("latest_modified")
+            or fs.get("latest_modification")
+            or ""
+        )
+        # Mark undated rows so consumers can bucket them separately.
+        undated_reason = None
+        if not first_seen or not last_seen:
+            undated_reason = "missing_modification_dates"
+        rows.append({
+            "project_id": pid,
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "undated_reason": undated_reason or "",
+            "classification": collab.get("classification", "unknown"),
+            "primary_contributor": collab.get("primary_contributor") or "",
+            "languages": ",".join(sorted(langs.keys())),
+            "frameworks": ",".join(frameworks),
+            "total_files": fs.get("total_files") or fs.get("count") or "",
+            "total_bytes": fs.get("total_bytes") or fs.get("size_bytes") or "",
+        })
+    rows.sort(key=lambda r: (r["first_seen"], r["project_id"]))
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["project_id","first_seen","last_seen","undated_reason","classification","primary_contributor",
+                  "languages","frameworks","total_files","total_bytes"]
+    with out_csv.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        if rows:
+            writer.writerows(rows)
+    return len(rows)
+
+
+def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
+    conn = open_db(db_dir)
+    agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for _, snap in _iter_snapshots(conn):
+        skill_timeline = (snap.get("skill_timeline") or {}).get("skills")
+        if skill_timeline:
+            for s in skill_timeline:
+                skill = s.get("skill")
+                cat = s.get("category", "unspecified")
+                if not skill:
+                    continue
+                key = (skill, cat)
+                agg[key] = {
+                    "skill": skill,
+                    "category": cat,
+                    "first_seen": s.get("first_seen") or "",
+                    "last_seen": s.get("last_seen") or "",
+                    "total_weight": s.get("total_weight") or 0.0,
+                    "count": s.get("count") or s.get("total_weight") or 0,
+                    "year_counts": s.get("year_counts", {}),
+                    "quarter_counts": s.get("quarter_counts", {}),
+                    "intensity": s.get("intensity", 0.0),
+                }
+            continue
+
+        # Fallback path for older snapshots without skill_timeline
+        fs = snap.get("file_summary", {}) or {}
+        first = fs.get("first_modified") or fs.get("earliest_modified")
+        last  = fs.get("last_modified") or fs.get("latest_modified")
+        for s in snap.get("skills", []) or []:
+            skill = s.get("skill")
+            if not skill:
+                continue
+            cat = s.get("category", "unspecified")
+            try:
+                w = float(s.get("score", s.get("weight", 1.0)))
+            except (TypeError, ValueError):
+                w = 1.0
+            key = (skill, cat)
+            d = agg.setdefault(key, {
+                "skill": skill, "category": cat,
+                "first_seen": first or "", "last_seen": last or "",
+                "total_weight": 0.0, "count": 0,
+                "year_counts": {}, "quarter_counts": {}, "intensity": 0.0
+            })
+            if first:
+                d["first_seen"] = (min(filter(None, [d["first_seen"], first]))
+                                   if d["first_seen"] else first)
+            if last:
+                d["last_seen"] = (max(filter(None, [d["last_seen"], last]))
+                                  if d["last_seen"] else last)
+            d["total_weight"] += w
+            d["count"] += 1
+    rows = sorted(agg.values(), key=lambda r: (r["first_seen"], r["skill"]))
+    if rows:
+        max_weight = max(r.get("total_weight", 0.0) for r in rows) or 1.0
+        for r in rows:
+            if not r.get("intensity"):
+                r["intensity"] = (r.get("total_weight", 0.0) / max_weight) if max_weight else 0.0
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["skill","category","first_seen","last_seen","total_weight","count","intensity","year_counts","quarter_counts"]
+    with out_csv.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        if rows:
+            writer.writerows(rows)
+    return len(rows)
+
+
+def write_top_skills_by_year(db_dir: Path | None, out_json: Path, top_n: int = 5) -> int:
+    """
+    for each year, list the top N skills by weight
+    uses skill_timeline.year_counts if available.
+    """
+    conn = open_db(db_dir)
+    years: Dict[str, Dict[str, float]] = {}
+    for _, snap in _iter_snapshots(conn):
+        skill_timeline = (snap.get("skill_timeline") or {}).get("skills") or []
+        for s in skill_timeline:
+            skill = s.get("skill")
+            year_counts = s.get("year_counts") or {}
+            for year, weight in year_counts.items():
+                bucket = years.setdefault(year, {})
+                bucket[skill] = bucket.get(skill, 0.0) + float(weight or 0.0)
+    payload: Dict[str, list] = {}
+    for year, data in sorted(years.items()):
+        ranked = sorted(data.items(), key=lambda item: (-item[1], item[0]))
+        payload[year] = [{"skill": skill, "weight": weight} for skill, weight in ranked[: max(1, top_n)]]
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return len(payload)

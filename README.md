@@ -1,3 +1,48 @@
+# Capstone Analyzer (Python)
+
+Local, consent-aware archive analysis implemented entirely in Python – no Electron dependencies required. Use the `capstone` CLI to manage consent preferences and to extract metadata, collaboration insights, languages, frameworks, and timeline metrics from zipped projects.
+
+## Quickstart
+
+```bash
+# (Optional) create and activate a virtual environment before running commands
+python -m venv .venv
+source .venv/bin/activate
+
+# Install the package in editable mode
+pip install -e .
+
+# Record consent for analysis
+capstone consent grant
+
+# Analyse an archive (results saved to analysis_output/ by default)
+capstone analyze /path/to/project.zip
+
+# Request external processing explicitly (default mode is local)
+capstone analyze /path/to/project.zip --analysis-mode external
+
+# Stream the summary JSON to the terminal
+capstone analyze /path/to/project.zip --summary-to-stdout
+
+# Inspect or reset stored preferences/consent
+capstone config show
+capstone config reset
+
+# Run the Python unit test suite (config, consent, CLI, metrics, etc.)
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Key features:
+- Encrypted local configuration that stores consent decisions, analysis preferences, and last-opened folders.
+- Consent workflow that blocks analysis until users explicitly grant permission.
+- JSONL metadata with per-file language classification and activity type (code, documentation, asset, other).
+- Collaboration labelling (individual vs collaborative) driven by Git log evidence found within the archive.
+- Automatic fallback to local analysis whenever external processing is unavailable or not approved.
+- Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
+- Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
+- Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
+- Git collaboration analysis now parses `git log --numstat` output, filters bots/shared accounts, weights commits/reviews/line changes, and stores JSON snapshots in a local SQLite db for future dashboards.
+
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)
 # Milestone #1

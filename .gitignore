@@ -1,0 +1,20 @@
+node_modules/
+dist/
+out/
+analysis_output/
+**/capstone.db
+log/
+!log/.gitkeep
+*.log
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+# SQLite
+*.db-journal
+__pycache__/
+*.py[cod]
+*.db-journal
+src/capstone_analyzer.egg-info/
+log/consent_decisions.jsonl
+/.venv
