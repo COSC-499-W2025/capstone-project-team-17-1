@@ -267,3 +267,44 @@ def ensure_external_permission(
         raise ExternalPermissionDenied(
             f"External request to '{service}' blocked. Update consent settings to continue."
         )
+
+
+def grant_external_consent(
+    service: str = "analysis",
+    decision: str = "allow_always"
+) -> None:
+    """Manually grant external consent via CLI (no prompts)."""
+    granted = decision in _ALLOW_DECISIONS
+    payload = {
+        "decision": decision,
+        "granted": granted,
+        "remember": True,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "purpose": "External analysis",
+        "destination": "External capstone processor",
+        "data": ["project metadata"],
+    }
+    _store_permission(service, payload)
+    print(f"✓ External consent granted ({decision}) for service '{service}'.")
+
+def revoke_external_consent(
+    service: str = "analysis",
+    decision: str = "deny_always"
+) -> None:
+    """Manually revoke stored external consent."""
+    clear_external_permission(service)
+    print(f"✗ External consent revoked for service '{service}'.")
+
+def show_external_consent_status(service: str = "analysis") -> None:
+    """Display current stored external permission state."""
+    perm = get_external_permission(service)
+    if not perm:
+        print(f"No external consent stored for service '{service}'.")
+        return
+    
+    print("External Consent Status:")
+    print(f"  Service:    {service}")
+    print(f"  Decision:   {perm.get('decision')}")
+    print(f"  Granted:    {perm.get('granted')}")
+    print(f"  Remember:   {perm.get('remember')}")
+    print(f"  Timestamp:  {perm.get('timestamp')}")
