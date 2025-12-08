@@ -6,7 +6,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 from capstone.job_matching import extract_job_skills
-from capstone.company_qualities import extract_company_qualities  # 👈 new import
+from capstone.company_qualities import extract_company_qualities 
 
 # softskills dictionary
 TRAIT_KEYWORDS: Dict[str, List[str]] = {
