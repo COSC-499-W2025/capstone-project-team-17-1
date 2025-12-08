@@ -202,6 +202,105 @@ class CLITestCase(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("Configuration reset", fake_out.getvalue())
 
+    # new tests
+    def test_summarize_projects_markdown_without_llm(self) -> None:
+        """summarize-projects: basic markdown output, no LLM."""
+        args = SimpleNamespace(
+            db_dir=Path(self._tmpdir.name) / "db",
+            user="alice",
+            limit=2,
+            use_llm=False,
+            format="markdown",
+        )
+
+        fake_conn = object()
+        fake_rows = [
+            {"project_id": "p1", "snapshot": {"languages": {"Python": 1}}},
+            {"project_id": "p2", "snapshot": {"languages": {"JavaScript": 1}}},
+        ]
+        fake_rankings = [
+            SimpleNamespace(project_id="p1", score=0.9),
+            SimpleNamespace(project_id="p2", score=0.8),
+        ]
+        # Summary objects that work whether you use export_markdown
+        # or access .markdown / .title directly.
+        fake_summaries = [
+            SimpleNamespace(title="Project One", markdown="# Summary for Project One"),
+            SimpleNamespace(title="Project Two", markdown="# Summary for Project Two"),
+        ]
+
+        with patch.object(cli, "open_db", return_value=fake_conn), \
+             patch.object(cli, "fetch_latest_snapshots", return_value=fake_rows), \
+             patch.object(cli, "rank_projects_from_snapshots", return_value=fake_rankings), \
+             patch.object(cli, "generate_top_project_summaries", return_value=fake_summaries) as gen_mock, \
+             patch.object(cli, "export_markdown", side_effect=lambda s: s.markdown), \
+             patch.object(cli, "build_default_llm") as build_llm_mock, \
+             patch.object(cli, "close_db") as close_db_mock, \
+             patch("sys.stdout", new_callable=io.StringIO) as fake_out:
+            exit_code = cli._handle_summarize_projects(args)
+
+        self.assertEqual(exit_code, 0)
+
+        # DB opened & closed
+        close_db_mock.assert_called_once()
+
+        # summaries generated
+        gen_mock.assert_called_once()
+
+        # LLM must NOT be built
+        build_llm_mock.assert_not_called()
+
+        out = fake_out.getvalue()
+        self.assertIn("Project One", out)
+        self.assertIn("Project Two", out)
+
+    def test_summarize_projects_json_with_llm(self) -> None:
+        """summarize-projects: JSON output and LLM path is exercised."""
+        args = SimpleNamespace(
+            db_dir=Path(self._tmpdir.name) / "db",
+            user=None,
+            limit=1,
+            use_llm=True,
+            format="json",
+        )
+
+        fake_conn = object()
+        fake_rows = [
+            {"project_id": "p1", "snapshot": {"languages": {"Python": 1}}},
+        ]
+        fake_rankings = [SimpleNamespace(project_id="p1", score=0.9)]
+        fake_llm = object()
+        fake_summary_dict = {"title": "Top Project", "score": 0.9}
+
+        with patch.object(cli, "open_db", return_value=fake_conn), \
+             patch.object(cli, "fetch_latest_snapshots", return_value=fake_rows), \
+             patch.object(cli, "rank_projects_from_snapshots", return_value=fake_rankings), \
+             patch.object(cli, "build_default_llm", return_value=fake_llm) as build_llm_mock, \
+             patch.object(cli, "generate_top_project_summaries", return_value=[fake_summary_dict]) as gen_mock, \
+             patch.object(cli, "close_db") as close_db_mock, \
+             patch("sys.stdout", new_callable=io.StringIO) as fake_out:
+            exit_code = cli._handle_summarize_projects(args)
+
+        self.assertEqual(exit_code, 0)
+
+        # LLM builder used
+        build_llm_mock.assert_called_once()
+
+        # generate_top_project_summaries sees llm + use_llm=True
+        _, gen_kwargs = gen_mock.call_args
+        self.assertTrue(gen_kwargs.get("use_llm"))
+        self.assertIs(gen_kwargs.get("llm"), fake_llm)
+
+        # DB closed
+        close_db_mock.assert_called_once()
+
+        # Output is valid JSON and contains the summary fields
+        out = fake_out.getvalue()
+        parsed = json.loads(out)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(parsed[0]["title"], "Top Project")
+        self.assertEqual(parsed[0]["score"], 0.9)
+
 
 if __name__ == "__main__":
     unittest.main()
