@@ -211,3 +211,29 @@ Overall, this week strengthened our résumé-related tooling and improved backen
 
 ### Completed Tasks Week 13
 'Retrieve Previously Generated Résumé Item'#101
+
+ ## WEEK 14 Personal LOG (Dec1 - Dec7, 2025)
+### 1. Type of Tasks Worked On
+<img width="1052" height="539" alt="Screenshot 2025-12-05 at 6 02 30 PM" src="https://github.com/user-attachments/assets/c4c471e9-a19d-40b8-af88-b8de4237686e" />
+
+### 2. Weekly Goals Recap
+- complete 'Enhance demo' #110
+- complete team contract
+- update DFD and system architecture diagrams
+- complete demo video
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the Enhance Demo task (#110), delivering an expanded and more coherent demo experience for Milestone #1. The updated demo surfaces all major WBS requirements in a single end-to-end flow, including improved consent handling, clearer logging, refined system outputs, and a more structured presentation of analysis results. These enhancements ensure that each subsystem appears visibly and consistently when running the demo, making it easier for both TAs and teammates to verify full-pipeline behavior.
+
+I also completed the team contract together with the team and finalized the DFD and system architecture diagrams, aligning them with the latest backend structure and ensuring they accurately reflect our updated workflows and module responsibilities. To support our Milestone submission, I recorded the demo video and discussed code details with teammates so the presentation remains internally consistent.
+
+In addition, I assigned tasks to team members, created new tasks to support workload distribution, and participated in several technical discussions. I reviewed PRs, provided integration feedback, and assisted with issues related to demo logic and system structure.
+
+Overall, this week strengthened the clarity of our project narrative, improved the technical accuracy of our documentation and architecture, and ensured that our demo reliably reflects the full capabilities of the system for Milestone #1.
+
+### Completed Tasks Week 14
+- 'Enhance demo' #110
+- team contract
+- DFD and system architecture diagrams
+- demo video
