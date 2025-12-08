@@ -40,10 +40,28 @@ def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
         langs = snap.get("languages", {}) or {}
         frameworks = snap.get("frameworks", []) or []
         collab = snap.get("collaboration", {}) or {}
+        # Prefer normalized keys, fall back to legacy ones.
+        first_seen = (
+            fs.get("first_modified")
+            or fs.get("earliest_modified")
+            or fs.get("earliest_modification")
+            or ""
+        )
+        last_seen = (
+            fs.get("last_modified")
+            or fs.get("latest_modified")
+            or fs.get("latest_modification")
+            or ""
+        )
+        # Mark undated rows so consumers can bucket them separately.
+        undated_reason = None
+        if not first_seen or not last_seen:
+            undated_reason = "missing_modification_dates"
         rows.append({
             "project_id": pid,
-            "first_seen": fs.get("first_modified") or fs.get("earliest_modified") or "",
-            "last_seen": fs.get("last_modified") or fs.get("latest_modified") or "",
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "undated_reason": undated_reason or "",
             "classification": collab.get("classification", "unknown"),
             "primary_contributor": collab.get("primary_contributor") or "",
             "languages": ",".join(sorted(langs.keys())),
@@ -53,7 +71,7 @@ def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
         })
     rows.sort(key=lambda r: (r["first_seen"], r["project_id"]))
     out_csv.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["project_id","first_seen","last_seen","classification","primary_contributor",
+    fieldnames = ["project_id","first_seen","last_seen","undated_reason","classification","primary_contributor",
                   "languages","frameworks","total_files","total_bytes"]
     with out_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)

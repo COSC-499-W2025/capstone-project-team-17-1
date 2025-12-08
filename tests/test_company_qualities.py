@@ -1,7 +1,14 @@
 import unittest
+import sys
+from pathlib import Path
+
+# adjust sys.path
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from capstone.company_qualities import extract_company_qualities
-
 
 class TestCompanyQualities(unittest.TestCase):
     def test_extract_values_and_style_and_keywords(self):
