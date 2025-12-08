@@ -1,3 +1,4 @@
+from __future__ import annotations
 def generate_resume_json(**kwargs):
     """
     Placeholder for Step 4.
@@ -8,7 +9,6 @@ def generate_resume_json(**kwargs):
         "received": list(kwargs.keys())
     }
 # capstone/resume_generator.py
-from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone

@@ -230,6 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["markdown", "json"],
         default="markdown",
         help="Output format",
+    )
         # generate-resume (Step 4)
     resume_parser = subparsers.add_parser(
         "generate-resume",

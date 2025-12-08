@@ -1,5 +1,5 @@
 {
-  "archive": "D:\\Desktop\\capstone-project-team-17-1\\demo.zip",
+  "archive": "C:\\Users\\chicken\\Desktop\\brain cells\\uni\\yr 4\\COSC499\\capstone-project-team-17-1\\demo.zip",
   "requested_mode": "local",
   "resolved_mode": "local",
   "mode_reason": "Local analysis enforced",
@@ -42,7 +42,7 @@
     "primary_contributor": "Alice"
   },
   "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.0028,
+  "scan_duration_seconds": 0.0041,
   "skills": [
     {
       "skill": "Express",
@@ -91,7 +91,7 @@
     }
   ],
   "skill_timeline": {
-    "generated_at": "2025-12-07T07:26:56.111547",
+    "generated_at": "2025-12-08T03:43:33.526078",
     "skills": [
       {
         "skill": "Markdown",
