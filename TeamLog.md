@@ -376,7 +376,7 @@ We integrated the new pipeline into the CLI, added the resume-generation command
 <img width="1023" height="536" alt="TEAMLOGBURNUP14" src="https://github.com/user-attachments/assets/71ef7829-74f3-4265-b807-fc803ce6c9d0" />
 
 ### In Progress Tasks Week 14 -- tasks for Milestone2
-<img width="1277" height="335" alt="Screenshot 2025-12-07 at 5 59 59 PM" src="https://github.com/user-attachments/assets/c3e4e52a-b520-4fbf-a1ac-5dca7e691ba9" />
+<img width="1272" height="302" alt="Screenshot 2025-12-07 at 6 05 14 PM" src="https://github.com/user-attachments/assets/6b99f0a7-4813-464b-b1c4-333ffecb6d57" />
 
 
 ### Test Report Week 14
