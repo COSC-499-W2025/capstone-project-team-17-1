@@ -183,3 +183,37 @@ Team Meetings
 - Finalize presentation slides + present
 - Final revision/refractor of code and update ReadMe for demo
 - Work on Milestone #1 video demo
+
+
+## Week 14 Personal Log
+
+- (Dec 1 - Dec 7, 2025)<br />
+
+<img width="968" height="568" alt="image" src="https://github.com/user-attachments/assets/70d54d06-27e6-48c4-a095-fb1fd3a2cf4f" />
+
+### Week Recap: 
+Worked closely with the team to finalize, deliver and wrap up all major components required for Milestone #1. This included delivering our presentation, completing the full video demo, and refining all associated documentation. We also continued integrating and refractoring our system so each feature is cleanly accessible through the terminal and connected smoothly through our cli.py file.
+
+Refractoring and Terminal-Based Feature Access
+- Refractored code so each feature can be manually executed via terminal
+    - Simplifies debugging and showcasing in video demo
+  - Standardized function interactions across modules
+  - Improved organization and readability to prepare for future development
+
+Feature Integration Through cli.py
+- Linked all primary features to a single CLI entrypoint
+- Ensured consistent command structure and user output formatting
+  
+System Architecture and DFD
+- Conducted team meetings to refine system architecture design and DFD based on new implementations/modifications
+- Delegated work to efficiently complete all remaining Milestone #1 objectives
+
+Milestone #1 Deliverables
+- Delivered team presentation
+- Finished Milestone #1 video demo
+- Refined and updated README
+- Updated all required documentation
+
+### Next Week:
+- Work on possible new features
+- Further refractoring and cleanup based on milestone feedback
