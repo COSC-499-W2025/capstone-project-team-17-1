@@ -12,6 +12,7 @@
 - [Week 10 [Nov 3 – Nov 9, 2025]](#week-10)
 - [Week 12 [Nov 17 – Nov 23, 2025]](#week-12)
 - [Week 13 [Nov 24 – Nov 30, 2025]](#week-13)
+- [Week 14 [Dec 1 – Dec 7, 2025]](#week-14)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -108,3 +109,12 @@ Last week, I refactored some database related parts of the system, but the colum
 <img width="1549" height="906" alt="a503080e56676a2cd653b71f8b47fbb8" src="https://github.com/user-attachments/assets/d993a031-f2a5-4209-8c47-f799094f1ba2" />
 
 [Back](#table-of-contents)
+
+## We ek 14
+[Dec 1 – Dec 7, 2025]
+This week, as the final week of Term 1 and the end of Milestone 1, I first made thorough preparations for our presentation and demo recording. I then did some final optimizations to our project and added simple commands for some features to make it easier for my teammates to present them. The project is in good shape now, and we’ll keep working hard next term and for the upcoming Milestone 2.
+
+<img width="1558" height="910" alt="55e9d0c3d05f48dc9c18d1025670ba2f" src="https://github.com/user-attachments/assets/29040154-6464-4653-8f1c-b5da3c7dffdc" />
+
+[Back](#table-of-contents)
+
