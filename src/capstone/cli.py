@@ -7,24 +7,34 @@ import sys
 from pathlib import Path
 
 from capstone.llm_client import build_default_llm
-from .insight_store import InsightStore
-from .config import load_config, reset_config
 from .consent import (
     ConsentError,
     ExternalPermissionDenied,
     ensure_consent,
     ensure_external_permission,
-    export_consent,
     grant_consent,
     prompt_for_consent,
     revoke_consent,
+    export_consent,
 )
+from .config import load_config, reset_config
+from .insight_store import InsightStore
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db, store_analysis_snapshot
-
-from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
+from .services import (
+    ArchiveAnalysisError,
+    ArchiveAnalyzerService,
+    ConfigService,
+    ConsentService,
+    RankingService,
+    SnapshotStore,
+    SnapshotSummaryService,
+    TimelineService,
+    TopSummaryService,
+)
+from .storage import close_db, fetch_latest_snapshots, open_db
+from .zip_analyzer import ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from .resume_retrieval import (
     build_resume_preview,
@@ -32,21 +42,12 @@ from .resume_retrieval import (
     query_resume_entries,
     ensure_resume_schema,
 )
-from pathlib import Path
 from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
 from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
 from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
 from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
-from .timeline import write_projects_timeline, write_skills_timeline
-from .top_project_summaries import (
-    create_summary_template,
-    AutoWriter,
-    EvidenceItem,
-    export_markdown,
-    export_readme_snippet,
-    generate_top_project_summaries
-)
+from .top_project_summaries import export_markdown, generate_top_project_summaries
 
 logger = get_logger(__name__)
 
@@ -562,7 +563,8 @@ def _handle_job_match(args: argparse.Namespace) -> int:
 
 
 def _handle_resume(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
     try:
         ensure_resume_schema(conn)
         result = query_resume_entries(
@@ -599,10 +601,15 @@ def _handle_resume(args: argparse.Namespace) -> int:
             print(data.decode("utf-8"))
         return 0
     finally:
-        close_db()
+        store.close()
+        try:
+            close_db()
+        except Exception:
+            pass
 
 def _handle_portfolio(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
     try:
         ensure_portfolio_indexes(conn)
         if args.portfolio_action == "latest":
@@ -638,142 +645,83 @@ def _handle_portfolio(args: argparse.Namespace) -> int:
         print("Unknown portfolio action", file=sys.stderr)
         return 1
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_collab_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        collab = snapshot.get("collaboration") or {}
-        payload = {
-            "projectId": args.project_id,
-            "classification": collab.get("classification", "unknown"),
-            "primaryContributor": collab.get("primary_contributor"),
-            "contributors": collab.get("contributors", {}),
-        }
+        payload = service.collab_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_tech_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        payload = {
-            "projectId": args.project_id,
-            "languages": snapshot.get("languages", {}),
-            "frameworks": snapshot.get("frameworks", []),
-        }
+        payload = service.tech_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_skill_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        payload = {
-            "projectId": args.project_id,
-            "skills": snapshot.get("skills", []),
-            "skillTimeline": (snapshot.get("skill_timeline") or {}).get("skills", []),
-            "topSkillsByYear": snapshot.get("top_skills_by_year", {}),
-        }
+        payload = service.skill_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_metrics_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        file_summary = snapshot.get("file_summary", {}) or {}
-        payload = {
-            "projectId": args.project_id,
-            "fileSummary": file_summary,
-            "activityBreakdown": file_summary.get("activity_breakdown", {}),
-            "timeline": file_summary.get("timeline", {}),
-        }
+        payload = service.metrics_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_top_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    g = globals()
+    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    service = TopSummaryService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
-        raw = fetch_latest_snapshots(conn)
-        snapshots = {row["project_id"]: row["snapshot"] for row in raw if row.get("project_id") and isinstance(row.get("snapshot"), dict)}
-        if not snapshots:
-            print("No project analyses available for summary.")
-            return 0
-        rankings = rank_projects_from_snapshots(snapshots)
-        target_id = args.project_id or (rankings[0].project_id if rankings else None)
-        if not target_id:
-            print("No project available for summary.")
-            return 0
-        snapshot = snapshots.get(target_id)
-        if not snapshot:
-            print(f"Project '{target_id}' not found in snapshots.")
+        payload = service.generate(
+            project_id=args.project_id,
+            output_dir=args.output_dir,
+            pdf_output=args.pdf_output,
+        )
+        if payload.get("error"):
+            print(json.dumps(payload, indent=2))
             return 1
-        ranking = next((r for r in rankings if r.project_id == target_id), None)
-        template = create_summary_template(target_id, snapshot, ranking)
-        # Keep evidence explicit to ground the summary; no LLM used.
-        evidence = [
-            EvidenceItem(kind="metric", reference="analysis:file_count", detail=f"{snapshot.get('file_summary', {}).get('file_count', 0)} files", source="analysis"),
-            EvidenceItem(kind="collaboration", reference="collaboration:contributors", detail="contributors weighted", source="analysis"),
-            EvidenceItem(kind="languages", reference="languages", detail=", ".join(snapshot.get("languages", {}).keys()), source="analysis"),
-        ]
-        summary = AutoWriter().compose(template, evidence, snapshot, ranking, rank_position=1, use_llm=False)
-        out_dir = args.output_dir
-        out_dir.mkdir(parents=True, exist_ok=True)
-        md_path = out_dir / "top_project.md"
-        readme_path = out_dir / "top_project_README.md"
-        md_path.write_text(export_markdown(summary), encoding="utf-8")
-        readme_path.write_text(export_readme_snippet(summary), encoding="utf-8")
-        pdf_path = args.pdf_output or (out_dir / "top_project.pdf")
-        pdf_path.write_bytes(export_markdown(summary).encode("utf-8"))
-        payload = {
-            "top_project": summary.title,
-            "markdown": str(md_path),
-            "readme": str(readme_path),
-            "pdf": str(pdf_path),
-            "evidence": [e.__dict__ for e in evidence],
-            "confidence": {"llm_used": False, "mode": "offline", "guardrails": "facts quoted with references in markdown/readme/pdf"},
-        }
+        if payload.get("detail"):
+            print(payload.get("detail"))
+            return 0
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_projects_timeline(args: argparse.Namespace) -> int:
-    rows = write_projects_timeline(args.db_dir, args.output)
+    rows = TimelineService().export_projects(args.db_dir, args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
 
 def _handle_skills_timeline(args: argparse.Namespace) -> int:
-    rows = write_skills_timeline(args.db_dir, args.output)
+    rows = TimelineService().export_skills(args.db_dir, args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
@@ -880,7 +828,13 @@ def _handle_preview(args: argparse.Namespace) -> int:
 
 
 def _handle_config(args: argparse.Namespace) -> int:
-    config_state = load_config()
+    g = globals()
+    config_service = ConfigService(
+        load_fn=g.get("load_config", load_config),
+        reset_fn=g.get("reset_config", reset_config),
+        export_consent_fn=g.get("export_consent", export_consent),
+    )
+    config_state = config_service.load()
     if args.config_action == "show":
         payload = {
             "consent": config_state.consent.__dict__,
@@ -889,7 +843,7 @@ def _handle_config(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2))
         return 0
     if args.config_action == "reset":
-        reset = reset_config()
+        reset = config_service.reset()
         logger.info("Configuration reset to defaults")
         print("Configuration reset. Current preferences:")
         print(json.dumps(reset.preferences.__dict__, indent=2))
@@ -899,64 +853,58 @@ def _handle_config(args: argparse.Namespace) -> int:
 
 
 def _handle_analyze(args: argparse.Namespace) -> int:
-    archive_arg = (args.archive or "").strip()
-    if not archive_arg:
-        payload = {"error": "InvalidInput", "detail": "Archive path must not be empty"}
+    archive_service = ArchiveAnalyzerService(ZipAnalyzer())
+    archive_path, payload, code = archive_service.validate_archive(args.archive)
+    if payload:
         print(json.dumps(payload), file=sys.stderr)
-        return 5
+        return code
 
-    archive_path = Path(archive_arg).expanduser()
-    if not archive_path.exists():
-        detail = f"Archive not found: {archive_path}"
-        payload = {"error": "FileNotFound", "detail": detail}
-        print(json.dumps(payload), file=sys.stderr)
-        return 4
-    if archive_path.suffix.lower() != ".zip":
-        payload = {
-            "error": "InvalidInput",
-            "detail": "Unsupported file format. Please provide a .zip archive.",
-        }
-        print(json.dumps(payload), file=sys.stderr)
-        return 3
-
+    g = globals()
+    consent_service = ConsentService(
+        ensure_consent_fn=g.get("ensure_consent", ensure_consent),
+        prompt_fn=g.get("prompt_for_consent", prompt_for_consent),
+        grant_fn=g.get("grant_consent", grant_consent),
+        ensure_external_fn=g.get("ensure_external_permission", ensure_external_permission),
+    )
     try:
-        consent = ensure_consent(require_granted=True)
+        consent = consent_service.ensure_local_consent()
     except ConsentError as exc:
         privacy_message = (
             "This analysis runs locally and reads file metadata (paths, sizes, timestamps). "
             "No data leaves your machine unless you later export results."
         )
         print(privacy_message)
-        decision = prompt_for_consent()
-        if decision == "accepted":
-            config_state = grant_consent()
-            consent = config_state.consent
+        try:
+            consent = consent_service.prompt_and_grant()
             logger.info("Consent granted interactively: %s", consent)
-        else:
+        except ConsentError:
             payload = {"error": "ConsentRequired", "detail": str(exc)}
             print(json.dumps(payload), file=sys.stderr)
             return 2
 
-    config = load_config()
+    config = ConfigService(
+        load_fn=g.get("load_config", load_config),
+        reset_fn=g.get("reset_config", reset_config),
+        export_consent_fn=g.get("export_consent", export_consent),
+    ).load()
     mode: ModeResolution = resolve_mode(args.analysis_mode, consent)
-    if mode.resolved == "external":
-        try:
-            ensure_external_permission(
-                "capstone.external.analysis",
-                data_types=["artifact metadata", "language statistics", "collaboration summaries"],
-                purpose="Generate remote analytics for the selected archive",
-                destination="Configured external analysis provider",
-                privacy="No source code is transmitted; only derived metadata is shared.",
-                source="cli",
-            )
-        except ExternalPermissionDenied as exc:
-            payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
-            print(json.dumps(payload), file=sys.stderr)
-            return 6
-
-    analyzer = ZipAnalyzer()
     try:
-        summary = analyzer.analyze(
+        consent_service.ensure_external(
+            mode,
+            service="capstone.external.analysis",
+            data_types=["artifact metadata", "language statistics", "collaboration summaries"],
+            purpose="Generate remote analytics for the selected archive",
+            destination="Configured external analysis provider",
+            privacy="No source code is transmitted; only derived metadata is shared.",
+            source="cli",
+        )
+    except ExternalPermissionDenied as exc:
+        payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
+        print(json.dumps(payload), file=sys.stderr)
+        return 6
+
+    try:
+        summary = archive_service.analyze(
             zip_path=archive_path,
             metadata_path=args.metadata_output,
             summary_path=args.summary_output,
@@ -965,9 +913,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             project_id=args.project_id,
             db_dir=args.db_dir,
         )
-    except InvalidArchiveError as exc:
-        payload = getattr(exc, "payload", {"error": "InvalidInput", "detail": str(exc)})
-        print(json.dumps(payload), file=sys.stderr)
+    except ArchiveAnalysisError as exc:
+        print(json.dumps(exc.payload), file=sys.stderr)
         return 3
 
     # --- summary_to_stdout mode: behave exactly like original tests expect ---
@@ -980,50 +927,32 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         _print_human_summary(summary, args)
 
     # --- Save analysis snapshot to SQLite (for resume / ranking) ---
-    conn = None
+    store = SnapshotStore(args.db_dir)
     try:
-        conn = open_db(args.db_dir)
-        store_analysis_snapshot(
-            conn,
+        store.store_snapshot(
             project_id=summary.get("project_id") or args.project_id or archive_path.stem,
             classification=summary.get("collaboration", {}).get("classification", "unknown"),
             primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
             snapshot=summary,
         )
-        # This extra print is fine here: tests don't check this branch's stdout
         if not args.quiet:
             print("[analyze] Snapshot saved to SQLite database.")
     except Exception as exc:
-        # Warnings go to stderr; they won't break stdout parsing.
         print(f"[analyze] WARNING: Failed to store snapshot in DB: {exc}", file=sys.stderr)
     finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
+        store.close()
 
     return 0
 
 def _handle_rank_projects(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    g = globals()
+    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    service = RankingService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
-        raw_snapshots = fetch_latest_snapshots(conn)
-        snapshot_map: dict[str, dict] = {}
-        for row in raw_snapshots:
-            pid = row.get("project_id")
-            snap = row.get("snapshot")
-            if not pid or not isinstance(snap, dict):
-                continue
-            snapshot_map[pid] = snap
-
+        rankings, snapshot_map = service.rank(user=args.user, limit=args.limit)
         if not snapshot_map:
             print("No project analyses available for ranking.")
             return 0
-
-        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
-        if args.limit is not None and args.limit >= 0:
-            rankings = rankings[: args.limit]
 
         contributor_label = args.user or "primary contributor"
         print(f"Project rankings for {contributor_label}:")
@@ -1033,7 +962,6 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
                 weight = RANK_WEIGHTS[factor]
                 print(f"   - {factor}: weight {weight:.2f}, contribution {ranking.breakdown[factor]:.3f}")
             details = ranking.details
-            # Expose raw metrics so users understand how each factor influenced the score.
             print(
                 "     raw metrics: "
                 f"files={details['artifact_count']:.0f}, "
@@ -1045,42 +973,34 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
             )
         return 0
     finally:
-        close_db()
+        store.close()
 
 def _handle_summarize_projects(args: argparse.Namespace) -> int:
     """Summarize top ranked projects, optionally using an LLM."""
-    conn = open_db(args.db_dir)
+    g = globals()
+    close_fn = g.get("close_db", close_db)
+    store = SnapshotStore(
+        args.db_dir,
+        fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots),
+        close_fn=close_fn,
+    )
+    service = RankingService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
-        # 1. Load latest snapshots
-        raw_snapshots = fetch_latest_snapshots(conn)
-        snapshot_map: dict[str, dict] = {}
-        for row in raw_snapshots:
-            pid = row.get("project_id")
-            snap = row.get("snapshot")
-            if not pid or not isinstance(snap, dict):
-                continue
-            snapshot_map[pid] = snap
-
+        rankings, snapshot_map = service.rank(user=args.user, limit=args.limit)
         if not snapshot_map:
             print("No project analyses available for summary.")
             return 0
 
-        # 2. Rank projects (reuse existing ranking flow)
-        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
         if not rankings:
             print("No ranked projects available for summary.")
             return 0
 
-        if args.limit is not None and args.limit >= 0:
-            rankings = rankings[: args.limit]
-
-        # 3. Optional LLM
+        # Optional LLM
         llm = None
         use_llm = bool(args.use_llm)
         if use_llm:
             llm = build_default_llm()
 
-        # 4. Generate summaries via helper
         summaries = generate_top_project_summaries(
             snapshots=snapshot_map,
             rankings=rankings,
@@ -1089,7 +1009,6 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
             use_llm=use_llm,
         )
 
-        # 5. Print in requested format
         if args.format == "json":
             def to_jsonable(s):
                 if isinstance(s, dict):
@@ -1103,12 +1022,9 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
             payload = [to_jsonable(s) for s in summaries]
             print(json.dumps(payload, indent=2))
         else:
-            # markdown: join each summary's markdown
             parts = []
             for s in summaries:
                 try:
-                    # if generate_top_project_summaries returns the same summary
-                    # objects used by export_markdown, use that for nice output
                     parts.append(export_markdown(s))
                 except Exception:
                     md = getattr(s, "markdown", None) or str(s)
@@ -1117,7 +1033,7 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
 
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_generate_resume(args: argparse.Namespace) -> int:
@@ -1146,14 +1062,9 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
     # If your implementation has a slightly different signature, tweak this call.
     # 3) Load latest project snapshots
     # 3) Open DB and load all project snapshots
-    conn = open_db(args.db_dir)
-    try:
-        snapshots = fetch_latest_snapshots(conn)
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+    store = SnapshotStore(args.db_dir)
+    snapshots = store.fetch_all_latest()
+    store.close()
 
     if not snapshots:
         print("[generate-resume] No analyzed projects found in database. Run 'capstone analyze' first.")
