@@ -828,7 +828,7 @@ def _handle_preview(args: argparse.Namespace) -> int:
 
 
 def _handle_config(args: argparse.Namespace) -> int:
-    g = globals()
+    g = globals()  # allow legacy tests 
     config_service = ConfigService(
         load_fn=g.get("load_config", load_config),
         reset_fn=g.get("reset_config", reset_config),
@@ -859,7 +859,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(payload), file=sys.stderr)
         return code
 
-    g = globals()
+    g = globals()  # keep test patches 
     consent_service = ConsentService(
         ensure_consent_fn=g.get("ensure_consent", ensure_consent),
         prompt_fn=g.get("prompt_for_consent", prompt_for_consent),
@@ -977,7 +977,7 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
 
 def _handle_summarize_projects(args: argparse.Namespace) -> int:
     """Summarize top ranked projects, optionally using an LLM."""
-    g = globals()
+    g = globals()  # tests patch fetch_latest_snapshots
     close_fn = g.get("close_db", close_db)
     store = SnapshotStore(
         args.db_dir,
