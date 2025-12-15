@@ -237,3 +237,13 @@ Overall, this week strengthened the clarity of our project narrative, improved t
 - team contract
 - DFD and system architecture diagrams
 - demo video
+
+ ## WEEK 15 Personal LOG (Dec8 - Dec15, 2025)--extra
+### 1. Weekly Goals Recap
+- complete 'encapsulation for main feature'#128
+  
+This week I delivered the “encapsulation for main feature” milestone (#128) by carving the core logic into a reusable service layer and slimming the CLI to argument parsing and orchestration. The new services cover consent/config, archive validation+analysis, snapshot storage and
+summaries, ranking, timelines, and top project outputs, while compatibility shims keep existing behaviors and tests intact. I verified the end-to-end flow with the full unit suite (python -m unittest discover -s tests -p 'test_*.py' -v), and coordinated with teammates on integration
+details so downstream consumers can adopt the services without breaking changes. This work makes the system easier to test, mock, and extend, and keeps the demo and Milestone #1 flows consistent and transparent.
+
+  
