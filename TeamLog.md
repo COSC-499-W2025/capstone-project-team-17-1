@@ -381,3 +381,25 @@ We integrated the new pipeline into the CLI, added the resume-generation command
 
 ### Test Report Week 14
 During week 14, the team validated the new end-to-end CLI pipeline and updated résumé/analysis commands with a mix of automated and manual tests. Pytest/unittest cases now cover CLI argument parsing, error handling for missing/invalid archives, and the integration of the pipeline into capstone.cli analyze (including JSON/CSV export checks). Manually, we ran python -m capstone.cli analyze demo.zip and the new résumé command on multiple demo archives to confirm that snapshots, logs, and LLM-generated summaries are produced correctly and the tool runs to completion without crashes.
+
+
+## Term2 WEEK 1  TEAM LOG
+(Jan5 - Jan11, 2026)
+
+### Recap of Milestone Goal - Week 1
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Completed Tasks Week 1
+### Burnup chart Week 1
+### In Progress Tasks Week 1 
+### Test Report Week 14
