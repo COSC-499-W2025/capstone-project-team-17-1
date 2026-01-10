@@ -244,6 +244,25 @@ Overall, this week strengthened the clarity of our project narrative, improved t
   
 This week I delivered the “encapsulation for main feature” milestone (#128) by carving the core logic into a reusable service layer and slimming the CLI to argument parsing and orchestration. The new services cover consent/config, archive validation+analysis, snapshot storage and
 summaries, ranking, timelines, and top project outputs, while compatibility shims keep existing behaviors and tests intact. I verified the end-to-end flow with the full unit suite (python -m unittest discover -s tests -p 'test_*.py' -v), and coordinated with teammates on integration
-details so downstream consumers can adopt the services without breaking changes. This work makes the system easier to test, mock, and extend, and keeps the demo and Milestone #1 flows consistent and transparent.
+details so downstream consumers can adopt the services without breaking changes. This work makes the system easier to test, mock, and extend, and keeps the demo and Milestone #1 flows consistent and transpare2-Jannt.
 
   
+ ## Term2 week1 Personal LOG (Jan5-Jan11, 2026)
+### 1. Type of Tasks Worked On
+<img width="1085" height="626" alt="Screenshot 2026-01-09 at 8 21 50 PM" src="https://github.com/user-attachments/assets/b8d29095-ce6e-4d1e-94f2-4b74d526dac4" />
+
+### 2. Weekly Goals Recap
+- complete 'resume customization' #147
+- complete 'Add error message for parsing and add nested demo' #145
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the Resume Customization feature (#147), adding a persistent résumé-project description store with both API and CLI support. Users can now customize and save résumé-specific project wording without affecting portfolio text, and the résumé generator prioritizes this customized content. This directly supports the milestone’s human-in-the-loop requirement by allowing users to edit, persist, and retrieve concise résumé wording via CLI or HTTP API.
+
+I also completed Add error message for parsing and add nested demo (#145), enhancing the robustness of zip analysis. The system now detects multiple error types—including corrupt entries, invalid JSON, non-UTF-8 files, empty files, unsupported extensions, and missing key files—while still producing a summary. Detected issues are emitted as warnings to stderr so users can see errors alongside analysis output. A new demo-4.zip with mixed error cases was added for CLI validation and demonstration.
+
+In addition, I discussed code details with team members and reviewed teammates’ PRs, providing feedback and assistance to support integration and overall system consistency.
+
+  ### Completed Tasks Week 1
+  - 'resume customization' #147
+- 'Add error message for parsing and add nested demo' #145
