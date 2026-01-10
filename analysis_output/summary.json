@@ -1,31 +1,29 @@
 {
-  "archive": "C:\\Users\\chicken\\Desktop\\brain cells\\uni\\yr 4\\COSC499\\capstone-project-team-17-1\\demo.zip",
+  "archive": "/Users/yanshuyu/Desktop/capstone-project-team-17-1/demo-4.zip",
   "requested_mode": "local",
   "resolved_mode": "local",
   "mode_reason": "Local analysis enforced",
   "local_mode_label": "Local Analysis Mode",
   "file_summary": {
-    "file_count": 7,
-    "total_bytes": 357,
-    "earliest_modification": "2025-12-06T21:44:26",
-    "latest_modification": "2025-12-06T21:44:26",
+    "file_count": 10,
+    "total_bytes": 321,
+    "earliest_modification": "2026-01-09T19:35:38",
+    "latest_modification": "2026-01-09T19:35:42",
     "duration_days": 0,
     "active_days": 1,
     "activity_breakdown": {
+      "other": 6,
       "documentation": 2,
-      "other": 2,
-      "code": 3
+      "code": 2
     },
     "timeline": {
-      "2025-12": 7
+      "2026-01": 10
     }
   },
   "languages": {
-    "Markdown": 1,
-    "JSON": 1,
-    "Python": 1,
-    "TypeScript": 1,
-    "SQL": 1
+    "JSON": 2,
+    "SQL": 1,
+    "TypeScript": 1
   },
   "frameworks": [
     "Express",
@@ -41,216 +39,220 @@
     },
     "primary_contributor": "Alice"
   },
-  "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.0041,
+  "metadata_output": "analysis_output/metadata.jsonl",
+  "scan_duration_seconds": 0.0073,
+  "warnings": [
+    {
+      "path": "deep/level1/level2/level3/project/empty.txt",
+      "error": "EmptyFile",
+      "detail": "File is empty (0 bytes)"
+    },
+    {
+      "path": "deep/level1/level2/level3/project/file.xyz",
+      "error": "UnsupportedExtension",
+      "detail": "Unsupported file extension: .xyz"
+    },
+    {
+      "path": "deep/level1/level2/level3/project/bad.json",
+      "error": "InvalidFormat",
+      "detail": "Invalid JSON: Expecting property name enclosed in double quotes at line 1 column 3"
+    },
+    {
+      "path": "deep/level1/level2/level3/project/binary.dat",
+      "error": "UnsupportedExtension",
+      "detail": "Unsupported file extension: .dat"
+    },
+    {
+      "path": "deep/level1/level2/level3/project/binary.dat",
+      "error": "NonUtf8",
+      "detail": "File contains non-UTF-8 bytes"
+    },
+    {
+      "path": "deep/level1/level2/level3/project/src/app.py",
+      "error": "CorruptedFile",
+      "detail": "Bad CRC-32 for file 'deep/level1/level2/level3/project/src/app.py'"
+    },
+    {
+      "path": "/Users/yanshuyu/Desktop/capstone-project-team-17-1/demo-4.zip",
+      "error": "MissingKeyFiles",
+      "detail": "Missing required file(s): README.md"
+    }
+  ],
+  "warning_count": 7,
   "skills": [
     {
+      "skill": "JSON",
+      "confidence": 0.25,
+      "category": "language"
+    },
+    {
       "skill": "Express",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "framework"
     },
     {
       "skill": "FastAPI",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "framework"
     },
     {
       "skill": "Flask",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "framework"
     },
     {
-      "skill": "JSON",
-      "confidence": 0.1111111111111111,
-      "category": "language"
-    },
-    {
-      "skill": "Markdown",
-      "confidence": 0.1111111111111111,
-      "category": "language"
-    },
-    {
-      "skill": "Python",
-      "confidence": 0.1111111111111111,
-      "category": "language"
-    },
-    {
       "skill": "React",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "framework"
     },
     {
       "skill": "SQL",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "language"
     },
     {
       "skill": "TypeScript",
-      "confidence": 0.1111111111111111,
+      "confidence": 0.125,
       "category": "language"
     }
   ],
   "skill_timeline": {
-    "generated_at": "2025-12-08T03:43:33.526078",
+    "generated_at": "2026-01-10T03:36:21.818194",
     "skills": [
       {
-        "skill": "Markdown",
-        "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "skill": "FastAPI",
+        "category": "framework",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "Flask",
         "category": "framework",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
-      },
-      {
-        "skill": "FastAPI",
-        "category": "framework",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
-        "total_weight": 1.0,
-        "year_counts": {
-          "2025": 1.0
-        },
-        "quarter_counts": {
-          "2025-Q4": 1.0
-        },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "JSON",
         "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
-        "total_weight": 1.0,
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
+        "total_weight": 2.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 2.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 2.0
         },
         "intensity": 1.0
       },
       {
         "skill": "React",
         "category": "framework",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "Express",
         "category": "framework",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
-      },
-      {
-        "skill": "Python",
-        "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
-        "total_weight": 1.0,
-        "year_counts": {
-          "2025": 1.0
-        },
-        "quarter_counts": {
-          "2025-Q4": 1.0
-        },
-        "intensity": 1.0
-      },
-      {
-        "skill": "TypeScript",
-        "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
-        "total_weight": 1.0,
-        "year_counts": {
-          "2025": 1.0
-        },
-        "quarter_counts": {
-          "2025-Q4": 1.0
-        },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "SQL",
         "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "bash",
         "category": "tool",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
+        "intensity": 0.5
       },
       {
         "skill": "sql",
         "category": "language",
-        "first_seen": "2025-12-06T21:44:26",
-        "last_seen": "2025-12-06T21:44:26",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
         "total_weight": 1.0,
         "year_counts": {
-          "2025": 1.0
+          "2026": 1.0
         },
         "quarter_counts": {
-          "2025-Q4": 1.0
+          "2026-Q1": 1.0
         },
-        "intensity": 1.0
+        "intensity": 0.5
+      },
+      {
+        "skill": "TypeScript",
+        "category": "language",
+        "first_seen": "2026-01-09T19:35:38",
+        "last_seen": "2026-01-09T19:35:38",
+        "total_weight": 1.0,
+        "year_counts": {
+          "2026": 1.0
+        },
+        "quarter_counts": {
+          "2026-Q1": 1.0
+        },
+        "intensity": 0.5
       }
     ]
   },
   "top_skills_by_year": {
-    "2025": [
+    "2026": [
+      {
+        "skill": "JSON",
+        "weight": 2.0
+      },
       {
         "skill": "Express",
         "weight": 1.0
@@ -264,11 +266,7 @@
         "weight": 1.0
       },
       {
-        "skill": "JSON",
-        "weight": 1.0
-      },
-      {
-        "skill": "Markdown",
+        "skill": "React",
         "weight": 1.0
       }
     ]

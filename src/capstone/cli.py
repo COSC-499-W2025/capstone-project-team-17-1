@@ -917,6 +917,9 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(exc.payload), file=sys.stderr)
         return 3
 
+    if summary.get("warnings") and not args.quiet:
+        print(json.dumps({"warnings": summary["warnings"]}, indent=2), file=sys.stderr)
+
     # --- summary_to_stdout mode: behave exactly like original tests expect ---
     if args.summary_to_stdout:
         print(json.dumps(summary, indent=2))
