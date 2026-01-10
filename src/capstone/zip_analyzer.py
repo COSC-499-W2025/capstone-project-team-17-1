@@ -97,6 +97,7 @@ class ZipAnalyzer:
         frameworks = set()
         git_logs: list[str] = []
         skill_events: List[Tuple[str, str, datetime, float]] = []
+        # Collect non-fatal issues 
         warnings: List[dict[str, str]] = []
         seen_paths: set[str] = set()
         supported_extensions = {
@@ -174,6 +175,7 @@ class ZipAnalyzer:
             )
 
             path_lower = info.filename.lower()
+            # Lightweight content validation for common error
             suffix = PurePosixPath(path_lower).suffix
             if info.file_size == 0:
                 warnings.append(
@@ -231,6 +233,7 @@ class ZipAnalyzer:
                 for skill_name, category in tool_skills:
                     skill_events.append((skill_name, category, ts, 1.0))
 
+        # Surface missing key files 
         missing_required = [
             name
             for name in ("README.md", "package.json", "requirements.txt")
