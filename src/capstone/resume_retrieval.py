@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from .logging_utils import get_logger
@@ -118,16 +118,41 @@ def ensure_resume_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_resume_entry_links
         ON resume_entry_links(link_type, link_value, entry_id);
+        CREATE TABLE IF NOT EXISTS resume_project_descriptions (
+            project_id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            metadata TEXT
+        );
         """
     )
     conn.commit()
+
+
+@dataclass(frozen=True)
+class ResumeProjectDescription:
+    project_id: str
+    summary: str
+    created_at: str
+    updated_at: str
+    metadata: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "project_id": self.project_id,
+            "summary": self.summary,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "metadata": self.metadata,
+        }
 
 
 def describe_resume_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
     ensure_resume_schema(conn)
     tables = {}
     counts = {}
-    for table in ("resume_entries", "resume_entry_links"):
+    for table in ("resume_entries", "resume_entry_links", "resume_project_descriptions"):
         info = conn.execute(f"PRAGMA table_info({table})").fetchall()
         columns = [
             {"name": row[1], "type": row[2], "notnull": bool(row[3]), "default": row[4]}
@@ -307,12 +332,119 @@ def _fetch_links(conn: sqlite3.Connection, entry_ids: Sequence[str]) -> Dict[str
     }
 
 
+def upsert_resume_project_description(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    summary: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    created_at: Optional[str] = None,
+    updated_at: Optional[str] = None,
+) -> ResumeProjectDescription:
+    ensure_resume_schema(conn)
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    if not summary:
+        raise ValueError("summary must be provided")
+    now = updated_at or datetime.now(timezone.utc).isoformat()
+    created_value = created_at or now
+    payload = json.dumps(metadata or {})
+    conn.execute(
+        """
+        INSERT INTO resume_project_descriptions(project_id, summary, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            summary=excluded.summary,
+            metadata=excluded.metadata,
+            updated_at=excluded.updated_at
+        """,
+        (project_id, summary, payload, created_value, now),
+    )
+    conn.commit()
+    result = get_resume_project_description(conn, project_id)
+    if result is None:
+        raise RuntimeError("Failed to persist resume project description")
+    return result
+
+
+def get_resume_project_description(
+    conn: sqlite3.Connection,
+    project_id: str,
+) -> Optional[ResumeProjectDescription]:
+    ensure_resume_schema(conn)
+    row = conn.execute(
+        """
+        SELECT project_id, summary, created_at, updated_at, metadata
+        FROM resume_project_descriptions
+        WHERE project_id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    return _row_to_project_description(row) if row else None
+
+
+def list_resume_project_descriptions(
+    conn: sqlite3.Connection,
+    *,
+    project_ids: Optional[Sequence[str]] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[ResumeProjectDescription]:
+    ensure_resume_schema(conn)
+    where = ""
+    params: List[Any] = []
+    if project_ids:
+        placeholders = ",".join("?" * len(project_ids))
+        where = f"WHERE project_id IN ({placeholders})"
+        params.extend(list(project_ids))
+    rows = conn.execute(
+        f"""
+        SELECT project_id, summary, created_at, updated_at, metadata
+        FROM resume_project_descriptions
+        {where}
+        ORDER BY updated_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        (*params, max(1, limit), max(0, offset)),
+    ).fetchall()
+    return [_row_to_project_description(row) for row in rows]
+
+
+def _row_to_project_description(row: sqlite3.Row | Sequence[Any]) -> ResumeProjectDescription:
+    metadata: Dict[str, Any] = {}
+    if row[4]:
+        try:
+            metadata = json.loads(row[4])
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse metadata for resume project %s", row[0])
+            metadata = {}
+    return ResumeProjectDescription(
+        project_id=row[0],
+        summary=row[1],
+        created_at=row[2],
+        updated_at=row[3],
+        metadata=metadata,
+    )
+
+
 def resolve_resume_projects(conn: sqlite3.Connection, entries: Iterable[ResumeEntry]) -> Dict[str, Optional[dict]]:
     ids = sorted({pid for entry in entries for pid in entry.project_ids})
     context: Dict[str, Optional[dict]] = {}
     for pid in ids:
         context[pid] = fetch_latest_snapshot(conn, pid)
     return context
+
+
+def resolve_resume_project_descriptions(
+    conn: sqlite3.Connection,
+    entries: Iterable[ResumeEntry],
+) -> Dict[str, Optional[dict]]:
+    ids = sorted({pid for entry in entries for pid in entry.project_ids})
+    if not ids:
+        return {}
+    descriptions = list_resume_project_descriptions(conn, project_ids=ids, limit=len(ids))
+    by_id = {desc.project_id: desc.to_dict() for desc in descriptions}
+    return {pid: by_id.get(pid) for pid in ids}
 
 
 def build_resume_preview(
@@ -344,6 +476,9 @@ def build_resume_preview(
         sections_payload.append({"name": section, "items": grouped[section]})
 
     project_context = resolve_resume_projects(conn, result.entries) if conn else {}
+    resume_project_descriptions = (
+        resolve_resume_project_descriptions(conn, result.entries) if conn else {}
+    )
     last_updated = max((entry.updated for entry in result.entries if entry.updated), default=None)
     preview = {
         "sections": sections_payload,
@@ -351,19 +486,24 @@ def build_resume_preview(
         "missingSections": result.missing_sections,
         "schema": result.schema_state,
         "projectContext": project_context,
+        "resumeProjectDescriptions": resume_project_descriptions,
         "lastUpdated": last_updated.isoformat() if last_updated else None,
     }
     return preview
 
 
-def resume_to_markdown(entries: Sequence[ResumeEntry]) -> str:
+def resume_to_markdown(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> str:
     grouped = _group_by_section(entries)
     lines: List[str] = []
     for section, items in grouped:
         lines.append(f"## {section.title()}")
         for entry in items:
             period = _format_period(entry.metadata)
-            summary = entry.summary or entry.body
+            summary = _resolve_entry_summary(entry, project_descriptions)
             lines.append(f"- **{entry.title}** {period} — {summary.strip()}")
             if entry.skills:
                 lines.append(f"  - Skills: {', '.join(entry.skills)}")
@@ -371,29 +511,53 @@ def resume_to_markdown(entries: Sequence[ResumeEntry]) -> str:
     return "\n".join(line for line in lines if line).strip()
 
 
-def resume_to_json(entries: Sequence[ResumeEntry]) -> Dict[str, Any]:
+def resume_to_json(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> Dict[str, Any]:
     grouped = _group_by_section(entries)
     sections = []
     for section, items in grouped:
-        sections.append({"name": section, "items": [entry.to_dict() for entry in items]})
+        rendered: List[Dict[str, Any]] = []
+        for entry in items:
+            payload = entry.to_dict()
+            summary = _resolve_entry_summary(entry, project_descriptions)
+            if summary:
+                payload["summary"] = summary
+            rendered.append(payload)
+        sections.append({"name": section, "items": rendered})
     return {"generatedAt": datetime.now(timezone.utc).isoformat(), "sections": sections}
 
 
-def resume_to_pdf(entries: Sequence[ResumeEntry]) -> bytes:
-    markdown = resume_to_markdown(entries)
+def resume_to_pdf(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> bytes:
+    markdown = resume_to_markdown(entries, project_descriptions=project_descriptions)
     return _markdown_to_pdf(markdown)
 
 # export in differnt formats
-def export_resume(entries: Sequence[ResumeEntry], *, fmt: str, destination: Optional[Path] = None) -> bytes:
+def export_resume(
+    entries: Sequence[ResumeEntry],
+    *,
+    fmt: str,
+    destination: Optional[Path] = None,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> bytes:
     fmt = fmt.lower()
     if fmt not in {"markdown", "json", "pdf"}:
         raise ValueError(f"Unsupported export format: {fmt}")
     if fmt == "markdown":
-        data = resume_to_markdown(entries).encode("utf-8")
+        data = resume_to_markdown(entries, project_descriptions=project_descriptions).encode("utf-8")
     elif fmt == "json":
-        data = json.dumps(resume_to_json(entries), indent=2).encode("utf-8")
+        data = json.dumps(
+            resume_to_json(entries, project_descriptions=project_descriptions),
+            indent=2,
+        ).encode("utf-8")
     else:
-        data = resume_to_pdf(entries)
+        data = resume_to_pdf(entries, project_descriptions=project_descriptions)
     if destination:
         destination.write_bytes(data)
         logger.info("Wrote resume export (%s) to %s", fmt, destination)
@@ -418,6 +582,18 @@ def _format_period(metadata: Dict[str, Any]) -> str:
     if not start:
         return f"({end})"
     return f"({start} – {end})"
+
+
+def _resolve_entry_summary(
+    entry: ResumeEntry,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]],
+) -> str:
+    if project_descriptions and entry.project_ids:
+        for project_id in entry.project_ids:
+            desc = project_descriptions.get(project_id)
+            if desc and desc.summary:
+                return desc.summary
+    return entry.summary or entry.body
 
 
 def _markdown_to_pdf(markdown: str) -> bytes:
@@ -464,12 +640,17 @@ def _markdown_to_pdf(markdown: str) -> bytes:
 
 __all__ = [
     "ResumeEntry",
+    "ResumeProjectDescription",
     "ResumeRetrievalResult",
     "ensure_resume_schema",
     "describe_resume_schema",
     "insert_resume_entry",
+    "upsert_resume_project_description",
+    "get_resume_project_description",
+    "list_resume_project_descriptions",
     "query_resume_entries",
     "resolve_resume_projects",
+    "resolve_resume_project_descriptions",
     "build_resume_preview",
     "resume_to_markdown",
     "resume_to_json",

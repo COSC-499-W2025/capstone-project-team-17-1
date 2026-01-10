@@ -41,9 +41,13 @@ from .resume_retrieval import (
     export_resume,
     query_resume_entries,
     ensure_resume_schema,
+    get_resume_project_description,
+    list_resume_project_descriptions,
+    upsert_resume_project_description,
 )
 from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
+from .portfolio_retrieval import create_app as create_portfolio_app
 from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
 from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
 from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
@@ -358,6 +362,77 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include entries flagged as outdated or expired",
     )
 
+    resume_project_parser = subparsers.add_parser(
+        "resume-project",
+        help="Save or retrieve resume-specific project wording",
+    )
+    resume_project_parser.add_argument(
+        "action",
+        choices=["set", "get", "list"],
+        help="Action to perform",
+    )
+    resume_project_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    resume_project_parser.add_argument(
+        "--project-id",
+        action="append",
+        help="Project id to target (repeatable for list)",
+    )
+    resume_project_parser.add_argument(
+        "--summary",
+        type=str,
+        help="Resume-specific project summary text",
+    )
+    resume_project_parser.add_argument(
+        "--summary-file",
+        type=Path,
+        help="File containing the resume-specific project summary text",
+    )
+    resume_project_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum number of resume project descriptions to load",
+    )
+    resume_project_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Offset for pagination when listing resume project descriptions",
+    )
+
+    api_parser = subparsers.add_parser(
+        "api",
+        help="Run the local API service",
+    )
+    api_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind (default: 127.0.0.1)",
+    )
+    api_parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="Port to listen on (default: 5000)",
+    )
+    api_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    api_parser.add_argument(
+        "--token",
+        type=str,
+        default=None,
+        help="Optional Bearer token to protect API routes",
+    )
+
     # portfolio retrieval
     portfolio_parser = subparsers.add_parser(
         "portfolio",
@@ -587,7 +662,21 @@ def _handle_resume(args: argparse.Namespace) -> int:
             print("No resume entries found that match the provided filters.")
             return 0
 
-        data = export_resume(entries, fmt=args.format, destination=args.output)
+        project_ids = sorted({pid for entry in entries for pid in entry.project_ids})
+        description_map = {}
+        if project_ids:
+            descriptions = list_resume_project_descriptions(
+                conn,
+                project_ids=project_ids,
+                limit=len(project_ids),
+            )
+            description_map = {item.project_id: item for item in descriptions}
+        data = export_resume(
+            entries,
+            fmt=args.format,
+            destination=args.output,
+            project_descriptions=description_map,
+        )
         if args.output:
             print(f"Wrote resume {args.format} export to {args.output}")
             return 0
@@ -606,6 +695,65 @@ def _handle_resume(args: argparse.Namespace) -> int:
             close_db()
         except Exception:
             pass
+
+
+def _handle_resume_project(args: argparse.Namespace) -> int:
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
+    try:
+        ensure_resume_schema(conn)
+        project_ids = args.project_id or []
+        if args.action in {"set", "get"}:
+            if len(project_ids) != 1:
+                print("resume-project set/get requires exactly one --project-id", file=sys.stderr)
+                return 2
+            project_id = project_ids[0]
+
+        if args.action == "set":
+            summary = args.summary
+            if args.summary_file:
+                summary = args.summary_file.read_text(encoding="utf-8", errors="ignore").strip()
+            if not summary:
+                print("resume-project set requires --summary or --summary-file", file=sys.stderr)
+                return 2
+            result = upsert_resume_project_description(
+                conn,
+                project_id=project_id,
+                summary=summary,
+            )
+            print(json.dumps(result.to_dict(), indent=2))
+            return 0
+
+        if args.action == "get":
+            result = get_resume_project_description(conn, project_id)
+            if not result:
+                print(json.dumps({"error": "NotFound", "detail": "No resume project description found"}, indent=2))
+                return 0
+            print(json.dumps(result.to_dict(), indent=2))
+            return 0
+
+        if args.action == "list":
+            results = list_resume_project_descriptions(
+                conn,
+                project_ids=project_ids or None,
+                limit=args.limit,
+                offset=args.offset,
+            )
+            print(json.dumps([item.to_dict() for item in results], indent=2))
+            return 0
+
+        print("Unknown resume-project action", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+
+def _handle_api(args: argparse.Namespace) -> int:
+    db_dir = str(args.db_dir) if args.db_dir else None
+    app = create_portfolio_app(db_dir=db_dir, auth_token=args.token)
+    app.run(host=args.host, port=args.port)
+    return 0
+
 
 def _handle_portfolio(args: argparse.Namespace) -> int:
     store = SnapshotStore(args.db_dir)
@@ -1192,6 +1340,10 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_job_match(args)
     if args.command == "resume":
         return _handle_resume(args)
+    if args.command == "resume-project":
+        return _handle_resume_project(args)
+    if args.command == "api":
+        return _handle_api(args)
     if args.command == "generate-resume":
         return _handle_generate_resume(args)
     if args.command == "portfolio":

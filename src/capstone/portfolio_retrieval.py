@@ -19,6 +19,13 @@ except Exception:
     _close_db = None
     _fetch_latest_snapshot = None
 
+from .resume_retrieval import (
+    ensure_resume_schema,
+    get_resume_project_description,
+    list_resume_project_descriptions,
+    upsert_resume_project_description,
+)
+
 @contextmanager
 def _db_session(db_dir: str | None):
     """
@@ -238,5 +245,53 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             },
             "error": None,
         })
+
+    @app.get("/resume-projects")
+    def resume_projects_get():
+        q = request.args
+        project_ids = q.getlist("projectId")
+        limit = int(q.get("limit", 100))
+        offset = int(q.get("offset", 0))
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            if project_ids and len(project_ids) == 1 and q.get("list") != "true":
+                item = get_resume_project_description(c, project_ids[0])
+                if not item:
+                    return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No resume project found"}}), 404
+                return jsonify({"data": item.to_dict(), "error": None})
+            items = list_resume_project_descriptions(
+                c,
+                project_ids=project_ids or None,
+                limit=limit,
+                offset=offset,
+            )
+        payload = [item.to_dict() for item in items]
+        return jsonify({
+            "data": payload,
+            "meta": {"limit": limit, "offset": offset, "total": len(payload)},
+            "error": None,
+        })
+
+    @app.post("/resume-projects")
+    def resume_projects_post():
+        payload = request.get_json(silent=True) or {}
+        project_id = payload.get("projectId") or payload.get("project_id")
+        summary = payload.get("summary")
+        metadata = payload.get("metadata")
+        if not project_id:
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}), 400
+        if not summary or not str(summary).strip():
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "summary is required"}}), 400
+        if metadata is not None and not isinstance(metadata, dict):
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "metadata must be an object"}}), 400
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            item = upsert_resume_project_description(
+                c,
+                project_id=str(project_id),
+                summary=str(summary).strip(),
+                metadata=metadata if isinstance(metadata, dict) else None,
+            )
+        return jsonify({"data": item.to_dict(), "error": None}), 201
 
     return app
