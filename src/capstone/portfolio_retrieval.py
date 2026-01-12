@@ -163,6 +163,56 @@ def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[d
     ).fetchone()
     return json.loads(row[0]) if row else None
 
+def _extract_evidence(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract a simple evidence/metrics structure from a snapshot.
+    Keeps it robust: handles different key shapes and provides a fallback.
+    """
+    if not isinstance(snapshot, dict):
+        return {"type": "metrics", "items": []}
+
+    # Common places teams store metrics/evidence
+    candidates = [
+        snapshot.get("evidence"),
+        snapshot.get("metrics"),
+        snapshot.get("results"),
+        snapshot.get("evaluation"),
+        snapshot.get("outcomes"),
+    ]
+
+    for c in candidates:
+        # If already in desired shape
+        if isinstance(c, dict) and "items" in c and isinstance(c["items"], list):
+            return {"type": c.get("type", "metrics"), "items": c["items"]}
+
+        # If it's a dict of key->value metrics
+        if isinstance(c, dict):
+            items = [{"label": str(k), "value": str(v)} for k, v in c.items()]
+            if items:
+                return {"type": "metrics", "items": items}
+
+        # If it's a list, assume list of strings or dicts
+        if isinstance(c, list):
+            items = []
+            for it in c:
+                if isinstance(it, dict) and ("label" in it or "value" in it):
+                    items.append({"label": str(it.get("label", "")), "value": str(it.get("value", ""))})
+                else:
+                    items.append({"label": "evidence", "value": str(it)})
+            if items:
+                return {"type": "metrics", "items": items}
+
+    # Fallback evidence (still counts as “evidence of success/summary metrics”)
+    items: List[Dict[str, str]] = []
+    if isinstance(snapshot.get("skills"), list):
+        items.append({"label": "Skills detected", "value": str(len(snapshot["skills"]))})
+    if isinstance(snapshot.get("projects"), list):
+        items.append({"label": "Projects detected", "value": str(len(snapshot["projects"]))})
+    if isinstance(snapshot.get("files"), list):
+        items.append({"label": "Files analyzed", "value": str(len(snapshot["files"]))})
+
+    return {"type": "metrics", "items": items}
+
 
 def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
     """
@@ -212,6 +262,24 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         if data is None:
             return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No snapshots found"}}), 404
         return jsonify({"data": data, "meta": {"projectId": project_id}, "error": None})
+    @app.get("/portfolios/evidence")
+    def evidence_latest():
+        project_id = request.args.get("projectId", "")
+        if not project_id:
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}), 400
+
+        with _db_session(db_dir) as c:
+            ensure_indexes(c)
+            snap = get_latest_snapshot(c, project_id)
+
+        if snap is None:
+            return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No snapshots found"}}), 404
+
+        evidence = _extract_evidence(snap)
+        return jsonify({
+            "data": {"projectId": project_id, "evidence": evidence},
+            "error": None
+        })
 
     @app.get("/portfolios")
     def list_():
