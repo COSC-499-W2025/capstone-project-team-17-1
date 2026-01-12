@@ -7,6 +7,8 @@ import io
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Sequence
 
+from .collaboration import _normalize_email
+
 
 @dataclass
 class ContributionRecord:
@@ -52,8 +54,16 @@ def collect_git_contributions(
 ) -> dict[str, object]:
     """Aggregate git contributions while filtering bot accounts."""
 
-    humans: Dict[str, int] = {}
-    bots: Dict[str, int] = {}
+    def _key(author: str, email: str) -> str:
+        email_key = _normalize_email(email)
+        if email_key:
+            return email_key
+        return (author or "Unknown").strip().lower()
+
+    humans_by_key: Dict[str, int] = {}
+    bots_by_key: Dict[str, int] = {}
+    display_counts: Dict[str, Dict[str, int]] = {}
+    local_map: Dict[str, str] = {}
 
     for entry in raw_entries:
         author = entry.get("author") or "Unknown"
@@ -63,16 +73,41 @@ def collect_git_contributions(
         kind = entry.get("kind", "commit")
         score = commits + (reviews if kind == "review" else 0)
         is_bot = entry.get("is_bot") or _is_bot_author(author, email)
+        normalized_email = _normalize_email(email)
+        local = normalized_email.split("@", 1)[0] if normalized_email else ""
+        key = _key(author, email)
+        if normalized_email.endswith("users.noreply.github.com") and local:
+            key = f"local:{local}"
+        elif local and local.lower() in local_map:
+            key = local_map[local.lower()]
+        if local and local.lower() not in local_map:
+            local_map[local.lower()] = key
+        if key not in display_counts:
+            display_counts[key] = {}
+        if author:
+            display_counts[key][author] = display_counts[key].get(author, 0) + score
 
         if is_bot:
-            bots[author] = bots.get(author, 0) + score
+            bots_by_key[key] = bots_by_key.get(key, 0) + score
             if not include_bots:
                 continue
 
         if not is_bot:
-            humans[author] = humans.get(author, 0) + score
+            humans_by_key[key] = humans_by_key.get(key, 0) + score
 
-    human_count = len(humans)
+    humans: Dict[str, int] = {}
+    for key, count in humans_by_key.items():
+        names = display_counts.get(key, {})
+        name = sorted(names.items(), key=lambda item: (-item[1], item[0]))[0][0] if names else key
+        humans[name] = humans.get(name, 0) + count
+
+    bots: Dict[str, int] = {}
+    for key, count in bots_by_key.items():
+        names = display_counts.get(key, {})
+        name = sorted(names.items(), key=lambda item: (-item[1], item[0]))[0][0] if names else key
+        bots[name] = bots.get(name, 0) + count
+
+    human_count = len(humans_by_key)
     classification = "unknown"
     if human_count == 0 and bots:
         classification = "bot-only"
@@ -84,11 +119,20 @@ def collect_git_contributions(
         classification = "collaborative"
 
     primary: str | None = None
-    if humans:
-        if main_user and main_user in humans:
-            primary = main_user
-        else:
-            primary = max(humans.items(), key=lambda item: item[1])[0]
+    if humans_by_key:
+        normalized_main = (main_user or "").strip().lower()
+        if normalized_main:
+            for key, names in display_counts.items():
+                for candidate in names:
+                    if candidate.lower() == normalized_main or key == normalized_main:
+                        primary = candidate
+                        break
+                if primary:
+                    break
+        if not primary:
+            primary_key = max(humans_by_key.items(), key=lambda item: item[1])[0]
+            names = display_counts.get(primary_key, {})
+            primary = sorted(names.items(), key=lambda item: (-item[1], item[0]))[0][0] if names else primary_key
 
     return {
         "classification": classification,

@@ -1,24 +1,24 @@
 {
-  "archive": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-bdpxc9pn\\capstone-project-team-17-1.zip",
+  "archive": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-mjero4pk\\capstone-project-team-17-1.zip",
   "requested_mode": "local",
   "resolved_mode": "local",
   "mode_reason": "Local analysis enforced",
   "local_mode_label": "Local Analysis Mode",
   "file_summary": {
-    "file_count": 111,
-    "total_bytes": 13376428,
-    "earliest_modification": "2026-01-11T18:48:50",
-    "latest_modification": "2026-01-11T18:48:52",
+    "file_count": 92,
+    "total_bytes": 13351031,
+    "earliest_modification": "2026-01-11T20:11:24",
+    "latest_modification": "2026-01-11T20:11:26",
     "duration_days": 0,
     "active_days": 1,
     "activity_breakdown": {
-      "other": 48,
-      "documentation": 5,
+      "other": 28,
+      "documentation": 6,
       "code": 57,
       "asset": 1
     },
     "timeline": {
-      "2026-01": 111
+      "2026-01": 92
     }
   },
   "languages": {
@@ -31,22 +31,20 @@
   "collaboration": {
     "classification": "collaborative",
     "contributors": {
-      "yanshuyu280042": 40,
-      "Aminian": 22,
+      "yanshuyu280042": 66,
+      "Pmoney1383": 61,
       "Zhou": 36,
       "Khanna": 37,
-      "Pmoney1383": 39,
-      "ErenSun408": 81,
-      "YAN": 26,
+      "ErenSun408": 78,
       "mltzhou": 25,
       "Chen": 1,
       "kangnade": 4,
       "github-classroom[bot]": 2
     },
-    "primary_contributor": "ErenSun408"
+    "primary_contributor": "yanshuyu280042"
   },
   "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.1328,
+  "scan_duration_seconds": 0.1264,
   "warnings": [
     {
       "path": "demo.zip",
@@ -99,109 +97,34 @@
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/hooks/applypatch-msg.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/commit-msg.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/fsmonitor-watchman.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/post-update.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-applypatch.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-commit.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-merge-commit.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-push.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-rebase.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/pre-receive.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/prepare-commit-msg.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/push-to-checkout.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/sendemail-validate.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/hooks/update.sample",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .sample"
-    },
-    {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.idx",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.idx",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .idx"
     },
     {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.idx",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.idx",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.pack",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.pack",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .pack"
     },
     {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.pack",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.pack",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.rev",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.rev",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .rev"
     },
     {
-      "path": ".git/objects/pack/pack-f196f0d9ed086190a2607e3ab3267ac6797c6985.rev",
+      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.rev",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
-    },
-    {
-      "path": ".venv/pyvenv.cfg",
-      "error": "UnsupportedExtension",
-      "detail": "Unsupported file extension: .cfg"
     },
     {
       "path": "analysis_output/metadata.jsonl",
@@ -249,12 +172,12 @@
       "detail": "File is empty (0 bytes)"
     },
     {
-      "path": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-bdpxc9pn\\capstone-project-team-17-1.zip",
+      "path": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-mjero4pk\\capstone-project-team-17-1.zip",
       "error": "MissingKeyFiles",
       "detail": "Missing required file(s): package.json, requirements.txt"
     }
   ],
-  "warning_count": 41,
+  "warning_count": 26,
   "skills": [
     {
       "skill": "Python",
@@ -273,13 +196,13 @@
     }
   ],
   "skill_timeline": {
-    "generated_at": "2026-01-12T02:48:52.921686",
+    "generated_at": "2026-01-12T04:11:27.770462",
     "skills": [
       {
         "skill": "YAML",
         "category": "language",
-        "first_seen": "2026-01-11T18:48:52",
-        "last_seen": "2026-01-11T18:48:52",
+        "first_seen": "2026-01-11T20:11:26",
+        "last_seen": "2026-01-11T20:11:26",
         "total_weight": 1.0,
         "year_counts": {
           "2026": 1.0
@@ -292,8 +215,8 @@
       {
         "skill": "docker",
         "category": "tool",
-        "first_seen": "2026-01-11T18:48:52",
-        "last_seen": "2026-01-11T18:48:52",
+        "first_seen": "2026-01-11T20:11:26",
+        "last_seen": "2026-01-11T20:11:26",
         "total_weight": 1.0,
         "year_counts": {
           "2026": 1.0
@@ -306,8 +229,8 @@
       {
         "skill": "Python",
         "category": "language",
-        "first_seen": "2026-01-11T18:48:52",
-        "last_seen": "2026-01-11T18:48:52",
+        "first_seen": "2026-01-11T20:11:26",
+        "last_seen": "2026-01-11T20:11:26",
         "total_weight": 57.0,
         "year_counts": {
           "2026": 57.0
@@ -320,8 +243,8 @@
       {
         "skill": "Markdown",
         "category": "language",
-        "first_seen": "2026-01-11T18:48:52",
-        "last_seen": "2026-01-11T18:48:52",
+        "first_seen": "2026-01-11T20:11:26",
+        "last_seen": "2026-01-11T20:11:26",
         "total_weight": 4.0,
         "year_counts": {
           "2026": 4.0
@@ -334,8 +257,8 @@
       {
         "skill": "JSON",
         "category": "language",
-        "first_seen": "2026-01-11T18:48:52",
-        "last_seen": "2026-01-11T18:48:52",
+        "first_seen": "2026-01-11T20:11:26",
+        "last_seen": "2026-01-11T20:11:26",
         "total_weight": 4.0,
         "year_counts": {
           "2026": 4.0
