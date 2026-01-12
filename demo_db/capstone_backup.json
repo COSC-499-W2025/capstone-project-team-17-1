@@ -3,9 +3,9 @@
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-23 04:32:43",
+    "created_at": "2025-11-23 04:34:25",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmplzvi6t9y\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp6tnsyhr7\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -13,8 +13,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-22T20:32:42",
-        "latest_modification": "2025-11-22T20:32:42",
+        "earliest_modification": "2025-11-22T20:34:24",
+        "latest_modification": "2025-11-22T20:34:24",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -37,8 +37,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmplzvi6t9y\\meta.jsonl",
-      "scan_duration_seconds": 0.0284,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp6tnsyhr7\\meta.jsonl",
+      "scan_duration_seconds": 0.0289,
       "skills": [
         {
           "skill": "Flask",
@@ -64,9 +64,9 @@
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-24 01:18:07",
+    "created_at": "2025-11-23 04:35:37",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwwcwzrhj\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpn7t2ffcz\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -74,8 +74,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-23T17:18:06",
-        "latest_modification": "2025-11-23T17:18:06",
+        "earliest_modification": "2025-11-22T20:35:36",
+        "latest_modification": "2025-11-22T20:35:36",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -98,8 +98,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwwcwzrhj\\meta.jsonl",
-      "scan_duration_seconds": 0.0245,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpn7t2ffcz\\meta.jsonl",
+      "scan_duration_seconds": 0.0246,
       "skills": [
         {
           "skill": "Flask",
@@ -116,16 +116,18 @@
           "confidence": 0.3333333333333333,
           "category": "language"
         }
-      ]
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
     }
   },
   {
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-24 01:22:59",
+    "created_at": "2025-11-23 04:42:05",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpbnfi3oox\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpt3dluwrq\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -133,8 +135,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-23T17:22:58",
-        "latest_modification": "2025-11-23T17:22:58",
+        "earliest_modification": "2025-11-22T20:42:04",
+        "latest_modification": "2025-11-22T20:42:04",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -157,8 +159,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpbnfi3oox\\meta.jsonl",
-      "scan_duration_seconds": 0.0251,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpt3dluwrq\\meta.jsonl",
+      "scan_duration_seconds": 0.0325,
       "skills": [
         {
           "skill": "Flask",
@@ -175,16 +177,18 @@
           "confidence": 0.3333333333333333,
           "category": "language"
         }
-      ]
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
     }
   },
   {
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-24 02:30:35",
+    "created_at": "2025-11-23 04:48:24",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpagccjrb4\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpvwve1sfl\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -192,8 +196,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-23T18:30:34",
-        "latest_modification": "2025-11-23T18:30:34",
+        "earliest_modification": "2025-11-22T20:48:24",
+        "latest_modification": "2025-11-22T20:48:24",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -216,8 +220,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpagccjrb4\\meta.jsonl",
-      "scan_duration_seconds": 0.0082,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpvwve1sfl\\meta.jsonl",
+      "scan_duration_seconds": 0.0288,
       "skills": [
         {
           "skill": "Flask",
@@ -234,16 +238,18 @@
           "confidence": 0.3333333333333333,
           "category": "language"
         }
-      ]
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
     }
   },
   {
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-24 02:40:43",
+    "created_at": "2025-11-23 04:56:22",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwxvao_xm\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpru1vixn8\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -251,8 +257,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-23T18:40:42",
-        "latest_modification": "2025-11-23T18:40:42",
+        "earliest_modification": "2025-11-22T20:56:22",
+        "latest_modification": "2025-11-22T20:56:22",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -275,8 +281,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwxvao_xm\\meta.jsonl",
-      "scan_duration_seconds": 0.009,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpru1vixn8\\meta.jsonl",
+      "scan_duration_seconds": 0.0509,
       "skills": [
         {
           "skill": "Flask",
@@ -293,140 +299,18 @@
           "confidence": 0.3333333333333333,
           "category": "language"
         }
-      ]
-    }
-  },
-  {
-    "project_id": "demo",
-    "classification": "individual",
-    "primary_contributor": "Demo User",
-    "created_at": "2025-11-24 02:41:57",
-    "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp5vrbgfsn\\sample.zip",
-      "requested_mode": "local",
-      "resolved_mode": "local",
-      "mode_reason": "Local analysis enforced",
-      "local_mode_label": "Local Analysis Mode",
-      "file_summary": {
-        "file_count": 4,
-        "total_bytes": 362,
-        "earliest_modification": "2025-11-23T18:41:56",
-        "latest_modification": "2025-11-23T18:41:56",
-        "duration_days": 0,
-        "active_days": 1,
-        "activity_breakdown": {
-          "documentation": 2,
-          "code": 1,
-          "other": 1
-        },
-        "timeline": {
-          "2025-11": 4
-        }
-      },
-      "languages": {
-        "Markdown": 1,
-        "Python": 1
-      },
-      "frameworks": [
-        "Flask"
       ],
-      "collaboration": {
-        "classification": "individual",
-        "contributors": {
-          "Demo User": 2
-        },
-        "primary_contributor": "Demo User"
-      },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp5vrbgfsn\\meta.jsonl",
-      "scan_duration_seconds": 0.0099,
-      "skills": [
-        {
-          "skill": "Flask",
-          "confidence": 0.3333333333333333,
-          "category": "framework"
-        },
-        {
-          "skill": "Markdown",
-          "confidence": 0.3333333333333333,
-          "category": "language"
-        },
-        {
-          "skill": "Python",
-          "confidence": 0.3333333333333333,
-          "category": "language"
-        }
-      ]
-    }
-  },
-  {
-    "project_id": "demo",
-    "classification": "individual",
-    "primary_contributor": "Demo User",
-    "created_at": "2025-11-24 02:45:40",
-    "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpzm8rxvfj\\sample.zip",
-      "requested_mode": "local",
-      "resolved_mode": "local",
-      "mode_reason": "Local analysis enforced",
-      "local_mode_label": "Local Analysis Mode",
-      "file_summary": {
-        "file_count": 4,
-        "total_bytes": 362,
-        "earliest_modification": "2025-11-23T18:45:40",
-        "latest_modification": "2025-11-23T18:45:40",
-        "duration_days": 0,
-        "active_days": 1,
-        "activity_breakdown": {
-          "documentation": 2,
-          "code": 1,
-          "other": 1
-        },
-        "timeline": {
-          "2025-11": 4
-        }
-      },
-      "languages": {
-        "Markdown": 1,
-        "Python": 1
-      },
-      "frameworks": [
-        "Flask"
-      ],
-      "collaboration": {
-        "classification": "individual",
-        "contributors": {
-          "Demo User": 2
-        },
-        "primary_contributor": "Demo User"
-      },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpzm8rxvfj\\meta.jsonl",
-      "scan_duration_seconds": 0.0117,
-      "skills": [
-        {
-          "skill": "Flask",
-          "confidence": 0.3333333333333333,
-          "category": "framework"
-        },
-        {
-          "skill": "Markdown",
-          "confidence": 0.3333333333333333,
-          "category": "language"
-        },
-        {
-          "skill": "Python",
-          "confidence": 0.3333333333333333,
-          "category": "language"
-        }
-      ]
+      "project_id": "demo",
+      "classification": "unknown"
     }
   },
   {
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-29 01:21:02",
+    "created_at": "2025-11-23 05:01:09",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp8pp6vkwi\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpdruge411\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -434,8 +318,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-28T17:21:02",
-        "latest_modification": "2025-11-28T17:21:02",
+        "earliest_modification": "2025-11-22T21:01:08",
+        "latest_modification": "2025-11-22T21:01:08",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -458,8 +342,557 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp8pp6vkwi\\meta.jsonl",
-      "scan_duration_seconds": 0.0078,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpdruge411\\meta.jsonl",
+      "scan_duration_seconds": 0.032,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 05:02:11",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpsx479arx\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-22T21:02:10",
+        "latest_modification": "2025-11-22T21:02:10",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpsx479arx\\meta.jsonl",
+      "scan_duration_seconds": 0.0283,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 05:03:18",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpggil39ut\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-22T21:03:18",
+        "latest_modification": "2025-11-22T21:03:18",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpggil39ut\\meta.jsonl",
+      "scan_duration_seconds": 0.0308,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 05:04:00",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpfzpizy46\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-22T21:04:00",
+        "latest_modification": "2025-11-22T21:04:00",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpfzpizy46\\meta.jsonl",
+      "scan_duration_seconds": 0.0265,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 07:38:54",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpubngpquk\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-22T23:38:52",
+        "latest_modification": "2025-11-22T23:38:52",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpubngpquk\\meta.jsonl",
+      "scan_duration_seconds": 0.0317,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 08:15:05",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp8wub2ppo\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-23T00:15:04",
+        "latest_modification": "2025-11-23T00:15:04",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp8wub2ppo\\meta.jsonl",
+      "scan_duration_seconds": 0.0334,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 08:27:00",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpcsyt_oli\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-23T00:26:58",
+        "latest_modification": "2025-11-23T00:26:58",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpcsyt_oli\\meta.jsonl",
+      "scan_duration_seconds": 0.0295,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 09:00:01",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpxlicifby\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-23T01:00:00",
+        "latest_modification": "2025-11-23T01:00:00",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpxlicifby\\meta.jsonl",
+      "scan_duration_seconds": 0.0282,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-23 09:06:01",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpi1_mrob7\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-23T01:06:00",
+        "latest_modification": "2025-11-23T01:06:00",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpi1_mrob7\\meta.jsonl",
+      "scan_duration_seconds": 0.0321,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "project_id": "demo",
+      "classification": "unknown"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-11-29 01:31:10",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpyy9qikad\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-11-28T17:31:10",
+        "latest_modification": "2025-11-28T17:31:10",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-11": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpyy9qikad\\meta.jsonl",
+      "scan_duration_seconds": 0.0258,
       "skills": [
         {
           "skill": "Flask",
@@ -478,13 +911,13 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-11-29T01:21:02.542998",
+        "generated_at": "2025-11-29T01:31:10.203135",
         "skills": [
           {
             "skill": "Flask",
             "category": "framework",
-            "first_seen": "2025-11-28T17:21:02",
-            "last_seen": "2025-11-28T17:21:02",
+            "first_seen": "2025-11-28T17:31:10",
+            "last_seen": "2025-11-28T17:31:10",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -497,8 +930,8 @@
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-11-28T17:21:02",
-            "last_seen": "2025-11-28T17:21:02",
+            "first_seen": "2025-11-28T17:31:10",
+            "last_seen": "2025-11-28T17:31:10",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -511,8 +944,8 @@
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-11-28T17:21:02",
-            "last_seen": "2025-11-28T17:21:02",
+            "first_seen": "2025-11-28T17:31:10",
+            "last_seen": "2025-11-28T17:31:10",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -549,9 +982,9 @@
     "project_id": "demo",
     "classification": "unknown",
     "primary_contributor": null,
-    "created_at": "2025-11-30 00:16:39",
+    "created_at": "2025-11-30 03:40:10",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpl0yir0co\\sample.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp0u4w1e34\\sample.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -559,8 +992,8 @@
       "file_summary": {
         "file_count": 3,
         "total_bytes": 40,
-        "earliest_modification": "2025-11-29T16:16:38",
-        "latest_modification": "2025-11-29T16:16:38",
+        "earliest_modification": "2025-11-29T19:40:10",
+        "latest_modification": "2025-11-29T19:40:10",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -583,8 +1016,8 @@
         "contributors": {},
         "primary_contributor": null
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpl0yir0co\\meta.jsonl",
-      "scan_duration_seconds": 0.0132,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp0u4w1e34\\meta.jsonl",
+      "scan_duration_seconds": 0.0213,
       "skills": [
         {
           "skill": "Flask",
@@ -603,13 +1036,13 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-11-30T00:16:39.446654",
+        "generated_at": "2025-11-30T03:40:10.885270",
         "skills": [
           {
             "skill": "Flask",
             "category": "framework",
-            "first_seen": "2025-11-29T16:16:38",
-            "last_seen": "2025-11-29T16:16:38",
+            "first_seen": "2025-11-29T19:40:10",
+            "last_seen": "2025-11-29T19:40:10",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -622,8 +1055,8 @@
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-11-29T16:16:38",
-            "last_seen": "2025-11-29T16:16:38",
+            "first_seen": "2025-11-29T19:40:10",
+            "last_seen": "2025-11-29T19:40:10",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -636,8 +1069,633 @@
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-11-29T16:16:38",
-            "last_seen": "2025-11-29T16:16:38",
+            "first_seen": "2025-11-29T19:40:10",
+            "last_seen": "2025-11-29T19:40:10",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2025": [
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "weight": 1.0
+          },
+          {
+            "skill": "Python",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "unknown",
+      "primary_contributor": null
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-12-03 00:59:35",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpfnnr0qps\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-12-02T16:59:34",
+        "latest_modification": "2025-12-02T16:59:34",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-12": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpfnnr0qps\\meta.jsonl",
+      "scan_duration_seconds": 0.0292,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2025-12-03T00:59:35.223041",
+        "skills": [
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-02T16:59:34",
+            "last_seen": "2025-12-02T16:59:34",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2025-12-02T16:59:34",
+            "last_seen": "2025-12-02T16:59:34",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2025-12-02T16:59:34",
+            "last_seen": "2025-12-02T16:59:34",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2025": [
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "weight": 1.0
+          },
+          {
+            "skill": "Python",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "unknown",
+      "primary_contributor": null
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-12-03 01:32:00",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpw6b8bli4\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-12-02T17:31:58",
+        "latest_modification": "2025-12-02T17:32:00",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-12": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpw6b8bli4\\meta.jsonl",
+      "scan_duration_seconds": 0.0303,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2025-12-03T01:32:00.143172",
+        "skills": [
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-02T17:32:00",
+            "last_seen": "2025-12-02T17:32:00",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2025-12-02T17:31:58",
+            "last_seen": "2025-12-02T17:31:58",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2025-12-02T17:31:58",
+            "last_seen": "2025-12-02T17:31:58",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2025": [
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "weight": 1.0
+          },
+          {
+            "skill": "Python",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "unknown",
+      "primary_contributor": null
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-12-03 01:36:26",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp0uaw0alj\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-12-02T17:36:26",
+        "latest_modification": "2025-12-02T17:36:26",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-12": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmp0uaw0alj\\meta.jsonl",
+      "scan_duration_seconds": 0.0225,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2025-12-03T01:36:26.813108",
+        "skills": [
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-02T17:36:26",
+            "last_seen": "2025-12-02T17:36:26",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2025-12-02T17:36:26",
+            "last_seen": "2025-12-02T17:36:26",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2025-12-02T17:36:26",
+            "last_seen": "2025-12-02T17:36:26",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2025": [
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "weight": 1.0
+          },
+          {
+            "skill": "Python",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "unknown",
+      "primary_contributor": null
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-12-03 01:37:10",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpcvisft5_\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-12-02T17:37:10",
+        "latest_modification": "2025-12-02T17:37:10",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-12": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpcvisft5_\\meta.jsonl",
+      "scan_duration_seconds": 0.0218,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2025-12-03T01:37:10.331537",
+        "skills": [
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-02T17:37:10",
+            "last_seen": "2025-12-02T17:37:10",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2025-12-02T17:37:10",
+            "last_seen": "2025-12-02T17:37:10",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2025-12-02T17:37:10",
+            "last_seen": "2025-12-02T17:37:10",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2025": [
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "weight": 1.0
+          },
+          {
+            "skill": "Python",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "unknown",
+      "primary_contributor": null
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "unknown",
+    "primary_contributor": null,
+    "created_at": "2025-12-03 01:38:47",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpxqls69t8\\sample.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 3,
+        "total_bytes": 40,
+        "earliest_modification": "2025-12-02T17:38:46",
+        "latest_modification": "2025-12-02T17:38:46",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "documentation": 2,
+          "code": 1
+        },
+        "timeline": {
+          "2025-12": 3
+        }
+      },
+      "languages": {
+        "Markdown": 1,
+        "Python": 1
+      },
+      "frameworks": [
+        "Flask"
+      ],
+      "collaboration": {
+        "classification": "unknown",
+        "contributors": {},
+        "primary_contributor": null
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpxqls69t8\\meta.jsonl",
+      "scan_duration_seconds": 0.0324,
+      "skills": [
+        {
+          "skill": "Flask",
+          "confidence": 0.3333333333333333,
+          "category": "framework"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.3333333333333333,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2025-12-03T01:38:47.862551",
+        "skills": [
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-02T17:38:46",
+            "last_seen": "2025-12-02T17:38:46",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2025-12-02T17:38:46",
+            "last_seen": "2025-12-02T17:38:46",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2025-12-02T17:38:46",
+            "last_seen": "2025-12-02T17:38:46",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -674,9 +1732,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-06 02:31:42",
+    "created_at": "2025-12-07 01:58:30",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpdvpqio52\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpkd8yk2wn\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -684,8 +1742,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-05T18:31:42",
-        "latest_modification": "2025-12-05T18:31:42",
+        "earliest_modification": "2025-12-06T17:58:30",
+        "latest_modification": "2025-12-06T17:58:30",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -719,8 +1777,8 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpdvpqio52\\meta.jsonl",
-      "scan_duration_seconds": 0.0146,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpkd8yk2wn\\meta.jsonl",
+      "scan_duration_seconds": 0.034,
       "skills": [
         {
           "skill": "Express",
@@ -774,27 +1832,13 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-06T02:31:42.364211",
+        "generated_at": "2025-12-07T01:58:30.723176",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "React",
-            "category": "framework",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -807,8 +1851,8 @@
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -819,10 +1863,10 @@
             "intensity": 0.5
           },
           {
-            "skill": "FastAPI",
+            "skill": "React",
             "category": "framework",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -835,8 +1879,22 @@
           {
             "skill": "Flask",
             "category": "framework",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "FastAPI",
+            "category": "framework",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -849,8 +1907,8 @@
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -863,8 +1921,8 @@
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -877,8 +1935,8 @@
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -891,8 +1949,8 @@
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 2.0,
             "year_counts": {
               "2025": 2.0
@@ -905,8 +1963,8 @@
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -919,8 +1977,8 @@
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -933,8 +1991,8 @@
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -947,8 +2005,8 @@
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-05T18:31:42",
-            "last_seen": "2025-12-05T18:31:42",
+            "first_seen": "2025-12-06T17:58:30",
+            "last_seen": "2025-12-06T17:58:30",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -993,13 +2051,13 @@
     "project_id": "demo-backend",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-06 02:31:42",
+    "created_at": "2025-12-07 01:58:30",
     "snapshot": {
       "file_summary": {
         "file_count": 48,
         "total_bytes": 58211,
-        "earliest_modification": "2025-12-05T18:31:42",
-        "latest_modification": "2025-12-05T18:31:42",
+        "earliest_modification": "2025-12-06T17:58:30",
+        "latest_modification": "2025-12-06T17:58:30",
         "duration_days": 0,
         "active_days": 42,
         "activity_breakdown": {
@@ -1037,13 +2095,13 @@
     "project_id": "analytics-pipeline",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-06 02:31:42",
+    "created_at": "2025-12-07 01:58:30",
     "snapshot": {
       "file_summary": {
         "file_count": 63,
         "total_bytes": 80330,
-        "earliest_modification": "2025-12-05T18:31:42",
-        "latest_modification": "2025-12-05T18:31:42",
+        "earliest_modification": "2025-12-06T17:58:30",
+        "latest_modification": "2025-12-06T17:58:30",
         "duration_days": 0,
         "active_days": 58,
         "activity_breakdown": {
@@ -1080,9 +2138,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 01:37:12",
+    "created_at": "2025-12-07 02:16:18",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpat6cxq7t\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpqsi02d84\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -1090,8 +2148,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-06T17:37:12",
-        "latest_modification": "2025-12-06T17:37:12",
+        "earliest_modification": "2025-12-06T18:16:18",
+        "latest_modification": "2025-12-06T18:16:18",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -1125,8 +2183,8 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpat6cxq7t\\meta.jsonl",
-      "scan_duration_seconds": 0.0138,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpqsi02d84\\meta.jsonl",
+      "scan_duration_seconds": 0.0219,
       "skills": [
         {
           "skill": "Express",
@@ -1180,13 +2238,13 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-07T01:37:12.507484",
+        "generated_at": "2025-12-07T02:16:18.650432",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1199,8 +2257,8 @@
           {
             "skill": "React",
             "category": "framework",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1213,22 +2271,8 @@
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "Flask",
-            "category": "framework",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1241,8 +2285,22 @@
           {
             "skill": "FastAPI",
             "category": "framework",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1255,8 +2313,8 @@
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1269,8 +2327,8 @@
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1283,8 +2341,8 @@
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1297,8 +2355,8 @@
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 2.0,
             "year_counts": {
               "2025": 2.0
@@ -1311,8 +2369,8 @@
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1325,8 +2383,8 @@
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1339,8 +2397,8 @@
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1353,8 +2411,8 @@
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-06T17:37:12",
-            "last_seen": "2025-12-06T17:37:12",
+            "first_seen": "2025-12-06T18:16:18",
+            "last_seen": "2025-12-06T18:16:18",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1399,13 +2457,13 @@
     "project_id": "demo-backend",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 01:37:12",
+    "created_at": "2025-12-07 02:16:18",
     "snapshot": {
       "file_summary": {
         "file_count": 48,
         "total_bytes": 58211,
-        "earliest_modification": "2025-12-06T17:37:12",
-        "latest_modification": "2025-12-06T17:37:12",
+        "earliest_modification": "2025-12-06T18:16:18",
+        "latest_modification": "2025-12-06T18:16:18",
         "duration_days": 0,
         "active_days": 42,
         "activity_breakdown": {
@@ -1443,13 +2501,13 @@
     "project_id": "analytics-pipeline",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 01:37:12",
+    "created_at": "2025-12-07 02:16:18",
     "snapshot": {
       "file_summary": {
         "file_count": 63,
         "total_bytes": 80330,
-        "earliest_modification": "2025-12-06T17:37:12",
-        "latest_modification": "2025-12-06T17:37:12",
+        "earliest_modification": "2025-12-06T18:16:18",
+        "latest_modification": "2025-12-06T18:16:18",
         "duration_days": 0,
         "active_days": 58,
         "activity_breakdown": {
@@ -1486,9 +2544,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:46:33",
+    "created_at": "2025-12-07 02:31:01",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpmaxdjqcm\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpy0zrhob2\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -1496,8 +2554,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-06T18:46:32",
-        "latest_modification": "2025-12-06T18:46:32",
+        "earliest_modification": "2025-12-06T18:31:00",
+        "latest_modification": "2025-12-06T18:31:00",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -1531,8 +2589,8 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpmaxdjqcm\\meta.jsonl",
-      "scan_duration_seconds": 0.013,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpy0zrhob2\\meta.jsonl",
+      "scan_duration_seconds": 0.0308,
       "skills": [
         {
           "skill": "Express",
@@ -1586,13 +2644,13 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-07T02:46:33.139158",
+        "generated_at": "2025-12-07T02:31:01.615166",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1605,8 +2663,8 @@
           {
             "skill": "React",
             "category": "framework",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1619,22 +2677,8 @@
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "Flask",
-            "category": "framework",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1647,8 +2691,22 @@
           {
             "skill": "FastAPI",
             "category": "framework",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2025": 1.0
+            },
+            "quarter_counts": {
+              "2025-Q4": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1661,8 +2719,8 @@
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1675,8 +2733,8 @@
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1689,8 +2747,8 @@
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1703,8 +2761,8 @@
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 2.0,
             "year_counts": {
               "2025": 2.0
@@ -1717,8 +2775,8 @@
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1731,8 +2789,8 @@
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1745,8 +2803,8 @@
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1759,8 +2817,8 @@
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-06T18:46:32",
-            "last_seen": "2025-12-06T18:46:32",
+            "first_seen": "2025-12-06T18:31:00",
+            "last_seen": "2025-12-06T18:31:00",
             "total_weight": 1.0,
             "year_counts": {
               "2025": 1.0
@@ -1805,13 +2863,13 @@
     "project_id": "demo-backend",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:46:33",
+    "created_at": "2025-12-07 02:31:01",
     "snapshot": {
       "file_summary": {
         "file_count": 48,
         "total_bytes": 58211,
-        "earliest_modification": "2025-12-06T18:46:32",
-        "latest_modification": "2025-12-06T18:46:32",
+        "earliest_modification": "2025-12-06T18:31:00",
+        "latest_modification": "2025-12-06T18:31:00",
         "duration_days": 0,
         "active_days": 42,
         "activity_breakdown": {
@@ -1849,13 +2907,13 @@
     "project_id": "analytics-pipeline",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:46:33",
+    "created_at": "2025-12-07 02:31:01",
     "snapshot": {
       "file_summary": {
         "file_count": 63,
         "total_bytes": 80330,
-        "earliest_modification": "2025-12-06T18:46:32",
-        "latest_modification": "2025-12-06T18:46:32",
+        "earliest_modification": "2025-12-06T18:31:00",
+        "latest_modification": "2025-12-06T18:31:00",
         "duration_days": 0,
         "active_days": 58,
         "activity_breakdown": {
@@ -1892,9 +2950,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:49:43",
+    "created_at": "2026-01-07 17:47:06",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwmh9zu2s\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpnmngm46n\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -1902,8 +2960,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-06T18:49:42",
-        "latest_modification": "2025-12-06T18:49:42",
+        "earliest_modification": "2026-01-07T09:47:06",
+        "latest_modification": "2026-01-07T09:47:06",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -1912,7 +2970,7 @@
           "code": 4
         },
         "timeline": {
-          "2025-12": 9
+          "2026-01": 9
         }
       },
       "languages": {
@@ -1937,8 +2995,8 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmpwmh9zu2s\\meta.jsonl",
-      "scan_duration_seconds": 0.0135,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpnmngm46n\\meta.jsonl",
+      "scan_duration_seconds": 0.0321,
       "skills": [
         {
           "skill": "Express",
@@ -1992,194 +3050,194 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-07T02:49:43.212065",
+        "generated_at": "2026-01-07T17:47:06.797384",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "React",
-            "category": "framework",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "React",
+            "category": "framework",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "FastAPI",
             "category": "framework",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Flask",
             "category": "framework",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 2.0,
             "year_counts": {
-              "2025": 2.0
+              "2026": 2.0
             },
             "quarter_counts": {
-              "2025-Q4": 2.0
+              "2026-Q1": 2.0
             },
             "intensity": 1.0
           },
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-06T18:49:42",
-            "last_seen": "2025-12-06T18:49:42",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           }
         ]
       },
       "top_skills_by_year": {
-        "2025": [
+        "2026": [
           {
             "skill": "bash",
             "weight": 2.0
@@ -2203,93 +3261,6 @@
         ]
       },
       "project_id": "demo",
-      "classification": "collaborative",
-      "primary_contributor": "Alice Smith"
-    }
-  },
-  {
-    "project_id": "demo-backend",
-    "classification": "collaborative",
-    "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:49:43",
-    "snapshot": {
-      "file_summary": {
-        "file_count": 48,
-        "total_bytes": 58211,
-        "earliest_modification": "2025-12-06T18:49:42",
-        "latest_modification": "2025-12-06T18:49:42",
-        "duration_days": 0,
-        "active_days": 42,
-        "activity_breakdown": {
-          "other": 3,
-          "documentation": 2,
-          "code": 4
-        },
-        "timeline": {
-          "2025-12": 9
-        }
-      },
-      "languages": {
-        "Python": 6,
-        "SQL": 3,
-        "JavaScript": 2
-      },
-      "frameworks": [
-        "Flask",
-        "React"
-      ],
-      "collaboration": {
-        "classification": "collaborative",
-        "primary_contributor": "Alice Smith",
-        "contributors": {
-          "Alice Smith": 8,
-          "Bob Stone": 4
-        }
-      },
-      "project_id": "demo-backend",
-      "classification": "collaborative",
-      "primary_contributor": "Alice Smith"
-    }
-  },
-  {
-    "project_id": "analytics-pipeline",
-    "classification": "collaborative",
-    "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 02:49:43",
-    "snapshot": {
-      "file_summary": {
-        "file_count": 63,
-        "total_bytes": 80330,
-        "earliest_modification": "2025-12-06T18:49:42",
-        "latest_modification": "2025-12-06T18:49:42",
-        "duration_days": 0,
-        "active_days": 58,
-        "activity_breakdown": {
-          "other": 3,
-          "documentation": 2,
-          "code": 4
-        },
-        "timeline": {
-          "2025-12": 9
-        }
-      },
-      "languages": {
-        "Python": 10,
-        "SQL": 7
-      },
-      "frameworks": [
-        "FastAPI",
-        "React"
-      ],
-      "collaboration": {
-        "classification": "collaborative",
-        "primary_contributor": "Alice Smith",
-        "contributors": {
-          "Alice Smith": 8,
-          "Bob Stone": 4
-        }
-      },
-      "project_id": "analytics-pipeline",
       "classification": "collaborative",
       "primary_contributor": "Alice Smith"
     }
@@ -2298,9 +3269,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 03:05:29",
+    "created_at": "2026-01-07 17:47:06",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp48vlbouq\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpnmngm46n\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -2308,8 +3279,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-06T19:05:28",
-        "latest_modification": "2025-12-06T19:05:28",
+        "earliest_modification": "2026-01-07T09:47:06",
+        "latest_modification": "2026-01-07T09:47:06",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -2318,7 +3289,7 @@
           "code": 4
         },
         "timeline": {
-          "2025-12": 9
+          "2026-01": 9
         }
       },
       "languages": {
@@ -2343,8 +3314,8 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp48vlbouq\\meta.jsonl",
-      "scan_duration_seconds": 0.0154,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpnmngm46n\\meta.jsonl",
+      "scan_duration_seconds": 0.0321,
       "skills": [
         {
           "skill": "Express",
@@ -2398,194 +3369,194 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-07T03:05:29.668550",
+        "generated_at": "2026-01-07T17:47:06.797384",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "React",
             "category": "framework",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "Flask",
-            "category": "framework",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "FastAPI",
             "category": "framework",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 2.0,
             "year_counts": {
-              "2025": 2.0
+              "2026": 2.0
             },
             "quarter_counts": {
-              "2025-Q4": 2.0
+              "2026-Q1": 2.0
             },
             "intensity": 1.0
           },
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-06T19:05:28",
-            "last_seen": "2025-12-06T19:05:28",
+            "first_seen": "2026-01-07T09:47:06",
+            "last_seen": "2026-01-07T09:47:06",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           }
         ]
       },
       "top_skills_by_year": {
-        "2025": [
+        "2026": [
           {
             "skill": "bash",
             "weight": 2.0
@@ -2609,93 +3580,6 @@
         ]
       },
       "project_id": "demo",
-      "classification": "collaborative",
-      "primary_contributor": "Alice Smith"
-    }
-  },
-  {
-    "project_id": "demo-backend",
-    "classification": "collaborative",
-    "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 03:05:29",
-    "snapshot": {
-      "file_summary": {
-        "file_count": 48,
-        "total_bytes": 58211,
-        "earliest_modification": "2025-12-06T19:05:28",
-        "latest_modification": "2025-12-06T19:05:28",
-        "duration_days": 0,
-        "active_days": 42,
-        "activity_breakdown": {
-          "other": 3,
-          "documentation": 2,
-          "code": 4
-        },
-        "timeline": {
-          "2025-12": 9
-        }
-      },
-      "languages": {
-        "Python": 6,
-        "SQL": 3,
-        "JavaScript": 2
-      },
-      "frameworks": [
-        "Flask",
-        "React"
-      ],
-      "collaboration": {
-        "classification": "collaborative",
-        "primary_contributor": "Alice Smith",
-        "contributors": {
-          "Alice Smith": 8,
-          "Bob Stone": 4
-        }
-      },
-      "project_id": "demo-backend",
-      "classification": "collaborative",
-      "primary_contributor": "Alice Smith"
-    }
-  },
-  {
-    "project_id": "analytics-pipeline",
-    "classification": "collaborative",
-    "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 03:05:29",
-    "snapshot": {
-      "file_summary": {
-        "file_count": 63,
-        "total_bytes": 80330,
-        "earliest_modification": "2025-12-06T19:05:28",
-        "latest_modification": "2025-12-06T19:05:28",
-        "duration_days": 0,
-        "active_days": 58,
-        "activity_breakdown": {
-          "other": 3,
-          "documentation": 2,
-          "code": 4
-        },
-        "timeline": {
-          "2025-12": 9
-        }
-      },
-      "languages": {
-        "Python": 10,
-        "SQL": 7
-      },
-      "frameworks": [
-        "FastAPI",
-        "React"
-      ],
-      "collaboration": {
-        "classification": "collaborative",
-        "primary_contributor": "Alice Smith",
-        "contributors": {
-          "Alice Smith": 8,
-          "Bob Stone": 4
-        }
-      },
-      "project_id": "analytics-pipeline",
       "classification": "collaborative",
       "primary_contributor": "Alice Smith"
     }
@@ -2704,9 +3588,9 @@
     "project_id": "demo",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 04:18:27",
+    "created_at": "2026-01-12 06:31:12",
     "snapshot": {
-      "archive": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp3takmlow\\sample_project.zip",
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpq104cvbx\\sample_project.zip",
       "requested_mode": "local",
       "resolved_mode": "local",
       "mode_reason": "Local analysis enforced",
@@ -2714,8 +3598,8 @@
       "file_summary": {
         "file_count": 9,
         "total_bytes": 1271,
-        "earliest_modification": "2025-12-06T20:18:26",
-        "latest_modification": "2025-12-06T20:18:26",
+        "earliest_modification": "2026-01-11T22:31:12",
+        "latest_modification": "2026-01-11T22:31:12",
         "duration_days": 0,
         "active_days": 1,
         "activity_breakdown": {
@@ -2724,7 +3608,7 @@
           "code": 4
         },
         "timeline": {
-          "2025-12": 9
+          "2026-01": 9
         }
       },
       "languages": {
@@ -2749,8 +3633,10 @@
         },
         "primary_contributor": "Alice Smith"
       },
-      "metadata_output": "C:\\Users\\amirp\\AppData\\Local\\Temp\\tmp3takmlow\\meta.jsonl",
-      "scan_duration_seconds": 0.0112,
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpq104cvbx\\meta.jsonl",
+      "scan_duration_seconds": 0.0314,
+      "warnings": [],
+      "warning_count": 0,
       "skills": [
         {
           "skill": "Express",
@@ -2804,194 +3690,515 @@
         }
       ],
       "skill_timeline": {
-        "generated_at": "2025-12-07T04:18:27.288266",
+        "generated_at": "2026-01-12T06:31:12.850688",
         "skills": [
           {
             "skill": "JSON",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
-            },
-            "intensity": 0.5
-          },
-          {
-            "skill": "React",
-            "category": "framework",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
-            "total_weight": 1.0,
-            "year_counts": {
-              "2025": 1.0
-            },
-            "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Express",
             "category": "framework",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "React",
+            "category": "framework",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Flask",
             "category": "framework",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "FastAPI",
             "category": "framework",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Markdown",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "docker",
             "category": "tool",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Shell",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "bash",
             "category": "tool",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 2.0,
             "year_counts": {
-              "2025": 2.0
+              "2026": 2.0
             },
             "quarter_counts": {
-              "2025-Q4": 2.0
+              "2026-Q1": 2.0
             },
             "intensity": 1.0
           },
           {
             "skill": "SQL",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "sql",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "Python",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           },
           {
             "skill": "TypeScript",
             "category": "language",
-            "first_seen": "2025-12-06T20:18:26",
-            "last_seen": "2025-12-06T20:18:26",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
             "total_weight": 1.0,
             "year_counts": {
-              "2025": 1.0
+              "2026": 1.0
             },
             "quarter_counts": {
-              "2025-Q4": 1.0
+              "2026-Q1": 1.0
             },
             "intensity": 0.5
           }
         ]
       },
       "top_skills_by_year": {
-        "2025": [
+        "2026": [
+          {
+            "skill": "bash",
+            "weight": 2.0
+          },
+          {
+            "skill": "Express",
+            "weight": 1.0
+          },
+          {
+            "skill": "FastAPI",
+            "weight": 1.0
+          },
+          {
+            "skill": "Flask",
+            "weight": 1.0
+          },
+          {
+            "skill": "JSON",
+            "weight": 1.0
+          }
+        ]
+      },
+      "project_id": "demo",
+      "classification": "collaborative",
+      "primary_contributor": "Alice Smith"
+    }
+  },
+  {
+    "project_id": "demo",
+    "classification": "collaborative",
+    "primary_contributor": "Alice Smith",
+    "created_at": "2026-01-12 06:31:12",
+    "snapshot": {
+      "archive": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpq104cvbx\\sample_project.zip",
+      "requested_mode": "local",
+      "resolved_mode": "local",
+      "mode_reason": "Local analysis enforced",
+      "local_mode_label": "Local Analysis Mode",
+      "file_summary": {
+        "file_count": 9,
+        "total_bytes": 1271,
+        "earliest_modification": "2026-01-11T22:31:12",
+        "latest_modification": "2026-01-11T22:31:12",
+        "duration_days": 0,
+        "active_days": 1,
+        "activity_breakdown": {
+          "other": 3,
+          "documentation": 2,
+          "code": 4
+        },
+        "timeline": {
+          "2026-01": 9
+        }
+      },
+      "languages": {
+        "JSON": 1,
+        "Markdown": 1,
+        "Shell": 1,
+        "SQL": 1,
+        "Python": 1,
+        "TypeScript": 1
+      },
+      "frameworks": [
+        "Express",
+        "FastAPI",
+        "Flask",
+        "React"
+      ],
+      "collaboration": {
+        "classification": "collaborative",
+        "contributors": {
+          "Alice Smith": 2,
+          "Bob Stone": 1
+        },
+        "primary_contributor": "Alice Smith"
+      },
+      "metadata_output": "C:\\Users\\chicken\\AppData\\Local\\Temp\\tmpq104cvbx\\meta.jsonl",
+      "scan_duration_seconds": 0.0314,
+      "warnings": [],
+      "warning_count": 0,
+      "skills": [
+        {
+          "skill": "Express",
+          "confidence": 0.1,
+          "category": "framework"
+        },
+        {
+          "skill": "FastAPI",
+          "confidence": 0.1,
+          "category": "framework"
+        },
+        {
+          "skill": "Flask",
+          "confidence": 0.1,
+          "category": "framework"
+        },
+        {
+          "skill": "JSON",
+          "confidence": 0.1,
+          "category": "language"
+        },
+        {
+          "skill": "Markdown",
+          "confidence": 0.1,
+          "category": "language"
+        },
+        {
+          "skill": "Python",
+          "confidence": 0.1,
+          "category": "language"
+        },
+        {
+          "skill": "React",
+          "confidence": 0.1,
+          "category": "framework"
+        },
+        {
+          "skill": "SQL",
+          "confidence": 0.1,
+          "category": "language"
+        },
+        {
+          "skill": "Shell",
+          "confidence": 0.1,
+          "category": "language"
+        },
+        {
+          "skill": "TypeScript",
+          "confidence": 0.1,
+          "category": "language"
+        }
+      ],
+      "skill_timeline": {
+        "generated_at": "2026-01-12T06:31:12.850688",
+        "skills": [
+          {
+            "skill": "JSON",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Express",
+            "category": "framework",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "React",
+            "category": "framework",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Flask",
+            "category": "framework",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "FastAPI",
+            "category": "framework",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Markdown",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "docker",
+            "category": "tool",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Shell",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "bash",
+            "category": "tool",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 2.0,
+            "year_counts": {
+              "2026": 2.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 2.0
+            },
+            "intensity": 1.0
+          },
+          {
+            "skill": "SQL",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "sql",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "Python",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          },
+          {
+            "skill": "TypeScript",
+            "category": "language",
+            "first_seen": "2026-01-11T22:31:12",
+            "last_seen": "2026-01-11T22:31:12",
+            "total_weight": 1.0,
+            "year_counts": {
+              "2026": 1.0
+            },
+            "quarter_counts": {
+              "2026-Q1": 1.0
+            },
+            "intensity": 0.5
+          }
+        ]
+      },
+      "top_skills_by_year": {
+        "2026": [
           {
             "skill": "bash",
             "weight": 2.0
@@ -3023,13 +4230,13 @@
     "project_id": "demo-backend",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 04:18:27",
+    "created_at": "2026-01-12 06:31:12",
     "snapshot": {
       "file_summary": {
         "file_count": 48,
         "total_bytes": 58211,
-        "earliest_modification": "2025-12-06T20:18:26",
-        "latest_modification": "2025-12-06T20:18:26",
+        "earliest_modification": "2026-01-11T22:31:12",
+        "latest_modification": "2026-01-11T22:31:12",
         "duration_days": 0,
         "active_days": 42,
         "activity_breakdown": {
@@ -3038,7 +4245,7 @@
           "code": 4
         },
         "timeline": {
-          "2025-12": 9
+          "2026-01": 9
         }
       },
       "languages": {
@@ -3067,13 +4274,13 @@
     "project_id": "analytics-pipeline",
     "classification": "collaborative",
     "primary_contributor": "Alice Smith",
-    "created_at": "2025-12-07 04:18:27",
+    "created_at": "2026-01-12 06:31:12",
     "snapshot": {
       "file_summary": {
         "file_count": 63,
         "total_bytes": 80330,
-        "earliest_modification": "2025-12-06T20:18:26",
-        "latest_modification": "2025-12-06T20:18:26",
+        "earliest_modification": "2026-01-11T22:31:12",
+        "latest_modification": "2026-01-11T22:31:12",
         "duration_days": 0,
         "active_days": 58,
         "activity_breakdown": {
@@ -3082,7 +4289,7 @@
           "code": 4
         },
         "timeline": {
-          "2025-12": 9
+          "2026-01": 9
         }
       },
       "languages": {
