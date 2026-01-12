@@ -37,10 +37,6 @@ def main():
     print("     Data and Artifact Mining Application")
     print("     Portfolio & Resume Generator")
     print("=" * 60)
-    
-    print(snapshots[0].keys())
-    print(json.dumps(snapshots[0], indent=2))
-
     print()
     
     if not grant_consent():
