@@ -232,6 +232,7 @@ Worked on creating a start up menu for the user to navigate with upon running th
 
 - Created start up menu for application
 - Integrated menu options with existing program functions
+- Discussed milestone #2 implementation with team
 - Reviewed and tested teammate's code and pr
 
 ### Next Week:
