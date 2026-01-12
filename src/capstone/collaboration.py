@@ -9,6 +9,8 @@ from typing import Iterable
 
 
 AUTHOR_PATTERN = re.compile(r"^\S+\s+\S+\s+(.+?)\s+<(.+?)>")
+# Fallback for plain git log lines: "<hash> Author Name <email>"
+AUTHOR_LOG_PATTERN = re.compile(r"^\S+\s+(.+?)\s+<(.+?)>")
 
 
 @dataclass
@@ -21,7 +23,7 @@ class CollaborationSummary:
 def analyze_git_logs(lines: Iterable[str]) -> CollaborationSummary:
     counts: Counter[str] = Counter()
     for line in lines:
-        match = AUTHOR_PATTERN.match(line)
+        match = AUTHOR_PATTERN.match(line) or AUTHOR_LOG_PATTERN.match(line)
         if not match:
             continue
         author = match.group(1).strip()
