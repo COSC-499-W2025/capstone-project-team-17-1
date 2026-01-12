@@ -300,12 +300,10 @@ During week 10, the team cleaned all js legacy and developed with full python la
 (Nov 17 - Nov 23, 2025)
 
 ### Recap of Milestone Goal - Week 12
-
 In Week 12, team members self-assigned issues based on the tasks assigned in the WBS and collaborated on development.
 
 ### Completed Tasks Week 12
 <img width="1188" height="287" alt="image" src="https://github.com/user-attachments/assets/499889f6-8e29-4eae-8c64-5fa7746525ed" />
-
 
 ### Burnup chart Week 12
 <img width="833" height="624" alt="image" src="https://github.com/user-attachments/assets/06858518-edd7-4c65-81fa-44a7ae2e6f9a" />
@@ -378,19 +376,18 @@ We integrated the new pipeline into the CLI, added the resume-generation command
 ### In Progress Tasks Week 14 -- tasks for Milestone2
 <img width="1272" height="302" alt="Screenshot 2025-12-07 at 6 05 14 PM" src="https://github.com/user-attachments/assets/6b99f0a7-4813-464b-b1c4-333ffecb6d57" />
 
-
 ### Test Report Week 14
 During week 14, the team validated the new end-to-end CLI pipeline and updated résumé/analysis commands with a mix of automated and manual tests. Pytest/unittest cases now cover CLI argument parsing, error handling for missing/invalid archives, and the integration of the pipeline into capstone.cli analyze (including JSON/CSV export checks). Manually, we ran python -m capstone.cli analyze demo.zip and the new résumé command on multiple demo archives to confirm that snapshots, logs, and LLM-generated summaries are produced correctly and the tool runs to completion without crashes.
 
 
-## Term2 WEEK 1  TEAM LOG
+
+## WEEK 1 TEAM LOG (Term2)
 (Jan5 - Jan11, 2026)
 
 ### Recap of Milestone Goal - Week 1
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
 
 ### Username and Student Name for Team 17
-
 | Student Name | Github Username |
 | ------------ | --------------- |
 | Yuxuan Sun | ErenSun408 |
@@ -399,7 +396,15 @@ The goal of this milestone is to build a service-oriented system that supports a
 | Shuyu Yan | yanshuyu280042 |
 | Michelle Zhou | mltzhou |
 
-### Completed Tasks Week 1
 ### Burnup chart Week 1
+<img width="1651" height="951" alt="image" src="https://github.com/user-attachments/assets/b583ca3d-f785-4884-9eb4-ff7dc63df524" />
+
+### Completed Tasks Week 1
+<img width="1921" height="205" alt="image" src="https://github.com/user-attachments/assets/1623f5c5-413d-4274-9ce8-53dc6d07a9db" />
+<img width="1920" height="201" alt="image" src="https://github.com/user-attachments/assets/afc2aeb2-cf25-477b-a3d3-ca1a1292fa19" />
+
 ### In Progress Tasks Week 1 
+<img width="1949" height="1128" alt="image" src="https://github.com/user-attachments/assets/19a7e300-9b37-4201-b6cb-c022945e58a9" />
+
 ### Test Report Week 14
+This week, the team improved contributor analysis, data determinism, and user-facing customization. PR #147 added résumé-specific project descriptions with API and CLI support to enable a human-in-the-loop workflow. PR #148 made latest snapshot selection deterministic and Windows-safe, with additional unit tests for edge cases. PR #151 introduced an API endpoint exposing structured evidence of success from the latest portfolio snapshot. PR #152 enhanced contributor rankings by incorporating reviews and lines changed, added a contribution scoring formula, and introduced a new capstone import-repo <url> command while improving contributor identity resolution.
