@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional
 
 from .logging_utils import get_logger
+from .collaboration_analysis import compact_contributors
 
 
 logger = get_logger(__name__)
@@ -80,24 +81,28 @@ def extract_features(
     activity_kinds = len(activity_breakdown)
 
     collaboration = snapshot.get("collaboration", {}) or {}
-    contributors = collaboration.get("contributors", {}) or {}
-    total_contributions = sum(int(value) for value in contributors.values())
-    contribution_ratio = 1.0
-    if total_contributions > 0:
+    contributors = compact_contributors(collaboration)
+    weighted = {}  # no weighted scores in compact representation
+
+    def _ratio_from(mapping: Dict[str, float]) -> float:
+        if not mapping:
+            return 0.0
+        total = sum(float(v) for v in mapping.values())
+        if total <= 0:
+            return 0.0
         target = None
         if user:
             target = user
         else:
             target = collaboration.get("primary_contributor")
-            if not target and contributors:
-                target = max(contributors, key=lambda name: contributors[name])
-        contribution_ratio = contributors.get(target, 0) / total_contributions if target else 0.0
-        if contribution_ratio == 0.0:
-            contribution_ratio = 0.1
+            if not target and mapping:
+                target = max(mapping, key=lambda name: mapping[name])
+        return float(mapping.get(target, 0.0)) / total if target else 0.0
 
-    # Guarantee a minimum multiplier so sparse data still yields a sortable score.
-    # This avoids a user with shared ownership being penalised into a zero-score project.
-    contribution_ratio = max(contribution_ratio, 0.1)
+    # Prefer weighted scores (commit/review/lines) when available; otherwise use raw counts.
+    contribution_ratio = _ratio_from(weighted)
+    if contribution_ratio == 0.0:
+        contribution_ratio = _ratio_from(contributors)
 
     return ProjectFeatureSet(
         project_id=project_id,

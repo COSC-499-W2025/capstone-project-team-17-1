@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from capstone.llm_client import build_default_llm
@@ -161,6 +163,63 @@ def build_parser() -> argparse.ArgumentParser:
         help="Identifier used when persisting analysis snapshots",
     )
     analyze_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where the analysis database (SQLite) should be stored",
+    )
+
+    # import-repo: clone a git repo by URL and run the same analysis pipeline
+    import_parser = subparsers.add_parser(
+        "import-repo",
+        help="Clone a git repository from a URL, zip it, and analyse the snapshot",
+    )
+    import_parser.add_argument("url", type=str, help="Git repository URL (e.g., https://github.com/org/repo)")
+    import_parser.add_argument(
+        "--branch",
+        type=str,
+        default=None,
+        help="Optional branch or tag to checkout before analysis",
+    )
+    import_parser.add_argument(
+        "--depth",
+        type=int,
+        default=0,
+        help="Shallow clone depth (0 means full clone)",
+    )
+    import_parser.add_argument(
+        "--metadata-output",
+        type=Path,
+        default=Path("analysis_output/metadata.jsonl"),
+        help="Path to save JSONL metadata",
+    )
+    import_parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=Path("analysis_output/summary.json"),
+        help="Path to save the analysis summary",
+    )
+    import_parser.add_argument(
+        "--analysis-mode",
+        choices=["local", "external", "auto"],
+        default="local",
+        help="Requested analysis mode (default: local)",
+    )
+    import_parser.add_argument(
+        "--quiet", action="store_true", help="Suppress terminal output and only write files"
+    )
+    import_parser.add_argument(
+        "--summary-to-stdout",
+        action="store_true",
+        help="Print summary JSON directly to stdout",
+    )
+    import_parser.add_argument(
+        "--project-id",
+        type=str,
+        default=None,
+        help="Identifier used when persisting analysis snapshots",
+    )
+    import_parser.add_argument(
         "--db-dir",
         type=Path,
         default=None,
@@ -1000,6 +1059,74 @@ def _handle_config(args: argparse.Namespace) -> int:
     return 1
 
 
+def _infer_repo_name(url: str) -> str:
+    slug = url.rstrip("/").rsplit("/", 1)[-1]
+    name = slug.split(":")[-1].removesuffix(".git")
+    return name or "repository"
+
+
+def _clone_repository(url: str, *, branch: str | None, depth: int, dest_root: Path) -> Path:
+    repo_name = _infer_repo_name(url)
+    target_dir = dest_root / repo_name
+    cmd = ["git", "clone"]
+    if depth and depth > 0:
+        cmd += ["--depth", str(depth)]
+    if branch:
+        cmd += ["--branch", branch]
+    cmd += [url, str(target_dir)]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("git executable not found in PATH") from None
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        raise RuntimeError(f"git clone failed: {detail}") from exc
+    return target_dir
+
+
+def _write_git_log(repo_path: Path) -> None:
+    """Persist git log into .git/logs for downstream contribution analysis."""
+    cmd = [
+        "git",
+        "-C",
+        str(repo_path),
+        "log",
+        "--no-color",
+        "--pretty=format:commit:%H|%an|%ae|%ct|%s",
+        "--numstat",
+    ]
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        logger.warning("Unable to capture git log for %s: %s", repo_path, detail)
+        return
+    except FileNotFoundError:
+        logger.warning("git executable not found; skipping git log capture for %s", repo_path)
+        return
+
+    log_dir = repo_path / ".git" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "capstone_git_log").write_text(result.stdout, encoding="utf-8")
+    # Also drop a copy at repo root so we can delete most of .git before zipping.
+    (repo_path / "capstone_git_log.txt").write_text(result.stdout, encoding="utf-8")
+
+
+def _prune_repository(repo_path: Path) -> None:
+    """Drop bulky/non-essential folders before zipping to avoid noisy warnings."""
+    prune_targets = [
+        ".git",
+        ".venv",
+    ]
+    for rel in prune_targets:
+        target = repo_path / rel
+        if target.exists():
+            try:
+                shutil.rmtree(target)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to prune %s: %s", target, exc)
+
+
 def _handle_analyze(args: argparse.Namespace) -> int:
     archive_service = ArchiveAnalyzerService(ZipAnalyzer())
     archive_path, payload, code = archive_service.validate_archive(args.archive)
@@ -1095,6 +1222,45 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 
     return 0
 
+
+def _handle_import_repo(args: argparse.Namespace) -> int:
+    with tempfile.TemporaryDirectory(prefix="capstone-import-") as temp_dir:
+        temp_path = Path(temp_dir)
+        try:
+            repo_path = _clone_repository(args.url, branch=args.branch, depth=args.depth or 0, dest_root=temp_path)
+        except Exception as exc:
+            print(f"[import-repo] Failed to clone repository: {exc}", file=sys.stderr)
+            return 4
+
+        # Capture git log to feed collaboration analysis (avoids relying on reflog only).
+        try:
+            _write_git_log(repo_path)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to persist git log for analysis: %s", exc)
+
+        # Remove bulky/unnecessary bits that trigger warnings but don't affect analysis.
+        _prune_repository(repo_path)
+
+        try:
+            archive_path = Path(shutil.make_archive(str(temp_path / repo_path.name), "zip", root_dir=repo_path))
+        except Exception as exc:
+            print(f"[import-repo] Failed to package repository: {exc}", file=sys.stderr)
+            return 5
+
+        project_id = args.project_id or repo_path.name
+        analyze_args = argparse.Namespace(
+            archive=str(archive_path),
+            metadata_output=args.metadata_output,
+            summary_output=args.summary_output,
+            analysis_mode=args.analysis_mode,
+            quiet=args.quiet,
+            summary_to_stdout=args.summary_to_stdout,
+            project_id=project_id,
+            db_dir=args.db_dir,
+        )
+        return _handle_analyze(analyze_args)
+
+
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     g = globals()
     store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
@@ -1132,6 +1298,7 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
     close_fn = g.get("close_db", close_db)
     store = SnapshotStore(
         args.db_dir,
+        open_fn=g.get("open_db", open_db),
         fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots),
         close_fn=close_fn,
     )
@@ -1276,6 +1443,44 @@ def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -
     collaboration = summary.get("collaboration", {})
     if collaboration:
         print("Collaboration classification:", collaboration.get("classification", "unknown"))
+        contributors = collaboration.get("contributors (commits, line changes, reviews)", {}) or {}
+        if contributors:
+            formula = collaboration.get(
+                "contribution_compute",
+                "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
+            )
+            print(f"Contribution formula: {formula}")
+            print("Contributors (commits, line changes, reviews):")
+            def _parse_counts(data) -> tuple[int, int, int]:
+                if isinstance(data, str):
+                    try:
+                        parts = [int(x.strip()) for x in data.strip("[]").split(",") if x.strip()]
+                        commits = parts[0] if len(parts) > 0 else 0
+                        lines = parts[1] if len(parts) > 1 else 0
+                        reviews = parts[2] if len(parts) > 2 else 0
+                        return commits, lines, reviews
+                    except Exception:
+                        return 0, 0, 0
+                if isinstance(data, (list, tuple)):
+                    commits = int(data[0]) if len(data) > 0 else 0
+                    lines = int(data[1]) if len(data) > 1 else 0
+                    reviews = int(data[2]) if len(data) > 2 else 0
+                    return commits, lines, reviews
+                if isinstance(data, dict):
+                    return (
+                        int(data.get("commits", 0)),
+                        int(data.get("lines", 0)),
+                        int(data.get("reviews", 0)),
+                    )
+                return 0, 0, 0
+
+            sorted_items = sorted(
+                contributors.items(),
+                key=lambda item: (-_parse_counts(item[1])[0], item[0]),
+            )
+            for author, values in sorted_items:
+                commits, lines, reviews = _parse_counts(values)
+                print(f" - {author}: {commits}, {lines}, {reviews}")
     print(f"Scan duration: {summary.get('scan_duration_seconds', 0)} seconds")
 
 
@@ -1328,6 +1533,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_config(args)
     if args.command == "analyze":
         return _handle_analyze(args)
+    if args.command == "import-repo":
+        return _handle_import_repo(args)
     if args.command == "clean":
         return _handle_clean(args)
     if args.command == "rank-projects":
