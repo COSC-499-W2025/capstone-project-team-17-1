@@ -1298,6 +1298,7 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
     close_fn = g.get("close_db", close_db)
     store = SnapshotStore(
         args.db_dir,
+        open_fn=g.get("open_db", open_db),
         fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots),
         close_fn=close_fn,
     )
