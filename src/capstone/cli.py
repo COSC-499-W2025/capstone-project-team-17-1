@@ -1100,6 +1100,23 @@ def _write_git_log(repo_path: Path) -> None:
     log_dir = repo_path / ".git" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "capstone_git_log").write_text(result.stdout, encoding="utf-8")
+    # Also drop a copy at repo root so we can delete most of .git before zipping.
+    (repo_path / "capstone_git_log.txt").write_text(result.stdout, encoding="utf-8")
+
+
+def _prune_repository(repo_path: Path) -> None:
+    """Drop bulky/non-essential folders before zipping to avoid noisy warnings."""
+    prune_targets = [
+        ".git",
+        ".venv",
+    ]
+    for rel in prune_targets:
+        target = repo_path / rel
+        if target.exists():
+            try:
+                shutil.rmtree(target)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to prune %s: %s", target, exc)
 
 
 def _handle_analyze(args: argparse.Namespace) -> int:
@@ -1212,6 +1229,9 @@ def _handle_import_repo(args: argparse.Namespace) -> int:
             _write_git_log(repo_path)
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Failed to persist git log for analysis: %s", exc)
+
+        # Remove bulky/unnecessary bits that trigger warnings but don't affect analysis.
+        _prune_repository(repo_path)
 
         try:
             archive_path = Path(shutil.make_archive(str(temp_path / repo_path.name), "zip", root_dir=repo_path))

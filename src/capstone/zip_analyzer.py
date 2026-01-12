@@ -225,7 +225,11 @@ class ZipAnalyzer:
                 frameworks.update(detected)
                 for fw in detected:
                     skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
-            elif ".git/logs/" in path_lower:
+            elif (
+                ".git/logs/capstone_git_log" in path_lower
+                or path_lower.endswith("capstone_git_log")
+                or path_lower.endswith("capstone_git_log.txt")
+            ):
                 git_logs.extend(content_text.splitlines())
             tool_skills = self._detect_tool_skills(path_lower)
             if tool_skills:
