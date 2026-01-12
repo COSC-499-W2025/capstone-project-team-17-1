@@ -7,7 +7,7 @@ import uuid
 from collections import Counter
 from dataclasses import asdict
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import perf_counter
 from typing import Iterable, List, Tuple, Dict
 from zipfile import BadZipFile, ZipFile
@@ -97,10 +97,67 @@ class ZipAnalyzer:
         frameworks = set()
         git_logs: list[str] = []
         skill_events: List[Tuple[str, str, datetime, float]] = []
+        # Collect non-fatal issues 
+        warnings: List[dict[str, str]] = []
+        seen_paths: set[str] = set()
+        supported_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".tsx",
+            ".jsx",
+            ".java",
+            ".rb",
+            ".go",
+            ".rs",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+            ".cs",
+            ".swift",
+            ".kt",
+            ".m",
+            ".php",
+            ".html",
+            ".css",
+            ".scss",
+            ".md",
+            ".json",
+            ".yml",
+            ".yaml",
+            ".sql",
+            ".sh",
+            ".bat",
+            ".ps1",
+            ".txt",
+            ".rst",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".svg",
+            ".pdf",
+            ".csv",
+        }
 
         for info in archive.infolist():
             if info.is_dir():
                 continue
+            seen_paths.add(info.filename.lower())
+            try:
+                raw = archive.read(info)
+            except BadZipFile as exc:
+                warnings.append(
+                    {
+                        "path": info.filename,
+                        "error": "CorruptedFile",
+                        "detail": str(exc),
+                    }
+                )
+                self._logger.error("Failed to read archive member %s", info.filename, exc_info=True)
+                continue
+
             record = self._build_record(info, mode)
             metadata_records.append(record)
 
@@ -118,26 +175,78 @@ class ZipAnalyzer:
             )
 
             path_lower = info.filename.lower()
+            # Lightweight content validation for common error
+            suffix = PurePosixPath(path_lower).suffix
+            if info.file_size == 0:
+                warnings.append(
+                    {
+                        "path": info.filename,
+                        "error": "EmptyFile",
+                        "detail": "File is empty (0 bytes)",
+                    }
+                )
+            if suffix and suffix not in supported_extensions:
+                warnings.append(
+                    {
+                        "path": info.filename,
+                        "error": "UnsupportedExtension",
+                        "detail": f"Unsupported file extension: {suffix}",
+                    }
+                )
+            try:
+                content_text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                warnings.append(
+                    {
+                        "path": info.filename,
+                        "error": "NonUtf8",
+                        "detail": "File contains non-UTF-8 bytes",
+                    }
+                )
+                content_text = raw.decode("utf-8", errors="ignore")
+            if path_lower.endswith(".json"):
+                try:
+                    json.loads(content_text)
+                except json.JSONDecodeError as exc:
+                    warnings.append(
+                        {
+                            "path": info.filename,
+                            "error": "InvalidFormat",
+                            "detail": f"Invalid JSON: {exc.msg} at line {exc.lineno} column {exc.colno}",
+                        }
+                    )
             if path_lower.endswith("package.json"):
-                content = archive.read(info).decode("utf-8", errors="ignore")
-                detected = detect_frameworks_from_package_json(content)
+                detected = detect_frameworks_from_package_json(content_text)
                 frameworks.update(detected)
                 for fw in detected:
                     skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
             elif path_lower.endswith("requirements.txt"):
-                content = archive.read(info).decode("utf-8", errors="ignore").splitlines()
-                detected = detect_frameworks_from_python_requirements(content)
+                detected = detect_frameworks_from_python_requirements(content_text.splitlines())
                 frameworks.update(detected)
                 for fw in detected:
                     skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
             elif ".git/logs/" in path_lower:
-                content = archive.read(info).decode("utf-8", errors="ignore")
-                git_logs.extend(content.splitlines())
+                git_logs.extend(content_text.splitlines())
             tool_skills = self._detect_tool_skills(path_lower)
             if tool_skills:
                 ts = datetime.fromisoformat(record["modified"])
                 for skill_name, category in tool_skills:
                     skill_events.append((skill_name, category, ts, 1.0))
+
+        # Surface missing key files 
+        missing_required = [
+            name
+            for name in ("README.md", "package.json", "requirements.txt")
+            if not any(path.endswith(f"/{name.lower()}") or path == name.lower() for path in seen_paths)
+        ]
+        if missing_required:
+            warnings.append(
+                {
+                    "path": str(zip_path),
+                    "error": "MissingKeyFiles",
+                    "detail": f"Missing required file(s): {', '.join(missing_required)}",
+                }
+            )
 
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         with metadata_path.open("w", encoding="utf-8") as fh:
@@ -171,6 +280,8 @@ class ZipAnalyzer:
             "collaboration": asdict(collaboration),
             "metadata_output": str(metadata_path),
             "scan_duration_seconds": round(duration, 4),
+            "warnings": warnings,
+            "warning_count": len(warnings),
             "skills": skills,
             "skill_timeline": {
                 "generated_at": datetime.utcnow().isoformat(),
