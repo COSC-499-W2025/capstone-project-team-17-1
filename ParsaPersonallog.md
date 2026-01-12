@@ -715,3 +715,51 @@ We also needed to prepare our video demo that is due on Sunday, so I contributed
 ### Reflection
 
 This week felt like a bridge between what we already built and the next level of intelligence we want from our tool. Adding the LLM client and dummy client did not change any user facing behavior yet, but it gives us a clean and safe way to start asking smarter questions about projects, code, and documents without breaking the existing system. At the same time, polishing the slides, doing mock presentations, and getting ready for the video demo helped me see the whole project as a unified story rather than separate features. Next steps are to hook the LLM adapter into `generate_top_project_summaries`, design prompts that target specific user questions, and finish strong with our final presentation and demo.
+
+---
+
+## Week 1 Personal Log [Jan 5 – Jan 11, 2026]
+
+This week I focused on improving the reliability of our SQLite storage layer and adding unit test coverage around retrieving the latest analysis snapshots. The main goal was to unblock summarize projects workflows by ensuring we can consistently fetch one latest snapshot per project and avoid Windows file locking issues during tests.
+
+**Peer Eval**  
+>
+> ![Week 1 — improving the storage]
+> <img width="647" height="693" alt="image" src="https://github.com/user-attachments/assets/9be664b5-490d-4bd3-a886-bc14d13a1fdd" />
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### Storage snapshot retrieval improvements
+
+This week I reviewed and updated our `storage.py` logic related to reading snapshots from the database.
+
+* Reviewed the updated `storage.py` implementation, including schema initialization and legacy backfill behavior for older rows.
+* Improved the `fetch_latest_snapshot` query ordering to be deterministic by ordering on `created_at` and using `id` as a tie breaker, preventing ambiguity when timestamps match.
+* Updated the `fetch_latest_snapshots` logic to reliably return one latest snapshot per project, even when multiple rows share the same timestamp, and added an optional limit to support returning only the most recently updated projects.
+* Ensured invalid snapshot JSON does not crash the pipeline by safely defaulting to an empty snapshot payload when JSON parsing fails.
+
+---
+
+### Unittest coverage and Windows cleanup fixes
+
+Most of the effort this week was making sure tests run consistently on Windows without leaving the database file locked.
+
+* Added a dedicated unittest file `test_storage_latest_snapshots.py` to cover empty database behavior, multiple snapshots per project, deterministic tie breaking when timestamps match, limit ordering, and invalid JSON handling.
+* Debugged repeated `WinError 32` failures during test cleanup and fixed the root cause by restructuring tests so database closure happens before temporary directory cleanup.
+* Ran the storage specific tests locally with `python -m unittest discover -s tests -p "test_storage_latest_snapshots.py" -v` and confirmed all tests pass.
+
+---
+
+### PR preparation
+
+To wrap the work cleanly, I prepared a PR with clear review information.
+
+* Filled out the PR template with a concise description of the snapshot retrieval fix, test coverage details, and exact reproduction steps for running the tests locally.
+
+---
+
+### Reflection
+
+This week was mostly about stability and correctness. The snapshot retrieval logic is now deterministic and test covered, and the test harness is structured in a way that behaves correctly on Windows. This should reduce friction for contributors and make it easier to build on summarize projects features without database edge cases breaking the flow. Next steps are to make sure the CLI summarize projects tests also consistently close database handles and to expand coverage around real CLI paths that depend on stored snapshots.
