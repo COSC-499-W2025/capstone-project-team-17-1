@@ -1,14 +1,14 @@
 {
-  "archive": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-mjero4pk\\capstone-project-team-17-1.zip",
+  "archive": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-vxw788cc\\capstone-project-team-17-1.zip",
   "requested_mode": "local",
   "resolved_mode": "local",
   "mode_reason": "Local analysis enforced",
   "local_mode_label": "Local Analysis Mode",
   "file_summary": {
     "file_count": 92,
-    "total_bytes": 13351031,
-    "earliest_modification": "2026-01-11T20:11:24",
-    "latest_modification": "2026-01-11T20:11:26",
+    "total_bytes": 13566231,
+    "earliest_modification": "2026-01-11T21:17:16",
+    "latest_modification": "2026-01-11T21:17:18",
     "duration_days": 0,
     "active_days": 1,
     "activity_breakdown": {
@@ -30,21 +30,22 @@
   "frameworks": [],
   "collaboration": {
     "classification": "collaborative",
-    "contributors": {
-      "yanshuyu280042": 66,
-      "Pmoney1383": 61,
-      "Zhou": 36,
-      "Khanna": 37,
-      "ErenSun408": 78,
-      "mltzhou": 25,
-      "Chen": 1,
-      "kangnade": 4,
-      "github-classroom[bot]": 2
+    "contributors (commits, line changes, reviews)": {
+      "yanshuyu280042": "[66, 194592, 0]",
+      "Pmoney1383": "[61, 25733, 0]",
+      "Michelle Zhou": "[36, 145719, 0]",
+      "Raunak Khanna": "[37, 3473, 0]",
+      "ErenSun408": "[42, 10768, 0]",
+      "mltzhou": "[25, 772, 0]",
+      "Adams Chen": "[1, 58, 0]",
+      "kangnade": "[4, 15, 0]",
+      "github-classroom[bot]": "[0, 0, 0]"
     },
+    "contribution_compute": "weightedScore = commits*1.0 + line_changes*0.001 + reviews*0.5",
     "primary_contributor": "yanshuyu280042"
   },
   "metadata_output": "analysis_output\\metadata.jsonl",
-  "scan_duration_seconds": 0.1264,
+  "scan_duration_seconds": 0.1302,
   "warnings": [
     {
       "path": "demo.zip",
@@ -97,32 +98,32 @@
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.idx",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.idx",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .idx"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.idx",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.idx",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.pack",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.pack",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .pack"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.pack",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.pack",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.rev",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.rev",
       "error": "UnsupportedExtension",
       "detail": "Unsupported file extension: .rev"
     },
     {
-      "path": ".git/objects/pack/pack-57e69b22fd7e4ba18cd5375c78a10c0a995065d4.rev",
+      "path": ".git/objects/pack/pack-be252b4d8b5b8c391442d5b2ec9025e02891291d.rev",
       "error": "NonUtf8",
       "detail": "File contains non-UTF-8 bytes"
     },
@@ -172,7 +173,7 @@
       "detail": "File is empty (0 bytes)"
     },
     {
-      "path": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-mjero4pk\\capstone-project-team-17-1.zip",
+      "path": "C:\\Users\\17967\\AppData\\Local\\Temp\\capstone-import-vxw788cc\\capstone-project-team-17-1.zip",
       "error": "MissingKeyFiles",
       "detail": "Missing required file(s): package.json, requirements.txt"
     }
@@ -196,13 +197,13 @@
     }
   ],
   "skill_timeline": {
-    "generated_at": "2026-01-12T04:11:27.770462",
+    "generated_at": "2026-01-12T05:17:19.960414",
     "skills": [
       {
         "skill": "YAML",
         "category": "language",
-        "first_seen": "2026-01-11T20:11:26",
-        "last_seen": "2026-01-11T20:11:26",
+        "first_seen": "2026-01-11T21:17:18",
+        "last_seen": "2026-01-11T21:17:18",
         "total_weight": 1.0,
         "year_counts": {
           "2026": 1.0
@@ -215,8 +216,8 @@
       {
         "skill": "docker",
         "category": "tool",
-        "first_seen": "2026-01-11T20:11:26",
-        "last_seen": "2026-01-11T20:11:26",
+        "first_seen": "2026-01-11T21:17:18",
+        "last_seen": "2026-01-11T21:17:18",
         "total_weight": 1.0,
         "year_counts": {
           "2026": 1.0
@@ -229,8 +230,8 @@
       {
         "skill": "Python",
         "category": "language",
-        "first_seen": "2026-01-11T20:11:26",
-        "last_seen": "2026-01-11T20:11:26",
+        "first_seen": "2026-01-11T21:17:18",
+        "last_seen": "2026-01-11T21:17:18",
         "total_weight": 57.0,
         "year_counts": {
           "2026": 57.0
@@ -243,8 +244,8 @@
       {
         "skill": "Markdown",
         "category": "language",
-        "first_seen": "2026-01-11T20:11:26",
-        "last_seen": "2026-01-11T20:11:26",
+        "first_seen": "2026-01-11T21:17:18",
+        "last_seen": "2026-01-11T21:17:18",
         "total_weight": 4.0,
         "year_counts": {
           "2026": 4.0
@@ -257,8 +258,8 @@
       {
         "skill": "JSON",
         "category": "language",
-        "first_seen": "2026-01-11T20:11:26",
-        "last_seen": "2026-01-11T20:11:26",
+        "first_seen": "2026-01-11T21:17:18",
+        "last_seen": "2026-01-11T21:17:18",
         "total_weight": 4.0,
         "year_counts": {
           "2026": 4.0

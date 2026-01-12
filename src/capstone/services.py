@@ -218,9 +218,9 @@ class SnapshotSummaryService:
         collab = snapshot.get("collaboration") or {}
         return {
             "projectId": project_id,
-            "classification": collab.get("classification", "unknown"),
-            "primaryContributor": collab.get("primary_contributor"),
-            "contributors": collab.get("contributors", {}),
+            "classification": collab.get("classification", snapshot.get("classification", "unknown")),
+            "primaryContributor": collab.get("primary_contributor") or snapshot.get("primary_contributor"),
+            "collaboration": collab,
         }
 
     def tech_summary(self, project_id: str) -> dict[str, object]:

@@ -12,7 +12,9 @@ from time import perf_counter
 from typing import Iterable, List, Tuple, Dict
 from zipfile import BadZipFile, ZipFile
 
-from .collaboration import CollaborationSummary, analyze_git_logs
+from .collaboration import analyze_git_logs
+from .collaboration_analysis import build_collaboration_analysis, to_compact_collaboration
+from .git_analysis import parse_git_log_stream
 from .config import Preferences, update_preferences
 from .language_detection import (
     classify_activity,
@@ -281,7 +283,7 @@ class ZipAnalyzer:
             "file_summary": asdict(metric_summary),
             "languages": dict(language_counter),
             "frameworks": sorted(frameworks),
-            "collaboration": asdict(collaboration),
+            "collaboration": collaboration,
             "metadata_output": str(metadata_path),
             "scan_duration_seconds": round(duration, 4),
             "warnings": warnings,
@@ -304,8 +306,8 @@ class ZipAnalyzer:
         )
 
         project_id = project_id or zip_path.stem
-        classification = collaboration.classification
-        primary_contributor = collaboration.primary_contributor
+        classification = collaboration.get("classification", "unknown")
+        primary_contributor = collaboration.get("primary_contributor")
         conn = open_db(db_dir)
         store_analysis_snapshot(
             conn,
@@ -355,10 +357,29 @@ class ZipAnalyzer:
             skills.append(("terraform", "tool"))
         return skills
 
-    def _summarize_collaboration(self, git_logs: Iterable[str]) -> CollaborationSummary:
-        if not git_logs:
-            return CollaborationSummary("unknown", {}, None)
-        return analyze_git_logs(git_logs)
+    def _summarize_collaboration(self, git_logs: Iterable[str]) -> dict[str, object]:
+        logs = list(git_logs)
+        if not logs:
+            return {"classification": "unknown", "contributors (commits, line changes, reviews)": {}, "primary_contributor": None}
+
+        # Prefer rich analysis when git log contains numstat-style entries.
+        try:
+            if any(line.startswith("commit:") for line in logs):
+                entries = parse_git_log_stream("\n".join(logs))
+                analysis = build_collaboration_analysis(entries)
+                return to_compact_collaboration(analysis)
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            self._logger.warning("Failed rich collaboration parse; falling back to basic: %s", exc)
+
+        basic = analyze_git_logs(logs)
+        return {
+            "classification": basic.classification,
+            "contributors (commits, line changes, reviews)": {
+                name: [count, 0, 0] for name, count in basic.contributors.items()
+            },
+            "primary_contributor": basic.primary_contributor,
+            "contribution_compute": "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
+        }
 
 
 def _compute_top_skills_by_year(skill_timeline: Dict[str, Dict[str, object]], top_n: int = 5) -> Dict[str, List[Dict[str, float]]]:
