@@ -18,3 +18,5 @@ __pycache__/
 src/capstone_analyzer.egg-info/
 log/consent_decisions.jsonl
 /.venv
+config/user_config.json
+data/capstone.db
