@@ -69,12 +69,16 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
 
 def close_db() -> None:
     """Close the shared database handle if it exists."""
-
     global _DB_HANDLE, _DB_PATH
     if _DB_HANDLE is not None:
-        _DB_HANDLE.close()
-    _DB_HANDLE = None
-    _DB_PATH = None
+        try:
+            _DB_HANDLE.close()
+        except Exception:  # pragma: no cover
+            logger.warning("Failed to close DB cleanly", exc_info=True)
+        finally:
+            _DB_HANDLE = None
+            _DB_PATH = None
+
 
 
 def store_analysis_snapshot(
@@ -110,7 +114,7 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
         SELECT snapshot
         FROM project_analysis
         WHERE project_id = ?
-        ORDER BY created_at DESC
+        ORDER BY datetime(created_at) DESC, id DESC
         LIMIT 1
         """,
         (project_id,),
@@ -119,21 +123,37 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     return json.loads(row[0]) if row else None
 
 
-def fetch_latest_snapshots(conn: sqlite3.Connection) -> list[dict]:
+def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
     # return newest snapshot for every project saved in the database
     # each item contains the same structure as fetch_latest_snapshot plus metadata
+
+    if limit is not None and int(limit) <= 0:
+        return []
+
     cursor = conn.execute(
-        """
-        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
-        FROM project_analysis a
-        JOIN (
-            SELECT project_id AS pid, MAX(created_at) AS created_at
+        f"""
+        WITH latest_time AS (
+            SELECT project_id, MAX(created_at) AS created_at
             FROM project_analysis
             GROUP BY project_id
-        ) latest ON latest.pid = a.project_id AND latest.created_at = a.created_at
-        ORDER BY a.project_id
-        """
+        ),
+        latest_row AS (
+            SELECT pa.project_id, MAX(pa.id) AS id
+            FROM project_analysis pa
+            JOIN latest_time lt
+              ON lt.project_id = pa.project_id
+             AND lt.created_at = pa.created_at
+            GROUP BY pa.project_id
+        )
+        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
+        FROM project_analysis a
+        JOIN latest_row lr ON lr.id = a.id
+        ORDER BY datetime(a.created_at) DESC, a.id DESC
+        {"LIMIT ?" if limit is not None else ""}
+        """,
+        (() if limit is None else (int(limit),)),
     )
+
     rows = cursor.fetchall()
     payload: list[dict] = []
     for project_id, classification, contributor, snapshot_json, created_at in rows:
@@ -151,6 +171,7 @@ def fetch_latest_snapshots(conn: sqlite3.Connection) -> list[dict]:
             }
         )
     return payload
+
 
 
 def backup_database(conn: sqlite3.Connection, destination: Path) -> Path:
