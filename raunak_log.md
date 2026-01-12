@@ -12,6 +12,7 @@
 - [Week 12 Personal Log](#week-12-personal-log)
 - [Week 13 Personal Log](#week-13-personal-log)
 - [Week 14 Personal Log](#week-14-personal-log)
+- [Term 2 Week 1 Personal Log](#term-2-week-1-personal-log)
 
 ---
 
@@ -610,4 +611,110 @@ I worked on the WBS 5-8 for the Demo video and helped in curating the overall pr
 
 
 <img width="1470" height="956" alt="WEEK14PEEREVAL" src="https://github.com/user-attachments/assets/fb2edcb1-c68f-407e-8cc4-c50ff9af4673" />
+
+### TERM 2 WEEK 1 PERSONAL LOG
+---
+
+## **Weekly Log – COSC 499 (Week of January 6–12, 2026)**
+
+### **Files Modified**
+
+* `capstone/portfolio_retrieval.py`
+* `tests/test_portfolio_evidence.py`
+
+---
+
+### **Work Completed**
+
+**1. Added a new portfolio evidence API endpoint**
+
+I implemented a new Flask endpoint to expose evidence of success for a project based on its latest analysis snapshot:
+
+```python
+@app.get("/portfolios/evidence")
+def evidence_latest():
+    project_id = request.args.get("projectId", "")
+    if not project_id:
+        return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}), 400
+
+    with _db_session(db_dir) as c:
+        ensure_indexes(c)
+        snap = get_latest_snapshot(c, project_id)
+
+    if snap is None:
+        return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No snapshots found"}}), 404
+
+    evidence = _extract_evidence(snap)
+    return jsonify({
+        "data": {"projectId": project_id, "evidence": evidence},
+        "error": None
+    })
+```
+
+This endpoint (`GET /portfolios/evidence`) returns structured metrics that can be used in portfolio and résumé contexts.
+
+---
+
+**2. Implemented robust evidence extraction logic**
+
+I added a helper function that extracts evidence from multiple possible snapshot schemas, ensuring compatibility with existing and future analysis outputs:
+
+```python
+def _extract_evidence(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    candidates = [
+        snapshot.get("evidence"),
+        snapshot.get("metrics"),
+        snapshot.get("results"),
+        snapshot.get("evaluation"),
+        snapshot.get("outcomes"),
+    ]
+
+    for c in candidates:
+        if isinstance(c, dict):
+            return {
+                "type": "metrics",
+                "items": [{"label": k, "value": str(v)} for k, v in c.items()]
+            }
+
+    return {"type": "metrics", "items": []}
+```
+
+Fallback logic was included to return derived metrics (e.g., skill count, project count) when explicit evidence is not available.
+
+---
+
+**3. Added isolated pytest coverage**
+
+I created a new test file to validate the new endpoint using Flask’s test client and a temporary SQLite database:
+
+```python
+def test_portfolios_evidence_happy_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(pr, "_open_db", None)
+    monkeypatch.setattr(pr, "_close_db", None)
+    monkeypatch.setattr(pr, "_fetch_latest_snapshot", None)
+
+    app = pr.create_app(db_dir=str(tmp_path), auth_token=None)
+    client = app.test_client()
+
+    resp = client.get("/portfolios/evidence?projectId=p1")
+    assert resp.status_code == 200
+```
+
+The tests cover:
+
+* Successful evidence retrieval
+* Missing `projectId` handling
+* Non-existent project handling
+
+---
+
+### **Outcome**
+
+* Successfully extended the backend API with a Milestone 2–aligned feature
+* Added test coverage without modifying existing database schemas
+* Submitted changes via a pull request on a dedicated feature branch
+<img width="642" height="551" alt="T2WEEK1PEEREVAL" src="https://github.com/user-attachments/assets/eb374d20-0cf1-4549-9646-2bc3801e78bf" />
+
+---
+
 

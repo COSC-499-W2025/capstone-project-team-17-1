@@ -14,6 +14,8 @@
 - [Week 13 [Nov 24 – Nov 30, 2025]](#week-13)
 - [Week 14 [Dec 1 – Dec 7, 2025]](#week-14)
 
+- [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
+
 ## Week 3
 [Sep 15 – Sep 21, 2025]
 - Worked on Project Requirements Documentation
@@ -110,11 +112,20 @@ Last week, I refactored some database related parts of the system, but the colum
 
 [Back](#table-of-contents)
 
-## We ek 14
+## Week 14
 [Dec 1 – Dec 7, 2025]
 This week, as the final week of Term 1 and the end of Milestone 1, I first made thorough preparations for our presentation and demo recording. I then did some final optimizations to our project and added simple commands for some features to make it easier for my teammates to present them. The project is in good shape now, and we’ll keep working hard next term and for the upcoming Milestone 2.
 
 <img width="1558" height="910" alt="55e9d0c3d05f48dc9c18d1025670ba2f" src="https://github.com/user-attachments/assets/29040154-6464-4653-8f1c-b5da3c7dffdc" />
+
+[Back](#table-of-contents)
+
+
+## Week 1 (M2)
+[Jan 5 – Jan 11, 2026]
+This week, I focused on fixing unclear and inaccurate contributor rankings within the same project. Previously, contributor rankings relied solely on commit counts, which lacked robustness and determinism. To address this, I decided to incorporate additional signals such as code reviews and lines changed, and to define a scoring formula to compute a contribution score. I introduced a new CLI command, capstone import-repo <url>, to connect to a GitHub repository and collect data for analysis. At present, this command simply packages the GitHub repository as a ZIP archive and reuses the existing ZIP analysis pipeline. As a result, it can theoretically also be used to import local file paths. However, this approach cannot capture GitHub-specific data such as reviews, line changes, pull requests, or issues. In future work, I plan to connect directly to GitHub using the GitHub API or access tokens instead of relying on ZIP-based local analysis. The implementation also merges commits made under different email addresses and usernames (including GitHub private emails) by matching on email, significantly improving the accuracy of contributor records. Next week, I will focus on resolving the remaining limitations, including fetching review, pull request, and issue data, as well as developing new features based on the updated WBS.
+
+<img width="1551" height="910" alt="d099a90066b32f397ff91aa1f85a6442" src="https://github.com/user-attachments/assets/946121dc-d3fd-4e0a-846a-d8a06a087f08" />
 
 [Back](#table-of-contents)
 

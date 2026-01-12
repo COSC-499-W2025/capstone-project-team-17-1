@@ -14,6 +14,7 @@
 - [Week 12 Personal Log](#week-12-personal-log)
 - [Week 13 Personal Log](#week-13-personal-log)
 - [Week 14 Personal Log](#week-14-personal-log)
+- [T2 Week 1 Personal Log](#T2-week-1-personal-log)
 
 
 ## Week 3 Personal Log
@@ -218,3 +219,22 @@ Milestone #1 Deliverables
 ### Next Week:
 - Work on possible new features
 - Further refractoring and cleanup based on milestone feedback
+
+
+## T2 Week 1 Personal Log
+
+- (Jan 5 - Jan 11, 2025)<br />
+
+<img width="969" height="565" alt="image" src="https://github.com/user-attachments/assets/a84a3419-0b93-4039-9575-55973d83fe2c" />
+
+### Week Recap: 
+Worked on creating a start up menu for the user to navigate with upon running the program. Upon granting user consent, it enters a loop with all possible program options. This makes it easier to navigate and more user/testing friendly for future implementations. Additionally, it incorporates the functions from milestone #1 and creates a centralized point for all interactions.
+
+- Created start up menu for application
+- Integrated menu options with existing program functions
+- Discussed milestone #2 implementation with team
+- Reviewed and tested teammate's code and pr
+
+### Next Week:
+- Complete specific integrations for all menu options so that everything can be ran through it
+- Wrok on new feature for milestone #2
