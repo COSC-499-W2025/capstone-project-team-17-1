@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Iterable, List, Mapping, MutableMapping, Optional
 
+from .collaboration_analysis import compact_contributors
 from .external_artifacts import fetch_snapshot_artifacts
 from .project_ranking import ProjectRanking, rank_projects_from_snapshots
 
@@ -164,7 +165,7 @@ def gather_evidence(
         _add_evidence(evidence, "commit", "frameworks", detail, "snapshot", weight=0.7)
 
     collaboration = snapshot.get("collaboration", {}) or {}
-    contributors = collaboration.get("contributors", {}) or {}
+    contributors = compact_contributors(collaboration)
     if contributors:
         total_contributions = sum(int(value) for value in contributors.values())
         leader, leader_count = max(contributors.items(), key=lambda item: item[1])
@@ -478,7 +479,7 @@ class AutoWriter:
             total_weight += 0.1
 
         collaboration = snapshot.get("collaboration", {}) or {}
-        contributors = collaboration.get("contributors", {}) or {}
+        contributors = compact_contributors(collaboration)
         if contributors:
             signals.append({"signal": "collaboration", "weight": 0.2, "present": True})
             total_weight += 0.2

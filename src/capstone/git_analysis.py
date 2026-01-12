@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, List
 
-from .collaboration_analysis import build_collaboration_analysis
+from .collaboration_analysis import build_collaboration_analysis, to_compact_collaboration
 from .external_artifacts import discover_repository, fetch_repository_artifacts
 from .logging_utils import get_logger
 from .storage import open_db, store_analysis_snapshot
@@ -149,16 +149,12 @@ def analyze_repository(
         include_bots=include_bots,
         main_user=main_user,
     )
+    collaboration = to_compact_collaboration(analysis)
     snapshot = {
         "project_id": project_id,
         "classification": analysis.classification,
         "primary_contributor": analysis.primary_contributor,
-        "human_contributors": analysis.human_contributors,
-        "bot_contributors": analysis.bot_contributors,
-        "scores": analysis.scores,
-        "coauthors": analysis.coauthors,
-        "review_totals": analysis.review_totals,
-        "exports": analysis.exports,
+        "collaboration": collaboration,
     }
     # capture where the repo actually lives 
     repository = discover_repository(repo_path)
