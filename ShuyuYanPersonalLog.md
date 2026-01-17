@@ -266,3 +266,25 @@ In addition, I discussed code details with team members and reviewed teammates�
   ### Completed Tasks Week 1
   - 'resume customization' #147
 - 'Add error message for parsing and add nested demo' #145
+
+ ## Term2 week2 Personal LOG (Jan12-Jan18, 2026)
+### 1. Type of Tasks Worked On
+<img width="1080" height="625" alt="Screenshot 2026-01-16 at 8 39 30 PM" src="https://github.com/user-attachments/assets/0f10a068-1403-4516-9096-350dde897c51" />
+
+### 2. Weekly Goals Recap
+- complete 'Résumé Textual Display' #144
+- Part of 'menu in terminal'#134
+- discussed the code details with members
+- review member's PR and help them
+  
+This week, I completed the Résumé Textual Display functionality by implementing a full, end-to-end résumé customization and display workflow across both the API and CLI. The system now supports résumé-specific project wording that is stored persistently and kept separate from portfolio descriptions. Multiple wording variants can be maintained, with an active version selected for résumé generation, and a clear priority rule is enforced during output (custom > generated > fallback). This ensures that résumé text is predictable, explainable, and does not get unintentionally overridden by automated generation.
+
+To improve usability and transparency, the résumé preview output now explicitly indicates the source of the displayed text, making it easier to verify whether custom, generated, or fallback wording is being used. These behaviors are covered by HTTP-level tests to validate both error handling and priority enforcement, and the corresponding API endpoints are documented to support frontend integration.
+
+In parallel, I contributed to part of the terminal main menu implementation, focusing on improving the user experience around résumé-related actions. The updated menu flow allows users to generate, preview, and customize résumé text more naturally within the CLI, reducing the need for manual commands and making the workflow easier to demonstrate and validate.
+
+Beyond feature development, I spent time discussing implementation details and design decisions with team members to ensure consistency across modules. I also reviewed teammates’ pull requests, provided feedback on code structure and edge cases, and assisted with integration where needed to help keep the system stable and aligned with milestone requirements.
+
+### Completed Tasks Week 1
+- complete 'Résumé Textual Display' #144
+- Part of 'menu in terminal'#134
