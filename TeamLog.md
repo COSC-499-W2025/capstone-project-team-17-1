@@ -406,5 +406,26 @@ The goal of this milestone is to build a service-oriented system that supports a
 ### In Progress Tasks Week 1 
 <img width="1949" height="1128" alt="image" src="https://github.com/user-attachments/assets/19a7e300-9b37-4201-b6cb-c022945e58a9" />
 
-### Test Report Week 14
+### Test Report Week 1
 This week, the team improved contributor analysis, data determinism, and user-facing customization. PR #147 added résumé-specific project descriptions with API and CLI support to enable a human-in-the-loop workflow. PR #148 made latest snapshot selection deterministic and Windows-safe, with additional unit tests for edge cases. PR #151 introduced an API endpoint exposing structured evidence of success from the latest portfolio snapshot. PR #152 enhanced contributor rankings by incorporating reviews and lines changed, added a contribution scoring formula, and introduced a new capstone import-repo <url> command while improving contributor identity resolution.
+
+
+## WEEK 2 TEAM LOG (Term2)
+(Jan12 - Jan18, 2026)
+
+### Recap of Milestone Goal - Week 2
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart Week 2
+### Completed Tasks Week 2
+### In Progress Tasks Week 2
+### Test Report Week 2
