@@ -723,21 +723,21 @@ def generate_resume_project_descriptions(
         if not project_id:
             continue
         existing_active = get_resume_project_description(conn, str(project_id))
-    if existing_active and not overwrite:
-        results.append(existing_active)
-        continue
-    snapshot = fetch_latest_snapshot(conn, str(project_id))
-    if not snapshot:
-        logger.warning("No snapshot found for resume project %s", project_id)
-        continue
-    active = True
-    if existing_active:
-        # Avoid overriding a custom active wording 
-        source = (existing_active.metadata or {}).get("source")
-        if source == "custom":
-            active = False
-    summary = build_resume_project_summary(str(project_id), snapshot)
-    results.append(
+        if existing_active and not overwrite:
+            results.append(existing_active)
+            continue
+        snapshot = fetch_latest_snapshot(conn, str(project_id))
+        if not snapshot:
+            logger.warning("No snapshot found for resume project %s", project_id)
+            continue
+        active = True
+        if existing_active:
+            # Avoid overriding a custom active wording with auto-generated content.
+            source = (existing_active.metadata or {}).get("source")
+            if source == "custom":
+                active = False
+        summary = build_resume_project_summary(str(project_id), snapshot)
+        results.append(
             upsert_resume_project_description(
                 conn,
                 project_id=str(project_id),
