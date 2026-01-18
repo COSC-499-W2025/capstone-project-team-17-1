@@ -79,12 +79,14 @@ def main():
                     print("No projects found.")
                 else:
                     for snap in snapshots:
-                        print(f"- {snap['project_name']} (ID: {snap['id']})")
+                        snapshot_data = snap.get("snapshot") or {}
+                        project_label = snapshot_data.get("project_name") or snap.get("project_id")
+                        print(f"- {project_label} (ID: {snap.get('project_id')})")
         elif choice == "3":
             project_id = input("Enter the project ID to view details: ").strip()
             with open_db() as conn:
                 snapshots = fetch_latest_snapshots(conn)
-                project = next((s for s in snapshots if str(s['id']) == project_id), None)
+                project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
                 if not project:
                     print("Project not found.")
                 else:
