@@ -141,8 +141,12 @@ def main():
             print("10. Contributor rankings")
             print("11. Exit")
             print()
-
-            choice = input("Please select an option (1-11): ").strip()
+            while True:
+                choice = input("Please select an option (1-11): ").strip()
+                if choice in {str(i) for i in range(1, 12)}:
+                    break
+                print("Invalid choice. Please enter a number between 1 and 11.")
+                print()
 
             if choice == "1":
                 zip_path = input("Enter the path to the project ZIP archive: ").strip()
@@ -171,6 +175,7 @@ def main():
                         project_id = input("Enter the project ID to view details (0 to cancel): ").strip()
                         if project_id == "0":
                             continue
+                        project = None
                         with open_db() as conn:
                             snapshots = fetch_latest_snapshots(conn)
                             project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
@@ -178,15 +183,25 @@ def main():
                                 print("Project not found.")
                             else:
                                 print(json.dumps(project, indent=4))
-                        view_contrib = input("View contributor rankings for this project? (y/n): ").strip().lower()
-                        if view_contrib == "y":
-                            _contributor_menu(project_id)
+                        if project:
+                            while True:
+                                print()
+                                print("1. View contributor rankings")
+                                print("2. Back")
+                                detail_choice = input("Please select an option (1-2): ").strip()
+                                if detail_choice == "1":
+                                    _contributor_menu(project_id)
+                                elif detail_choice == "2":
+                                    break
+                                else:
+                                    print("Invalid choice. Please enter 1 or 2.")
                     elif follow == "2":
                         break
                     else:
                         print("Invalid choice. Please enter 1 or 2.")
             elif choice == "3":
                 project_id = input("Enter the project ID to view details: ").strip()
+                project = None
                 with open_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
                     project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
@@ -194,9 +209,18 @@ def main():
                         print("Project not found.")
                     else:
                         print(json.dumps(project, indent=4))
-                follow = input("View contributor rankings for this project? (y/n): ").strip().lower()
-                if follow == "y":
-                    _contributor_menu(project_id)
+                if project:
+                    while True:
+                        print()
+                        print("1. View contributor rankings")
+                        print("2. Back")
+                        detail_choice = input("Please select an option (1-2): ").strip()
+                        if detail_choice == "1":
+                            _contributor_menu(project_id)
+                        elif detail_choice == "2":
+                            break
+                        else:
+                            print("Invalid choice. Please enter 1 or 2.")
             elif choice == "4":
                 with open_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
@@ -245,8 +269,6 @@ def main():
                 _contributor_menu(project_id)
             elif choice == "11":
                 _exit_app()
-            else:
-                print("Invalid choice. Please enter a number between 1 and 11.")
     except KeyboardInterrupt:
         _exit_app()
     
