@@ -3,6 +3,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from typing import Iterable, List
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
