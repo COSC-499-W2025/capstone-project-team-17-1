@@ -13,6 +13,7 @@
 - [Week 13 Personal Log](#week-13-personal-log)
 - [Week 14 Personal Log](#week-14-personal-log)
 - [Term 2 Week 1 Personal Log](#term-2-week-1-personal-log)
+- [Term 2 Week 2 Personal Log](#term-2-week-2-personal-log)
 
 ---
 
@@ -716,5 +717,54 @@ The tests cover:
 <img width="642" height="551" alt="T2WEEK1PEEREVAL" src="https://github.com/user-attachments/assets/eb374d20-0cf1-4549-9646-2bc3801e78bf" />
 
 ---
+### TERM 2 WEEK 2 PERSONAL LOG
+Got you — here’s the updated weekly log version with **backend-only** + **no screenshots (UI not ready yet)**.
 
+---
+
+## Weekly Log (Jan 12–18)
+
+### Summary
+
+Implemented and tested **backend-only** support for portfolio “evidence of success” to move toward Milestone 2 requirements. Opened a PR for review. This is an improvement fron last week's PR.
+
+### What I worked on
+
+* **Backend API (Flask)**
+
+  * Added `GET /portfolios/evidence?projectId=...` to return a structured evidence payload (metrics/evaluation signals) derived from the **latest portfolio snapshot**.
+  * Implemented `_extract_evidence()` to safely pull evidence across multiple snapshot shapes (`metrics`, `results`, `evaluation`, etc.) with fallbacks.
+  * Updated `GET /portfolios/latest` to support `view=portfolio|resume` for returning either portfolio snapshot output (default) or resume-description output.
+  * Used `_db_session()` for consistent SQLite connection handling in local/test environments.
+
+* **Testing**
+
+  * Added `tests/test_portfolio_evidence.py` covering:
+
+    * Happy path evidence extraction
+    * `400` when `projectId` missing
+    * `404` when no snapshot exists
+
+### Files changed
+
+* `src/capstone/portfolio_retrieval.py`
+* `tests/test_portfolio_evidence.py`
+
+### PRs
+
+* Opened PR: **Improving portfolio evidence endpoint + tests** (#157)
+
+### How I tested
+
+```bash
+pytest -q tests/test_portfolio_evidence.py
+python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_token=None); print([r.rule for r in app.url_map.iter_rules()])"
+```
+
+### Notes
+
+* **No screenshots included** — this work is **backend only** right now; UI integration is not implemented yet. Although we will not need to do extra work once UI is implemented since the backend and testing is already verified.
+<img width="1112" height="644" alt="T2WEEK2PEEREVAL" src="https://github.com/user-attachments/assets/5d44900c-67dd-40b1-938e-cdad81ed7b6c" />
+
+---
 

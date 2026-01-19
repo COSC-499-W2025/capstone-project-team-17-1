@@ -406,5 +406,35 @@ The goal of this milestone is to build a service-oriented system that supports a
 ### In Progress Tasks Week 1 
 <img width="1949" height="1128" alt="image" src="https://github.com/user-attachments/assets/19a7e300-9b37-4201-b6cb-c022945e58a9" />
 
-### Test Report Week 14
+### Test Report Week 1
 This week, the team improved contributor analysis, data determinism, and user-facing customization. PR #147 added résumé-specific project descriptions with API and CLI support to enable a human-in-the-loop workflow. PR #148 made latest snapshot selection deterministic and Windows-safe, with additional unit tests for edge cases. PR #151 introduced an API endpoint exposing structured evidence of success from the latest portfolio snapshot. PR #152 enhanced contributor rankings by incorporating reviews and lines changed, added a contribution scoring formula, and introduced a new capstone import-repo <url> command while improving contributor identity resolution.
+
+
+## WEEK 2 TEAM LOG (Term2)
+(Jan12 - Jan18, 2026)
+
+### Recap of Milestone Goal - Week 2
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart Week 2
+<img width="1040" height="580" alt="Screenshot 2026-01-18 at 10 16 31 PM" src="https://github.com/user-attachments/assets/89d17713-a5d5-4279-8b8f-5ee47a0f8859" />
+
+### Completed Tasks Week 2
+<img width="1215" height="77" alt="Screenshot 2026-01-18 at 11 27 35 PM" src="https://github.com/user-attachments/assets/97587be4-0622-4ee2-9a66-1f788b4e6f45" />
+<img width="1217" height="136" alt="Screenshot 2026-01-18 at 10 17 43 PM" src="https://github.com/user-attachments/assets/165c1c17-641a-4f29-a7f8-1ad3b6382283" />
+<img width="1213" height="139" alt="Screenshot 2026-01-18 at 10 17 32 PM" src="https://github.com/user-attachments/assets/796e7f82-95b1-488c-b747-86355f140272" />
+
+### In Progress Tasks Week 2
+<img width="1230" height="776" alt="Screenshot 2026-01-18 at 10 18 48 PM" src="https://github.com/user-attachments/assets/7f64783d-d6dc-452a-82d9-25d9e129b3d8" />
+
+### Test Report Week 2
+This week, the team expanded CLI and backend functionality and validated new features through automated and manual testing. PR #160 added a summarize-top-projects CLI subcommand to generate summaries of top-ranked projects from the latest analysis snapshots, with JSON/Markdown output and unit tests for command registration and execution. PR #157 introduced a new GET /portfolios/evidence endpoint to expose structured evidence of success and extended the latest portfolio API to support portfolio vs. résumé views, with automated tests covering common and edge cases. PR #156 completed résumé textual display and customization across API and CLI, adding clear priority rules and a user-friendly preview flow with supporting tests. PR #159 enabled GitHub repository import via URL and improved contributor rankings using commits, reviews, and lines changed, validated through unit tests and manual CLI workflows. PR #162 implemented a fully functional start menu that unifies core workflows under a single entry point, normalizes snapshot handling across formats, fixes portfolio summary argument passing, and adds defensive checks and unit tests to ensure robust menu behavior.
