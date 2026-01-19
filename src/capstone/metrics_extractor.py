@@ -216,8 +216,8 @@ def chronological_proj(all_proj: dict) -> list:
         
         projects.append({
             "name": proj_name,
-            "start": metrics.get("start"),
-            "end": metrics.get("end") # if None prints Present
+            "start": start,
+            "end": end # if None prints Present
         })
     
     # sort in order

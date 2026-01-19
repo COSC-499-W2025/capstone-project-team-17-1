@@ -188,20 +188,49 @@ def app_main():
             if not projects:
                 print("No projects found to summarize. Please upload some projects first.")
                 continue
-            
-            snapshot_dicts = []
+
+            snapshot_map = {}
             for item in projects:
                 snap = dict(item.get("snapshot") or {})
-                if item.get("project_id") and "project_id" not in snap:
-                    snap["project_id"] = item.get("project_id")
-                if item.get("uploaded_on") and "date" not in snap:
-                    snap["date"] = item.get("uploaded_on")
-                snapshot_dicts.append(snap)  
-                 
-            ranked_projects = rank_projects_from_snapshots(snapshot_dicts)
-            summary = create_summary_template(ranked_projects)
+                pid = (
+                    item.get("project_id")
+                    or snap.get("project_id")
+                    or snap.get("projectId")
+                    or f"row_{item.get("id", "unknown")}"
+                )
+                
+                snap.setdefault("project_id", pid)
+                
+                ts = item.get("uploaded_on") or item.get("uploaded_on")
+                if ts:
+                    snap.setdefault("analyzed_date", ts)
+                    
+                old = snapshot_map.get(pid)
+                if old is None:
+                    snapshot_map[pid] = snap
+                else:
+                    if (snap.get("analyzed_date") or "") >= (old.get("uploaded_on") or ""):
+                        snapshot_map[pid] = snap
+
+            ranked = rank_projects_from_snapshots(snapshot_map)
+            
+            if not ranked:
+                print("No rankable projects found.")
+                continue
+            
+            top = ranked[0]
+            top_id = getattr(top, "project_id", None) or top.get("project_id")
+            top_snapshot = snapshot_map.get(top_id)
+            
+            if not top_snapshot:
+                print("Could not find snapshot for top project.")
+                continue
+            
+            summary = create_summary_template(top, top_snapshot)
+
             print("\nPortfolio Summary:\n")
             print(summary)
+            
         elif choice == "5":
             with open_db() as conn:
                 try:
@@ -235,28 +264,46 @@ def app_main():
                 print(preview_obj)
         elif choice == "6":
             with open_db() as conn:
-                rows
+                rows = fetch_latest_snapshots(conn)
             projects = _normalize_snapshot(rows)
             
             if not projects:
                 print("No projects found to summarize. Please upload some projects first.")
                 continue
             
-            snapshot_dicts = []
+            all_proj = {}
+            
             for item in projects:
                 snap = dict(item.get("snapshot") or {})
-                if item.get("project_id") and "project_id" not in snap:
-                    snap.setdefault("project_id", item.get("project_id"))
-                    snap.setdefault("uploaded_on", item.get("uploaded_on"))
-                    snapshot_dicts.append(snap)
+                pid = (
+                       item.get("project_id")
+                       or snap.get("project_id")
+                       or snap.get("projectId")
+                       or f"row_{item.get('id', 'unknown')}"
+                )
+                ts = item.get("uploaded_on") or item.get("created_at") or snap.get("analyzed_date")
+                if ts:
+                    snap.setdefault("created_at", ts)
+                    
+                all_proj[pid] = snap
+            
+            timeline = chronological_proj(all_proj)
+            
+            print("\nChronological Project Timeline:\n")
+            for proj in timeline:
+                name = proj.get("project_name") or "Misc Project"
+                start = proj.get("start") or "N/A"
+                end = proj.get("end") or "N/A"
                 
-                timeline = chronological_proj(snapshot_dicts)
+                if hasattr(start, "isoformat"):
+                    start = start.isoformat()
+                if hasattr(end, "isoformat"):
+                    end = end.isoformat()
+                    
+                start = start or "N/A"
+                end = end or "Present"
                 
-                print("\nChronological Project Timeline:\n")
-                for proj in timeline:
-                    date = proj.get("date") or proj.get("uploaded_on") or "N/A"
-                    name = proj.get("poject_name") or proj.get("project_id") or "Misc Project"
-                    print(f"- {date}: {name}")
+                print(f"- {name}: {start} to {end}")
         elif choice == "7":
             with open_db() as conn:
                 rows = fetch_latest_snapshots(conn)
