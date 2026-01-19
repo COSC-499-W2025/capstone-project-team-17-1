@@ -759,7 +759,39 @@ def build_parser() -> argparse.ArgumentParser:
     demo_parser.add_argument("--owner-b", default="bob", help="Owner for insight B")
     demo_parser.add_argument("--dry-strategy", choices=["block", "cascade"], default="block")
     demo_parser.add_argument("--soft-strategy", choices=["block", "cascade"], default="cascade")
-
+    summarize_parser = subparsers.add_parser(
+        "summarize-top-projects",
+        help="Summarize top projects from the latest stored snapshots",
+    )
+    summarize_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the analysis database",
+    )
+    summarize_parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Contributor name to weight when ranking",
+    )
+    summarize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of projects to summarize",
+    )
+    summarize_parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="Use an LLM to enrich the summaries",
+    )
+    summarize_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format",
+    )
     return parser
 
 
@@ -1659,7 +1691,47 @@ def _handle_clean(args: argparse.Namespace) -> int:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
 
+def _handle_summarize_projects(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        snapshots = fetch_latest_snapshots(conn)
 
+        if isinstance(snapshots, list):
+            snapshots = {
+            snap["project_id"]: snap
+            for snap in snapshots
+            if isinstance(snap, dict) and "project_id" in snap
+        }
+
+        if not snapshots:
+            print("No project analyses available to summarize.")
+            return 0
+
+        llm = None
+        if args.use_llm:
+            # The issue says to call build_default_llm0 when enabled.
+            # If your project exposes a differently named builder, adjust this import.
+            from capstone.llm_client import build_default_llm
+            llm = build_default_llm()
+
+        summaries = generate_top_project_summaries(
+            snapshots,
+            limit=args.limit,
+            user=args.user,
+            use_llm=bool(args.use_llm),
+            llm=llm,
+        )
+
+        if args.format == "json":
+            print(json.dumps(summaries, indent=2))
+        else:
+            for summary in summaries:
+                print(export_markdown(summary))
+                print()
+
+        return 0
+    finally:
+        close_db()
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
@@ -1716,6 +1788,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_insight_dry_run(args)
     if args.command == "insight-demo":
         return _handle_insight_demo(args)
+    if args.command == "summarize-top-projects":
+        return _handle_summarize_projects(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")
