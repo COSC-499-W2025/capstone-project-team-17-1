@@ -54,9 +54,8 @@ def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
     for index, row in enumerate(rows, start=1):
         print(
             f"{index}. {row['contributor']} "
-            f"(Total Score= {row['score']:.2f}, Commits= {row['commits']}, "
-            f"Line Changes= {row['line_changes']}, Merged PRs= {row['pull_requests']}, "
-            f"Completed Issues= {row['issues']}, Reviews= {row['reviews']})"
+            f"(Total Score: {row['score']:.2f}, Commits: {row['commits']}, "
+            f"PRs: {row['pull_requests']}, Issues: {row['issues']}, Reviews: {row['reviews']})"
         )
 
 
@@ -68,13 +67,12 @@ def _contributor_menu(project_id: str) -> None:
         print("1. Sync from GitHub")
         print("2. View total score ranking")
         print("3. View commits ranking")
-        print("4. View line change ranking")
-        print("5. View PR ranking")
-        print("6. View issue ranking")
-        print("7. View review ranking")
-        print("8. Back")
+        print("4. View PR ranking")
+        print("5. View issue ranking")
+        print("6. View review ranking")
+        print("7. Back")
         print()
-        choice = input("Please select an option (1-8): ").strip()
+        choice = input("Please select an option (1-7): ").strip()
         if choice == "1":
             repo_url = input("Enter GitHub repository URL: ").strip()
             token = _prompt_github_token()
@@ -92,17 +90,15 @@ def _contributor_menu(project_id: str) -> None:
         elif choice == "3":
             _print_contributor_rankings(project_id, "commits")
         elif choice == "4":
-            _print_contributor_rankings(project_id, "line_changes")
-        elif choice == "5":
             _print_contributor_rankings(project_id, "pull_requests")
-        elif choice == "6":
+        elif choice == "5":
             _print_contributor_rankings(project_id, "issues")
-        elif choice == "7":
+        elif choice == "6":
             _print_contributor_rankings(project_id, "reviews")
-        elif choice == "8":
+        elif choice == "7":
             return
         else:
-            print("Invalid choice. Please enter a number between 1 and 8.")
+            print("Invalid choice. Please enter a number between 1 and 7.")
 
 
 def main():

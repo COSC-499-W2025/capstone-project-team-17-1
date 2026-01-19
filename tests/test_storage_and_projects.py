@@ -59,7 +59,6 @@ class StorageTests(unittest.TestCase):
             project_id="demo",
             contributor="alice",
             commits=5,
-            line_changes=40,
             pull_requests=2,
             issues=1,
             reviews=0,
@@ -71,7 +70,6 @@ class StorageTests(unittest.TestCase):
             project_id="demo",
             contributor="bob",
             commits=8,
-            line_changes=20,
             pull_requests=1,
             issues=0,
             reviews=3,
@@ -84,7 +82,6 @@ class StorageTests(unittest.TestCase):
             project_id="demo",
             contributor="alice",
             commits=6,
-            line_changes=45,
             pull_requests=3,
             issues=1,
             reviews=2,
@@ -95,7 +92,6 @@ class StorageTests(unittest.TestCase):
         latest = storage.fetch_latest_contributor_stats(conn, "demo")
         latest_by_name = {row["contributor"]: row for row in latest}
         self.assertEqual(latest_by_name["alice"]["commits"], 6)
-        self.assertEqual(latest_by_name["alice"]["line_changes"], 45)
         self.assertEqual(latest_by_name["bob"]["reviews"], 3)
 
         ranked_score = storage.fetch_contributor_rankings(conn, "demo")

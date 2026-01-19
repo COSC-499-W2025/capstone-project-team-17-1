@@ -62,20 +62,18 @@ class GitHubContributorTests(unittest.TestCase):
         score = compute_score(
             {
                 "commits": 10,
-                "line_changes": 20,
                 "pull_requests": 1,
                 "issues": 2,
                 "reviews": 3,
             },
             weights={
                 "commits": 0.3,
-                "line_changes": 0.25,
                 "pull_requests": 0.2,
                 "issues": 0.15,
                 "reviews": 0.1,
             },
         )
-        expected = 10 * 0.3 + 20 * 0.25 + 1 * 0.2 + 2 * 0.15 + 3 * 0.1
+        expected = 10 * 0.3 + 1 * 0.2 + 2 * 0.15 + 3 * 0.1
         self.assertAlmostEqual(score, expected, places=6)
 
     def test_collect_contributor_stats(self) -> None:
@@ -85,7 +83,6 @@ class GitHubContributorTests(unittest.TestCase):
             client=_FakeClient(),
             weights={
                 "commits": 0.3,
-                "line_changes": 0.25,
                 "pull_requests": 0.2,
                 "issues": 0.15,
                 "reviews": 0.1,
@@ -94,12 +91,10 @@ class GitHubContributorTests(unittest.TestCase):
         )
         by_name = {row.contributor: row for row in stats}
         self.assertEqual(by_name["alice"].commits, 5)
-        self.assertEqual(by_name["alice"].line_changes, 16)
         self.assertEqual(by_name["alice"].pull_requests, 2)
         self.assertEqual(by_name["alice"].issues, 1)
         self.assertEqual(by_name["alice"].reviews, 4)
         self.assertEqual(by_name["bob"].commits, 3)
-        self.assertEqual(by_name["bob"].line_changes, 0)
 
     def test_rankings_refresh_when_weights_change(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -107,7 +102,6 @@ class GitHubContributorTests(unittest.TestCase):
                 conn = open_db(Path(tmpdir))
                 old_weights = {
                     "commits": 0.3,
-                    "line_changes": 0.25,
                     "pull_requests": 0.2,
                     "issues": 0.15,
                     "reviews": 0.1,
@@ -115,7 +109,6 @@ class GitHubContributorTests(unittest.TestCase):
                 old_score = compute_score(
                     {
                         "commits": 10,
-                        "line_changes": 5,
                         "pull_requests": 2,
                         "issues": 1,
                         "reviews": 0,
@@ -127,7 +120,6 @@ class GitHubContributorTests(unittest.TestCase):
                     project_id="demo",
                     contributor="alice",
                     commits=10,
-                    line_changes=5,
                     pull_requests=2,
                     issues=1,
                     reviews=0,
@@ -138,7 +130,6 @@ class GitHubContributorTests(unittest.TestCase):
 
                 new_weights = {
                     "commits": 0.25,
-                    "line_changes": 0.25,
                     "pull_requests": 0.25,
                     "issues": 0.15,
                     "reviews": 0.1,
@@ -153,7 +144,6 @@ class GitHubContributorTests(unittest.TestCase):
                     compute_score(
                         {
                             "commits": 10,
-                            "line_changes": 5,
                             "pull_requests": 2,
                             "issues": 1,
                             "reviews": 0,

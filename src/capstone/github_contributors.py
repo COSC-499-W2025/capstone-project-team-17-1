@@ -22,9 +22,8 @@ logger = get_logger(__name__)
 
 DEFAULT_WEIGHTS = {
     "commits": 0.30,
-    "line_changes": 0.02,
     "pull_requests": 0.25,
-    "issues": 0.23,
+    "issues": 0.25,
     "reviews": 0.20,
 }
 
@@ -53,7 +52,6 @@ def compute_score(stats: dict, weights: dict | None = None) -> float:
     w = weights or DEFAULT_WEIGHTS
     return (
         float(stats.get("commits", 0)) * float(w.get("commits", 0))
-        + float(stats.get("line_changes", 0)) * float(w.get("line_changes", 0))
         + float(stats.get("pull_requests", 0)) * float(w.get("pull_requests", 0))
         + float(stats.get("issues", 0)) * float(w.get("issues", 0))
         + float(stats.get("reviews", 0)) * float(w.get("reviews", 0))
@@ -70,7 +68,6 @@ def weights_hash(weights: dict | None = None) -> str:
 class ContributorStats:
     contributor: str
     commits: int = 0
-    line_changes: int = 0
     pull_requests: int = 0
     issues: int = 0
     reviews: int = 0
@@ -169,16 +166,9 @@ def collect_contributor_stats(
         login = author.get("login") if isinstance(author, dict) else None
         if not login:
             continue
-        weeks = entry.get("weeks", []) if isinstance(entry, dict) else []
-        line_changes = 0
-        for week in weeks:
-            if not isinstance(week, dict):
-                continue
-            line_changes += int(week.get("a", 0)) + int(week.get("d", 0))
         stats_by_login[login] = ContributorStats(
             contributor=login,
             commits=int(entry.get("total", 0)),
-            line_changes=line_changes,
         )
 
     for entry in contributors_data:
@@ -191,7 +181,6 @@ def collect_contributor_stats(
             stats_by_login[login] = ContributorStats(
                 contributor=login,
                 commits=int(entry.get("contributions", 0)),
-                line_changes=0,
             )
 
     ranked = sorted(
@@ -215,7 +204,6 @@ def collect_contributor_stats(
         stats.score = compute_score(
             {
                 "commits": stats.commits,
-                "line_changes": stats.line_changes,
                 "pull_requests": stats.pull_requests,
                 "issues": stats.issues,
                 "reviews": stats.reviews,
@@ -254,7 +242,6 @@ def sync_contributor_stats(
             project_id=resolved_project_id,
             contributor=row.contributor,
             commits=row.commits,
-            line_changes=row.line_changes,
             pull_requests=row.pull_requests,
             issues=row.issues,
             reviews=row.reviews,
@@ -284,7 +271,6 @@ def get_contributor_rankings(
         score = compute_score(
             {
                 "commits": row.get("commits", 0),
-                "line_changes": row.get("line_changes", 0),
                 "pull_requests": row.get("pull_requests", 0),
                 "issues": row.get("issues", 0),
                 "reviews": row.get("reviews", 0),
@@ -302,7 +288,6 @@ def get_contributor_rankings(
     allowed = {
         "score": "score",
         "commits": "commits",
-        "line_changes": "line_changes",
         "pull_requests": "pull_requests",
         "issues": "issues",
         "reviews": "reviews",

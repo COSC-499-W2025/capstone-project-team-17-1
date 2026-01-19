@@ -628,7 +628,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     contributors_rank.add_argument(
         "--sort-by",
-        choices=["score", "commits", "line_changes", "pull_requests", "issues", "reviews"],
+        choices=["score", "commits", "pull_requests", "issues", "reviews"],
         default="score",
         help="Metric to sort by",
     )
@@ -956,19 +956,12 @@ def _handle_contributors(args: argparse.Namespace) -> int:
             db_dir=args.db_dir,
             max_contributors=args.max_contributors,
         )
-        payload = [
-            {
-                "contributor": row.contributor,
-                "commits": row.commits,
-                "line_changes": row.line_changes,
-                "pull_requests": row.pull_requests,
-                "issues": row.issues,
-                "reviews": row.reviews,
-                "score": row.score,
-            }
-            for row in stats
-        ]
-        print(json.dumps(payload, indent=2))
+        for index, row in enumerate(stats, start=1):
+            print(
+                f"{index}. {row.contributor} "
+                f"(Total Score: {row.score:.2f}, Commits: {row.commits}, "
+                f"PRs: {row.pull_requests}, Issues: {row.issues}, Reviews: {row.reviews})"
+            )
         return 0
 
     if args.contributors_action == "rank":
@@ -983,9 +976,8 @@ def _handle_contributors(args: argparse.Namespace) -> int:
         for index, row in enumerate(rankings, start=1):
             print(
                 f"{index}. {row['contributor']} "
-                f"(score={row['score']:.2f}, commits={row['commits']}, "
-                f"line_changes={row['line_changes']}, prs={row['pull_requests']}, "
-                f"issues={row['issues']}, reviews={row['reviews']})"
+                f"(Total Score: {row['score']:.2f}, Commits: {row['commits']}, "
+                f"PRs: {row['pull_requests']}, Issues: {row['issues']}, Reviews: {row['reviews']})"
             )
         return 0
 

@@ -37,7 +37,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             project_id TEXT NOT NULL,
             contributor TEXT NOT NULL,
             commits INTEGER NOT NULL DEFAULT 0,
-            line_changes INTEGER NOT NULL DEFAULT 0,
             pull_requests INTEGER NOT NULL DEFAULT 0,
             issues INTEGER NOT NULL DEFAULT 0,
             reviews INTEGER NOT NULL DEFAULT 0,
@@ -56,8 +55,61 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     )
     info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
     columns = {row[1] for row in info}
-    if "weights_hash" not in columns:
-        conn.execute("ALTER TABLE contributor_stats ADD COLUMN weights_hash TEXT")
+    if "line_changes" in columns:
+        conn.execute("ALTER TABLE contributor_stats RENAME TO contributor_stats_old")
+        conn.execute(
+            """
+            CREATE TABLE contributor_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                contributor TEXT NOT NULL,
+                commits INTEGER NOT NULL DEFAULT 0,
+                pull_requests INTEGER NOT NULL DEFAULT 0,
+                issues INTEGER NOT NULL DEFAULT 0,
+                reviews INTEGER NOT NULL DEFAULT 0,
+                score REAL NOT NULL DEFAULT 0,
+                weights_hash TEXT,
+                source TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        select_weights = "weights_hash" if "weights_hash" in columns else "NULL AS weights_hash"
+        conn.execute(
+            f"""
+            INSERT INTO contributor_stats (
+                project_id,
+                contributor,
+                commits,
+                pull_requests,
+                issues,
+                reviews,
+                score,
+                weights_hash,
+                source,
+                created_at
+            )
+            SELECT
+                project_id,
+                contributor,
+                commits,
+                pull_requests,
+                issues,
+                reviews,
+                score,
+                {select_weights},
+                source,
+                created_at
+            FROM contributor_stats_old
+            """
+        )
+        conn.execute("DROP TABLE contributor_stats_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
+            ON contributor_stats (project_id, contributor, created_at)
+            """
+        )
         conn.commit()
 
     # backfill legacy rows that only had project_name, can be deleted at end
@@ -141,7 +193,6 @@ def store_contributor_stats(
     contributor: str,
     *,
     commits: int = 0,
-    line_changes: int = 0,
     pull_requests: int = 0,
     issues: int = 0,
     reviews: int = 0,
@@ -159,7 +210,6 @@ def store_contributor_stats(
             project_id,
             contributor,
             commits,
-            line_changes,
             pull_requests,
             issues,
             reviews,
@@ -167,13 +217,12 @@ def store_contributor_stats(
             weights_hash,
             source
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project_id,
             contributor,
             int(commits),
-            int(line_changes),
             int(pull_requests),
             int(issues),
             int(reviews),
@@ -213,7 +262,6 @@ def fetch_latest_contributor_stats(
             cs.project_id,
             cs.contributor,
             cs.commits,
-            cs.line_changes,
             cs.pull_requests,
             cs.issues,
             cs.reviews,
@@ -235,7 +283,6 @@ def fetch_latest_contributor_stats(
             project_id,
             contributor,
             commits,
-            line_changes,
             pull_requests,
             issues,
             reviews,
@@ -250,7 +297,6 @@ def fetch_latest_contributor_stats(
                 "project_id": project_id,
                 "contributor": contributor,
                 "commits": commits,
-                "line_changes": line_changes,
                 "pull_requests": pull_requests,
                 "issues": issues,
                 "reviews": reviews,
@@ -290,7 +336,6 @@ def fetch_contributor_rankings(
     allowed = {
         "score": "score",
         "commits": "commits",
-        "line_changes": "line_changes",
         "pull_requests": "pull_requests",
         "issues": "issues",
         "reviews": "reviews",
