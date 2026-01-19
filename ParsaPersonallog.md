@@ -763,3 +763,65 @@ To wrap the work cleanly, I prepared a PR with clear review information.
 ### Reflection
 
 This week was mostly about stability and correctness. The snapshot retrieval logic is now deterministic and test covered, and the test harness is structured in a way that behaves correctly on Windows. This should reduce friction for contributors and make it easier to build on summarize projects features without database edge cases breaking the flow. Next steps are to make sure the CLI summarize projects tests also consistently close database handles and to expand coverage around real CLI paths that depend on stored snapshots.
+
+---
+
+## Week 2 Personal Log [Jan 12 – Jan 18, 2026]
+
+This week I focused on extending our CLI functionality by adding a new command to summarize top ranked projects based on the latest stored analysis snapshots. The main goal was to reuse the existing ranking and summary pipeline while exposing a clean, non conflicting CLI entry point, and to ensure the feature is properly tested using `unittest` within our src based project structure.
+
+**Peer Eval**  
+>
+> ![Week 2 — summarize top projects CLI]
+> <img width="648" height="690" alt="image" src="https://github.com/user-attachments/assets/13e8b6de-3391-4e38-a850-fc6fccec37d3" />
+>
+> _Figure 0. peer evaluation._
+
+---
+
+### New CLI command for top project summaries
+
+This week I implemented a new CLI command to generate summaries for the highest ranked projects.
+
+* Added a new `summarize-top-projects` command to avoid conflicts with the existing `summarize-projects` CLI entry.
+* Wired the command to load the latest snapshot per project from the database and pass them through the existing ranking and summary generation pipeline.
+* Ensured the command supports configurable limits, markdown or JSON output formats, and an optional `--use-llm` flag for enriched summaries.
+* Normalized snapshot data at the CLI boundary to ensure compatibility with ranking logic that expects a dictionary keyed by project id.
+
+---
+
+### Debugging and error resolution
+
+A significant portion of the week involved debugging integration issues and resolving edge cases discovered during manual testing.
+
+* Diagnosed and fixed argparse subcommand conflicts caused by duplicate command names.
+* Identified and corrected a data shape mismatch where snapshots were passed as a list instead of a dictionary.
+* Resolved an import error related to an incorrect LLM builder name by aligning the CLI with the existing `build_default_llm` implementation.
+* Verified correct behavior with sparse snapshot data, confirming that zero portfolio scores are expected when feature signals are limited.
+
+---
+
+### Unittest coverage for CLI functionality
+
+I added unit test coverage to ensure the new CLI command is stable and does not regress.
+
+* Created `unittest` based tests to validate that the `summarize-top-projects` command is correctly registered with argparse.
+* Added handler level tests that mock database access and snapshot retrieval to verify end to end execution without relying on a real database or LLM.
+* Fixed test import issues related to the src layout by updating `tests/__init__.py` to ensure the `capstone` package is discoverable during test runs.
+* Ran all tests locally using `python -m unittest discover -s tests` and confirmed they pass consistently on Windows.
+
+---
+
+### PR preparation
+
+To finalize the work, I prepared a clean pull request for review.
+
+* Filled out the PR template describing the new CLI feature, testing strategy, and reproduction steps.
+* Verified that the change is non breaking and integrates cleanly with existing summarize and ranking workflows.
+
+---
+
+### Reflection
+
+This week was focused on integration and reliability rather than new algorithms. By reusing existing ranking and summary logic, the new CLI command adds useful functionality with minimal duplication. The added unit tests and fixes around src based imports improve long term maintainability and reduce friction for future contributors. Next steps include improving snapshot richness so ranking scores are more meaningful and expanding CLI coverage to include JSON output validation and edge case handling.
+
