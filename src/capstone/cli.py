@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -45,6 +46,7 @@ from .resume_retrieval import (
     ensure_resume_schema,
     get_resume_project_description,
     list_resume_project_descriptions,
+    generate_resume_project_descriptions,
     upsert_resume_project_description,
 )
 from .job_matching import build_jd_profile, rank_projects_for_job
@@ -54,6 +56,7 @@ from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
 from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
 from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
 from .top_project_summaries import export_markdown, generate_top_project_summaries
+from .github_contributors import get_contributor_rankings, sync_contributor_stats
 
 logger = get_logger(__name__)
 
@@ -427,7 +430,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resume_project_parser.add_argument(
         "action",
-        choices=["set", "get", "list"],
+        choices=["set", "get", "list", "generate"],
         help="Action to perform",
     )
     resume_project_parser.add_argument(
@@ -452,6 +455,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="File containing the resume-specific project summary text",
     )
     resume_project_parser.add_argument(
+        "--variant-name",
+        type=str,
+        help="Variant name for resume-specific project summary",
+    )
+    resume_project_parser.add_argument(
+        "--audience",
+        type=str,
+        help="Audience for resume-specific project summary (e.g., SWE, DS)",
+    )
+    resume_project_parser.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Store the resume project summary as inactive",
+    )
+    resume_project_parser.add_argument(
         "--limit",
         type=int,
         default=100,
@@ -462,6 +480,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Offset for pagination when listing resume project descriptions",
+    )
+    resume_project_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing resume project descriptions when generating",
     )
 
     api_parser = subparsers.add_parser(
@@ -578,6 +601,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory where capstone.db is stored",
     )
 
+    # contributor stats
+    contributors_parser = subparsers.add_parser(
+        "contributors",
+        help="Sync or rank contributor stats for a GitHub repository",
+    )
+    contributors_sub = contributors_parser.add_subparsers(dest="contributors_action", required=True)
+
+    contributors_sync = contributors_sub.add_parser(
+        "sync",
+        help="Fetch GitHub contribution stats and store them",
+    )
+    contributors_sync.add_argument("--repo-url", required=True, help="GitHub repository URL")
+    contributors_sync.add_argument(
+        "--project-id",
+        default=None,
+        help="Project id to store (defaults to owner/repo)",
+    )
+    contributors_sync.add_argument(
+        "--token",
+        default=None,
+        help="GitHub token (defaults to GITHUB_TOKEN env var)",
+    )
+    contributors_sync.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    contributors_sync.add_argument(
+        "--max-contributors",
+        type=int,
+        default=50,
+        help="Maximum number of contributors to fetch",
+    )
+
+    contributors_rank = contributors_sub.add_parser(
+        "rank",
+        help="Rank contributors for a project",
+    )
+    contributors_rank.add_argument("--project-id", required=True, help="Project id to rank")
+    contributors_rank.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    contributors_rank.add_argument(
+        "--sort-by",
+        choices=["score", "commits", "pull_requests", "issues", "reviews"],
+        default="score",
+        help="Metric to sort by",
+    )
+
     # metrics summary (thin wrapper to inspect file metrics/timeline for a project)
     metrics_summary_parser = subparsers.add_parser(
         "metrics-summary",
@@ -683,7 +759,39 @@ def build_parser() -> argparse.ArgumentParser:
     demo_parser.add_argument("--owner-b", default="bob", help="Owner for insight B")
     demo_parser.add_argument("--dry-strategy", choices=["block", "cascade"], default="block")
     demo_parser.add_argument("--soft-strategy", choices=["block", "cascade"], default="cascade")
-
+    summarize_parser = subparsers.add_parser(
+        "summarize-top-projects",
+        help="Summarize top projects from the latest stored snapshots",
+    )
+    summarize_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the analysis database",
+    )
+    summarize_parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Contributor name to weight when ranking",
+    )
+    summarize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of projects to summarize",
+    )
+    summarize_parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="Use an LLM to enrich the summaries",
+    )
+    summarize_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format",
+    )
     return parser
 
 
@@ -727,6 +835,7 @@ def _handle_resume(args: argparse.Namespace) -> int:
             descriptions = list_resume_project_descriptions(
                 conn,
                 project_ids=project_ids,
+                active_only=True,
                 limit=len(project_ids),
             )
             description_map = {item.project_id: item for item in descriptions}
@@ -779,12 +888,21 @@ def _handle_resume_project(args: argparse.Namespace) -> int:
                 conn,
                 project_id=project_id,
                 summary=summary,
+                variant_name=args.variant_name,
+                audience=args.audience,
+                is_active=not args.inactive,
+                metadata={"source": "custom"},
             )
             print(json.dumps(result.to_dict(), indent=2))
             return 0
 
         if args.action == "get":
-            result = get_resume_project_description(conn, project_id)
+            result = get_resume_project_description(
+                conn,
+                project_id,
+                variant_name=args.variant_name,
+                audience=args.audience,
+            )
             if not result:
                 print(json.dumps({"error": "NotFound", "detail": "No resume project description found"}, indent=2))
                 return 0
@@ -797,6 +915,18 @@ def _handle_resume_project(args: argparse.Namespace) -> int:
                 project_ids=project_ids or None,
                 limit=args.limit,
                 offset=args.offset,
+            )
+            print(json.dumps([item.to_dict() for item in results], indent=2))
+            return 0
+
+        if args.action == "generate":
+            if not project_ids:
+                print("resume-project generate requires at least one --project-id", file=sys.stderr)
+                return 2
+            results = generate_resume_project_descriptions(
+                conn,
+                project_ids=project_ids,
+                overwrite=args.overwrite,
             )
             print(json.dumps([item.to_dict() for item in results], indent=2))
             return 0
@@ -886,6 +1016,48 @@ def _handle_skill_summary(args: argparse.Namespace) -> int:
         return 0
     finally:
         store.close()
+
+
+def _handle_contributors(args: argparse.Namespace) -> int:
+    if args.contributors_action == "sync":
+        token = args.token or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("GitHub token missing. Provide --token or set GITHUB_TOKEN.", file=sys.stderr)
+            return 2
+        stats = sync_contributor_stats(
+            repo_url=args.repo_url,
+            token=token,
+            project_id=args.project_id,
+            db_dir=args.db_dir,
+            max_contributors=args.max_contributors,
+        )
+        for index, row in enumerate(stats, start=1):
+            print(
+                f"{index}. {row.contributor} "
+                f"(Total Score: {row.score:.2f}, Commits: {row.commits}, "
+                f"PRs: {row.pull_requests}, Issues: {row.issues}, Reviews: {row.reviews})"
+            )
+        return 0
+
+    if args.contributors_action == "rank":
+        conn = open_db(args.db_dir)
+        try:
+            rankings = get_contributor_rankings(conn, args.project_id, sort_by=args.sort_by)
+        finally:
+            close_db()
+        if not rankings:
+            print("No contributor stats found.")
+            return 0
+        for index, row in enumerate(rankings, start=1):
+            print(
+                f"{index}. {row['contributor']} "
+                f"(Total Score: {row['score']:.2f}, Commits: {row['commits']}, "
+                f"PRs: {row['pull_requests']}, Issues: {row['issues']}, Reviews: {row['reviews']})"
+            )
+        return 0
+
+    print("Unknown contributors action", file=sys.stderr)
+    return 1
 
 
 def _handle_metrics_summary(args: argparse.Namespace) -> int:
@@ -1519,7 +1691,47 @@ def _handle_clean(args: argparse.Namespace) -> int:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
 
+def _handle_summarize_projects(args: argparse.Namespace) -> int:
+    conn = open_db(args.db_dir)
+    try:
+        snapshots = fetch_latest_snapshots(conn)
 
+        if isinstance(snapshots, list):
+            snapshots = {
+            snap["project_id"]: snap
+            for snap in snapshots
+            if isinstance(snap, dict) and "project_id" in snap
+        }
+
+        if not snapshots:
+            print("No project analyses available to summarize.")
+            return 0
+
+        llm = None
+        if args.use_llm:
+            # The issue says to call build_default_llm0 when enabled.
+            # If your project exposes a differently named builder, adjust this import.
+            from capstone.llm_client import build_default_llm
+            llm = build_default_llm()
+
+        summaries = generate_top_project_summaries(
+            snapshots,
+            limit=args.limit,
+            user=args.user,
+            use_llm=bool(args.use_llm),
+            llm=llm,
+        )
+
+        if args.format == "json":
+            print(json.dumps(summaries, indent=2))
+        else:
+            for summary in summaries:
+                print(export_markdown(summary))
+                print()
+
+        return 0
+    finally:
+        close_db()
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
@@ -1576,6 +1788,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_insight_dry_run(args)
     if args.command == "insight-demo":
         return _handle_insight_demo(args)
+    if args.command == "summarize-top-projects":
+        return _handle_summarize_projects(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")
