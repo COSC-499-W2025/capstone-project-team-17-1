@@ -141,9 +141,9 @@ def main():
             print("10. Contributor rankings")
             print("11. Exit")
             print()
-            
+
             choice = input("Please select an option (1-11): ").strip()
-            
+
             if choice == "1":
                 zip_path = input("Enter the path to the project ZIP archive: ").strip()
                 if not os.path.isfile(zip_path):
@@ -157,11 +157,34 @@ def main():
                     snapshots = fetch_latest_snapshots(conn)
                     if not snapshots:
                         print("No projects found.")
+                        continue
+                    for snap in snapshots:
+                        snapshot_data = snap.get("snapshot") or {}
+                        project_label = snapshot_data.get("project_name") or snap.get("project_id")
+                        print(f"- {project_label} (ID: {snap.get('project_id')})")
+                while True:
+                    print()
+                    print("1. View project details")
+                    print("2. Back")
+                    follow = input("Please select an option (1-2): ").strip()
+                    if follow == "1":
+                        project_id = input("Enter the project ID to view details (0 to cancel): ").strip()
+                        if project_id == "0":
+                            continue
+                        with open_db() as conn:
+                            snapshots = fetch_latest_snapshots(conn)
+                            project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
+                            if not project:
+                                print("Project not found.")
+                            else:
+                                print(json.dumps(project, indent=4))
+                        view_contrib = input("View contributor rankings for this project? (y/n): ").strip().lower()
+                        if view_contrib == "y":
+                            _contributor_menu(project_id)
+                    elif follow == "2":
+                        break
                     else:
-                        for snap in snapshots:
-                            snapshot_data = snap.get("snapshot") or {}
-                            project_label = snapshot_data.get("project_name") or snap.get("project_id")
-                            print(f"- {project_label} (ID: {snap.get('project_id')})")
+                        print("Invalid choice. Please enter 1 or 2.")
             elif choice == "3":
                 project_id = input("Enter the project ID to view details: ").strip()
                 with open_db() as conn:
