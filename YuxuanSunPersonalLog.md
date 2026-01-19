@@ -1,6 +1,8 @@
 # COSC 499 TEAM 17 Personal Log - Yuxuan Sun 27929934
 
 ## Table of Contents
+- [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
+- [Milestone 2 - Week 2 [Jan 12 – Jan 18, 2026]](#week-2-m2)
 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -14,7 +16,6 @@
 - [Week 13 [Nov 24 – Nov 30, 2025]](#week-13)
 - [Week 14 [Dec 1 – Dec 7, 2025]](#week-14)
 
-- [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
 
 ## Week 3
 [Sep 15 – Sep 21, 2025]
@@ -126,6 +127,21 @@ This week, as the final week of Term 1 and the end of Milestone 1, I first made 
 This week, I focused on fixing unclear and inaccurate contributor rankings within the same project. Previously, contributor rankings relied solely on commit counts, which lacked robustness and determinism. To address this, I decided to incorporate additional signals such as code reviews and lines changed, and to define a scoring formula to compute a contribution score. I introduced a new CLI command, capstone import-repo <url>, to connect to a GitHub repository and collect data for analysis. At present, this command simply packages the GitHub repository as a ZIP archive and reuses the existing ZIP analysis pipeline. As a result, it can theoretically also be used to import local file paths. However, this approach cannot capture GitHub-specific data such as reviews, line changes, pull requests, or issues. In future work, I plan to connect directly to GitHub using the GitHub API or access tokens instead of relying on ZIP-based local analysis. The implementation also merges commits made under different email addresses and usernames (including GitHub private emails) by matching on email, significantly improving the accuracy of contributor records. Next week, I will focus on resolving the remaining limitations, including fetching review, pull request, and issue data, as well as developing new features based on the updated WBS.
 
 <img width="1551" height="910" alt="d099a90066b32f397ff91aa1f85a6442" src="https://github.com/user-attachments/assets/946121dc-d3fd-4e0a-846a-d8a06a087f08" />
+
+[Back](#table-of-contents)
+
+
+## Week 2 (M2)
+[Jan 12 – Jan 18, 2026]
+This week, I continued to build on last week’s work, focusing on fixing and improving the contributor ranking functionality. Last week, I attempted to package GitHub projects as ZIP files and reuse the original analysis pipeline, but I quickly identified several issues. First, the same contributors appeared under different email addresses, for reasons that were unclear, which significantly complicated contribution analysis. In addition, ZIP-packaged repositories do not include pull request, issue, or review data, making the contribution analysis incomplete and less reliable.
+
+To address these problems, I switched to connecting directly to GitHub via APIs, retrieving project data using repository URLs and tokens. I initially used the REST/Search APIs and later introduced GraphQL to obtain merged pull request counts and completed issue counts for each contributor. The database schema was updated to add url and token fields to the project table; these fields are populated when a project is imported via URL and left empty for ZIP uploads. A new routing mechanism was implemented so that, during analysis, projects are processed differently depending on whether they were imported via ZIP or URL. URL-based projects use a separate weighting scheme and contributor workflow.
+
+During this process, I found that extracting accurate line-change metrics was overly complex. Since it was not possible to reliably detect blank lines and dependency-related changes, even a very small weight could disproportionately affect contribution scores. As a result, I decided to remove this metric, reflecting a necessary trade-off in development. I also added a weight hash to detect changes before data loading, reducing redundant read/write operations, and improved the menu display and logic to make it more user-friendly.
+
+Next week, I plan to fully finalize this contributor workflow and begin developing new features. Currently, URL-imported projects are not yet integrated with the original ZIP-based analysis pipeline. Aside from contribution analysis, both pipelines should share the same analysis flow, and I plan to complete this integration next week.
+
+<img width="1556" height="910" alt="b453e044d181d21d9bc27701a5393547" src="https://github.com/user-attachments/assets/2210aff4-4031-474b-8eea-eb77dea48075" />
 
 [Back](#table-of-contents)
 
