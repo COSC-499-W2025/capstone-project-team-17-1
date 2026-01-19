@@ -426,6 +426,14 @@ The goal of this milestone is to build a service-oriented system that supports a
 | Michelle Zhou | mltzhou |
 
 ### Burnup chart Week 2
+<img width="1040" height="580" alt="Screenshot 2026-01-18 at 10 16 31 PM" src="https://github.com/user-attachments/assets/89d17713-a5d5-4279-8b8f-5ee47a0f8859" />
+
 ### Completed Tasks Week 2
+<img width="1217" height="136" alt="Screenshot 2026-01-18 at 10 17 43 PM" src="https://github.com/user-attachments/assets/165c1c17-641a-4f29-a7f8-1ad3b6382283" />
+<img width="1213" height="139" alt="Screenshot 2026-01-18 at 10 17 32 PM" src="https://github.com/user-attachments/assets/796e7f82-95b1-488c-b747-86355f140272" />
+
 ### In Progress Tasks Week 2
+<img width="1230" height="776" alt="Screenshot 2026-01-18 at 10 18 48 PM" src="https://github.com/user-attachments/assets/7f64783d-d6dc-452a-82d9-25d9e129b3d8" />
+
 ### Test Report Week 2
+This week, the team expanded CLI and backend functionality and validated new features through automated and manual testing. PR #160 added a summarize-top-projects CLI subcommand to generate summaries of top-ranked projects from the latest analysis snapshots, with JSON/Markdown output and unit tests for command registration and execution. PR #157 introduced a new GET /portfolios/evidence endpoint to expose structured evidence of success and extended the latest portfolio API to support portfolio vs. résumé views, with automated tests covering common and edge cases. PR #156 completed résumé textual display and customization across API and CLI, adding clear priority rules and a user-friendly preview flow with supporting tests. PR #159 enabled GitHub repository import via URL and improved contributor rankings using commits, reviews, and lines changed, validated through unit tests and manual CLI workflows.
