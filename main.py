@@ -45,6 +45,11 @@ def _prompt_github_token() -> str | None:
     return os.environ.get("GITHUB_TOKEN")
 
 
+def _exit_app() -> None:
+    print("\nGood luck with everything! Exiting application.")
+    raise SystemExit(0)
+
+
 def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
     with open_db() as conn:
         rows = get_contributor_rankings(conn, project_id, sort_by=sort_by)
@@ -60,45 +65,48 @@ def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
 
 
 def _contributor_menu(project_id: str) -> None:
-    while True:
-        print("\n" + "=" * 40)
-        print("Contributor Menu")
-        print("=" * 40)
-        print("1. Sync from GitHub")
-        print("2. View total score ranking")
-        print("3. View commits ranking")
-        print("4. View PR ranking")
-        print("5. View issue ranking")
-        print("6. View review ranking")
-        print("7. Back")
-        print()
-        choice = input("Please select an option (1-7): ").strip()
-        if choice == "1":
-            repo_url = input("Enter GitHub repository URL: ").strip()
-            token = _prompt_github_token()
-            if not token:
-                print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
-                continue
-            try:
-                sync_contributor_stats(repo_url, token=token, project_id=project_id)
-            except Exception as exc:
-                print(f"Failed to sync contributor stats: {exc}")
+    try:
+        while True:
+            print("\n" + "=" * 40)
+            print("Contributor Menu")
+            print("=" * 40)
+            print("1. Sync from GitHub")
+            print("2. View total score ranking")
+            print("3. View commits ranking")
+            print("4. View PR ranking")
+            print("5. View issue ranking")
+            print("6. View review ranking")
+            print("7. Back")
+            print()
+            choice = input("Please select an option (1-7): ").strip()
+            if choice == "1":
+                repo_url = input("Enter GitHub repository URL: ").strip()
+                token = _prompt_github_token()
+                if not token:
+                    print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
+                    continue
+                try:
+                    sync_contributor_stats(repo_url, token=token, project_id=project_id)
+                except Exception as exc:
+                    print(f"Failed to sync contributor stats: {exc}")
+                else:
+                    print("Contributor stats synced.")
+            elif choice == "2":
+                _print_contributor_rankings(project_id, "score")
+            elif choice == "3":
+                _print_contributor_rankings(project_id, "commits")
+            elif choice == "4":
+                _print_contributor_rankings(project_id, "pull_requests")
+            elif choice == "5":
+                _print_contributor_rankings(project_id, "issues")
+            elif choice == "6":
+                _print_contributor_rankings(project_id, "reviews")
+            elif choice == "7":
+                return
             else:
-                print("Contributor stats synced.")
-        elif choice == "2":
-            _print_contributor_rankings(project_id, "score")
-        elif choice == "3":
-            _print_contributor_rankings(project_id, "commits")
-        elif choice == "4":
-            _print_contributor_rankings(project_id, "pull_requests")
-        elif choice == "5":
-            _print_contributor_rankings(project_id, "issues")
-        elif choice == "6":
-            _print_contributor_rankings(project_id, "reviews")
-        elif choice == "7":
-            return
-        else:
-            print("Invalid choice. Please enter a number between 1 and 7.")
+                print("Invalid choice. Please enter a number between 1 and 7.")
+    except KeyboardInterrupt:
+        _exit_app()
 
 
 def main():
@@ -116,106 +124,108 @@ def main():
     print("\n Consent granted. Proceeding with analysis...\n")
     
     # main menu loop
-    while True:
-        print("\n" + "=" * 40)
-        print("Main Menu")
-        print("=" * 40)
-        print("1. Analyze new project archive (ZIP)")
-        print("2. View all projects")
-        print("3. Vew project details")
-        print("4. Generate portfolio summary")
-        print("5. Generate resume preview")
-        print("6. View chronological project timeline")
-        print("7. View skills timeline")
-        print("8. Delete project insights")
-        print("9. Manage consent")
-        print("10. Contributor rankings")
-        print("11. Exit")
-        print()
-        
-        choice = input("Please select an option (1-11): ").strip()
-        
-        if choice == "1":
-            zip_path = input("Enter the path to the project ZIP archive: ").strip()
-            if not os.path.isfile(zip_path):
-                print("Invalid file path. Please try again.")
-                continue
-            with open_db() as conn:
-                store_analysis_snapshot(conn, zip_path)
-            print("Project analysis completed and stored.")
-        elif choice == "2":
-            with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                if not snapshots:
-                    print("No projects found.")
+    try:
+        while True:
+            print("\n" + "=" * 40)
+            print("Main Menu")
+            print("=" * 40)
+            print("1. Analyze new project archive (ZIP)")
+            print("2. View all projects")
+            print("3. View project details")
+            print("4. Generate portfolio summary")
+            print("5. Generate resume preview")
+            print("6. View chronological project timeline")
+            print("7. View skills timeline")
+            print("8. Delete project insights")
+            print("9. Manage consent")
+            print("10. Contributor rankings")
+            print("11. Exit")
+            print()
+            
+            choice = input("Please select an option (1-11): ").strip()
+            
+            if choice == "1":
+                zip_path = input("Enter the path to the project ZIP archive: ").strip()
+                if not os.path.isfile(zip_path):
+                    print("Invalid file path. Please try again.")
+                    continue
+                with open_db() as conn:
+                    store_analysis_snapshot(conn, zip_path)
+                print("Project analysis completed and stored.")
+            elif choice == "2":
+                with open_db() as conn:
+                    snapshots = fetch_latest_snapshots(conn)
+                    if not snapshots:
+                        print("No projects found.")
+                    else:
+                        for snap in snapshots:
+                            snapshot_data = snap.get("snapshot") or {}
+                            project_label = snapshot_data.get("project_name") or snap.get("project_id")
+                            print(f"- {project_label} (ID: {snap.get('project_id')})")
+            elif choice == "3":
+                project_id = input("Enter the project ID to view details: ").strip()
+                with open_db() as conn:
+                    snapshots = fetch_latest_snapshots(conn)
+                    project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
+                    if not project:
+                        print("Project not found.")
+                    else:
+                        print(json.dumps(project, indent=4))
+                follow = input("View contributor rankings for this project? (y/n): ").strip().lower()
+                if follow == "y":
+                    _contributor_menu(project_id)
+            elif choice == "4":
+                with open_db() as conn:
+                    snapshots = fetch_latest_snapshots(conn)
+                    ranked_projects = rank_projects_from_snapshots(snapshots)
+                    summary = create_summary_template(ranked_projects)
+                    print("\nPortfolio Summary:\n")
+                    print(summary)
+            elif choice == "5":
+                with open_db() as conn:
+                    resume_preview = build_resume_preview(conn)
+                    print("\nResume Preview:\n")
+                    print(resume_preview)
+            elif choice == "6":
+                with open_db() as conn:
+                    snapshots = fetch_latest_snapshots(conn)
+                    timeline = chronological_proj(snapshots)
+                    print("\nChronological Project Timeline:\n")
+                    for entry in timeline:
+                        print(f"- {entry['date']}: {entry['project_name']}")
+            elif choice == "7":
+                with open_db() as conn:
+                    snapshots = fetch_latest_snapshots(conn)
+                    skills_timeline = metrics_api(snapshots)
+                    print("\nSkills Timeline:\n")
+                    for skill in skills_timeline:
+                        print(f"- {skill['date']}: {skill['skill_name']} ({skill['level']})")
+            elif choice == "8":
+                project_id = input("Enter the project ID to delete insights: ").strip()
+                with open_db() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM analysis_snapshots WHERE id = ?", (project_id,))
+                    conn.commit()
+                    print("Project insights deleted.")
+            elif choice == "9":
+                consent = input("Do you want to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
+                if consent == "g":
+                    grant_consent()
+                    print("Consent granted.")
+                elif consent == "r":
+                    print("Consent revoked. Exiting application.")
+                    return
                 else:
-                    for snap in snapshots:
-                        snapshot_data = snap.get("snapshot") or {}
-                        project_label = snapshot_data.get("project_name") or snap.get("project_id")
-                        print(f"- {project_label} (ID: {snap.get('project_id')})")
-        elif choice == "3":
-            project_id = input("Enter the project ID to view details: ").strip()
-            with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
-                if not project:
-                    print("Project not found.")
-                else:
-                    print(json.dumps(project, indent=4))
-            follow = input("View contributor rankings for this project? (y/n): ").strip().lower()
-            if follow == "y":
+                    print("Invalid choice. Please try again.")
+            elif choice == "10":
+                project_id = input("Enter the project ID to view contributor rankings: ").strip()
                 _contributor_menu(project_id)
-        elif choice == "4":
-            with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                ranked_projects = rank_projects_from_snapshots(snapshots)
-                summary = create_summary_template(ranked_projects)
-                print("\nPortfolio Summary:\n")
-                print(summary)
-        elif choice == "5":
-            with open_db() as conn:
-                resume_preview = build_resume_preview(conn)
-                print("\nResume Preview:\n")
-                print(resume_preview)
-        elif choice == "6":
-            with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                timeline = chronological_proj(snapshots)
-                print("\nChronological Project Timeline:\n")
-                for entry in timeline:
-                    print(f"- {entry['date']}: {entry['project_name']}")
-        elif choice == "7":
-            with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                skills_timeline = metrics_api(snapshots)
-                print("\nSkills Timeline:\n")
-                for skill in skills_timeline:
-                    print(f"- {skill['date']}: {skill['skill_name']} ({skill['level']})")
-        elif choice == "8":
-            project_id = input("Enter the project ID to delete insights: ").strip()
-            with open_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM analysis_snapshots WHERE id = ?", (project_id,))
-                conn.commit()
-                print("Project insights deleted.")
-        elif choice == "9":
-            consent = input("Do you want to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
-            if consent == "g":
-                grant_consent()
-                print("Consent granted.")
-            elif consent == "r":
-                print("Consent revoked. Exiting application.")
-                return
+            elif choice == "11":
+                _exit_app()
             else:
-                print("Invalid choice. Please try again.")
-        elif choice == "10":
-            project_id = input("Enter the project ID to view contributor rankings: ").strip()
-            _contributor_menu(project_id)
-        elif choice == "11":
-            print("Good luck with everything! Exiting application.")
-            break
-        else:
-            print("Invalid choice. Please enter a number between 1 and 11.")
+                print("Invalid choice. Please enter a number between 1 and 11.")
+    except KeyboardInterrupt:
+        _exit_app()
     
 if __name__ == "__main__":
     main()
