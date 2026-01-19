@@ -30,6 +30,29 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS contributor_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            contributor TEXT NOT NULL,
+            commits INTEGER NOT NULL DEFAULT 0,
+            line_changes INTEGER NOT NULL DEFAULT 0,
+            pull_requests INTEGER NOT NULL DEFAULT 0,
+            issues INTEGER NOT NULL DEFAULT 0,
+            reviews INTEGER NOT NULL DEFAULT 0,
+            score REAL NOT NULL DEFAULT 0,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
+        ON contributor_stats (project_id, contributor, created_at)
+        """
+    )
 
     # backfill legacy rows that only had project_name, can be deleted at end
     info = conn.execute("PRAGMA table_info(project_analysis)").fetchall()
@@ -104,6 +127,144 @@ def store_analysis_snapshot(
         (project_id, classification, primary_contributor, payload),
     )
     conn.commit()
+
+
+def store_contributor_stats(
+    conn: sqlite3.Connection,
+    project_id: str,
+    contributor: str,
+    *,
+    commits: int = 0,
+    line_changes: int = 0,
+    pull_requests: int = 0,
+    issues: int = 0,
+    reviews: int = 0,
+    score: float = 0.0,
+    source: str | None = None,
+) -> None:
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    if not contributor:
+        raise ValueError("contributor must be provided")
+    conn.execute(
+        """
+        INSERT INTO contributor_stats (
+            project_id,
+            contributor,
+            commits,
+            line_changes,
+            pull_requests,
+            issues,
+            reviews,
+            score,
+            source
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            project_id,
+            contributor,
+            int(commits),
+            int(line_changes),
+            int(pull_requests),
+            int(issues),
+            int(reviews),
+            float(score),
+            source,
+        ),
+    )
+    conn.commit()
+
+
+def fetch_latest_contributor_stats(
+    conn: sqlite3.Connection,
+    project_id: str,
+) -> list[dict]:
+    if not project_id:
+        return []
+    cursor = conn.execute(
+        """
+        WITH latest_time AS (
+            SELECT contributor, MAX(created_at) AS created_at
+            FROM contributor_stats
+            WHERE project_id = ?
+            GROUP BY contributor
+        ),
+        latest_row AS (
+            SELECT cs.contributor, MAX(cs.id) AS id
+            FROM contributor_stats cs
+            JOIN latest_time lt
+              ON lt.contributor = cs.contributor
+             AND lt.created_at = cs.created_at
+            WHERE cs.project_id = ?
+            GROUP BY cs.contributor
+        )
+        SELECT
+            cs.project_id,
+            cs.contributor,
+            cs.commits,
+            cs.line_changes,
+            cs.pull_requests,
+            cs.issues,
+            cs.reviews,
+            cs.score,
+            cs.source,
+            cs.created_at
+        FROM contributor_stats cs
+        JOIN latest_row lr ON lr.id = cs.id
+        ORDER BY cs.score DESC, cs.contributor ASC
+        """,
+        (project_id, project_id),
+    )
+    rows = cursor.fetchall()
+    payload: list[dict] = []
+    for row in rows:
+        (
+            project_id,
+            contributor,
+            commits,
+            line_changes,
+            pull_requests,
+            issues,
+            reviews,
+            score,
+            source,
+            created_at,
+        ) = row
+        payload.append(
+            {
+                "project_id": project_id,
+                "contributor": contributor,
+                "commits": commits,
+                "line_changes": line_changes,
+                "pull_requests": pull_requests,
+                "issues": issues,
+                "reviews": reviews,
+                "score": score,
+                "source": source,
+                "created_at": created_at,
+            }
+        )
+    return payload
+
+
+def fetch_contributor_rankings(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    sort_by: str = "score",
+) -> list[dict]:
+    allowed = {
+        "score": "score",
+        "commits": "commits",
+        "line_changes": "line_changes",
+        "pull_requests": "pull_requests",
+        "issues": "issues",
+        "reviews": "reviews",
+    }
+    sort_key = allowed.get(sort_by, "score")
+    rows = fetch_latest_contributor_stats(conn, project_id)
+    return sorted(rows, key=lambda row: (-float(row.get(sort_key, 0)), row.get("contributor", "")))
 
 
 def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | None:
@@ -222,6 +383,9 @@ __all__ = [
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
+    "store_contributor_stats",
+    "fetch_latest_contributor_stats",
+    "fetch_contributor_rankings",
     "backup_database",
     "export_snapshots_to_json",
 ]

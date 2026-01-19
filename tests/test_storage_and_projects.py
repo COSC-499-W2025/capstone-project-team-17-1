@@ -50,6 +50,59 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(exported[0]["project_id"], "demo")
         self.assertIn("snapshot", exported[0])
 
+    def test_store_and_rank_contributor_stats(self) -> None:
+        base_dir = Path(self._tmpdir.name) / "db"
+        conn = storage.open_db(base_dir)
+
+        storage.store_contributor_stats(
+            conn,
+            project_id="demo",
+            contributor="alice",
+            commits=5,
+            line_changes=40,
+            pull_requests=2,
+            issues=1,
+            reviews=0,
+            score=12.5,
+            source="github",
+        )
+        storage.store_contributor_stats(
+            conn,
+            project_id="demo",
+            contributor="bob",
+            commits=8,
+            line_changes=20,
+            pull_requests=1,
+            issues=0,
+            reviews=3,
+            score=10.0,
+            source="github",
+        )
+        # Update alice with a newer row to ensure latest selection.
+        storage.store_contributor_stats(
+            conn,
+            project_id="demo",
+            contributor="alice",
+            commits=6,
+            line_changes=45,
+            pull_requests=3,
+            issues=1,
+            reviews=2,
+            score=14.0,
+            source="github",
+        )
+
+        latest = storage.fetch_latest_contributor_stats(conn, "demo")
+        latest_by_name = {row["contributor"]: row for row in latest}
+        self.assertEqual(latest_by_name["alice"]["commits"], 6)
+        self.assertEqual(latest_by_name["alice"]["line_changes"], 45)
+        self.assertEqual(latest_by_name["bob"]["reviews"], 3)
+
+        ranked_score = storage.fetch_contributor_rankings(conn, "demo")
+        self.assertEqual(ranked_score[0]["contributor"], "alice")
+        ranked_commits = storage.fetch_contributor_rankings(conn, "demo", sort_by="commits")
+        self.assertEqual(ranked_commits[0]["contributor"], "bob")
+
     def tearDown(self) -> None:
         storage.close_db()
 
