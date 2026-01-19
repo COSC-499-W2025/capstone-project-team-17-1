@@ -4,6 +4,13 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from capstone.portfolio_retrieval import ensure_indexes, list_snapshots, get_latest_snapshot, create_app
 
@@ -157,7 +164,28 @@ class PortfolioRetrievalTests(unittest.TestCase):
         source = preview["sections"][0]["items"][0]["source"]
         self.assertEqual(excerpt, "Custom resume wording.")
         self.assertEqual(source, "custom")
+        
+    # validate missing required parameters
+    def test_validate_missing_params(self):
+        try:
+            app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        except Exception:
+            self.skipTest("Flask not installed")
+            return
+        client = app.test_client()
+        headers = {"Authorization": "Bearer t"}
 
+        # should rejects missing projectId on portfolios/latest
+        r = client.get("/portfolios/latest", headers=headers)
+        self.assertEqual(r.status_code, {400, 422})
+        
+        # should reject missing projectId on resume
+        r = client.get("/resume-projects/latest", json={}, headers=headers)
+        self.assertEqual(r.status_code, {400, 422})
+        
+        # should reject missing projectId on resume
+        r = client.get("/resume-projects/latest", json={"summary": "x", "isActive": True}, headers=headers)
+        self.assertEqual(r.status_code, {400, 422})
 
 if __name__ == "__main__":
     unittest.main()
