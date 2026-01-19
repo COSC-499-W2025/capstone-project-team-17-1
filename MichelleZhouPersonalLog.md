@@ -2,6 +2,9 @@
 
 ## Table of Contents
 
+- [T2 Week 1 Personal Log](#T2-week-1-personal-log)
+- [T2 Week 2 Personal Log](#T2-week-2-personal-log)
+
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
 - [Week 5 Personal Log](#week-5-personal-log)
@@ -14,48 +17,6 @@
 - [Week 12 Personal Log](#week-12-personal-log)
 - [Week 13 Personal Log](#week-13-personal-log)
 - [Week 14 Personal Log](#week-14-personal-log)
-- [T2 Week 1 Personal Log](#T2-week-1-personal-log)
-- [T2 Week 2 Personal Log](#T2-week-2-personal-log)
-
-
-## T2 Week 1 Personal Log
-
-- (Jan 5 - Jan 11, 2025)<br />
-
-<img width="969" height="565" alt="image" src="https://github.com/user-attachments/assets/a84a3419-0b93-4039-9575-55973d83fe2c" />
-
-### Week Recap: 
-Worked on creating a start up menu for the user to navigate with upon running the program. Upon granting user consent, it enters a loop with all possible program options. This makes it easier to navigate and more user/testing friendly for future implementations. Additionally, it incorporates the functions from milestone #1 and creates a centralized point for all interactions.
-
-- Created start up menu for application
-- Integrated menu options with existing program functions
-- Discussed milestone #2 implementation with team
-- Reviewed and tested teammate's code and pr
-
-### Next Week:
-- Complete specific integrations for all menu options so that everything can be ran through it
-- Wrok on new feature for milestone #2
-
-## T2 Week 2 Personal Log
-
-- (Jan 12 - Jan 18, 2025)<br />
-
-<img width="967" height="566" alt="image" src="https://github.com/user-attachments/assets/42266e56-1b77-4700-aca2-324e76ea68eb" />
-
-###Weekly Recap:
-This week continued from last week's start up manu work by integrating all the underlying milestone features reliably. I focused on connecting the menu to existing modules, fixing integration issues caused by inconsistent snapshot data, and writing tests so future changes do not break basic navigation.
-
-Coding tasks
-I expanded the startup menu so each option routes to the correct functionality. I also included normalization logic to bridge differences beteween database row fields and snapshot payload keys so the menu can work across multiple stored snapshot shapes without breaking the program. 
-
-Testing or debugging tasks
-I debugged several runtime issues triggered by menu execution where functions expected dict maps but received lists. I added unittest coverage for the flow using mock data inputs and core helper calls. I also adjusted imports to avoid environment failures.
-
-Reviewing or collaboration tasks
-I helped review teammate prs for milestone 2 changes which includes success endpoints and resume textual display logic. I helped test new implementations and worked on adding additional tests which achieved better coverage for niche scenarios such as more consistent outputs even when input parameters may be missing.
-
-###Additionally:
-The primary blocked for this week was inconsistent snapshot schemas across the pipeline. This caused issues in both ranking and timeline utilities when called through the menu. I addressed this with normalization and correct data shaping prior to passing inputs to shared functions. Next week I plan to fully finalize the start menu in preparation for peer testing. I will also work on implementing milestone 2 features with the rest of the team.
 
 ## Week 3 Personal Log
 
@@ -259,3 +220,43 @@ Milestone #1 Deliverables
 ### Next Week:
 - Work on possible new features
 - Further refractoring and cleanup based on milestone feedback
+
+## T2 Week 1 Personal Log
+
+- (Jan 5 - Jan 11, 2025)<br />
+
+<img width="969" height="565" alt="image" src="https://github.com/user-attachments/assets/a84a3419-0b93-4039-9575-55973d83fe2c" />
+
+### Week Recap: 
+Worked on creating a start up menu for the user to navigate with upon running the program. Upon granting user consent, it enters a loop with all possible program options. This makes it easier to navigate and more user/testing friendly for future implementations. Additionally, it incorporates the functions from milestone #1 and creates a centralized point for all interactions.
+
+- Created start up menu for application
+- Integrated menu options with existing program functions
+- Discussed milestone #2 implementation with team
+- Reviewed and tested teammate's code and pr
+
+### Next Week:
+- Complete specific integrations for all menu options so that everything can be ran through it
+- Wrok on new feature for milestone #2
+
+## T2 Week 2 Personal Log
+
+- (Jan 12 - Jan 18, 2025)<br />
+
+<img width="967" height="566" alt="image" src="https://github.com/user-attachments/assets/42266e56-1b77-4700-aca2-324e76ea68eb" />
+
+###Weekly Recap:
+This week continued from last week's start up manu work by integrating all the underlying milestone features reliably. I focused on connecting the menu to existing modules, fixing integration issues caused by inconsistent snapshot data, and writing tests so future changes do not break basic navigation.
+
+Coding tasks
+I expanded the startup menu so each option routes to the correct functionality. I also included normalization logic to bridge differences beteween database row fields and snapshot payload keys so the menu can work across multiple stored snapshot shapes without breaking the program. 
+
+Testing or debugging tasks
+I debugged several runtime issues triggered by menu execution where functions expected dict maps but received lists. I added unittest coverage for the flow using mock data inputs and core helper calls. I also adjusted imports to avoid environment failures.
+
+Reviewing or collaboration tasks
+I helped review teammate prs for milestone 2 changes which includes success endpoints and resume textual display logic. I helped test new implementations and worked on adding additional tests which achieved better coverage for niche scenarios such as more consistent outputs even when input parameters may be missing.
+
+###Additionally:
+The primary blocked for this week was inconsistent snapshot schemas across the pipeline. This caused issues in both ranking and timeline utilities when called through the menu. I addressed this with normalization and correct data shaping prior to passing inputs to shared functions. Next week I plan to fully finalize the start menu in preparation for peer testing. I will also work on implementing milestone 2 features with the rest of the team.
+
