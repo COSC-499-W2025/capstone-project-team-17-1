@@ -2,36 +2,109 @@ import json
 import os
 import sqlite3
 import sys
-import tempfile
-import threading
-from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Iterable, List
-from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-
-from capstone.cli import main
-from capstone.company_profile import build_company_resume_lines
-from capstone.company_qualities import extract_company_qualities
-from capstone.config import reset_config
+    
 from capstone.consent import grant_consent
-from capstone.insight_store import InsightStore
+try:
+    from capstone.consent import revoke_consent, export_consent 
+except Exception:
+    revoke_consent = None
+    export_consent = None
+
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.project_ranking import rank_projects_from_snapshots
-from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema, insert_resume_entry, query_resume_entries
-from capstone.storage import close_db, export_snapshots_to_json, fetch_latest_snapshots, open_db, store_analysis_snapshot
-from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summary_template, export_markdown
-from capstone.top_project_summaries import export_readme_snippet
+from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema, query_resume_entries
+from capstone.storage import fetch_latest_snapshots, open_db, store_analysis_snapshot
+from capstone.top_project_summaries import create_summary_template
 
-# set NO_COLOR=1 to disable the colorized titles.
-USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") not in {"1", "true", "yes"}
+def _row_to_dict(row):
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return row
+    if hasattr(row, "to_dict"):
+        try:
+            return row.to_dict()
+        except Exception:
+            pass
+    if hasattr(row, "__dict__"):
+        return dict(row.__dict__)
+    return {"value": row}
 
-def main():
+def _parse_snapshot_field(value):
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return {"raw_snapshot": value}
+    return {"raw_snapshot": value}
+
+def _normalize_snapshot(rows):
+    normalized = []
+    for r in rows or []:
+        row_dict = _row_to_dict(r)
+        
+        pid = (
+            row_dict.get("project_id")
+            or row_dict.get("projectId")
+            or row_dict.get("project")
+            or row_dict.get("id_project")
+        )
+        
+        rid = row_dict.get("id") or row_dict.get("row_id") or row_dict.get("snapshot_id")
+        uploaded_on = row_dict.get("uploaded_on") or row_dict.get("analyzed_date") or row_dict.get("date")
+        snap = row_dict.get("snapshot")
+        
+        if snap is None and "data" in row_dict and isinstance(row_dict["data"], (dict, str)):
+            snap = row_dict["data"]
+        snapshot_dict = _parse_snapshot_field(snap)
+        
+        if pid and "project_id" not in snapshot_dict and "projectId" not in snapshot_dict:
+            snapshot_dict["project_id"] = pid
+            
+        normalized.append({
+            "id": rid,
+            "project_id": pid,
+            "uploaded_on": uploaded_on,
+            "snapshot": snapshot_dict,
+            "raw": row_dict
+         })
+    return normalized
+
+def _display_name(item):
+    snap = item.get("snapshot") or {}
+    pid = item.get("project_id") or snap.get("project_id") or snap.get("projectId")
+    
+    name = (
+        snap.get("project_name")
+        or snap.get("projectName")
+        or snap.get("name")
+        or (snap.get("meta") or {}).get("name")
+    )
+    return name or pid or "Misc Project"
+
+def _pick_project(normalized, user_input):
+    p = (user_input or "").strip().lower()
+    if not p:
+        return None
+    
+    # match by project id
+    for item in normalized:
+        if str(item.get("project_id")) == p:
+            return item
+    
+    return None
+
+def app_main():
     # main entry point for user
     print("=" * 60)
     print("     Data and Artifact Mining Application")
@@ -65,8 +138,8 @@ def main():
         choice = input("Please select an option (1-10): ").strip()
         
         if choice == "1":
-            zip_path = input("Enter the path to the project ZIP archive: ").strip()
-            if not os.path.isfile(zip_path):
+            zip_path = input("Please enter the path to the project ZIP archive: ").strip()
+            if not zip_path or not os.path.isfile(zip_path):
                 print("Invalid file path. Please try again.")
                 continue
             with open_db() as conn:
@@ -74,64 +147,200 @@ def main():
             print("Project analysis completed and stored.")
         elif choice == "2":
             with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                if not snapshots:
-                    print("No projects found.")
+                rows = fetch_latest_snapshots(conn)
+            projects = _normalize_snapshot(rows)
+            if not projects:
+                print("No projects found. Feel free to upload one!")
+                continue
+            print("\nProjects:")
+            for item in projects:
+                name = _display_name(item)
+                pid = item.get("project_id") or "N/A"
+                rid = item.get("id") or "N/A"
+                uploaded = item.get("uploaded_on") or "N/A"
+                if rid is not None:
+                    print(f"- {name} (project_id: {pid}, row_id: {rid}, uploaded_on: {uploaded}")
                 else:
-                    for snap in snapshots:
-                        print(f"- {snap['project_name']} (ID: {snap['id']})")
+                    print(f"- {name}, (project_id): {pid}, uploaded_on: {uploaded}")
         elif choice == "3":
-            project_id = input("Enter the project ID to view details: ").strip()
+            to_view = input("Please enter the project_id: ").strip()
             with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                project = next((s for s in snapshots if str(s['id']) == project_id), None)
-                if not project:
-                    print("Project not found.")
-                else:
-                    print(json.dumps(project, indent=4))
+                rows = fetch_latest_snapshots(conn)
+            projects = _normalize_snapshot(rows)
+            
+            item = _pick_project(projects, to_view)
+            if not item:
+                print("Project not found :( Please pick option 2 tocheck the project_id and try again.")
+                continue
+            
+            payload = {
+                "project_id": item.get("project_id"),
+                "row_id": item.get("id"),
+                "uploaded_on": item.get("uploaded_on"),
+                "snapshot": item.get("snapshot")
+            }
+            print(json.dumps(payload, indent=4))
         elif choice == "4":
             with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                ranked_projects = rank_projects_from_snapshots(snapshots)
-                summary = create_summary_template(ranked_projects)
-                print("\nPortfolio Summary:\n")
-                print(summary)
+                rows = fetch_latest_snapshots(conn)
+            projects = _normalize_snapshot(rows)
+            
+            if not projects:
+                print("No projects found to summarize. Please upload some projects first.")
+                continue
+            
+            snapshot_dicts = []
+            for item in projects:
+                snap = dict(item.get("snapshot") or {})
+                if item.get("project_id") and "project_id" not in snap:
+                    snap["project_id"] = item.get("project_id")
+                if item.get("uploaded_on") and "date" not in snap:
+                    snap["date"] = item.get("uploaded_on")
+                snapshot_dicts.append(snap)  
+                 
+            ranked_projects = rank_projects_from_snapshots(snapshot_dicts)
+            summary = create_summary_template(ranked_projects)
+            print("\nPortfolio Summary:\n")
+            print(summary)
         elif choice == "5":
             with open_db() as conn:
-                resume_preview = build_resume_preview(conn)
-                print("\nResume Preview:\n")
-                print(resume_preview)
+                try:
+                    ensure_resume_schema(conn)
+                except Exception:
+                    pass
+                
+                # query to build preview similar to what we did in cli.py
+                preview_obj = None
+                try:
+                    result = query_resume_entries(
+                        conn, sections=None,
+                        keywords=None,
+                        start_date=None,
+                        end_date=None,
+                        include_outdated=False,
+                        limit=20,
+                        offset=0
+                    )
+                    preview_obj = build_resume_preview(result, conn=conn)
+                except TypeError:
+                    preview_obj = build_resume_preview(conn=conn)
+                except Exception as e:
+                    print(f"Something went wrong when generating resume preview: {e}")
+                    continue
+                
+            print("\nResume Preview:\n")
+            if isinstance(preview_obj, (dict, list)):
+                print(json.dumps(preview_obj, indent=4))
+            else:
+                print(preview_obj)
         elif choice == "6":
             with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                timeline = chronological_proj(snapshots)
+                rows
+            projects = _normalize_snapshot(rows)
+            
+            if not projects:
+                print("No projects found to summarize. Please upload some projects first.")
+                continue
+            
+            snapshot_dicts = []
+            for item in projects:
+                snap = dict(item.get("snapshot") or {})
+                if item.get("project_id") and "project_id" not in snap:
+                    snap.setdefault("project_id", item.get("project_id"))
+                    snap.setdefault("uploaded_on", item.get("uploaded_on"))
+                    snapshot_dicts.append(snap)
+                
+                timeline = chronological_proj(snapshot_dicts)
+                
                 print("\nChronological Project Timeline:\n")
-                for entry in timeline:
-                    print(f"- {entry['date']}: {entry['project_name']}")
+                for proj in timeline:
+                    date = proj.get("date") or proj.get("uploaded_on") or "N/A"
+                    name = proj.get("poject_name") or proj.get("project_id") or "Misc Project"
+                    print(f"- {date}: {name}")
         elif choice == "7":
             with open_db() as conn:
-                snapshots = fetch_latest_snapshots(conn)
-                skills_timeline = metrics_api(snapshots)
-                print("\nSkills Timeline:\n")
-                for skill in skills_timeline:
-                    print(f"- {skill['date']}: {skill['skill_name']} ({skill['level']})")
+                rows = fetch_latest_snapshots(conn)
+            projects = _normalize_snapshot(rows)
+            
+            if not projects:
+                print("No projects found to summarize. Please upload some projects first.")
+                continue
+            
+            snapshot_dicts = []
+            for item in projects:
+                snap = dict(item.get("snapshot") or {})
+                snap.setdefault("project_id", item.get("project_id"))
+                snap.setdefault("uploaded_on", item.get("uploaded_on"))
+                snapshot_dicts.append(snap)
+            
+            skills = metrics_api(snapshot_dicts)
+            
+            print("\nSkills Timeline:\n")
+            for item in skills or []:
+                date = item.get("date") or item.get("uploaded_on") or "N/A"
+                name = item.get("skill_name") or item.get("skill") or "Unnamed Skill"
+                level = item.get("level")
+                if level is None:
+                    print(f"- {date}: {name}")
+                else:
+                    print(f"- {date}: {name} ({level})")
         elif choice == "8":
-            project_id = input("Enter the project ID to delete insights: ").strip()
+            to_view = input("Please enter the project_id to delete: ").strip()
+            if not to_view:
+                print("Invalid project_id. Please try again.")
+                continue
+            
+            confirm_del = input(f"Are you sure you want to delete insights for project_id '{to_view}'? (y/n): ").strip().lower()
+            if confirm_del != "y":
+                print("Deletion cancelled.")
+                continue
+            
+            deletion = False
             with open_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM analysis_snapshots WHERE id = ?", (project_id,))
-                conn.commit()
-                print("Project insights deleted.")
-        elif choice == "9":
-            consent = input("Do you want to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
-            if consent == "g":
-                grant_consent()
-                print("Consent granted.")
-            elif consent == "r":
-                print("Consent revoked. Exiting application.")
-                return
+                cur = conn.cursor()
+                
+                for table, id_col, pid_col in [
+                    ("project_analysis", "id", "project_id"),
+                    ("analysis_snapshots", "id", "project_id")
+                ]:
+                    try:
+                        # delete by project_id
+                        cur.execute(f"DELETE FROM {table} WHERE {pid_col} = ?", (to_view,))
+                        if cur.rowcount:
+                            deletion = True
+                        conn.commit()
+                    except Exception:
+                        pass
+            if deletion:
+                print("Project insights deleted successfully.")
             else:
-                print("Invalid choice. Please try again.")
+                print("No insights found for the given project_id. Nothing was deleted.")
+        elif choice == "9":
+            print("\nConsent Menu:")
+            print("1. View Consent Status")
+            print("2. Grant Consent")
+            print("3. Revoke Consent")
+            choice_consent = input("Please select an option (1-3): ").strip()
+            
+            if choice_consent == "1":
+                if export_consent is None:
+                    print("Consent functions not available or does not exist.")
+                else:
+                    try:
+                        print(json.dumps(export_consent(), indent=4))
+                    except Exception as e:
+                        print(f"Could not read consent status: {e}")
+            elif choice_consent == "2":
+                grant_consent()
+                print("Consent granted!")
+            elif choice_consent == "3":
+                if revoke_consent is None:
+                    print("Revoke consent function not available.")
+                else:
+                    revoke_consent()
+                    print("Consent revoked successfully.")
+            else:
+                print("Invalid choice. Please enter a number between 1 and 3.")
         elif choice == "10":
             print("Good luck with everything! Exiting application.")
             break
@@ -139,5 +348,5 @@ def main():
             print("Invalid choice. Please enter a number between 1 and 10.")
     
 if __name__ == "__main__":
-    main()
+    app_main()
     
