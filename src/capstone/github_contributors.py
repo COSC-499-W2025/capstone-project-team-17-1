@@ -1,5 +1,3 @@
-"""Fetch GitHub contributor stats and persist them to SQLite."""
-
 from __future__ import annotations
 
 import json
@@ -169,7 +167,7 @@ def collect_contributor_stats(
     for stats in ranked:
         login = stats.contributor
         stats.pull_requests = client.search_issues_count(
-            f"repo:{owner}/{repo} type:pr author:{login} is:merged"
+            f"repo:{owner}/{repo} type:pr assignee:{login} is:merged"
         )
         stats.issues = client.search_issues_count(
             f"repo:{owner}/{repo} type:issue assignee:{login} is:closed"

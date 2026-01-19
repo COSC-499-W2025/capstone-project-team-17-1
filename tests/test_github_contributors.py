@@ -28,13 +28,13 @@ class _FakeClient:
         return [{"login": "bob", "contributions": 3}]
 
     def search_issues_count(self, query: str):
-        if "author:alice" in query and "type:pr" in query:
+        if "assignee:alice" in query and "type:pr" in query:
             return 2
         if "assignee:alice" in query and "type:issue" in query:
             return 1
         if "reviewed-by:alice" in query:
             return 4
-        if "author:bob" in query and "type:pr" in query:
+        if "assignee:bob" in query and "type:pr" in query:
             return 1
         if "assignee:bob" in query and "type:issue" in query:
             return 0

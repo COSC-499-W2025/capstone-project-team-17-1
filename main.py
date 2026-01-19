@@ -56,8 +56,8 @@ def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
         print(
             f"{index}. {row['contributor']} "
             f"(Total Score= {row['score']:.2f}, Commits= {row['commits']}, "
-            f"Line Changes= {row['line_changes']}, PRs= {row['pull_requests']}, "
-            f"Issues= {row['issues']}, Reviews= {row['reviews']})"
+            f"Line Changes= {row['line_changes']}, Merged PRs= {row['pull_requests']}, "
+            f"Completed Issues= {row['issues']}, Reviews= {row['reviews']})"
         )
 
 

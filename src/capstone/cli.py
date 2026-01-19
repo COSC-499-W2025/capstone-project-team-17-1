@@ -956,13 +956,19 @@ def _handle_contributors(args: argparse.Namespace) -> int:
             db_dir=args.db_dir,
             max_contributors=args.max_contributors,
         )
-        for index, row in enumerate(stats, start=1):
-            print(
-                f"{index}. {row.contributor} "
-                f"(Total Score: {row.score:.2f}, Commits: {row.commits}, "
-                f"Line Changes: {row.line_changes}, PRs: {row.pull_requests}, "
-                f"Issues: {row.issues}, Reviews: {row.reviews})"
-            )
+        payload = [
+            {
+                "contributor": row.contributor,
+                "commits": row.commits,
+                "line_changes": row.line_changes,
+                "pull_requests": row.pull_requests,
+                "issues": row.issues,
+                "reviews": row.reviews,
+                "score": row.score,
+            }
+            for row in stats
+        ]
+        print(json.dumps(payload, indent=2))
         return 0
 
     if args.contributors_action == "rank":
@@ -977,9 +983,9 @@ def _handle_contributors(args: argparse.Namespace) -> int:
         for index, row in enumerate(rankings, start=1):
             print(
                 f"{index}. {row['contributor']} "
-                f"(Total Score: {row['score']:.2f}, Commits: {row['commits']}, "
-                f"Line Changes: {row['line_changes']}, PRs: {row['pull_requests']}, "
-                f"Issues: {row['issues']}, Reviews: {row['reviews']})"
+                f"(score={row['score']:.2f}, commits={row['commits']}, "
+                f"line_changes={row['line_changes']}, prs={row['pull_requests']}, "
+                f"issues={row['issues']}, reviews={row['reviews']})"
             )
         return 0
 
@@ -1663,8 +1669,6 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_tech_summary(args)
     if args.command == "skill-summary":
         return _handle_skill_summary(args)
-    if args.command == "contributors":
-        return _handle_contributors(args)
     if args.command == "metrics-summary":
         return _handle_metrics_summary(args)
     if args.command == "top-summary":
