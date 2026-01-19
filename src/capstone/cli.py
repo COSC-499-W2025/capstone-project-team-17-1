@@ -46,6 +46,7 @@ from .resume_retrieval import (
     ensure_resume_schema,
     get_resume_project_description,
     list_resume_project_descriptions,
+    generate_resume_project_descriptions,
     upsert_resume_project_description,
 )
 from .job_matching import build_jd_profile, rank_projects_for_job
@@ -429,7 +430,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resume_project_parser.add_argument(
         "action",
-        choices=["set", "get", "list"],
+        choices=["set", "get", "list", "generate"],
         help="Action to perform",
     )
     resume_project_parser.add_argument(
@@ -454,6 +455,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="File containing the resume-specific project summary text",
     )
     resume_project_parser.add_argument(
+        "--variant-name",
+        type=str,
+        help="Variant name for resume-specific project summary",
+    )
+    resume_project_parser.add_argument(
+        "--audience",
+        type=str,
+        help="Audience for resume-specific project summary (e.g., SWE, DS)",
+    )
+    resume_project_parser.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Store the resume project summary as inactive",
+    )
+    resume_project_parser.add_argument(
         "--limit",
         type=int,
         default=100,
@@ -464,6 +480,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Offset for pagination when listing resume project descriptions",
+    )
+    resume_project_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing resume project descriptions when generating",
     )
 
     api_parser = subparsers.add_parser(
@@ -782,6 +803,7 @@ def _handle_resume(args: argparse.Namespace) -> int:
             descriptions = list_resume_project_descriptions(
                 conn,
                 project_ids=project_ids,
+                active_only=True,
                 limit=len(project_ids),
             )
             description_map = {item.project_id: item for item in descriptions}
@@ -834,12 +856,21 @@ def _handle_resume_project(args: argparse.Namespace) -> int:
                 conn,
                 project_id=project_id,
                 summary=summary,
+                variant_name=args.variant_name,
+                audience=args.audience,
+                is_active=not args.inactive,
+                metadata={"source": "custom"},
             )
             print(json.dumps(result.to_dict(), indent=2))
             return 0
 
         if args.action == "get":
-            result = get_resume_project_description(conn, project_id)
+            result = get_resume_project_description(
+                conn,
+                project_id,
+                variant_name=args.variant_name,
+                audience=args.audience,
+            )
             if not result:
                 print(json.dumps({"error": "NotFound", "detail": "No resume project description found"}, indent=2))
                 return 0
@@ -852,6 +883,18 @@ def _handle_resume_project(args: argparse.Namespace) -> int:
                 project_ids=project_ids or None,
                 limit=args.limit,
                 offset=args.offset,
+            )
+            print(json.dumps([item.to_dict() for item in results], indent=2))
+            return 0
+
+        if args.action == "generate":
+            if not project_ids:
+                print("resume-project generate requires at least one --project-id", file=sys.stderr)
+                return 2
+            results = generate_resume_project_descriptions(
+                conn,
+                project_ids=project_ids,
+                overwrite=args.overwrite,
             )
             print(json.dumps([item.to_dict() for item in results], indent=2))
             return 0
