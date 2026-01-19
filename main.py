@@ -20,7 +20,7 @@ from capstone.company_profile import build_company_resume_lines
 from capstone.company_qualities import extract_company_qualities
 from capstone.config import reset_config
 from capstone.consent import grant_consent
-from capstone.github_contributors import sync_contributor_stats
+from capstone.github_contributors import get_contributor_rankings, sync_contributor_stats
 from capstone.insight_store import InsightStore
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.project_ranking import rank_projects_from_snapshots
@@ -28,7 +28,6 @@ from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema
 from capstone.storage import (
     close_db,
     export_snapshots_to_json,
-    fetch_contributor_rankings,
     fetch_latest_snapshots,
     open_db,
     store_analysis_snapshot,
@@ -48,7 +47,7 @@ def _prompt_github_token() -> str | None:
 
 def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
     with open_db() as conn:
-        rows = fetch_contributor_rankings(conn, project_id, sort_by=sort_by)
+        rows = get_contributor_rankings(conn, project_id, sort_by=sort_by)
     if not rows:
         print("No contributor stats found. Please sync from GitHub first.")
         return

@@ -36,7 +36,7 @@ from .services import (
     TimelineService,
     TopSummaryService,
 )
-from .storage import close_db, fetch_contributor_rankings, fetch_latest_snapshots, open_db
+from .storage import close_db, fetch_latest_snapshots, open_db
 from .zip_analyzer import ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from .resume_retrieval import (
@@ -55,7 +55,7 @@ from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
 from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
 from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
 from .top_project_summaries import export_markdown, generate_top_project_summaries
-from .github_contributors import sync_contributor_stats
+from .github_contributors import get_contributor_rankings, sync_contributor_stats
 
 logger = get_logger(__name__)
 
@@ -974,7 +974,7 @@ def _handle_contributors(args: argparse.Namespace) -> int:
     if args.contributors_action == "rank":
         conn = open_db(args.db_dir)
         try:
-            rankings = fetch_contributor_rankings(conn, args.project_id, sort_by=args.sort_by)
+            rankings = get_contributor_rankings(conn, args.project_id, sort_by=args.sort_by)
         finally:
             close_db()
         if not rankings:

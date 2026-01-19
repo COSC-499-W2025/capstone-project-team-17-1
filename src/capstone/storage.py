@@ -42,6 +42,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             issues INTEGER NOT NULL DEFAULT 0,
             reviews INTEGER NOT NULL DEFAULT 0,
             score REAL NOT NULL DEFAULT 0,
+            weights_hash TEXT,
             source TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -53,6 +54,11 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON contributor_stats (project_id, contributor, created_at)
         """
     )
+    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
+    columns = {row[1] for row in info}
+    if "weights_hash" not in columns:
+        conn.execute("ALTER TABLE contributor_stats ADD COLUMN weights_hash TEXT")
+        conn.commit()
 
     # backfill legacy rows that only had project_name, can be deleted at end
     info = conn.execute("PRAGMA table_info(project_analysis)").fetchall()
@@ -140,6 +146,7 @@ def store_contributor_stats(
     issues: int = 0,
     reviews: int = 0,
     score: float = 0.0,
+    weights_hash: str | None = None,
     source: str | None = None,
 ) -> None:
     if not project_id:
@@ -157,9 +164,10 @@ def store_contributor_stats(
             issues,
             reviews,
             score,
+            weights_hash,
             source
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project_id,
@@ -170,6 +178,7 @@ def store_contributor_stats(
             int(issues),
             int(reviews),
             float(score),
+            weights_hash,
             source,
         ),
     )
@@ -200,6 +209,7 @@ def fetch_latest_contributor_stats(
             GROUP BY cs.contributor
         )
         SELECT
+            cs.id,
             cs.project_id,
             cs.contributor,
             cs.commits,
@@ -208,6 +218,7 @@ def fetch_latest_contributor_stats(
             cs.issues,
             cs.reviews,
             cs.score,
+            cs.weights_hash,
             cs.source,
             cs.created_at
         FROM contributor_stats cs
@@ -220,6 +231,7 @@ def fetch_latest_contributor_stats(
     payload: list[dict] = []
     for row in rows:
         (
+            row_id,
             project_id,
             contributor,
             commits,
@@ -228,11 +240,13 @@ def fetch_latest_contributor_stats(
             issues,
             reviews,
             score,
+            weights_hash,
             source,
             created_at,
         ) = row
         payload.append(
             {
+                "id": row_id,
                 "project_id": project_id,
                 "contributor": contributor,
                 "commits": commits,
@@ -241,11 +255,30 @@ def fetch_latest_contributor_stats(
                 "issues": issues,
                 "reviews": reviews,
                 "score": score,
+                "weights_hash": weights_hash,
                 "source": source,
                 "created_at": created_at,
             }
         )
     return payload
+
+
+def update_contributor_score(
+    conn: sqlite3.Connection,
+    row_id: int,
+    *,
+    score: float,
+    weights_hash: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        UPDATE contributor_stats
+        SET score = ?, weights_hash = ?
+        WHERE id = ?
+        """,
+        (float(score), weights_hash, int(row_id)),
+    )
+    conn.commit()
 
 
 def fetch_contributor_rankings(
@@ -385,6 +418,7 @@ __all__ = [
     "fetch_latest_snapshots",
     "store_contributor_stats",
     "fetch_latest_contributor_stats",
+    "update_contributor_score",
     "fetch_contributor_rankings",
     "backup_database",
     "export_snapshots_to_json",

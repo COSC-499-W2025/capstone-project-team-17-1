@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import urllib.error
@@ -10,16 +11,21 @@ from pathlib import Path
 from typing import Iterable
 
 from .logging_utils import get_logger
-from .storage import open_db, store_contributor_stats
+from .storage import (
+    fetch_latest_contributor_stats,
+    open_db,
+    store_contributor_stats,
+    update_contributor_score,
+)
 
 logger = get_logger(__name__)
 
 DEFAULT_WEIGHTS = {
     "commits": 0.30,
-    "line_changes": 0.25,
-    "pull_requests": 0.20,
-    "issues": 0.15,
-    "reviews": 0.10,
+    "line_changes": 0.02,
+    "pull_requests": 0.25,
+    "issues": 0.23,
+    "reviews": 0.20,
 }
 
 
@@ -54,6 +60,12 @@ def compute_score(stats: dict, weights: dict | None = None) -> float:
     )
 
 
+def weights_hash(weights: dict | None = None) -> str:
+    w = weights or DEFAULT_WEIGHTS
+    payload = json.dumps(w, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 @dataclass
 class ContributorStats:
     contributor: str
@@ -68,6 +80,26 @@ class ContributorStats:
 class GitHubClient:
     def __init__(self, token: str | None) -> None:
         self._token = token
+
+    def _request_graphql(self, payload: dict) -> dict:
+        url = "https://api.github.com/graphql"
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("User-Agent", "capstone-analyzer")
+        if self._token:
+            req.add_header("Authorization", f"Bearer {self._token}")
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = response.read().decode("utf-8")
+                return json.loads(data)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8") if exc.fp else ""
+            logger.warning("GitHub GraphQL error %s: %s", exc.code, body)
+            try:
+                return json.loads(body)
+            except Exception:
+                return {"errors": [{"message": body or str(exc)}]}
 
     def _request_json(self, path: str, params: dict | None = None) -> tuple[object, int]:
         base_url = "https://api.github.com"
@@ -106,13 +138,18 @@ class GitHubClient:
         return []
 
     def search_issues_count(self, query: str) -> int:
-        data, _ = self._request_json("/search/issues", {"q": query, "per_page": 1})
-        if isinstance(data, dict):
-            try:
-                return int(data.get("total_count", 0))
-            except (TypeError, ValueError):
-                return 0
-        return 0
+        payload = self._request_graphql(
+            {
+                "query": "query($query: String!) { search(type: ISSUE, query: $query) { issueCount } }",
+                "variables": {"query": query},
+            }
+        )
+        data = payload.get("data") if isinstance(payload, dict) else None
+        search = data.get("search") if isinstance(data, dict) else None
+        try:
+            return int(search.get("issueCount", 0)) if isinstance(search, dict) else 0
+        except (TypeError, ValueError):
+            return 0
 
 
 def collect_contributor_stats(
@@ -202,6 +239,7 @@ def sync_contributor_stats(
     owner, repo = parse_repo_url(repo_url)
     resolved_project_id = project_id or f"{owner}/{repo}"
     client = client or GitHubClient(token)
+    hash_value = weights_hash(weights)
     stats = collect_contributor_stats(
         owner,
         repo,
@@ -221,16 +259,65 @@ def sync_contributor_stats(
             issues=row.issues,
             reviews=row.reviews,
             score=row.score,
+            weights_hash=hash_value,
             source="github",
         )
     return stats
 
 
+def get_contributor_rankings(
+    conn,
+    project_id: str,
+    *,
+    sort_by: str = "score",
+    weights: dict | None = None,
+) -> list[dict]:
+    current_hash = weights_hash(weights)
+    rows = fetch_latest_contributor_stats(conn, project_id)
+    if not rows:
+        return []
+
+    updated = False
+    for row in rows:
+        if row.get("weights_hash") == current_hash:
+            continue
+        score = compute_score(
+            {
+                "commits": row.get("commits", 0),
+                "line_changes": row.get("line_changes", 0),
+                "pull_requests": row.get("pull_requests", 0),
+                "issues": row.get("issues", 0),
+                "reviews": row.get("reviews", 0),
+            },
+            weights=weights,
+        )
+        update_contributor_score(conn, row["id"], score=score, weights_hash=current_hash)
+        row["score"] = score
+        row["weights_hash"] = current_hash
+        updated = True
+
+    if updated:
+        rows = fetch_latest_contributor_stats(conn, project_id)
+
+    allowed = {
+        "score": "score",
+        "commits": "commits",
+        "line_changes": "line_changes",
+        "pull_requests": "pull_requests",
+        "issues": "issues",
+        "reviews": "reviews",
+    }
+    sort_key = allowed.get(sort_by, "score")
+    return sorted(rows, key=lambda row: (-float(row.get(sort_key, 0)), row.get("contributor", "")))
+
+
 __all__ = [
     "parse_repo_url",
     "compute_score",
+    "weights_hash",
     "collect_contributor_stats",
     "sync_contributor_stats",
+    "get_contributor_rankings",
     "GitHubClient",
     "ContributorStats",
     "DEFAULT_WEIGHTS",
