@@ -2,13 +2,7 @@ import json
 import os
 import sqlite3
 import sys
-import tempfile
-import threading
-from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Iterable, List
-from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -44,8 +38,19 @@ from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summ
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
 
-# set NO_COLOR=1 to disable the colorized titles.
-USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") not in {"1", "true", "yes"}
+def _row_to_dict(row):
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return row
+    if hasattr(row, "to_dict"):
+        try:
+            return row.to_dict()
+        except Exception:
+            pass
+    if hasattr(row, "__dict__"):
+        return dict(row.__dict__)
+    return {"value": row}
 
 def _prompt_github_token() -> str | None:
     token = input("Enter GitHub token (leave blank to use GITHUB_TOKEN): ").strip()
