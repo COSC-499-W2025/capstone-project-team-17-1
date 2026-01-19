@@ -20,9 +20,16 @@ except Exception:
     _fetch_latest_snapshot = None
 
 from .resume_retrieval import (
+    build_resume_preview,
     ensure_resume_schema,
+    export_resume,
+    get_resume_entry,
     get_resume_project_description,
+    insert_resume_entry,
     list_resume_project_descriptions,
+    query_resume_entries,
+    update_resume_entry,
+    generate_resume_project_descriptions,
     upsert_resume_project_description,
 )
 
@@ -223,6 +230,7 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
 
     app = Flask(__name__)
     token_required = auth_token or os.getenv("PORTFOLIO_API_TOKEN")
+    max_summary_len = 400
 
     def _auth() -> bool:
         if not token_required:
@@ -331,17 +339,179 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             }
         )
 
+    @app.get("/resume")
+    def resume_list():
+        q = request.args
+        fmt = (q.get("format") or "").lower()
+        sections = q.getlist("section")
+        keywords = q.getlist("keyword")
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            result = query_resume_entries(
+                c,
+                sections=sections or None,
+                keywords=keywords or None,
+                start_date=q.get("startDate"),
+                end_date=q.get("endDate"),
+                include_outdated=q.get("includeOutdated") == "true",
+                limit=int(q.get("limit", 100)),
+                offset=int(q.get("offset", 0)),
+            )
+            if fmt == "preview":
+                preview = build_resume_preview(result, conn=c)
+                return jsonify({"data": preview, "error": None})
+            entries = [entry.to_dict() for entry in result.entries]
+        return jsonify(
+            {
+                "data": entries,
+                "meta": {
+                    "warnings": result.warnings,
+                    "missingSections": result.missing_sections,
+                },
+                "error": None,
+            }
+        )
+
+    @app.get("/resume/<entry_id>")
+    def resume_get(entry_id: str):
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            entry = get_resume_entry(c, entry_id)
+        if not entry:
+            return jsonify({"data": None, "error": {"code": "NotFound", "detail": "Resume entry not found"}}), 404
+        return jsonify({"data": entry.to_dict(), "error": None})
+
+    @app.post("/resume")
+    def resume_create():
+        payload = request.get_json(silent=True) or {}
+        section = payload.get("section")
+        title = payload.get("title")
+        body = payload.get("body")
+        if not section or not title or not body:
+            return (
+                jsonify(
+                    {
+                        "data": None,
+                        "error": {"code": "BadRequest", "detail": "section, title, and body are required"},
+                    }
+                ),
+                400,
+            )
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            entry_id = insert_resume_entry(
+                c,
+                section=str(section),
+                title=str(title),
+                body=str(body),
+                summary=payload.get("summary"),
+                status=payload.get("status", "active"),
+                metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
+                projects=payload.get("projects") if isinstance(payload.get("projects"), list) else None,
+                skills=payload.get("skills") if isinstance(payload.get("skills"), list) else None,
+                created_at=payload.get("created_at"),
+            )
+            entry = get_resume_entry(c, entry_id)
+        return jsonify({"data": entry.to_dict() if entry else None, "error": None}), 201
+
+    @app.post("/resume/<entry_id>/edit")
+    def resume_edit(entry_id: str):
+        payload = request.get_json(silent=True) or {}
+        summary = payload.get("summary")
+        if "summary" in payload:
+            if not summary or not str(summary).strip():
+                return jsonify({"data": None, "error": {"code": "UnprocessableEntity", "detail": "summary is required"}}), 422
+            if len(str(summary).strip()) > max_summary_len:
+                return jsonify({"data": None, "error": {"code": "UnprocessableEntity", "detail": "summary is too long"}}), 422
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            entry = update_resume_entry(
+                c,
+                entry_id=entry_id,
+                section=payload.get("section"),
+                title=payload.get("title"),
+                summary=str(summary).strip() if "summary" in payload else None,
+                body=payload.get("body"),
+                status=payload.get("status"),
+                metadata=payload.get("metadata"),
+                projects=payload.get("projects"),
+                skills=payload.get("skills"),
+                _summary_provided="summary" in payload,
+                _metadata_provided="metadata" in payload,
+                _projects_provided="projects" in payload,
+                _skills_provided="skills" in payload,
+            )
+        if not entry:
+            return jsonify({"data": None, "error": {"code": "NotFound", "detail": "Resume entry not found"}}), 404
+        return jsonify({"data": entry.to_dict(), "error": None})
+
+    @app.post("/resume/generate")
+    def resume_generate():
+        payload = request.get_json(silent=True) or {}
+        fmt = str(payload.get("format", "json")).lower()
+        if fmt not in {"json", "markdown", "pdf"}:
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "format must be json, markdown, or pdf"}}), 400
+        def _normalise_list(value: object) -> List[str] | None:
+            if value is None:
+                return None
+            if isinstance(value, list):
+                return [str(item) for item in value]
+            return [str(value)]
+
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            result = query_resume_entries(
+                c,
+                sections=_normalise_list(payload.get("sections")),
+                keywords=_normalise_list(payload.get("keywords")),
+                start_date=payload.get("startDate"),
+                end_date=payload.get("endDate"),
+                include_outdated=bool(payload.get("includeOutdated", False)),
+                limit=int(payload.get("limit", 100)),
+                offset=int(payload.get("offset", 0)),
+            )
+            if not result.entries:
+                return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No resume entries found"}}), 404
+            project_ids = sorted({pid for entry in result.entries for pid in entry.project_ids})
+            description_map = {}
+            if project_ids:
+                descriptions = list_resume_project_descriptions(
+                    c,
+                    project_ids=project_ids,
+                    active_only=True,
+                    limit=len(project_ids),
+                )
+                description_map = {item.project_id: item for item in descriptions}
+            data = export_resume(result.entries, fmt=fmt, project_descriptions=description_map)
+        if fmt == "pdf":
+            import base64
+
+            encoded = base64.b64encode(data).decode("ascii")
+            return jsonify({"data": {"format": "pdf", "payload": encoded}, "error": None})
+        if fmt == "markdown":
+            return jsonify({"data": {"format": "markdown", "payload": data.decode("utf-8")}, "error": None})
+        return jsonify({"data": {"format": "json", "payload": json.loads(data.decode("utf-8"))}, "error": None})
+
     @app.get("/resume-projects")
     def resume_projects_get():
         q = request.args
         project_ids = q.getlist("projectId")
+        variant_name = q.get("variantName")
+        audience = q.get("audience")
+        active_only = q.get("activeOnly") == "true"
         limit = int(q.get("limit", 100))
         offset = int(q.get("offset", 0))
 
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
             if project_ids and len(project_ids) == 1 and q.get("list") != "true":
-                item = get_resume_project_description(c, project_ids[0])
+                item = get_resume_project_description(
+                    c,
+                    project_ids[0],
+                    variant_name=variant_name,
+                    audience=audience,
+                    active_only=not q.get("includeInactive") == "true",
+                )
                 if not item:
                     return jsonify(
                         {"data": None, "error": {"code": "NotFound", "detail": "No resume project found"}}
@@ -351,6 +521,7 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             items = list_resume_project_descriptions(
                 c,
                 project_ids=project_ids or None,
+                active_only=active_only,
                 limit=limit,
                 offset=offset,
             )
@@ -366,15 +537,18 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         project_id = payload.get("projectId") or payload.get("project_id")
         summary = payload.get("summary")
         metadata = payload.get("metadata")
-
+        variant_name = payload.get("variantName")
+        audience = payload.get("audience")
+        is_active = payload.get("isActive", True)
         if not project_id:
             return jsonify(
                 {"data": None, "error": {"code": "BadRequest", "detail": "projectId is required"}}
             ), 400
         if not summary or not str(summary).strip():
-            return jsonify(
-                {"data": None, "error": {"code": "BadRequest", "detail": "summary is required"}}
-            ), 400
+            return jsonify({"data": None, "error": {"code": "UnprocessableEntity", "detail": "summary is required"}}), 422
+        summary = str(summary).strip()
+        if len(summary) > max_summary_len:
+            return jsonify({"data": None, "error": {"code": "UnprocessableEntity", "detail": "summary is too long"}}), 422
         if metadata is not None and not isinstance(metadata, dict):
             return jsonify(
                 {"data": None, "error": {"code": "BadRequest", "detail": "metadata must be an object"}}
@@ -382,13 +556,47 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
 
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
+            # Reject unknown projects 
+            if get_latest_snapshot(c, str(project_id)) is None:
+                return jsonify({"data": None, "error": {"code": "NotFound", "detail": "Project not found"}}), 404
+            if metadata is None:
+                metadata = {}
+            metadata.setdefault("source", "custom")
             item = upsert_resume_project_description(
                 c,
                 project_id=str(project_id),
-                summary=str(summary).strip(),
+                summary=summary,
+                variant_name=str(variant_name) if variant_name else None,
+                audience=str(audience) if audience else None,
+                is_active=bool(is_active),
                 metadata=metadata if isinstance(metadata, dict) else None,
             )
 
         return jsonify({"data": item.to_dict(), "error": None}), 201
+
+    @app.post("/resume-projects/generate")
+    def resume_projects_generate():
+        payload = request.get_json(silent=True) or {}
+        project_ids = payload.get("projectIds") or payload.get("project_ids") or payload.get("projectId")
+        overwrite = bool(payload.get("overwrite", False))
+        if isinstance(project_ids, str):
+            project_ids = [project_ids]
+        if not project_ids or not isinstance(project_ids, list):
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectIds is required"}}), 400
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            missing = []
+            for pid in project_ids:
+                if get_latest_snapshot(c, str(pid)) is None:
+                    missing.append(pid)
+            if missing:
+                return jsonify({"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}), 404
+            items = generate_resume_project_descriptions(
+                c,
+                project_ids=[str(pid) for pid in project_ids],
+                overwrite=overwrite,
+            )
+        payload = [item.to_dict() for item in items]
+        return jsonify({"data": payload, "meta": {"total": len(payload)}, "error": None})
 
     return app
