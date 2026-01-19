@@ -8,16 +8,6 @@ ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-<<<<<<< HEAD
-    
-from capstone.consent import grant_consent
-try:
-    from capstone.consent import revoke_consent, export_consent 
-except Exception:
-    revoke_consent = None
-    export_consent = None
-
-=======
 
 from capstone.cli import main
 from capstone.company_profile import build_company_resume_lines
@@ -25,15 +15,9 @@ from capstone.company_qualities import extract_company_qualities
 from capstone.config import load_config, reset_config
 from capstone.consent import ensure_consent, grant_consent
 from capstone.github_contributors import get_contributor_rankings, parse_repo_url, sync_contributor_stats
->>>>>>> 8244b5db88950f304c2ad822eddbb950ee5ce44a
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.modes import resolve_mode
 from capstone.project_ranking import rank_projects_from_snapshots
-<<<<<<< HEAD
-from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema, query_resume_entries
-from capstone.storage import fetch_latest_snapshots, open_db, store_analysis_snapshot
-from capstone.top_project_summaries import create_summary_template
-=======
 from capstone.resume_retrieval import (
     build_resume_preview,
     generate_resume_project_descriptions,
@@ -53,7 +37,6 @@ from capstone.services import ArchiveAnalysisError, ArchiveAnalyzerService, Snap
 from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summary_template, export_markdown
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
->>>>>>> 8244b5db88950f304c2ad822eddbb950ee5ce44a
 
 def _row_to_dict(row):
     if row is None:
