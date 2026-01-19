@@ -20,16 +20,91 @@ from capstone.company_profile import build_company_resume_lines
 from capstone.company_qualities import extract_company_qualities
 from capstone.config import reset_config
 from capstone.consent import grant_consent
+from capstone.github_contributors import sync_contributor_stats
 from capstone.insight_store import InsightStore
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.project_ranking import rank_projects_from_snapshots
 from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema, insert_resume_entry, query_resume_entries
-from capstone.storage import close_db, export_snapshots_to_json, fetch_latest_snapshots, open_db, store_analysis_snapshot
+from capstone.storage import (
+    close_db,
+    export_snapshots_to_json,
+    fetch_contributor_rankings,
+    fetch_latest_snapshots,
+    open_db,
+    store_analysis_snapshot,
+)
 from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summary_template, export_markdown
 from capstone.top_project_summaries import export_readme_snippet
 
 # set NO_COLOR=1 to disable the colorized titles.
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") not in {"1", "true", "yes"}
+
+def _prompt_github_token() -> str | None:
+    token = input("Enter GitHub token (leave blank to use GITHUB_TOKEN): ").strip()
+    if token:
+        return token
+    return os.environ.get("GITHUB_TOKEN")
+
+
+def _print_contributor_rankings(project_id: str, sort_by: str) -> None:
+    with open_db() as conn:
+        rows = fetch_contributor_rankings(conn, project_id, sort_by=sort_by)
+    if not rows:
+        print("No contributor stats found. Please sync from GitHub first.")
+        return
+    for index, row in enumerate(rows, start=1):
+        print(
+            f"{index}. {row['contributor']} "
+            f"(Total Score= {row['score']:.2f}, Commits= {row['commits']}, "
+            f"Line Changes= {row['line_changes']}, PRs= {row['pull_requests']}, "
+            f"Issues= {row['issues']}, Reviews= {row['reviews']})"
+        )
+
+
+def _contributor_menu(project_id: str) -> None:
+    while True:
+        print("\n" + "=" * 40)
+        print("Contributor Menu")
+        print("=" * 40)
+        print("1. Sync from GitHub")
+        print("2. View total score ranking")
+        print("3. View commits ranking")
+        print("4. View line change ranking")
+        print("5. View PR ranking")
+        print("6. View issue ranking")
+        print("7. View review ranking")
+        print("8. Back")
+        print()
+        choice = input("Please select an option (1-8): ").strip()
+        if choice == "1":
+            repo_url = input("Enter GitHub repository URL: ").strip()
+            token = _prompt_github_token()
+            if not token:
+                print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
+                continue
+            try:
+                sync_contributor_stats(repo_url, token=token, project_id=project_id)
+            except Exception as exc:
+                print(f"Failed to sync contributor stats: {exc}")
+            else:
+                print("Contributor stats synced.")
+        elif choice == "2":
+            _print_contributor_rankings(project_id, "score")
+        elif choice == "3":
+            _print_contributor_rankings(project_id, "commits")
+        elif choice == "4":
+            _print_contributor_rankings(project_id, "line_changes")
+        elif choice == "5":
+            _print_contributor_rankings(project_id, "pull_requests")
+        elif choice == "6":
+            _print_contributor_rankings(project_id, "issues")
+        elif choice == "7":
+            _print_contributor_rankings(project_id, "reviews")
+        elif choice == "8":
+            return
+        else:
+            print("Invalid choice. Please enter a number between 1 and 8.")
+
 
 def main():
     # main entry point for user
@@ -59,10 +134,11 @@ def main():
         print("7. View skills timeline")
         print("8. Delete project insights")
         print("9. Manage consent")
-        print("10. Exit")
+        print("10. Contributor rankings")
+        print("11. Exit")
         print()
         
-        choice = input("Please select an option (1-10): ").strip()
+        choice = input("Please select an option (1-11): ").strip()
         
         if choice == "1":
             zip_path = input("Enter the path to the project ZIP archive: ").strip()
@@ -91,6 +167,9 @@ def main():
                     print("Project not found.")
                 else:
                     print(json.dumps(project, indent=4))
+            follow = input("View contributor rankings for this project? (y/n): ").strip().lower()
+            if follow == "y":
+                _contributor_menu(project_id)
         elif choice == "4":
             with open_db() as conn:
                 snapshots = fetch_latest_snapshots(conn)
@@ -135,10 +214,13 @@ def main():
             else:
                 print("Invalid choice. Please try again.")
         elif choice == "10":
+            project_id = input("Enter the project ID to view contributor rankings: ").strip()
+            _contributor_menu(project_id)
+        elif choice == "11":
             print("Good luck with everything! Exiting application.")
             break
         else:
-            print("Invalid choice. Please enter a number between 1 and 10.")
+            print("Invalid choice. Please enter a number between 1 and 11.")
     
 if __name__ == "__main__":
     main()
