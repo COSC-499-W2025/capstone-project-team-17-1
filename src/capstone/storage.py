@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from .config import CONFIG_SECRET
 from .logging_utils import get_logger
 
 
@@ -26,6 +29,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             classification TEXT NOT NULL,
             primary_contributor TEXT,
             snapshot JSON NOT NULL,
+            repo_url TEXT,
+            token_enc TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -117,9 +122,50 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in info}
     if "project_id" not in columns:
         conn.execute("ALTER TABLE project_analysis ADD COLUMN project_id TEXT")
+    if "repo_url" not in columns:
+        conn.execute("ALTER TABLE project_analysis ADD COLUMN repo_url TEXT")
+    if "token_enc" not in columns:
+        conn.execute("ALTER TABLE project_analysis ADD COLUMN token_enc TEXT")
     if "project_name" in columns:
         conn.execute("UPDATE project_analysis SET project_id = COALESCE(project_id, project_name) WHERE project_id IS NULL")
     conn.commit()
+
+    legacy_source = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='github_sources'"
+    ).fetchone()
+    if legacy_source:
+        rows = conn.execute("SELECT project_id, repo_url, token_enc FROM github_sources").fetchall()
+        for project_id, repo_url, token_enc in rows:
+            existing = conn.execute(
+                "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
+                (project_id,),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    """
+                    UPDATE project_analysis
+                    SET repo_url = ?, token_enc = ?
+                    WHERE project_id = ?
+                    """,
+                    (repo_url, token_enc, project_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO project_analysis (
+                        project_id,
+                        classification,
+                        primary_contributor,
+                        snapshot,
+                        repo_url,
+                        token_enc
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (project_id, "unknown", None, json.dumps({}), repo_url, token_enc),
+                )
+        conn.execute("DROP TABLE github_sources")
+        conn.commit()
 
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
@@ -185,6 +231,98 @@ def store_analysis_snapshot(
         (project_id, classification, primary_contributor, payload),
     )
     conn.commit()
+
+
+def _derive_key(secret: str) -> bytes:
+    return hashlib.sha256(secret.encode("utf-8")).digest()
+
+
+def _xor_bytes(data: bytes, key: bytes) -> bytes:
+    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
+
+def _encrypt_token(token: str, secret: str = CONFIG_SECRET) -> str:
+    payload = token.encode("utf-8")
+    key = _derive_key(secret)
+    encrypted = _xor_bytes(payload, key)
+    return base64.urlsafe_b64encode(encrypted).decode("ascii")
+
+
+def _decrypt_token(token_enc: str, secret: str = CONFIG_SECRET) -> str:
+    raw = base64.urlsafe_b64decode(token_enc.encode("ascii"))
+    key = _derive_key(secret)
+    decrypted = _xor_bytes(raw, key)
+    return decrypted.decode("utf-8")
+
+
+def store_github_source(
+    conn: sqlite3.Connection,
+    project_id: str,
+    repo_url: str,
+    token: str,
+) -> None:
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    if not repo_url:
+        raise ValueError("repo_url must be provided")
+    if not token:
+        raise ValueError("token must be provided")
+    token_enc = _encrypt_token(token)
+    existing = conn.execute(
+        "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            """
+            UPDATE project_analysis
+            SET repo_url = ?, token_enc = ?
+            WHERE project_id = ?
+            """,
+            (repo_url, token_enc, project_id),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO project_analysis (
+                project_id,
+                classification,
+                primary_contributor,
+                snapshot,
+                repo_url,
+                token_enc
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (project_id, "unknown", None, json.dumps({}), repo_url, token_enc),
+        )
+    conn.commit()
+
+
+def fetch_github_source(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    if not project_id:
+        return None
+    row = conn.execute(
+        """
+        SELECT project_id, repo_url, token_enc, created_at
+        FROM project_analysis
+        WHERE project_id = ?
+          AND repo_url IS NOT NULL
+          AND token_enc IS NOT NULL
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+    if not row:
+        return None
+    project_id, repo_url, token_enc, created_at = row
+    return {
+        "project_id": project_id,
+        "repo_url": repo_url,
+        "token": _decrypt_token(token_enc),
+        "created_at": created_at,
+    }
 
 
 def store_contributor_stats(
@@ -461,6 +599,8 @@ __all__ = [
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
+    "store_github_source",
+    "fetch_github_source",
     "store_contributor_stats",
     "fetch_latest_contributor_stats",
     "update_contributor_score",

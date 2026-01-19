@@ -50,6 +50,16 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(exported[0]["project_id"], "demo")
         self.assertIn("snapshot", exported[0])
 
+    def test_store_and_fetch_github_source(self) -> None:
+        base_dir = Path(self._tmpdir.name) / "db"
+        conn = storage.open_db(base_dir)
+        storage.store_github_source(conn, "org/repo", "https://github.com/org/repo", "token-123")
+        record = storage.fetch_github_source(conn, "org/repo")
+        self.assertIsNotNone(record)
+        self.assertEqual(record["project_id"], "org/repo")
+        self.assertEqual(record["repo_url"], "https://github.com/org/repo")
+        self.assertEqual(record["token"], "token-123")
+
     def test_store_and_rank_contributor_stats(self) -> None:
         base_dir = Path(self._tmpdir.name) / "db"
         conn = storage.open_db(base_dir)
