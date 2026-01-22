@@ -3,7 +3,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable,List
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -16,7 +16,7 @@ from capstone.company_qualities import extract_company_qualities
 from capstone.config import load_config, reset_config
 from capstone.consent import ensure_consent, grant_consent
 from capstone.github_contributors import get_contributor_rankings, parse_repo_url, sync_contributor_stats
-from capstone.metrics_extractor import chronological_proj, metrics_api
+from capstone.metrics_extractor import chronological_proj
 from capstone.modes import resolve_mode
 from capstone.project_ranking import rank_projects_from_snapshots
 from capstone.resume_retrieval import (
@@ -196,6 +196,111 @@ def _contributor_menu(project_id: str) -> None:
 def _open_app_db():
     # Pin to repo-local data directory to avoid cwd-dependent DBs.
     return open_db(ROOT / "data")
+
+def _merge_year_counts(target, incoming):
+    for year, weight in (incoming or {}).items():
+        try:
+            target[year] = target.get(year, 0.0) + float(weight or 0.0)
+        except (TypeError, ValueError):
+            continue
+
+
+def _merge_quarter_counts(target, incoming):
+    for quarter, weight in (incoming or {}).items():
+        try:
+            target[quarter] = target.get(quarter, 0.0) + float(weight or 0.0)
+        except (TypeError, ValueError):
+            continue
+
+
+def _merge_seen(a: str, b: str, *, pick_min: bool) -> str:
+    if not a:
+        return b or ""
+    if not b:
+        return a
+    return min(a, b) if pick_min else max(a, b)
+
+
+def _build_skills_timeline_rows(snapshots: Iterable[dict]) -> List[dict]:
+    agg = {}
+    for row in snapshots:
+        snap = row.get("snapshot") or {}
+        skill_timeline = (snap.get("skill_timeline") or {}).get("skills") or []
+        if skill_timeline:
+            for s in skill_timeline:
+                skill = s.get("skill")
+                if not skill:
+                    continue
+                cat = s.get("category", "unspecified")
+                key = (skill, cat)
+                entry = agg.setdefault(
+                    key,
+                    {
+                        "skill": skill,
+                        "category": cat,
+                        "first_seen": "",
+                        "last_seen": "",
+                        "total_weight": 0.0,
+                        "count": 0,
+                        "year_counts": {},
+                        "quarter_counts": {},
+                        "intensity": 0.0,
+                    },
+                )
+                entry["first_seen"] = _merge_seen(entry["first_seen"], s.get("first_seen") or "", pick_min=True)
+                entry["last_seen"] = _merge_seen(entry["last_seen"], s.get("last_seen") or "", pick_min=False)
+                try:
+                    entry["total_weight"] += float(s.get("total_weight") or 0.0)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    entry["count"] += int(s.get("count") or 0)
+                except (TypeError, ValueError):
+                    pass
+                _merge_year_counts(entry["year_counts"], s.get("year_counts"))
+                _merge_quarter_counts(entry["quarter_counts"], s.get("quarter_counts"))
+            continue
+
+        fs = snap.get("file_summary", {}) or {}
+        first = fs.get("first_modified") or fs.get("earliest_modified") or ""
+        last = fs.get("last_modified") or fs.get("latest_modified") or ""
+        for s in snap.get("skills", []) or []:
+            skill = s.get("skill")
+            if not skill:
+                continue
+            cat = s.get("category", "unspecified")
+            key = (skill, cat)
+            entry = agg.setdefault(
+                key,
+                {
+                    "skill": skill,
+                    "category": cat,
+                    "first_seen": "",
+                    "last_seen": "",
+                    "total_weight": 0.0,
+                    "count": 0,
+                    "year_counts": {},
+                    "quarter_counts": {},
+                    "intensity": 0.0,
+                },
+            )
+            entry["first_seen"] = _merge_seen(entry["first_seen"], first, pick_min=True)
+            entry["last_seen"] = _merge_seen(entry["last_seen"], last, pick_min=False)
+            try:
+                entry["total_weight"] += float(s.get("score", s.get("weight", 1.0)) or 0.0)
+            except (TypeError, ValueError):
+                pass
+            entry["count"] += 1
+
+    rows = list(agg.values())
+    if rows:
+        max_weight = max(r.get("total_weight", 0.0) for r in rows) or 1.0
+        for r in rows:
+            r["intensity"] = (r.get("total_weight", 0.0) / max_weight) if max_weight else 0.0
+            r["year_counts"] = dict(sorted((r.get("year_counts") or {}).items()))
+            r["quarter_counts"] = dict(sorted((r.get("quarter_counts") or {}).items()))
+    rows.sort(key=lambda r: (r.get("first_seen") or "", r.get("skill") or ""))
+    return rows
 
 
 def _prompt_choice(prompt: str, choices: Iterable[str]) -> str:
@@ -440,10 +545,21 @@ def main():
             elif choice == "8":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
-                    skills_timeline = metrics_api(snapshots)
+                    skills_timeline = _build_skills_timeline_rows(snapshots)
                     print("\nSkills Timeline:\n")
-                    for skill in skills_timeline:
-                        print(f"- {skill['date']}: {skill['skill_name']} ({skill['level']})")
+                    if not skills_timeline:
+                        print("No skill timeline data found.")
+                    else:
+                        for entry in skills_timeline:
+                            years = ", ".join(
+                                f"{year}:{weight}"
+                                for year, weight in (entry.get("year_counts") or {}).items()
+                            )
+                            print(
+                                f"- {entry.get('skill')} ({entry.get('category')}) "
+                                f"{entry.get('first_seen') or '-'} -> {entry.get('last_seen') or '-'} "
+                                f"| years: {years or '-'} | total_weight: {entry.get('total_weight', 0.0)}"
+                            )
             elif choice == "9":
                 project_id = input("Enter the project ID to delete insights: ").strip()
                 with _open_app_db() as conn:
