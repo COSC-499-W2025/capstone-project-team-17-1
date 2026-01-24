@@ -293,7 +293,7 @@ Beyond feature development, I spent time discussing implementation details and d
 <img width="1063" height="626" alt="Screenshot 2026-01-23 at 7 28 03 PM" src="https://github.com/user-attachments/assets/f6b33820-7116-486d-80c8-2f04160cdccd" />
 
 ### 2. Weekly Goals Recap
-- complete 'Enhance resume preview functionality and fix menu problem' #165
+- complete [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
 - Add api documentation
 - discussed the code details with members
 - review member's PR and help them
@@ -307,5 +307,5 @@ In parallel, I added and updated API documentation for the new résumé routes a
 Beyond feature development, I discussed implementation details and design decisions with team members to ensure consistency across modules. I also reviewed teammates’ pull requests, provided feedback on edge cases and structure, and assisted with integration to help keep the system stable and aligned with milestone requirements.
 
 ### Completed Tasks Week 3
-- complete 'Enhance resume preview functionality and fix menu problem' #165
+- complete [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
 - Add api documentation
