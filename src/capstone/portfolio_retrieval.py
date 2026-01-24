@@ -373,7 +373,11 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         )
 
     @app.get("/resume/<entry_id>")
-    def resume_get(entry_id: str):
+    @app.get("/resume/<id>")
+    def resume_get(entry_id: Optional[str] = None, id: Optional[str] = None):
+        entry_id = entry_id or id
+        if not entry_id:
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "entry id is required"}}), 400
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
             entry = get_resume_entry(c, entry_id)
@@ -415,7 +419,11 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         return jsonify({"data": entry.to_dict() if entry else None, "error": None}), 201
 
     @app.post("/resume/<entry_id>/edit")
-    def resume_edit(entry_id: str):
+    @app.post("/resume/<id>/edit")
+    def resume_edit(entry_id: Optional[str] = None, id: Optional[str] = None):
+        entry_id = entry_id or id
+        if not entry_id:
+            return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "entry id is required"}}), 400
         payload = request.get_json(silent=True) or {}
         summary = payload.get("summary")
         if "summary" in payload:
