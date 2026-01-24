@@ -285,6 +285,27 @@ In parallel, I contributed to part of the terminal main menu implementation, foc
 
 Beyond feature development, I spent time discussing implementation details and design decisions with team members to ensure consistency across modules. I also reviewed teammates’ pull requests, provided feedback on code structure and edge cases, and assisted with integration where needed to help keep the system stable and aligned with milestone requirements.
 
-### Completed Tasks Week 1
+### Completed Tasks Week 2
 - complete 'Résumé Textual Display' #144
-- Part of 'menu in terminal'#134
+
+ ## Term2 week3 Personal LOG (Jan19-Jan25, 2026)
+### 1. Type of Tasks Worked On
+<img width="1063" height="626" alt="Screenshot 2026-01-23 at 7 28 03 PM" src="https://github.com/user-attachments/assets/f6b33820-7116-486d-80c8-2f04160cdccd" />
+
+### 2. Weekly Goals Recap
+- complete 'Enhance resume preview functionality and fix menu problem' #165
+- Add api documentation
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the Enhance Resume Preview functionality and menu fixes by implementing a more detailed and structured résumé preview pipeline across both the CLI and API. The résumé preview now presents clearer, more readable output and supports fine-grained customization across multiple sections, including summary, body, skills, projects, and metadata. Users can add, edit, or delete résumé entries with duplicate prevention in place, and deletion behavior was refined to support both full removal and partial text updates, ensuring predictable and controllable résumé edits.
+
+To improve reliability and maintainability, I fixed existing menu syntax and flow issues that affected the portfolio summary and timeline features, restoring stable end-to-end execution within the terminal interface. The résumé-related menu paths were aligned with the updated backend logic, making résumé generation, preview, and customization easier to access and demonstrate through the CLI.
+
+In parallel, I added and updated API documentation for the new résumé routes and aliases, and introduced HTTP-style API tests that validate endpoint behavior without requiring a running server. This improves CI compatibility and makes it easier to verify correctness and error handling during development.
+
+Beyond feature development, I discussed implementation details and design decisions with team members to ensure consistency across modules. I also reviewed teammates’ pull requests, provided feedback on edge cases and structure, and assisted with integration to help keep the system stable and aligned with milestone requirements.
+
+### Completed Tasks Week 3
+- complete 'Enhance resume preview functionality and fix menu problem' #165
+- Add api documentation
