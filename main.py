@@ -21,10 +21,14 @@ from capstone.modes import resolve_mode
 from capstone.project_ranking import rank_projects_from_snapshots
 from capstone.resume_retrieval import (
     build_resume_preview,
+    delete_resume_project_description,
     generate_resume_project_descriptions,
+    get_resume_entry,
     get_resume_project_description,
     insert_resume_entry,
+    list_resume_project_descriptions,
     query_resume_entries,
+    update_resume_entry,
     upsert_resume_project_description,
 )
 from capstone.storage import (
@@ -35,7 +39,13 @@ from capstone.storage import (
     store_github_source,
 )
 from capstone.services import ArchiveAnalysisError, ArchiveAnalyzerService, SnapshotStore
-from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summary_template, export_markdown
+from capstone.top_project_summaries import (
+    AutoWriter,
+    EvidenceItem,
+    create_summary_template,
+    export_markdown,
+    generate_top_project_summaries,
+)
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
 
@@ -321,6 +331,149 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+
+def _format_resume_preview(preview: dict) -> str:
+    sections = preview.get("sections") or []
+    if not sections:
+        return "No resume sections to display."
+    project_context = preview.get("projectContext") or {}
+    # Render mixed-type lists safely 
+    def _stringify_list(values: Iterable) -> str:
+        parts: List[str] = []
+        for value in values:
+            if isinstance(value, str):
+                parts.append(value)
+                continue
+            if isinstance(value, dict):
+                name = value.get("name") or value.get("skill") or value.get("framework")
+                parts.append(str(name) if name is not None else json.dumps(value, ensure_ascii=True))
+                continue
+            parts.append(str(value))
+        return ", ".join(parts)
+    # Keep the preview compact 
+    def _body_snippet(text: str, max_lines: int = 2) -> str:
+        if not text:
+            return ""
+        lines = [line for line in text.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        snippet = lines[:max_lines]
+        suffix = " ..." if len(lines) > max_lines else ""
+        return " / ".join(snippet) + suffix
+    lines: List[str] = []
+    for section in sections:
+        name = (section.get("name") or "Section").title()
+        lines.append(f"{name}")
+        lines.append("-" * len(name))
+        for item in section.get("items") or []:
+            title = item.get("title") or item.get("id") or "Untitled"
+            excerpt = (item.get("excerpt") or "").strip()
+            entry_summary = (item.get("entrySummary") or "").strip()
+            entry_body = (item.get("entryBody") or "").strip()
+            source = item.get("source") or "-"
+            project_ids = item.get("projectIds") or []
+            skills = item.get("skills") or []
+            updated_at = item.get("updated_at") or item.get("updatedAt") or "-"
+            metadata = item.get("metadata") or {}
+            status = item.get("status") or "-"
+            section_name = item.get("section") or "-"
+            start_date = metadata.get("start_date")
+            end_date = metadata.get("end_date")
+            period = "-"
+            if start_date or end_date:
+                period = f"{start_date or ''} – {end_date or 'Present'}".strip()
+            lines.append(f"* {title}")
+            if item.get("id"):
+                lines.append(f"  Entry ID: {item.get('id')}")
+            if section_name:
+                lines.append(f"  Section: {section_name}")
+            if status:
+                lines.append(f"  Status: {status}")
+            if period != "-":
+                lines.append(f"  Period: {period}")
+            if project_ids:
+                lines.append(f"  Project IDs: {', '.join(project_ids)}")
+            if entry_summary:
+                lines.append(f"  Entry Summary: {entry_summary}")
+            if entry_body:
+                lines.append(f"  Entry Body (2 lines): {_body_snippet(entry_body)}")
+            if excerpt:
+                lines.append(f"  Effective Summary: {excerpt}")
+            if skills:
+                lines.append(f"  Skills: {', '.join(skills)}")
+            if updated_at:
+                lines.append(f"  Updated: {updated_at}")
+            if source:
+                lines.append(f"  Source: {source}")
+            for pid in project_ids:
+                context = project_context.get(pid)
+                if not context:
+                    continue
+                lines.append(f"  Project Context ({pid}):")
+                project_name = context.get("project_name") or context.get("project") or context.get("project_id")
+                classification = context.get("classification") or context.get("project_type")
+                if project_name:
+                    lines.append(f"    Name: {project_name}")
+                if classification:
+                    lines.append(f"    Type: {classification}")
+                file_summary = context.get("file_summary") if isinstance(context.get("file_summary"), dict) else {}
+                if file_summary:
+                    file_count = file_summary.get("file_count") or file_summary.get("files") or "-"
+                    active_days = file_summary.get("active_days") or file_summary.get("duration_days") or "-"
+                    lines.append(f"    Files: {file_count}")
+                    lines.append(f"    Active Days: {active_days}")
+                languages = context.get("languages") if isinstance(context.get("languages"), dict) else {}
+                if languages:
+                    lang_names = ", ".join(languages.keys())
+                    lines.append(f"    Languages: {lang_names}")
+                frameworks = context.get("frameworks") or []
+                if frameworks:
+                    if isinstance(frameworks, list):
+                        lines.append(f"    Frameworks: {', '.join(frameworks)}")
+                    else:
+                        lines.append(f"    Frameworks: {frameworks}")
+                ctx_skills = context.get("skills") or []
+                if ctx_skills:
+                    if isinstance(ctx_skills, list):
+                        lines.append(f"    Snapshot Skills: {_stringify_list(ctx_skills)}")
+                    else:
+                        lines.append(f"    Snapshot Skills: {ctx_skills}")
+        lines.append("")
+    warnings = preview.get("warnings") or []
+    if warnings:
+        lines.append("Warnings")
+        lines.append("--------")
+        for warning in warnings:
+            lines.append(f"* {warning}")
+    return "\n".join(lines).strip()
+
+
+def _build_project_target_map(preview: dict) -> dict[str, str]:
+    targets: dict[str, set[str]] = {}
+    for section in preview.get("sections") or []:
+        for item in section.get("items") or []:
+            title = item.get("title") or item.get("id") or "Untitled"
+            for project_id in item.get("projectIds") or []:
+                targets.setdefault(project_id, set()).add(title)
+    return {pid: ", ".join(sorted(titles)) for pid, titles in targets.items()}
+
+
+def _build_entry_target_map(preview: dict) -> dict[str, str]:
+    targets: dict[str, str] = {}
+    for section in preview.get("sections") or []:
+        for item in section.get("items") or []:
+            entry_id = item.get("id")
+            title = item.get("title") or entry_id or "Untitled"
+            metadata = item.get("metadata") or {}
+            start_date = metadata.get("start_date")
+            end_date = metadata.get("end_date")
+            period = ""
+            if start_date or end_date:
+                period = f" ({start_date or ''} – {end_date or 'Present'})"
+            if entry_id:
+                targets[entry_id] = f"{title}{period}"
+    return targets
+
 def main():
     # main entry point for user
     print("=" * 60)
@@ -493,10 +646,19 @@ def main():
             elif choice == "5":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
-                    ranked_projects = rank_projects_from_snapshots(snapshots)
-                    summary = create_summary_template(ranked_projects)
-                    print("\nPortfolio Summary:\n")
-                    print(summary)
+                    snapshot_map = {
+                        str(item.get("project_id")): (item.get("snapshot") or {})
+                        for item in snapshots
+                        if item.get("project_id")
+                    }
+                    summaries = generate_top_project_summaries(snapshot_map, limit=3)
+                    if not summaries:
+                        print("No project summaries available.")
+                    else:
+                        print("\nPortfolio Summary:\n")
+                        for summary in summaries:
+                            print(export_markdown(summary))
+                            print()
             elif choice == "6":
                 with _open_app_db() as conn:
                     result = query_resume_entries(conn)
@@ -505,43 +667,388 @@ def main():
                         generate_resume_project_descriptions(conn, project_ids=project_ids, overwrite=False)
                     resume_preview = build_resume_preview(result, conn=conn)
                     print("\nResume Preview:\n")
-                    print(resume_preview)
+                    print(_format_resume_preview(resume_preview))
 
                     if project_ids:
                         action = _prompt_menu("Preview Options", ["Customize", "Back to main menu"])
                         if action == "1":
-                            print(f"Available projects: {', '.join(project_ids)}")
-                            target = input("Project id to customize: ").strip()
-                            if target in project_ids:
-                                summary = input("Custom resume wording: ").strip()
-                                if summary:
-                                    variant_name = input("Variant name (optional): ").strip() or None
-                                    audience = input("Audience (optional): ").strip() or None
-                                    upsert_resume_project_description(
-                                        conn,
-                                        project_id=target,
-                                        summary=summary,
-                                        variant_name=variant_name,
-                                        audience=audience,
-                                        is_active=True,
-                                        metadata={"source": "custom"},
+                            while True:
+                                entry_map = _build_entry_target_map(resume_preview)
+                                if not entry_map:
+                                    print("No resume entries available to edit.")
+                                    break
+                                print("Available entries:")
+                                for entry_id, label in entry_map.items():
+                                    print(f"- {entry_id}: {label}")
+                                entry_id = input("Entry id to edit (blank to go back): ").strip()
+                                if not entry_id:
+                                    break
+                                entry = get_resume_entry(conn, entry_id)
+                                if not entry:
+                                    print("Invalid entry id.")
+                                    continue
+                                print("\nNote: Title/name and start/end dates are locked.")
+                                while True:
+                                    # Field-level editor
+                                    edit_action = _prompt_menu(
+                                        "Edit Entry",
+                                        [
+                                            "Summary",
+                                            "Body",
+                                            "Skills",
+                                            "Linked projects",
+                                            "Section",
+                                            "Status",
+                                            "Metadata (non-date)",
+                                            "Back",
+                                        ],
                                     )
-                                    updated = get_resume_project_description(conn, target)
-                                    print("\nUpdated Resume Preview:\n")
+                                    if edit_action == "8":
+                                        break
+                                    if edit_action == "1":
+                                        while True:
+                                            sub = _prompt_menu(
+                                                "Summary",
+                                                ["Edit", "Delete", "Add", "Back"],
+                                            )
+                                            if sub == "4":
+                                                break
+                                            print(f"\nCurrent summary:\n{entry.summary or ''}")
+                                            if sub == "2":
+                                                # Offer full delete or targeted text removal.
+                                                del_mode = _prompt_menu(
+                                                    "Delete Summary",
+                                                    ["Delete all", "Delete matching text", "Back"],
+                                                )
+                                                if del_mode == "3":
+                                                    continue
+                                                if del_mode == "1":
+                                                    entry = update_resume_entry(
+                                                        conn,
+                                                        entry_id=entry_id,
+                                                        summary=None,
+                                                        _summary_provided=True,
+                                                    ) or entry
+                                                elif del_mode == "2":
+                                                    target = input("Text to delete (blank cancels): ").strip()
+                                                    if not target:
+                                                        print("No changes made.")
+                                                        continue
+                                                    current = entry.summary or ""
+                                                    if target not in current:
+                                                        print("Text not found in summary.")
+                                                        continue
+                                                    summary = current.replace(target, "").strip()
+                                                    entry = update_resume_entry(
+                                                        conn,
+                                                        entry_id=entry_id,
+                                                        summary=summary,
+                                                        _summary_provided=True,
+                                                    ) or entry
+                                            elif sub == "1":
+                                                summary = input("New summary (blank keeps current): ").strip()
+                                                if not summary:
+                                                    print("No changes made.")
+                                                    continue
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    summary=summary,
+                                                    _summary_provided=True,
+                                                ) or entry
+                                            elif sub == "3":
+                                                addition = input("Add text (blank cancels): ").strip()
+                                                if not addition:
+                                                    print("No changes made.")
+                                                    continue
+                                                base = (entry.summary or "").strip()
+                                                summary = f"{base} {addition}".strip()
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    summary=summary,
+                                                    _summary_provided=True,
+                                                ) or entry
+                                            else:
+                                                print("Invalid choice.")
+                                            refreshed = query_resume_entries(conn)
+                                            refreshed_preview = build_resume_preview(refreshed, conn=conn)
+                                            resume_preview = refreshed_preview
+                                            print("\nUpdated Resume Preview:\n")
+                                            print(_format_resume_preview(refreshed_preview))
+                                        continue
+                                    elif edit_action == "2":
+                                        while True:
+                                            sub = _prompt_menu(
+                                                "Body",
+                                                ["Edit", "Delete", "Add", "Back"],
+                                            )
+                                            if sub == "4":
+                                                break
+                                            print(f"\nCurrent body:\n{entry.body}")
+                                            if sub == "2":
+                                                # Offer full delete or removal.
+                                                del_mode = _prompt_menu(
+                                                    "Delete Body",
+                                                    ["Delete all", "Delete matching text", "Back"],
+                                                )
+                                                if del_mode == "3":
+                                                    continue
+                                                if del_mode == "1":
+                                                    entry = update_resume_entry(
+                                                        conn,
+                                                        entry_id=entry_id,
+                                                        body="",
+                                                    ) or entry
+                                                elif del_mode == "2":
+                                                    target = input("Text to delete (blank cancels): ").strip()
+                                                    if not target:
+                                                        print("No changes made.")
+                                                        continue
+                                                    current = entry.body or ""
+                                                    if target not in current:
+                                                        print("Text not found in body.")
+                                                        continue
+                                                    body = current.replace(target, "").strip()
+                                                    entry = update_resume_entry(
+                                                        conn,
+                                                        entry_id=entry_id,
+                                                        body=body,
+                                                    ) or entry
+                                            elif sub == "1":
+                                                body = input("New body (blank keeps current): ").strip()
+                                                if not body:
+                                                    print("No changes made.")
+                                                    continue
+                                                entry = update_resume_entry(conn, entry_id=entry_id, body=body) or entry
+                                            elif sub == "3":
+                                                addition = input("Add text (blank cancels): ").strip()
+                                                if not addition:
+                                                    print("No changes made.")
+                                                    continue
+                                                base = (entry.body or "").strip()
+                                                body = f"{base}\n{addition}".strip()
+                                                entry = update_resume_entry(conn, entry_id=entry_id, body=body) or entry
+                                            else:
+                                                print("Invalid choice.")
+                                            refreshed = query_resume_entries(conn)
+                                            refreshed_preview = build_resume_preview(refreshed, conn=conn)
+                                            resume_preview = refreshed_preview
+                                            print("\nUpdated Resume Preview:\n")
+                                            print(_format_resume_preview(refreshed_preview))
+                                        continue
+                                    elif edit_action == "3":
+                                        while True:
+                                            sub = _prompt_menu(
+                                                "Skills",
+                                                ["Edit", "Delete", "Add", "Back"],
+                                            )
+                                            if sub == "4":
+                                                break
+                                            current = list(entry.skills)
+                                            print(f"\nCurrent skills: {', '.join(current)}")
+                                            if sub == "2":
+                                                raw = input(
+                                                    "Comma-separated skills to remove ('clear' to remove all): "
+                                                ).strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                if raw.lower() == "clear":
+                                                    skills = []
+                                                else:
+                                                    remove = {s.strip().lower() for s in raw.split(",") if s.strip()}
+                                                    skills = [s for s in current if s.lower() not in remove]
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    skills=skills,
+                                                    _skills_provided=True,
+                                                ) or entry
+                                            elif sub == "1":
+                                                raw = input(
+                                                    "Comma-separated skills (blank keeps current): "
+                                                ).strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                skills = [s.strip() for s in raw.split(",") if s.strip()]
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    skills=skills,
+                                                    _skills_provided=True,
+                                                ) or entry
+                                            elif sub == "3":
+                                                raw = input("Comma-separated skills to add: ").strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                additions = [s.strip() for s in raw.split(",") if s.strip()]
+                                                skills = list(dict.fromkeys(current + additions))
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    skills=skills,
+                                                    _skills_provided=True,
+                                                ) or entry
+                                            else:
+                                                print("Invalid choice.")
+                                            refreshed = query_resume_entries(conn)
+                                            refreshed_preview = build_resume_preview(refreshed, conn=conn)
+                                            resume_preview = refreshed_preview
+                                            print("\nUpdated Resume Preview:\n")
+                                            print(_format_resume_preview(refreshed_preview))
+                                        continue
+                                    elif edit_action == "4":
+                                        while True:
+                                            sub = _prompt_menu(
+                                                "Linked Projects",
+                                                ["Edit", "Delete", "Add", "Back"],
+                                            )
+                                            if sub == "4":
+                                                break
+                                            current = list(entry.project_ids)
+                                            print(f"\nCurrent linked projects: {', '.join(current)}")
+                                            if sub == "2":
+                                                raw = input(
+                                                    "Comma-separated project ids to remove ('clear' to remove all): "
+                                                ).strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                if raw.lower() == "clear":
+                                                    projects = []
+                                                else:
+                                                    remove = {s.strip() for s in raw.split(",") if s.strip()}
+                                                    projects = [p for p in current if p not in remove]
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    projects=projects,
+                                                    _projects_provided=True,
+                                                ) or entry
+                                            elif sub == "1":
+                                                raw = input(
+                                                    "Comma-separated project ids (blank keeps current): "
+                                                ).strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                projects = [s.strip() for s in raw.split(",") if s.strip()]
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    projects=projects,
+                                                    _projects_provided=True,
+                                                ) or entry
+                                            elif sub == "3":
+                                                raw = input("Comma-separated project ids to add: ").strip()
+                                                if not raw:
+                                                    print("No changes made.")
+                                                    continue
+                                                additions = [s.strip() for s in raw.split(",") if s.strip()]
+                                                projects = list(dict.fromkeys(current + additions))
+                                                entry = update_resume_entry(
+                                                    conn,
+                                                    entry_id=entry_id,
+                                                    projects=projects,
+                                                    _projects_provided=True,
+                                                ) or entry
+                                            else:
+                                                print("Invalid choice.")
+                                            refreshed = query_resume_entries(conn)
+                                            refreshed_preview = build_resume_preview(refreshed, conn=conn)
+                                            resume_preview = refreshed_preview
+                                            print("\nUpdated Resume Preview:\n")
+                                            print(_format_resume_preview(refreshed_preview))
+                                        continue
+                                    elif edit_action == "5":
+                                        print(f"\nCurrent section: {entry.section}")
+                                        section = input("New section (blank keeps current): ").strip()
+                                        if not section:
+                                            print("No changes made.")
+                                            continue
+                                        entry = update_resume_entry(
+                                            conn,
+                                            entry_id=entry_id,
+                                            section=section,
+                                        ) or entry
+                                    elif edit_action == "6":
+                                        print(f"\nCurrent status: {entry.status}")
+                                        status = input("New status (blank keeps current): ").strip()
+                                        if not status:
+                                            print("No changes made.")
+                                            continue
+                                        entry = update_resume_entry(
+                                            conn,
+                                            entry_id=entry_id,
+                                            status=status,
+                                        ) or entry
+                                    elif edit_action == "7":
+                                        metadata = dict(entry.metadata or {})
+                                        print(f"\nCurrent metadata:\n{json.dumps(metadata, indent=2)}")
+                                        meta_action = _prompt_menu(
+                                            "Metadata Options",
+                                            ["Add/update key", "Remove key", "Back"],
+                                        )
+                                        if meta_action == "3":
+                                            continue
+                                        if meta_action == "1":
+                                            key = input("Key (cannot be start_date/end_date): ").strip()
+                                            if not key:
+                                                print("No changes made.")
+                                                continue
+                                            if key in {"start_date", "end_date"}:
+                                                print("start_date/end_date are locked.")
+                                                continue
+                                            value = input("Value (blank keeps current): ").strip()
+                                            if not value:
+                                                print("No changes made.")
+                                                continue
+                                            metadata[key] = value
+                                        elif meta_action == "2":
+                                            key = input("Key to remove: ").strip()
+                                            if not key:
+                                                print("No changes made.")
+                                                continue
+                                            if key in {"start_date", "end_date"}:
+                                                print("start_date/end_date are locked.")
+                                                continue
+                                            if key in metadata:
+                                                metadata.pop(key, None)
+                                            else:
+                                                print("Key not found.")
+                                                continue
+                                        entry = update_resume_entry(
+                                            conn,
+                                            entry_id=entry_id,
+                                            metadata=metadata,
+                                            _metadata_provided=True,
+                                        ) or entry
+                                    else:
+                                        print("Invalid choice.")
                                     refreshed = query_resume_entries(conn)
-                                    print(build_resume_preview(refreshed, conn=conn))
-                                    if updated:
-                                        print("\nActive wording:\n")
-                                        print(updated.to_dict())
-                                else:
-                                    print("No summary provided; keeping existing wording.")
+                                    refreshed_preview = build_resume_preview(refreshed, conn=conn)
+                                    resume_preview = refreshed_preview
+                                    print("\nUpdated Resume Preview:\n")
+                                    print(_format_resume_preview(refreshed_preview))
             elif choice == "7":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
-                    timeline = chronological_proj(snapshots)
+                    snapshot_map = {
+                        str(item.get("project_id")): (item.get("snapshot") or {})
+                        for item in snapshots
+                        if item.get("project_id")
+                    }
+                    timeline = chronological_proj(snapshot_map)
                     print("\nChronological Project Timeline:\n")
                     for entry in timeline:
-                        print(f"- {entry['date']}: {entry['project_name']}")
+                        start = entry.get("start")
+                        end = entry.get("end")
+                        start_text = start.isoformat() if start else "-"
+                        end_text = end.isoformat() if end else "Present"
+                        print(f"- {entry['name']}: {start_text} -> {end_text}")
             elif choice == "8":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
