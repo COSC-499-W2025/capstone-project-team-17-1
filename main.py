@@ -522,25 +522,31 @@ def main():
     
     # main menu loop
     try:
+        forced_choice = None
         while True:
-            print("\n" + "=" * 40)
-            print("Main Menu")
-            print("=" * 40)
-            print("1. Analyze new project archive (ZIP)")
-            print("2. Import from GitHub URL")
-            print("3. View all projects")
-            print("4. View project details")
-            print("5. Generate portfolio summary")
-            print("6. Generate resume preview")
-            print("7. View chronological project timeline")
-            print("8. View skills timeline")
-            print("9. Delete project insights")
-            print("10. Manage consent")
-            print("11. Contributor rankings (Quick Access)")
-            print("12. Exit")
-            print()
+            if not forced_choice:
+                print("\n" + "=" * 40)
+                print("Main Menu")
+                print("=" * 40)
+                print("1. Analyze new project archive (ZIP)")
+                print("2. Import from GitHub URL")
+                print("3. View all projects")
+                print("4. View project details")
+                print("5. Generate portfolio summary")
+                print("6. Generate resume preview")
+                print("7. View chronological project timeline")
+                print("8. View skills timeline")
+                print("9. Delete project insights")
+                print("10. Manage consent")
+                print("11. Contributor rankings (Quick Access)")
+                print("12. Exit")
+                print()
             while True:
-                choice = input("Please select an option (1-12): ").strip()
+                if forced_choice:
+                    choice = forced_choice
+                    forced_choice = None
+                else:
+                    choice = input("Please select an option (1-12): ").strip()
                 if choice in {str(i) for i in range(1, 13)}:
                     break
                 print("Invalid choice. Please enter a number between 1 and 12.")
@@ -601,6 +607,7 @@ def main():
                     print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
                     continue
                 progress = _ProgressLine()
+                project_id = None
                 try:
                     owner, repo = parse_repo_url(repo_url)
                     project_id = f"{owner}/{repo}"
@@ -614,9 +621,32 @@ def main():
                 except Exception as exc:
                     progress.clear()
                     print(f"Failed to import from GitHub: {exc}")
-                else:
-                    progress.clear()
-                    print("GitHub import completed.")
+                    continue
+                progress.clear()
+                print(f"GitHub import completed. (Project ID: {project_id})")
+                if not project_id:
+                    continue
+                while True:
+                    print()
+                    print(f"1. Analyze current project (ID: {project_id})")
+                    print("2. View all projects")
+                    print("3. Import more from GitHub URL")
+                    print("4. Back to main menu")
+                    follow = input("Please select an option (1-4): ").strip()
+                    if follow == "1":
+                        _show_contributor_rankings(project_id)
+                    elif follow == "2":
+                        print()
+                        forced_choice = "3"
+                        break
+                    elif follow == "3":
+                        print()
+                        forced_choice = "2"
+                        break
+                    elif follow == "4":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 1 to 4.")
             elif choice == "3":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
