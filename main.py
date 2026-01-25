@@ -69,6 +69,30 @@ def _prompt_github_token() -> str | None:
         return token
     return os.environ.get("GITHUB_TOKEN")
 
+class _ProgressLine:
+    def __init__(self, enabled: bool | None = None) -> None:
+        self._enabled = sys.stdout.isatty() if enabled is None else enabled
+        self._last_len = 0
+
+    def update(self, message: str, current: int | None, total: int | None) -> None:
+        if not self._enabled:
+            return
+        if current is not None and total is not None:
+            text = f"[github] {message} {current}/{total}..."
+        else:
+            text = f"[github] {message}..."
+        padded = text.ljust(self._last_len)
+        sys.stdout.write(f"\r{padded}")
+        sys.stdout.flush()
+        self._last_len = len(text)
+
+    def clear(self) -> None:
+        if not self._enabled or not self._last_len:
+            return
+        sys.stdout.write("\r" + (" " * self._last_len) + "\r")
+        sys.stdout.flush()
+        self._last_len = 0
+
 
 def _exit_app() -> None:
     print("\nGood luck with everything! Exiting application.")
@@ -180,11 +204,19 @@ def _contributor_menu(project_id: str) -> None:
                             store_github_source(conn, project_id, repo_url, token)
                     except Exception as exc:
                         print(f"Failed to save GitHub source: {exc}")
+                progress = _ProgressLine()
                 try:
-                    sync_contributor_stats(repo_url, token=token, project_id=project_id)
+                    sync_contributor_stats(
+                        repo_url,
+                        token=token,
+                        project_id=project_id,
+                        progress_cb=progress.update,
+                    )
                 except Exception as exc:
+                    progress.clear()
                     print(f"Failed to sync contributor stats: {exc}")
                 else:
+                    progress.clear()
                     print("Contributor stats synced.")
             elif choice == "2":
                 _print_contributor_rankings(project_id, "score")
@@ -568,15 +600,22 @@ def main():
                 if not token:
                     print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
                     continue
+                progress = _ProgressLine()
                 try:
                     owner, repo = parse_repo_url(repo_url)
                     project_id = f"{owner}/{repo}"
                     with _open_app_db() as conn:
                         store_github_source(conn, project_id, repo_url, token)
-                    sync_contributor_stats(repo_url, token=token)
+                    sync_contributor_stats(
+                        repo_url,
+                        token=token,
+                        progress_cb=progress.update,
+                    )
                 except Exception as exc:
+                    progress.clear()
                     print(f"Failed to import from GitHub: {exc}")
                 else:
+                    progress.clear()
                     print("GitHub import completed.")
             elif choice == "3":
                 with _open_app_db() as conn:
