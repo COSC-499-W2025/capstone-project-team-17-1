@@ -825,3 +825,108 @@ To finalize the work, I prepared a clean pull request for review.
 
 This week was focused on integration and reliability rather than new algorithms. By reusing existing ranking and summary logic, the new CLI command adds useful functionality with minimal duplication. The added unit tests and fixes around src based imports improve long term maintainability and reduce friction for future contributors. Next steps include improving snapshot richness so ranking scores are more meaningful and expanding CLI coverage to include JSON output validation and edge case handling.
 
+---
+
+## Week 3 Personal Log [Jan 19 – Jan 25, 2026]
+
+This week I focused on completing the remaining AI related milestones for the capstone project, specifically around improving AutoWriter prompt quality, integrating an AI powered project insight feature, and safely gating all LLM usage behind explicit user consent. The work involved prompt engineering, backend integration, environment configuration, graceful fallback handling, and comprehensive `unittest` coverage to ensure the system remains reliable and explainable even when external services are unavailable.
+
+**Peer Eval**  
+>
+> ![Week 3 — AI insights and consent gating]
+> <img width="1065" height="624" alt="image" src="https://github.com/user-attachments/assets/4553abfc-9c6a-44c7-9a10-cbab33b76187" />
+
+>
+> _Figure 0. peer evaluation._
+>
+---
+
+### AutoWriter prompt restructuring for resume friendly summaries
+
+A major portion of the week was spent improving the AutoWriter prompt construction to better align with resume and LinkedIn use cases.
+
+* Updated the AutoWriter prompt to explicitly incorporate evidence references, contributor ownership, project timelines, and detected skills and tech stack.
+* Added clear constraints to enforce concise, structured output, including a fixed number of bullet points, word limits, and mandatory evidence citations.
+* Ensured the prompt highlights technical impact, contributor role, and growth over time rather than producing generic summaries.
+* Verified that the updated prompt remains compatible with both LLM based summaries and offline fallback summaries.
+
+---
+
+### Unittest coverage for AutoWriter prompt shape
+
+To ensure the new prompt structure is stable and regression resistant, I added targeted unit test coverage.
+
+* Created `unittest` based tests to validate that the AutoWriter prompt includes required sections such as Ownership, Timeline, Skills and Stack, Evidence, and Output Instructions.
+* Ensured tests assert intent and structure rather than brittle string equality, making them resilient to small formatting changes.
+* Ran  tests locally using `python -m unittest` and confirmed consistent passing behavior.
+
+---
+
+### AI powered project insight feature
+
+I implemented a new AI insight pipeline that allows users to ask free form questions about analyzed projects and receive evidence grounded responses.
+
+* Added a stateless LLM client wrapper that isolates external API usage from core application logic.
+* Built a structured prompt generator that derives context from stored project snapshots, rankings, collaboration data, and extracted evidence.
+* Ensured the AI responses are grounded strictly in internal metadata rather than raw source code to avoid hallucination and excessive token usage.
+* Verified the feature end to end by querying real project snapshots and validating that responses correctly identify strengths, weaknesses, activity levels, and collaboration patterns.
+
+---
+
+### Environment configuration and API key handling
+
+While integrating the LLM client, I resolved several environment related issues specific to Windows and virtual environments.
+
+* Diagnosed why environment variables set via `setx` were not visible inside the active virtual environment.
+* Implemented a robust solution using session level environment variables and optional `.env` loading to ensure reproducible local development.
+* Verified correct API key resolution inside the Python runtime using direct environment inspection.
+* Confirmed that the system behaves correctly when API keys are missing, invalid, or rate limited.
+
+---
+
+### Graceful fallback and quota handling
+
+To ensure system reliability, I added defensive handling around external API usage.
+
+* Implemented graceful fallback behavior when the LLM API is unavailable due to quota limits or missing credentials.
+* Ensured that fallback responses still provide meaningful offline summaries without crashing or blocking execution.
+* Validated that the system remains fully functional even when external AI services are disabled.
+
+---
+
+### Consent gated LLM usage (Step 4)
+
+The final major task this week was gating all LLM usage behind explicit user consent using the existing consent framework.
+
+* Integrated the external consent system to require permission before any LLM call using a dedicated service identifier.
+* Ensured consent decisions are remembered using the existing consent journal so users are not repeatedly prompted.
+* Implemented a clean fallback path that skips AI analysis entirely when consent is denied.
+* Added clear logging to make it explicit in debug output whether LLM usage was allowed or skipped.
+* Verified correct behavior for both consent granted and consent denied scenarios through manual testing.
+
+---
+
+### Unittest coverage for consent gating
+
+To validate consent behavior deterministically, I added unit tests that mock external dependencies.
+
+* Created `unittest` based tests that verify the LLM is not invoked when external consent is denied.
+* Added tests to confirm the LLM is invoked exactly once when consent is granted.
+* Mocked snapshot retrieval, ranking logic, and LLM responses to ensure tests do not rely on external APIs.
+* Ran the full test suite locally and confirmed all tests pass without warnings.
+
+---
+
+### PR preparation and review readiness
+
+To wrap up the work, I prepared clean pull requests for each completed milestone.
+
+* Filled out PR templates detailing design decisions, testing strategy, and expected behavior.
+* Verified that all changes are non breaking and integrate cleanly with existing pipelines.
+* Ensured PR descriptions clearly communicate AI usage, consent handling, and fallback behavior to reviewers.
+
+---
+
+### Reflection
+
+This week emphasized system design, reliability, and responsible AI integration rather than introducing new algorithms. By grounding AI usage in stored metadata, gating it behind explicit user consent, and ensuring graceful degradation when external services are unavailable, the project now demonstrates production ready AI integration patterns. The added test coverage improves long term maintainability and ensures that future contributors can extend AI functionality without introducing regressions. Next steps include expanding documentation around AI usage and exploring additional CLI entry points for interactive project analysis.
