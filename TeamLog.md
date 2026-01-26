@@ -440,7 +440,7 @@ The goal of this milestone is to build a service-oriented system that supports a
 This week, the team expanded CLI and backend functionality and validated new features through automated and manual testing. PR #160 added a summarize-top-projects CLI subcommand to generate summaries of top-ranked projects from the latest analysis snapshots, with JSON/Markdown output and unit tests for command registration and execution. PR #157 introduced a new GET /portfolios/evidence endpoint to expose structured evidence of success and extended the latest portfolio API to support portfolio vs. résumé views, with automated tests covering common and edge cases. PR #156 completed résumé textual display and customization across API and CLI, adding clear priority rules and a user-friendly preview flow with supporting tests. PR #159 enabled GitHub repository import via URL and improved contributor rankings using commits, reviews, and lines changed, validated through unit tests and manual CLI workflows. PR #162 implemented a fully functional start menu that unifies core workflows under a single entry point, normalizes snapshot handling across formats, fixes portfolio summary argument passing, and adds defensive checks and unit tests to ensure robust menu behavior.
 
 ## WEEK 3 TEAM LOG (Term2)
-(Jan19 - Jan18, 2026)
+(Jan19 - Jan25, 2026)
 
 ### Recap of Milestone Goal - Week 3
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
