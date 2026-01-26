@@ -3,6 +3,7 @@
 ## Table of Contents
 - [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
 - [Milestone 2 - Week 2 [Jan 12 – Jan 18, 2026]](#week-2-m2)
+- [Milestone 2 - Week 3 [Jan 19 – Jan 25, 2026]](#week-3-m2)
 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -142,6 +143,21 @@ During this process, I found that extracting accurate line-change metrics was ov
 Next week, I plan to fully finalize this contributor workflow and begin developing new features. Currently, URL-imported projects are not yet integrated with the original ZIP-based analysis pipeline. Aside from contribution analysis, both pipelines should share the same analysis flow, and I plan to complete this integration next week.
 
 <img width="1556" height="910" alt="b453e044d181d21d9bc27701a5393547" src="https://github.com/user-attachments/assets/2210aff4-4031-474b-8eea-eb77dea48075" />
+
+[Back](#table-of-contents)
+
+
+## Week 3 (M2)
+[Jan 19 – Jan 25, 2026]
+This week, I completed the final phase of the contributor ranking work, bringing the feature to a fully polished state. When users upload a GitHub project via URL, the system now downloads the repository ZIP using the GitHub API, stores it as a temporary file, and then invokes the existing ZIP analysis pipeline. At the same time, the URL-specific contributor analysis is preserved and overrides the contribution component of the ZIP-based analysis. This approach does not rely on Git, significantly improving execution speed.
+
+I also optimized the menu logic by reusing main menu logic within certain submenus and adding cancel and back-navigation options, making the interface more user-friendly. In addition, some summary output formats were adjusted accordingly. At this point, the contributor ranking functionality is considered complete.
+
+Beyond this, I further refined the chronological skill timeline feature. The output display was significantly improved, and project selection was added for users. Previously, this feature analyzed all projects in the database by default, which was super limiting. It now returns a list of available projects for users to choose from, along with corresponding menu logic improvements and new tests.
+
+Next week, I plan to refactor the database design. Currently, ZIP uploads and analysis are tightly coupled, meaning analysis starts immediately upon upload. I intend to separate these concerns by introducing a new table to store uploaded source information (ZIP or URL) independently, with analysis becoming an explicit, optional step. I will also begin developing new features next week.
+
+<img width="1559" height="914" alt="e8da96c504674bc25c8c8e6e463453bd" src="https://github.com/user-attachments/assets/767342f6-0bde-4035-b5f1-5d0558a0bc70" />
 
 [Back](#table-of-contents)
 

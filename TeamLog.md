@@ -2,6 +2,9 @@
 
 ## Team Log Table of Content
 
+- [Week 2 Team Log (Term2)](#week-2-team-log-term2)
+- [Week 3 Team Log (Term2)](#week-3-team-log-term2)
+
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
 - [Week 5 Team Log](#week-5-team-log)
@@ -438,3 +441,42 @@ The goal of this milestone is to build a service-oriented system that supports a
 
 ### Test Report Week 2
 This week, the team expanded CLI and backend functionality and validated new features through automated and manual testing. PR #160 added a summarize-top-projects CLI subcommand to generate summaries of top-ranked projects from the latest analysis snapshots, with JSON/Markdown output and unit tests for command registration and execution. PR #157 introduced a new GET /portfolios/evidence endpoint to expose structured evidence of success and extended the latest portfolio API to support portfolio vs. résumé views, with automated tests covering common and edge cases. PR #156 completed résumé textual display and customization across API and CLI, adding clear priority rules and a user-friendly preview flow with supporting tests. PR #159 enabled GitHub repository import via URL and improved contributor rankings using commits, reviews, and lines changed, validated through unit tests and manual CLI workflows. PR #162 implemented a fully functional start menu that unifies core workflows under a single entry point, normalizes snapshot handling across formats, fixes portfolio summary argument passing, and adds defensive checks and unit tests to ensure robust menu behavior.
+
+## WEEK 3 TEAM LOG (Term2)
+(Jan19 - Jan25, 2026)
+
+### Recap of Milestone Goal - Week 3
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart Week 3
+<img width="1032" height="601" alt="Screenshot 2026-01-25 at 10 59 16 PM" src="https://github.com/user-attachments/assets/5053dba4-27ba-44a7-bc81-2d4832fe1b70" />
+
+### Completed Tasks Week 3
+<img width="1217" height="326" alt="Screenshot 2026-01-25 at 10 59 45 PM" src="https://github.com/user-attachments/assets/069453ea-efe1-447e-8d77-10638c97f44a" />
+
+<img width="1217" height="271" alt="Screenshot 2026-01-25 at 10 59 34 PM" src="https://github.com/user-attachments/assets/c1946bb7-0eac-4717-ad1b-833cdd6f6752" />
+
+### In Progress Tasks Week 3
+<img width="1234" height="782" alt="Screenshot 2026-01-25 at 11 00 15 PM" src="https://github.com/user-attachments/assets/036549a9-d5a1-4f82-90d1-d88896f38dbf" />
+
+### Test Report Week 3
+This week, the team made solid progress across multiple core features, focusing on system stability, AI safety, and user experience improvements. Several major enhancements were completed and merged, while additional refinements are actively underway.
+
+Contributor analysis and AI workflows were significantly strengthened. The contributor ranking system was refined to address earlier limitations and produce more reliable results, and AI-powered functionality was stabilized by enforcing explicit user consent before any external LLM usage. These changes improve the transparency, robustness, and trustworthiness of AI-driven insights, while ensuring safe integration of LLM-based components. [Comprehensive refinement of the contributor ranking feature (#171)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/171)
+
+User-facing functionality also saw meaningful improvements. The résumé preview workflow was enhanced to provide clearer, more predictable output, and menu-related issues were resolved to create a smoother CLI experience for end users. [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
+
+Additionally, we introduced a unified ensure-or-prompt consent path that prompts users only when no prior consent decision exists. This supports a one time session-only option alongside persistent saved consent. The flow now correctly persists consent decisions to config, displaying distinct messages for first-time users verses returning users. The CLI behaviour was aligned for future GUI support by separating prompting logic cfrom enforcement. [Enhance User Consent Prompts and Behaviours (#176)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/176)
+
+In parallel, the team continued work on several Milestone 2 enhancements, including refinement of the chronological skill timeline, improvements to consent-related user prompts, richer project insight generation, and stronger test coverage for project summarization and snapshot handling.
+
+Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
