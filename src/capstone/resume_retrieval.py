@@ -243,9 +243,27 @@ def insert_resume_entry(
     created_at: Optional[str] = None,
 ) -> str:
     ensure_resume_schema(conn)
-    entry_id = entry_id or str(uuid4())
     section = section.lower()
-    payload = json.dumps(metadata or {})
+    metadata = metadata or {}
+    payload = json.dumps(metadata)
+    projects = list(dict.fromkeys(projects or []))
+    skills = [str(s).lower() for s in (skills or [])]
+    skills = list(dict.fromkeys(skills))
+    # Skip insertion 
+    duplicate_id = _find_duplicate_resume_entry(
+        conn,
+        section=section,
+        title=title,
+        body=body,
+        summary=summary,
+        status=status,
+        metadata=metadata,
+        projects=projects,
+        skills=skills,
+    )
+    if duplicate_id:
+        return duplicate_id
+    entry_id = entry_id or str(uuid4())
     conn.execute( # insert into entries
         """
         INSERT INTO resume_entries(id, section, title, summary, body, status, metadata)
@@ -262,22 +280,72 @@ def insert_resume_entry(
             """,
             (created_at, created_at, entry_id),
         )
-    _insert_links(conn, entry_id, projects or [], skills or [])
+    _insert_links(conn, entry_id, projects, skills)
     conn.commit()
     return entry_id
 
 
 def _insert_links(conn: sqlite3.Connection, entry_id: str, projects: Sequence[str], skills: Sequence[str]) -> None:
-    for pid in projects:
+    for pid in dict.fromkeys(projects):
         conn.execute(
             "INSERT INTO resume_entry_links(entry_id, link_type, link_value) VALUES (?, 'project', ?)",
             (entry_id, pid),
         )
-    for skill in skills:
+    for skill in dict.fromkeys(skills):
         conn.execute(
             "INSERT INTO resume_entry_links(entry_id, link_type, link_value) VALUES (?, 'skill', ?)",
             (entry_id, skill.lower()),
         )
+
+
+def _find_duplicate_resume_entry(
+    conn: sqlite3.Connection,
+    *,
+    section: str,
+    title: str,
+    body: str,
+    summary: Optional[str],
+    status: str,
+    metadata: Dict[str, Any],
+    projects: Sequence[str],
+    skills: Sequence[str],
+) -> Optional[str]:
+    # Detect duplicate entries
+    rows = conn.execute(
+        """
+        SELECT id, summary, status, metadata
+        FROM resume_entries
+        WHERE section = ? AND title = ? AND body = ?
+        """,
+        (section, title, body),
+    ).fetchall()
+    if not rows:
+        return None
+    target_projects = tuple(sorted(projects))
+    target_skills = tuple(sorted(skills))
+    links = _fetch_links(conn, [row[0] for row in rows])
+    for row in rows:
+        if row[1] != summary:
+            continue
+        if row[2] != status:
+            continue
+        raw_meta = row[3]
+        if raw_meta:
+            try:
+                stored_meta = json.loads(raw_meta)
+            except json.JSONDecodeError:
+                stored_meta = {}
+        else:
+            stored_meta = {}
+        if stored_meta != metadata:
+            continue
+        link = links.get(row[0], {})
+        if tuple(sorted(link.get("project", ()))) != target_projects:
+            continue
+        if tuple(sorted(link.get("skill", ()))) != target_skills:
+            continue
+        return row[0]
+    return None
 
 
 def get_resume_entry(conn: sqlite3.Connection, entry_id: str) -> Optional[ResumeEntry]:
@@ -632,6 +700,36 @@ def list_resume_project_descriptions(
     return [_row_to_project_description(row) for row in rows]
 
 
+def delete_resume_project_description(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    variant_name: Optional[str] = None,
+    audience: Optional[str] = None,
+    active_only: bool = True,
+) -> int:
+    ensure_resume_schema(conn)
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    where = ["project_id = ?"]
+    params: List[Any] = [project_id]
+    if variant_name is not None:
+        where.append("variant_name IS ?")
+        params.append(variant_name)
+    if audience is not None:
+        where.append("audience IS ?")
+        params.append(audience)
+    if active_only:
+        where.append("is_active = 1")
+    sql = f"""
+        DELETE FROM resume_project_descriptions
+        WHERE {' AND '.join(where)}
+    """
+    cur = conn.execute(sql, params)
+    conn.commit()
+    return int(cur.rowcount or 0)
+
+
 def _row_to_project_description(row: sqlite3.Row | Sequence[Any]) -> ResumeProjectDescription:
     metadata: Dict[str, Any] = {}
     if row[8]:
@@ -765,10 +863,15 @@ def build_resume_preview(
         grouped[entry.section].append(
             {
                 "id": entry.id,
+                "section": entry.section,
                 "title": entry.title,
                 "excerpt": excerpt,
                 "source": source,
                 "updated_at": entry.updated_at,
+                "metadata": entry.metadata,
+                "entrySummary": entry.summary,
+                "entryBody": entry.body,
+                "status": entry.status,
                 "projectIds": list(entry.project_ids),
                 "skills": list(entry.skills),
             }
@@ -784,7 +887,15 @@ def build_resume_preview(
         sections_payload.append({"name": section, "items": grouped[section]})
 
     project_context = resolve_resume_projects(conn, result.entries) if conn else {}
-    last_updated = max((entry.updated for entry in result.entries if entry.updated), default=None)
+    updated_values: List[datetime] = []
+    for entry in result.entries:
+        updated = entry.updated
+        if not updated:
+            continue
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        updated_values.append(updated)
+    last_updated = max(updated_values, default=None)
     preview = {
         "sections": sections_payload,
         "warnings": result.warnings,
@@ -1043,6 +1154,7 @@ __all__ = [
     "upsert_resume_project_description",
     "get_resume_project_description",
     "list_resume_project_descriptions",
+    "delete_resume_project_description",
     "query_resume_entries",
     "resolve_resume_projects",
     "resolve_resume_project_descriptions",
