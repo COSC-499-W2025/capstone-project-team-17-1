@@ -466,3 +466,11 @@ The goal of this milestone is to build a service-oriented system that supports a
 <img width="1234" height="782" alt="Screenshot 2026-01-25 at 11 00 15 PM" src="https://github.com/user-attachments/assets/036549a9-d5a1-4f82-90d1-d88896f38dbf" />
 
 ### Test Report Week 3
+This week, the team made solid progress across multiple core features, focusing on system stability, AI safety, and user experience improvements. Several major enhancements were completed and merged, while additional refinements are actively underway.
+
+Contributor analysis and AI workflows were significantly strengthened. The contributor ranking system was refined to address earlier limitations and produce more reliable results, and AI-powered functionality was stabilized by enforcing explicit user consent before any external LLM usage. These changes improve the transparency, robustness, and trustworthiness of AI-driven insights, while ensuring safe integration of LLM-based components[Comprehensive refinement of the contributor ranking feature (#171)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/171)
+User-facing functionality also saw meaningful improvements. The résumé preview workflow was enhanced to provide clearer, more predictable output, and menu-related issues were resolved to create a smoother CLI experience for end users [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
+
+In parallel, the team continued work on several Milestone 2 enhancements, including refinement of the chronological skill timeline, improvements to consent-related user prompts, richer project insight generation, and stronger test coverage for project summarization and snapshot handling.
+
+Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
