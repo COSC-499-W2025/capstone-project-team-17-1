@@ -3,6 +3,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from typing import Iterable,List
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -10,10 +11,11 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone.cli import main
+from capstone.config import load_config
 from capstone.company_profile import build_company_resume_lines
 from capstone.company_qualities import extract_company_qualities
 from capstone.config import load_config, reset_config
-from capstone.consent import ensure_consent, grant_consent, ensure_or_prompt_consent
+from capstone.consent import ensure_consent, grant_consent, revoke_consent, ensure_or_prompt_consent
 from capstone.github_contributors import get_contributor_rankings, parse_repo_url, sync_contributor_stats
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.modes import resolve_mode
@@ -218,16 +220,26 @@ def _prompt_menu(title: str, options: List[str]) -> str:
 def main():
     # main entry point for user
     print("=" * 60)
-    print("     Data and Artifact Mining Application")
-    print("     Portfolio & Resume Generator")
+    print("            Data and Artifact Mining Application")
+    print("               Portfolio & Resume Generator")
     print("=" * 60)
     print()
     
-    if not ensure_or_prompt_consent():
-        print("Consent is required to proceed. Exiting application.")
-        print("Please run program again and grant consent to continue.")
+    consent_status = ensure_or_prompt_consent()
+    
+    if consent_status == "denied":
+        print("\nConsent is required to proceed! Please run again and grant consent to continue.")
+        print("Exiting application...\n")
         return
-    print("\n Consent granted. Proceeding with analysis...\n")
+    
+    if consent_status == "saved_existing":
+        print("\nWelcome Back! Consent saved from previous session. Proceeding with analysis...\n")
+    elif consent_status == "saved_new":
+        print("Saving consent for future sessions.")
+        print("\n\nProceeding with analysis...\n")
+    elif consent_status == "sessions_only":
+        print("\nConsent granted for THIS SESSION ONLY. You will be prompted again next time.")
+        print("\n\nProceeding with analysis...\n")
     
     # main menu loop
     try:
@@ -235,15 +247,15 @@ def main():
             print("\n" + "=" * 40)
             print("Main Menu")
             print("=" * 40)
-            print("1. Analyze new project archive (ZIP)")
-            print("2. Import from GitHub URL")
-            print("3. View all projects")
-            print("4. View project details")
-            print("5. Generate portfolio summary")
-            print("6. Generate resume preview")
-            print("7. View chronological project timeline")
-            print("8. View skills timeline")
-            print("9. Delete project insights")
+            print("1.  Analyze new project archive (ZIP)")
+            print("2.  Import from GitHub URL")
+            print("3.  View all projects")
+            print("4.  View project details")
+            print("5.  Generate portfolio summary")
+            print("6.  Generate resume preview")
+            print("7.  View chronological project timeline")
+            print("8.  View skills timeline")
+            print("9.  Delete project insights")
             print("10. Manage consent")
             print("11. Contributor rankings (Quick Access)")
             print("12. Exit")
@@ -451,12 +463,13 @@ def main():
                     conn.commit()
                     print("Project insights deleted.")
             elif choice == "10":
-                consent = input("Do you want to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
+                consent = input("Do you wish to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
                 if consent == "g":
                     grant_consent()
                     print("Consent granted.")
                 elif consent == "r":
-                    print("Consent revoked. Exiting application.")
+                    revoke_consent("deny")
+                    print("Consent revoked successfully. Exiting application...")
                     return
                 else:
                     print("Invalid choice. Please try again.")
