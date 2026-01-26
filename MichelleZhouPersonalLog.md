@@ -4,6 +4,7 @@
 
 - [T2 Week 1 Personal Log](#T2-week-1-personal-log)
 - [T2 Week 2 Personal Log](#T2-week-2-personal-log)
+- [T2 Week 3 Personal Log](#T2-week-3-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -259,4 +260,26 @@ I helped review teammate prs for milestone 2 changes which includes success endp
 
 ###Additionally:
 The primary blocked for this week was inconsistent snapshot schemas across the pipeline. This caused issues in both ranking and timeline utilities when called through the menu. I addressed this with normalization and correct data shaping prior to passing inputs to shared functions. Next week I plan to fully finalize the start menu in preparation for peer testing. I will also work on implementing milestone 2 features with the rest of the team.
+
+
+## T2 Week 3 Personal Log
+
+- (Jan 19 - Jan 25, 2025)<br />
+
+<img width="972" height="571" alt="image" src="https://github.com/user-attachments/assets/0c530656-2fa9-4d0c-b57b-f25d12c6f651" />
+
+###Weekly Recap:
+This week built directly on last week's integration work by flushing out user facing flows and improving reliability across multiple core features. The focus shifted from just connecting features to making them correct, explicit, and user friendly. Several edge cases surfaced once features were tested through the menu which let to massive refinements in both logic and test coverage. In parallel, the team and I were preparing for the upcoming peer testing by designing a clear evaluation flow and participant guidance.
+
+Coding tasks
+I refractored the consent handling to ensure user permission is never implicitly granted. A unified method was introduced to only prompt when no prior consent decisions exists. This additionally supports session verses saved consent and correctly persists decisions to config. The consent flow now displays various messages for first time users vs returning users for imroved clarity. The application also exits cleanly without progressing further to the main menu when consent is denied. This structure was designed specifically to be compatible with future GUI frontend implementation by separating prompting logic from enforcement.
+
+Testing or debugging tasks
+A significant portion of this week was spent debugging consent related edge cases. Early versions of the flow incorrectly auto granted consent, failed to reprompt after revocation, or existed prematurely after acceptance. These were traced to mismatches between prompt return values and decision handling. The updated unittests now cover all possible user behaviours. 
+
+Reviewing or collaboration tasks
+I reviewed and tested teammate PRs by providing feedback on usability, code reuse, and test alignment. I helped validate that new features behaved correctly when invoked through the menu rather than in isolation. 
+
+###Additionally:
+This week's main blocker was the interaction between persisted configuration state and test isolation. This was resolved by redirecting congif and log paths to temporary directories during tests and avoiding implicit stdin reads. Next week, I will focus on implementing Resume Textual Display task #179. This will include generating resume ready project entries containing relevant details. The goal is to ensure the content is professionally formatted and suitable for direct inclusion in a resume while integrating cleanly with existing snapshot and resume pipelines.
 
