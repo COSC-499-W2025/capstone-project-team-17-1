@@ -2,6 +2,7 @@
 
 ## Team Log Table of Content
 
+- [Week 2 Team Log (Term2)](#week-2-team-log-term2)
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
