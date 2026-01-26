@@ -79,7 +79,7 @@ def ensure_or_prompt_consent(
     consent = config.consent
     
     if consent.granted:
-        return "saved_existing"
+        return "granted_existing"
     
     output_fn("\nWelcome! Thanks for being here. Let's get started :)")
     output_fn("\n\nNOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)")
@@ -103,7 +103,7 @@ def ensure_or_prompt_consent(
     
     if remember:
         grant_consent("allow")
-        return "saved_new"
+        return "granted_new"
     else:
         revoke_consent("deny")
         return "sessions_only"

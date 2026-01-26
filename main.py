@@ -232,9 +232,9 @@ def main():
         print("Exiting application...\n")
         return
     
-    if consent_status == "saved_existing":
+    if consent_status == "granted_existing":
         print("\nWelcome Back! Consent saved from previous session. Proceeding with analysis...\n")
-    elif consent_status == "saved_new":
+    elif consent_status == "granted_new":
         print("Saving consent for future sessions.")
         print("\n\nProceeding with analysis...\n")
     elif consent_status == "sessions_only":
