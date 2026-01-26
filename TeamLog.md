@@ -472,6 +472,8 @@ Contributor analysis and AI workflows were significantly strengthened. The contr
 
 User-facing functionality also saw meaningful improvements. The résumé preview workflow was enhanced to provide clearer, more predictable output, and menu-related issues were resolved to create a smoother CLI experience for end users. [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
 
+Additionally, we introduced a unified ensure-or-prompt consent path that prompts users only when no prior consent decision exists. This supports a one time session-only option alongside persistent saved consent. The flow now correctly persists consent decisions to config, displaying distinct messages for first-time users verses returning users. The CLI behaviour was aligned for future GUI support by separating prompting logic cfrom enforcement. [Enhance User Consent Prompts and Behaviours (#176)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/176)
+
 In parallel, the team continued work on several Milestone 2 enhancements, including refinement of the chronological skill timeline, improvements to consent-related user prompts, richer project insight generation, and stronger test coverage for project summarization and snapshot handling.
 
 Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
