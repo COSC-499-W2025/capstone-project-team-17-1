@@ -5,8 +5,9 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable,List
+from typing import Iterable, List
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -408,6 +409,76 @@ def _build_skills_timeline_rows(snapshots: Iterable[dict]) -> List[dict]:
     return rows
 
 
+def _short_date(date_str: str) -> str:
+    """Return YYYY-MM from an ISO datetime string; fallback to raw string."""
+
+    if not date_str:
+        return "-"
+    try:
+        return datetime.fromisoformat(date_str).strftime("%Y-%m")
+    except Exception:
+        return date_str[:7] if len(date_str) >= 7 else date_str
+
+
+def _intensity_bar(value: float, *, width: int = 8) -> str:
+    """ASCII mini bar to visualize relative intensity (0–1)."""
+
+    v = 0.0 if value is None else max(0.0, min(1.0, float(value)))
+    filled = int(round(v * width))
+    return "#" * filled + "." * (width - filled)
+
+
+def _compact_counts(counts: dict | None, *, max_items: int = 4) -> str:
+    """Human friendly year/quarter weights string, trimmed for width."""
+
+    if not counts:
+        return "-"
+    items = list(counts.items())
+    if not items:
+        return "-"
+    parts = [f"{k}:{round(float(v), 2)}" for k, v in items[:max_items]]
+    if len(items) > max_items:
+        parts.append("…")
+    return " ".join(parts)
+
+
+def _format_skills_timeline(rows: List[dict]) -> str:
+    """Pretty-print skills timeline as aligned rows grouped by category."""
+
+    if not rows:
+        return "No skill timeline data found."
+
+    # Group by category and order categories alphabetically, skills by intensity then name.
+    grouped: dict[str, list[dict]] = {}
+    for r in rows:
+        grouped.setdefault(r.get("category", "unspecified"), []).append(r)
+    for vals in grouped.values():
+        vals.sort(key=lambda r: (-float(r.get("intensity") or 0.0), r.get("skill") or ""))
+
+    # Column widths; keep narrow to avoid wrapping too much in console.
+    header = f"{'Skill':20} {'Cat':12} {'First':7} {'Last':7} {'Weight':8} {'Int':10} Years"
+    lines = [header, "-" * len(header)]
+
+    total_skills = 0
+    for cat in sorted(grouped):
+        lines.append(f"[Category: {cat}]")
+        for r in grouped[cat]:
+            total_skills += 1
+            lines.append(
+                f"{(r.get('skill') or '-')[:20]:20} "
+                f"{cat[:12]:12} "
+                f"{_short_date(r.get('first_seen')):7} "
+                f"{_short_date(r.get('last_seen')):7} "
+                f"{round(float(r.get('total_weight') or 0.0), 2):8.2f} "
+                f"{_intensity_bar(r.get('intensity'), width=8)} "
+                f"{_compact_counts(r.get('year_counts'))}"
+            )
+        lines.append("")
+
+    lines.insert(0, f"Skills: {total_skills} | Categories: {len(grouped)}")
+    return "\n".join(lines).rstrip()
+
+
 def _prompt_choice(prompt: str, choices: Iterable[str]) -> str:
     options = {c.lower() for c in choices}
     while True:
@@ -624,7 +695,7 @@ def main():
                 print("5. Generate portfolio summary")
                 print("6. Generate resume preview")
                 print("7. View chronological project timeline")
-                print("8. View skills timeline")
+                print("8. View chronological skill timeline")
                 print("9. Delete project insights")
                 print("10. Manage consent")
                 print("11. Contributor rankings (Quick Access)")
@@ -1322,21 +1393,63 @@ def main():
             elif choice == "8":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
-                    skills_timeline = _build_skills_timeline_rows(snapshots)
-                    print("\nSkills Timeline:\n")
-                    if not skills_timeline:
-                        print("No skill timeline data found.")
-                    else:
-                        for entry in skills_timeline:
-                            years = ", ".join(
-                                f"{year}:{weight}"
-                                for year, weight in (entry.get("year_counts") or {}).items()
-                            )
-                            print(
-                                f"- {entry.get('skill')} ({entry.get('category')}) "
-                                f"{entry.get('first_seen') or '-'} -> {entry.get('last_seen') or '-'} "
-                                f"| years: {years or '-'} | total_weight: {entry.get('total_weight', 0.0)}"
-                            )
+
+                if not snapshots:
+                    print("\nSkills Timeline\n----------------\n")
+                    print("No projects found.")
+                    continue
+
+                sorted_projects = sorted(
+                    snapshots,
+                    key=lambda s: (str(s.get("project_id") or "")).lower(),
+                )
+                print("\nAvailable projects (latest snapshot per project):")
+                for idx, snap in enumerate(sorted_projects, start=1):
+                    snapshot_data = snap.get("snapshot") or {}
+                    label = snapshot_data.get("project_name") or snap.get("project_id") or f"Project {idx}"
+                    print(f"{idx}. {label} (ID: {snap.get('project_id')})")
+
+                selection: list[int] = []
+                while True:
+                    raw = input("Select projects by number (space-separated). Enter 0 to cancel: ").strip()
+                    if raw == "0":
+                        print("Cancelled.")
+                        selection = []
+                        break
+                    if not raw:
+                        print("Please enter at least one index, or 0 to cancel.")
+                        continue
+                    try:
+                        nums = [int(x) for x in raw.split() if x.strip()]
+                    except ValueError:
+                        print("Invalid input, use numeric indices separated by spaces.")
+                        continue
+                    if not nums:
+                        print("Please enter at least one index, or 0 to cancel.")
+                        continue
+                    if any(n <= 0 or n > len(sorted_projects) for n in nums):
+                        print(f"Indices must be in 1–{len(sorted_projects)}, or 0 to cancel.")
+                        continue
+                    selection = nums
+                    break
+
+                if not selection:
+                    continue
+
+                chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                skills_timeline = _build_skills_timeline_rows(chosen_snapshots)
+                print("\nSkills Timeline\n----------------\n")
+                print(_format_skills_timeline(skills_timeline))
+                while True:
+                    print("\n1. View another skill timeline")
+                    print("2. Back to main menu")
+                    follow = input("Select an option (1-2): ").strip()
+                    if follow == "1":
+                        forced_choice = "8"
+                        break
+                    if follow == "2":
+                        break
+                    print("Invalid choice. Please enter 1 or 2.")
             elif choice == "9":
                 project_id = input("Enter the project ID to delete insights: ").strip()
                 with _open_app_db() as conn:
