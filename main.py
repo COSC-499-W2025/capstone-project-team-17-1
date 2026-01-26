@@ -2,6 +2,9 @@ import json
 import os
 import sqlite3
 import sys
+import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Iterable,List
 
@@ -34,6 +37,7 @@ from capstone.resume_retrieval import (
 )
 from capstone.storage import (
     fetch_github_source,
+    fetch_latest_contributor_stats,
     fetch_latest_snapshot,
     fetch_latest_snapshots,
     open_db,
@@ -70,6 +74,70 @@ def _prompt_github_token() -> str | None:
         return token
     return os.environ.get("GITHUB_TOKEN")
 
+class _ProgressLine:
+    def __init__(self, enabled: bool | None = None) -> None:
+        self._enabled = sys.stdout.isatty() if enabled is None else enabled
+        self._last_len = 0
+    def update(self, message: str, current: int | None, total: int | None) -> None:
+        if not self._enabled:
+            return
+        if current is not None and total is not None:
+            text = f"[github] {message} {current}/{total}..."
+        else:
+            text = f"[github] {message}..."
+        padded = text.ljust(self._last_len)
+        sys.stdout.write(f"\r{padded}")
+        sys.stdout.flush()
+        self._last_len = len(text)
+
+    def clear(self) -> None:
+        if not self._enabled or not self._last_len:
+            return
+        sys.stdout.write("\r" + (" " * self._last_len) + "\r")
+        sys.stdout.flush()
+        self._last_len = 0
+
+
+def _prepare_snapshot_for_display(snapshot: dict) -> dict:
+    if not isinstance(snapshot, dict):
+        return {}
+    collaboration = snapshot.get("collaboration")
+    if not isinstance(collaboration, dict):
+        return snapshot
+    old_key = "contributors (commits, line changes, reviews)"
+    new_key = "contributors (commits, PRs, issues, reviews)"
+    if new_key in collaboration:
+        return snapshot
+    raw = collaboration.get(old_key)
+    if not isinstance(raw, dict):
+        return snapshot
+    normalized: dict[str, str] = {}
+    for author, values in raw.items():
+        commits = 0
+        reviews = 0
+        if isinstance(values, str):
+            try:
+                parts = [int(x.strip()) for x in values.strip("[]").split(",") if x.strip()]
+                if parts:
+                    commits = parts[0]
+                if len(parts) > 2:
+                    reviews = parts[2]
+            except Exception:
+                commits = 0
+                reviews = 0
+        elif isinstance(values, (list, tuple)):
+            if values:
+                commits = int(values[0])
+            if len(values) > 2:
+                reviews = int(values[2])
+        elif isinstance(values, dict):
+            commits = int(values.get("commits", 0))
+            reviews = int(values.get("reviews", 0))
+        normalized[author] = f"[{commits}, 0, 0, {reviews}]"
+    collaboration[new_key] = normalized
+    collaboration.pop(old_key, None)
+    return snapshot
+
 
 def _exit_app() -> None:
     print("\nGood luck with everything! Exiting application.")
@@ -95,17 +163,31 @@ def _parse_contrib_counts(data) -> tuple[int, int, int]:
         try:
             parts = [int(x.strip()) for x in data.strip("[]").split(",") if x.strip()]
             commits = parts[0] if len(parts) > 0 else 0
-            lines = parts[1] if len(parts) > 1 else 0
-            reviews = parts[2] if len(parts) > 2 else 0
+            if len(parts) >= 4:
+                lines = 0
+                reviews = parts[3]
+            else:
+                lines = parts[1] if len(parts) > 1 else 0
+                reviews = parts[2] if len(parts) > 2 else 0
             return commits, lines, reviews
         except Exception:
             return 0, 0, 0
     if isinstance(data, (list, tuple)):
         commits = int(data[0]) if len(data) > 0 else 0
-        lines = int(data[1]) if len(data) > 1 else 0
-        reviews = int(data[2]) if len(data) > 2 else 0
+        if len(data) >= 4:
+            lines = 0
+            reviews = int(data[3])
+        else:
+            lines = int(data[1]) if len(data) > 1 else 0
+            reviews = int(data[2]) if len(data) > 2 else 0
         return commits, lines, reviews
     if isinstance(data, dict):
+        if "pull_requests" in data or "issues" in data:
+            return (
+                int(data.get("commits", 0)),
+                0,
+                int(data.get("reviews", 0)),
+            )
         return (
             int(data.get("commits", 0)),
             int(data.get("lines", 0)),
@@ -121,7 +203,11 @@ def _print_zip_contributor_rankings(project_id: str) -> None:
         print("No contributor data found for this project.")
         return
     collaboration = snapshot.get("collaboration") or {}
-    contributors = collaboration.get("contributors (commits, line changes, reviews)", {}) or {}
+    contributors = (
+        collaboration.get("contributors (commits, PRs, issues, reviews)")
+        or collaboration.get("contributors (commits, line changes, reviews)")
+        or {}
+    )
     if not contributors:
         print("No contributor data found for this project.")
         return
@@ -181,11 +267,19 @@ def _contributor_menu(project_id: str) -> None:
                             store_github_source(conn, project_id, repo_url, token)
                     except Exception as exc:
                         print(f"Failed to save GitHub source: {exc}")
+                progress = _ProgressLine()
                 try:
-                    sync_contributor_stats(repo_url, token=token, project_id=project_id)
+                    sync_contributor_stats(
+                        repo_url,
+                        token=token,
+                        project_id=project_id,
+                        progress_cb=progress.update,
+                    )
                 except Exception as exc:
+                    progress.clear()
                     print(f"Failed to sync contributor stats: {exc}")
                 else:
+                    progress.clear()
                     print("Contributor stats synced.")
             elif choice == "2":
                 _print_contributor_rankings(project_id, "score")
@@ -501,6 +595,7 @@ def main():
     
     # main menu loop
     try:
+        forced_choice = None
         while True:
             print("\n" + "=" * 40)
             print("Main Menu")
@@ -518,8 +613,29 @@ def main():
             print("11. Contributor rankings (Quick Access)")
             print("12. Exit")
             print()
+            if not forced_choice:
+                print("\n" + "=" * 40)
+                print("Main Menu")
+                print("=" * 40)
+                print("1. Analyze new project archive (ZIP)")
+                print("2. Import from GitHub URL")
+                print("3. View all projects")
+                print("4. View project details")
+                print("5. Generate portfolio summary")
+                print("6. Generate resume preview")
+                print("7. View chronological project timeline")
+                print("8. View skills timeline")
+                print("9. Delete project insights")
+                print("10. Manage consent")
+                print("11. Contributor rankings (Quick Access)")
+                print("12. Exit")
+                print()
             while True:
-                choice = input("Please select an option (1-12): ").strip()
+                if forced_choice:
+                    choice = forced_choice
+                    forced_choice = None
+                else:
+                    choice = input("Please select an option (1-12): ").strip()
                 if choice in {str(i) for i in range(1, 13)}:
                     break
                 print("Invalid choice. Please enter a number between 1 and 12.")
@@ -579,16 +695,157 @@ def main():
                 if not token:
                     print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
                     continue
+                progress = _ProgressLine()
+                project_id = None
                 try:
                     owner, repo = parse_repo_url(repo_url)
                     project_id = f"{owner}/{repo}"
                     with _open_app_db() as conn:
                         store_github_source(conn, project_id, repo_url, token)
-                    sync_contributor_stats(repo_url, token=token)
+                    sync_contributor_stats(
+                        repo_url,
+                        token=token,
+                        progress_cb=progress.update,
+                    )
                 except Exception as exc:
+                    progress.clear()
                     print(f"Failed to import from GitHub: {exc}")
-                else:
-                    print("GitHub import completed.")
+                    continue
+                progress.clear()
+                print(f"GitHub import completed. (Project ID: {project_id})")
+                if not project_id:
+                    continue
+                while True:
+                    print()
+                    print(f"1. Analyze current project (ID: {project_id})")
+                    print("2. View all projects")
+                    print("3. Import more from GitHub URL")
+                    print("4. Back to main menu")
+                    follow = input("Please select an option (1-4): ").strip()
+                    if follow == "1":
+                        with _open_app_db() as conn:
+                            source = fetch_github_source(conn, project_id)
+                        repo_url = source.get("repo_url") if source else None
+                        token = source.get("token") if source else None
+                        if not repo_url:
+                            repo_url = input("Enter GitHub repository URL: ").strip()
+                        if not token:
+                            token = _prompt_github_token()
+                            if not token:
+                                print("GitHub token missing. Set GITHUB_TOKEN or enter one.")
+                                continue
+                        try:
+                            owner, repo = parse_repo_url(repo_url)
+                        except Exception as exc:
+                            print(f"Failed to parse repository URL: {exc}")
+                            continue
+
+                        zip_url = f"https://api.github.com/repos/{owner}/{repo}/zipball"
+                        headers = {
+                            "Accept": "application/vnd.github+json",
+                            "User-Agent": "capstone-analyzer",
+                        }
+                        if token:
+                            headers["Authorization"] = f"Bearer {token}"
+
+                        temp_path = None
+                        try:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_file:
+                                temp_path = Path(temp_file.name)
+                                req = urllib.request.Request(zip_url, headers=headers)
+                                with urllib.request.urlopen(req) as response:
+                                    while True:
+                                        chunk = response.read(1024 * 128)
+                                        if not chunk:
+                                            break
+                                        temp_file.write(chunk)
+
+                            archive_service = ArchiveAnalyzerService(ZipAnalyzer())
+                            archive_path, payload, _code = archive_service.validate_archive(str(temp_path))
+                            if payload:
+                                print(json.dumps(payload))
+                                continue
+
+                            consent = ensure_consent()
+                            config = load_config()
+                            mode = resolve_mode("local", consent)
+                            try:
+                                summary = archive_service.analyze(
+                                    zip_path=archive_path,
+                                    metadata_path=Path("analysis_output/metadata.jsonl"),
+                                    summary_path=Path("analysis_output/summary.json"),
+                                    mode=mode,
+                                    preferences=config.preferences,
+                                    project_id=project_id,
+                                    db_dir=ROOT / "data",
+                                )
+                            except ArchiveAnalysisError as exc:
+                                print(json.dumps(exc.payload))
+                                continue
+
+                            with _open_app_db() as conn:
+                                contributors = fetch_latest_contributor_stats(conn, project_id)
+                            if contributors:
+                                contributors_map = {
+                                    row["contributor"]: (
+                                        f"[{row['commits']}, {row['pull_requests']}, "
+                                        f"{row['issues']}, {row['reviews']}]"
+                                    )
+                                    for row in contributors
+                                }
+                                classification = "individual" if len(contributors) == 1 else "collaborative"
+                                primary = contributors[0]["contributor"]
+                                summary["collaboration"] = {
+                                    "classification": classification,
+                                    "contributors (commits, PRs, issues, reviews)": contributors_map,
+                                    "contribution_compute": (
+                                        "weightedScore = commits*0.30 + "
+                                        "pull_requests*0.25 + issues*0.25 + reviews*0.20"
+                                    ),
+                                    "primary_contributor": primary,
+                                    "source": "github_api",
+                                }
+                            else:
+                                summary["collaboration"] = {
+                                    "classification": "unknown",
+                                    "contributors (commits, PRs, issues, reviews)": {},
+                                    "primary_contributor": None,
+                                    "source": "github_api",
+                                }
+
+                            store = SnapshotStore(ROOT / "data")
+                            try:
+                                store.store_snapshot(
+                                    project_id=project_id,
+                                    classification=summary.get("collaboration", {}).get("classification", "unknown"),
+                                    primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
+                                    snapshot=summary,
+                                )
+                            finally:
+                                store.close()
+                            print("Project analysis completed and stored.")
+                        except urllib.error.HTTPError as exc:
+                            print(f"Failed to download GitHub archive: {exc}")
+                        except urllib.error.URLError as exc:
+                            print(f"Failed to reach GitHub: {exc}")
+                        finally:
+                            if temp_path and temp_path.exists():
+                                try:
+                                    temp_path.unlink()
+                                except Exception:
+                                    pass
+                    elif follow == "2":
+                        print()
+                        forced_choice = "3"
+                        break
+                    elif follow == "3":
+                        print()
+                        forced_choice = "2"
+                        break
+                    elif follow == "4":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 1 to 4.")
             elif choice == "3":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
@@ -615,7 +872,8 @@ def main():
                             if not project:
                                 print("Project not found.")
                             else:
-                                print(json.dumps(project, indent=4))
+                                snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
+                                print(json.dumps(snapshot, indent=4))
                         if project:
                             while True:
                                 print()
@@ -641,7 +899,8 @@ def main():
                     if not project:
                         print("Project not found.")
                     else:
-                        print(json.dumps(project, indent=4))
+                        snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
+                        print(json.dumps(snapshot, indent=4))
                 if project:
                     while True:
                         print()
