@@ -22,8 +22,8 @@ from capstone.consent import (
     prompt_for_consent,
     request_external_service_permission,
     revoke_consent,
+    ensure_or_prompt_consent
 )
-
 
 class ConsentFlowTestCase(unittest.TestCase):
     def setUp(self) -> None:
@@ -177,6 +177,42 @@ class ConsentFlowTestCase(unittest.TestCase):
         clear_external_permission("demo.service")
         prefs_after = config.load_config().preferences
         self.assertNotIn("demo.service", prefs_after.external_permissions)
+    
+    # tests previously saved consent (no prompt)
+    def test_ensure_or_prompt_consent_granted_existing(self) -> None:
+        grant_consent()
+            
+        with patch("builtins.input") as input_mock:
+            result = ensure_or_prompt_consent()
+                
+        self.assertEqual(result, "granted_existing")
+        input_mock.assert_not_called()
+    
+    # tests deny consent (n)
+    def test_ensure_or_prompt_consent_denied(self) -> None:
+        result = ensure_or_prompt_consent(input_fn=lambda _: "n", output_fn=lambda _: None)
+        
+        self.assertEqual(result, "denied")
+    
+    # tests grant consent for session but do not save (y + n)
+    def test_ensure_or_prompt_consent_session_only(self) -> None:
+        inputs = iter(["y", "n"])
+        result = ensure_or_prompt_consent(input_fn=lambda _: next(inputs), output_fn=lambda _: None)
+            
+        self.assertEqual(result, "sessions_only")
+        
+        state = config.load_config().consent
+        self.assertFalse(state.granted)
+    
+    # tests grant consent and save (y + y)
+    def test_ensure_or_prompt_consent_granted_new(self) -> None:
+        inputs = iter(["y", "y"])
+        result = ensure_or_prompt_consent(input_fn=lambda _: next(inputs), output_fn=lambda _: None)
+            
+        self.assertEqual(result, "granted_new")
+        
+        state = config.load_config().consent
+        self.assertTrue(state.granted)
 
 
 if __name__ == "__main__":

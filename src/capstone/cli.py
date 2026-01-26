@@ -1026,13 +1026,38 @@ def _handle_contributors(args: argparse.Namespace) -> int:
         if not token:
             print("GitHub token missing. Provide --token or set GITHUB_TOKEN.", file=sys.stderr)
             return 2
-        stats = sync_contributor_stats(
-            repo_url=args.repo_url,
-            token=token,
-            project_id=args.project_id,
-            db_dir=args.db_dir,
-            max_contributors=args.max_contributors,
-        )
+        progress_state = {"last_len": 0}
+
+        def _progress(message: str, current: int | None, total: int | None) -> None:
+            if not sys.stdout.isatty():
+                return
+            if current is not None and total is not None:
+                text = f"[github] {message} {current}/{total}..."
+            else:
+                text = f"[github] {message}..."
+            padded = text.ljust(progress_state["last_len"])
+            sys.stdout.write(f"\r{padded}")
+            sys.stdout.flush()
+            progress_state["last_len"] = len(text)
+
+        def _clear_progress() -> None:
+            if not sys.stdout.isatty() or not progress_state["last_len"]:
+                return
+            sys.stdout.write("\r" + (" " * progress_state["last_len"]) + "\r")
+            sys.stdout.flush()
+            progress_state["last_len"] = 0
+
+        try:
+            stats = sync_contributor_stats(
+                repo_url=args.repo_url,
+                token=token,
+                project_id=args.project_id,
+                db_dir=args.db_dir,
+                max_contributors=args.max_contributors,
+                progress_cb=_progress,
+            )
+        finally:
+            _clear_progress()
         for index, row in enumerate(stats, start=1):
             print(
                 f"{index}. {row.contributor} "
@@ -1239,7 +1264,13 @@ def _infer_repo_name(url: str) -> str:
     return name or "repository"
 
 
-def _clone_repository(url: str, *, branch: str | None, depth: int, dest_root: Path) -> Path:
+def _clone_repository(
+    url: str,
+    *,
+    branch: str | None,
+    depth: int,
+    dest_root: Path,
+) -> Path:
     repo_name = _infer_repo_name(url)
     target_dir = dest_root / repo_name
     cmd = ["git", "clone"]
@@ -1401,7 +1432,12 @@ def _handle_import_repo(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="capstone-import-") as temp_dir:
         temp_path = Path(temp_dir)
         try:
-            repo_path = _clone_repository(args.url, branch=args.branch, depth=args.depth or 0, dest_root=temp_path)
+            repo_path = _clone_repository(
+                args.url,
+                branch=args.branch,
+                depth=args.depth or 0,
+                dest_root=temp_path,
+            )
         except Exception as exc:
             print(f"[import-repo] Failed to clone repository: {exc}", file=sys.stderr)
             return 4
@@ -1416,6 +1452,7 @@ def _handle_import_repo(args: argparse.Namespace) -> int:
         _prune_repository(repo_path)
 
         try:
+            print("Packaging repository...")
             archive_path = Path(shutil.make_archive(str(temp_path / repo_path.name), "zip", root_dir=repo_path))
         except Exception as exc:
             print(f"[import-repo] Failed to package repository: {exc}", file=sys.stderr)
@@ -1617,44 +1654,61 @@ def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -
     collaboration = summary.get("collaboration", {})
     if collaboration:
         print("Collaboration classification:", collaboration.get("classification", "unknown"))
-        contributors = collaboration.get("contributors (commits, line changes, reviews)", {}) or {}
+        contributors = (
+            collaboration.get("contributors (commits, PRs, issues, reviews)")
+            or collaboration.get("contributors (commits, line changes, reviews)")
+            or {}
+        )
         if contributors:
             formula = collaboration.get(
                 "contribution_compute",
                 "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
             )
             print(f"Contribution formula: {formula}")
-            print("Contributors (commits, line changes, reviews):")
-            def _parse_counts(data) -> tuple[int, int, int]:
+            print("Contributors (commits, PRs, issues, reviews):")
+            def _parse_counts(data) -> tuple[int, int, int, int]:
                 if isinstance(data, str):
                     try:
                         parts = [int(x.strip()) for x in data.strip("[]").split(",") if x.strip()]
                         commits = parts[0] if len(parts) > 0 else 0
-                        lines = parts[1] if len(parts) > 1 else 0
-                        reviews = parts[2] if len(parts) > 2 else 0
-                        return commits, lines, reviews
+                        if len(parts) >= 4:
+                            prs = parts[1]
+                            issues = parts[2]
+                            reviews = parts[3]
+                        else:
+                            prs = 0
+                            issues = 0
+                            reviews = parts[2] if len(parts) > 2 else 0
+                        return commits, prs, issues, reviews
                     except Exception:
-                        return 0, 0, 0
+                        return 0, 0, 0, 0
                 if isinstance(data, (list, tuple)):
                     commits = int(data[0]) if len(data) > 0 else 0
-                    lines = int(data[1]) if len(data) > 1 else 0
-                    reviews = int(data[2]) if len(data) > 2 else 0
-                    return commits, lines, reviews
+                    if len(data) >= 4:
+                        prs = int(data[1])
+                        issues = int(data[2])
+                        reviews = int(data[3])
+                    else:
+                        prs = 0
+                        issues = 0
+                        reviews = int(data[2]) if len(data) > 2 else 0
+                    return commits, prs, issues, reviews
                 if isinstance(data, dict):
                     return (
                         int(data.get("commits", 0)),
-                        int(data.get("lines", 0)),
+                        int(data.get("pull_requests", data.get("prs", 0))),
+                        int(data.get("issues", 0)),
                         int(data.get("reviews", 0)),
                     )
-                return 0, 0, 0
+                return 0, 0, 0, 0
 
             sorted_items = sorted(
                 contributors.items(),
                 key=lambda item: (-_parse_counts(item[1])[0], item[0]),
             )
             for author, values in sorted_items:
-                commits, lines, reviews = _parse_counts(values)
-                print(f" - {author}: {commits}, {lines}, {reviews}")
+                commits, prs, issues, reviews = _parse_counts(values)
+                print(f" - {author}: {commits}, {prs}, {issues}, {reviews}")
     print(f"Scan duration: {summary.get('scan_duration_seconds', 0)} seconds")
 
 
@@ -1710,13 +1764,9 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
             print("No project analyses available to summarize.")
             return 0
 
-        # Minimal non-LLM path (your unit test only checks exit_code + calls)
-        if not getattr(args, "use_llm", False):
-            # print a tiny summary so CLI is still useful
-            keys = list(snapshots.keys())[: getattr(args, "limit", 5)]
-            for pid in keys:
-                print(f"- {pid}")
-            return 0
+        llm = None
+        if args.use_llm:
+            llm = build_default_llm()
 
         # Optional: LLM enriched summaries (only if enabled)
         llm = build_default_llm()

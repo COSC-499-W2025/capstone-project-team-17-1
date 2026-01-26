@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, Optional
 
 from .logging_utils import get_logger
 from .storage import (
@@ -156,8 +156,13 @@ def collect_contributor_stats(
     client: GitHubClient,
     weights: dict | None = None,
     max_contributors: int = 50,
+    progress_cb: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None,
 ) -> list[ContributorStats]:
+    if progress_cb:
+        progress_cb("Fetching contributor stats", None, None)
     stats_data = client.get_contributor_stats(owner, repo)
+    if progress_cb:
+        progress_cb("Fetching contributor list", None, None)
     contributors_data = client.get_contributors(owner, repo)
 
     stats_by_login: dict[str, ContributorStats] = {}
@@ -190,8 +195,11 @@ def collect_contributor_stats(
     if max_contributors and max_contributors > 0:
         ranked = ranked[:max_contributors]
 
-    for stats in ranked:
+    total = len(ranked)
+    for index, stats in enumerate(ranked, start=1):
         login = stats.contributor
+        if progress_cb:
+            progress_cb("Fetching contributor stats", index, total)
         stats.pull_requests = client.search_issues_count(
             f"repo:{owner}/{repo} type:pr assignee:{login} is:merged"
         )
@@ -223,6 +231,7 @@ def sync_contributor_stats(
     weights: dict | None = None,
     max_contributors: int = 50,
     client: GitHubClient | None = None,
+    progress_cb: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None,
 ) -> list[ContributorStats]:
     owner, repo = parse_repo_url(repo_url)
     resolved_project_id = project_id or f"{owner}/{repo}"
@@ -234,7 +243,10 @@ def sync_contributor_stats(
         client=client,
         weights=weights,
         max_contributors=max_contributors,
+        progress_cb=progress_cb,
     )
+    if progress_cb:
+        progress_cb("Saving contributor stats", None, None)
     conn = open_db(db_dir)
     for row in stats:
         store_contributor_stats(
