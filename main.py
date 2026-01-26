@@ -1366,9 +1366,63 @@ def main():
             elif choice == "8":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
-                    skills_timeline = _build_skills_timeline_rows(snapshots)
+
+                if not snapshots:
                     print("\nSkills Timeline\n----------------\n")
-                    print(_format_skills_timeline(skills_timeline))
+                    print("No projects found.")
+                    continue
+
+                sorted_projects = sorted(
+                    snapshots,
+                    key=lambda s: (str(s.get("project_id") or "")).lower(),
+                )
+                print("\nAvailable projects (latest snapshot per project):")
+                for idx, snap in enumerate(sorted_projects, start=1):
+                    snapshot_data = snap.get("snapshot") or {}
+                    label = snapshot_data.get("project_name") or snap.get("project_id") or f"Project {idx}"
+                    print(f"{idx}. {label} (ID: {snap.get('project_id')})")
+
+                selection: list[int] = []
+                while True:
+                    raw = input("Select projects by number (space-separated). Enter 0 to cancel: ").strip()
+                    if raw == "0":
+                        print("Cancelled.")
+                        selection = []
+                        break
+                    if not raw:
+                        print("Please enter at least one index, or 0 to cancel.")
+                        continue
+                    try:
+                        nums = [int(x) for x in raw.split() if x.strip()]
+                    except ValueError:
+                        print("Invalid input, use numeric indices separated by spaces.")
+                        continue
+                    if not nums:
+                        print("Please enter at least one index, or 0 to cancel.")
+                        continue
+                    if any(n <= 0 or n > len(sorted_projects) for n in nums):
+                        print(f"Indices must be in 1–{len(sorted_projects)}, or 0 to cancel.")
+                        continue
+                    selection = nums
+                    break
+
+                if not selection:
+                    continue
+
+                chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                skills_timeline = _build_skills_timeline_rows(chosen_snapshots)
+                print("\nSkills Timeline\n----------------\n")
+                print(_format_skills_timeline(skills_timeline))
+                while True:
+                    print("\n1. View another skill timeline")
+                    print("2. Back to main menu")
+                    follow = input("Select an option (1-2): ").strip()
+                    if follow == "1":
+                        forced_choice = "8"
+                        break
+                    if follow == "2":
+                        break
+                    print("Invalid choice. Please enter 1 or 2.")
             elif choice == "9":
                 project_id = input("Enter the project ID to delete insights: ").strip()
                 with _open_app_db() as conn:
