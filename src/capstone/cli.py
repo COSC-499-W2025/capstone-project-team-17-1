@@ -1763,9 +1763,6 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
 
         llm = None
         if args.use_llm:
-            # The issue says to call build_default_llm0 when enabled.
-            # If your project exposes a differently named builder, adjust this import.
-            from capstone.llm_client import build_default_llm
             llm = build_default_llm()
 
         summaries = generate_top_project_summaries(

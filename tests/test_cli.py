@@ -301,6 +301,28 @@ class CLITestCase(unittest.TestCase):
         self.assertEqual(parsed[0]["title"], "Top Project")
         self.assertEqual(parsed[0]["score"], 0.9)
 
+    def test_print_human_summary_contributor_label(self) -> None:
+        summary = {
+            "resolved_mode": "local",
+            "metadata_output": "meta.jsonl",
+            "file_summary": {"file_count": 1, "total_bytes": 10},
+            "languages": {"Python": 1},
+            "frameworks": [],
+            "collaboration": {
+                "classification": "collaborative",
+                "contributors (commits, PRs, issues, reviews)": {
+                    "alice": "[3, 1, 2, 4]"
+                },
+            },
+            "scan_duration_seconds": 0.1,
+        }
+        args = SimpleNamespace(summary_output="summary.json", quiet=False)
+        with patch("sys.stdout", new_callable=io.StringIO) as fake_out:
+            cli._print_human_summary(summary, args)
+        output = fake_out.getvalue()
+        self.assertIn("Contributors (commits, PRs, issues, reviews):", output)
+        self.assertIn(" - alice: 3, 1, 2, 4", output)
+
 
 if __name__ == "__main__":
     unittest.main()
