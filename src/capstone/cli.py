@@ -1652,44 +1652,61 @@ def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -
     collaboration = summary.get("collaboration", {})
     if collaboration:
         print("Collaboration classification:", collaboration.get("classification", "unknown"))
-        contributors = collaboration.get("contributors (commits, line changes, reviews)", {}) or {}
+        contributors = (
+            collaboration.get("contributors (commits, PRs, issues, reviews)")
+            or collaboration.get("contributors (commits, line changes, reviews)")
+            or {}
+        )
         if contributors:
             formula = collaboration.get(
                 "contribution_compute",
                 "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
             )
             print(f"Contribution formula: {formula}")
-            print("Contributors (commits, line changes, reviews):")
-            def _parse_counts(data) -> tuple[int, int, int]:
+            print("Contributors (commits, PRs, issues, reviews):")
+            def _parse_counts(data) -> tuple[int, int, int, int]:
                 if isinstance(data, str):
                     try:
                         parts = [int(x.strip()) for x in data.strip("[]").split(",") if x.strip()]
                         commits = parts[0] if len(parts) > 0 else 0
-                        lines = parts[1] if len(parts) > 1 else 0
-                        reviews = parts[2] if len(parts) > 2 else 0
-                        return commits, lines, reviews
+                        if len(parts) >= 4:
+                            prs = parts[1]
+                            issues = parts[2]
+                            reviews = parts[3]
+                        else:
+                            prs = 0
+                            issues = 0
+                            reviews = parts[2] if len(parts) > 2 else 0
+                        return commits, prs, issues, reviews
                     except Exception:
-                        return 0, 0, 0
+                        return 0, 0, 0, 0
                 if isinstance(data, (list, tuple)):
                     commits = int(data[0]) if len(data) > 0 else 0
-                    lines = int(data[1]) if len(data) > 1 else 0
-                    reviews = int(data[2]) if len(data) > 2 else 0
-                    return commits, lines, reviews
+                    if len(data) >= 4:
+                        prs = int(data[1])
+                        issues = int(data[2])
+                        reviews = int(data[3])
+                    else:
+                        prs = 0
+                        issues = 0
+                        reviews = int(data[2]) if len(data) > 2 else 0
+                    return commits, prs, issues, reviews
                 if isinstance(data, dict):
                     return (
                         int(data.get("commits", 0)),
-                        int(data.get("lines", 0)),
+                        int(data.get("pull_requests", data.get("prs", 0))),
+                        int(data.get("issues", 0)),
                         int(data.get("reviews", 0)),
                     )
-                return 0, 0, 0
+                return 0, 0, 0, 0
 
             sorted_items = sorted(
                 contributors.items(),
                 key=lambda item: (-_parse_counts(item[1])[0], item[0]),
             )
             for author, values in sorted_items:
-                commits, lines, reviews = _parse_counts(values)
-                print(f" - {author}: {commits}, {lines}, {reviews}")
+                commits, prs, issues, reviews = _parse_counts(values)
+                print(f" - {author}: {commits}, {prs}, {issues}, {reviews}")
     print(f"Scan duration: {summary.get('scan_duration_seconds', 0)} seconds")
 
 
