@@ -13,11 +13,14 @@ try:
         open_db as _open_db,
         close_db as _close_db,
         fetch_latest_snapshot as _fetch_latest_snapshot,
+        fetch_latest_snapshots_for_projects as _fetch_latest_snapshots_for_projects,
     )
 except Exception:
     _open_db = None
     _close_db = None
     _fetch_latest_snapshot = None
+    _fetch_latest_snapshots_for_projects = None
+
 
 from .resume_retrieval import (
     build_resume_preview,
@@ -581,29 +584,44 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             )
 
         return jsonify({"data": item.to_dict(), "error": None}), 201
-
     @app.post("/resume-projects/generate")
     def resume_projects_generate():
         payload = request.get_json(silent=True) or {}
         project_ids = payload.get("projectIds") or payload.get("project_ids") or payload.get("projectId")
         overwrite = bool(payload.get("overwrite", False))
+
         if isinstance(project_ids, str):
             project_ids = [project_ids]
+
         if not project_ids or not isinstance(project_ids, list):
             return jsonify({"data": None, "error": {"code": "BadRequest", "detail": "projectIds is required"}}), 400
+
+        ids = [str(pid) for pid in project_ids]
+
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
+
+        # use one DB query to check existence (no N+1)
+        if _fetch_latest_snapshots_for_projects is not None:
+            latest_map = _fetch_latest_snapshots_for_projects(c, ids)
+            missing = [pid for pid, snap in latest_map.items() if snap is None]
+        else:
             missing = []
-            for pid in project_ids:
-                if get_latest_snapshot(c, str(pid)) is None:
+            for pid in ids:
+                if get_latest_snapshot(c, pid) is None:
                     missing.append(pid)
-            if missing:
-                return jsonify({"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}), 404
-            items = generate_resume_project_descriptions(
-                c,
-                project_ids=[str(pid) for pid in project_ids],
-                overwrite=overwrite,
-            )
+
+        if missing:
+            return jsonify(
+                {"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}
+            ), 404
+
+        items = generate_resume_project_descriptions(
+            c,
+            project_ids=ids,
+            overwrite=overwrite,
+        )
+
         payload = [item.to_dict() for item in items]
         return jsonify({"data": payload, "meta": {"total": len(payload)}, "error": None})
 
