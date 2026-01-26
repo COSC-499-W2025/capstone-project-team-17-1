@@ -14,6 +14,7 @@
 - [Week 14 Personal Log](#week-14-personal-log)
 - [Term 2 Week 1 Personal Log](#term-2-week-1-personal-log)
 - [Term 2 Week 2 Personal Log](#term-2-week-2-personal-log)
+- [Term 2 Week 3 Personal Log](#term-2-week-3-personal-log)
 
 ---
 
@@ -767,4 +768,194 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 <img width="1112" height="644" alt="T2WEEK2PEEREVAL" src="https://github.com/user-attachments/assets/5d44900c-67dd-40b1-938e-cdad81ed7b6c" />
 
 ---
+### TERM 2 WEEK 3 PERSONAL LOG
+
+### 1) Repo / Setup
+
+* Worked in repo: `capstone-project-team-17-1`
+* Ran tests with:
+
+  * `PYTHONPATH=src pytest ...`
+* Note: on macOS, `python` wasn’t available → used `python3` for quick manual runs.
+
+---
+
+## A) Storage + CLI snapshot work (Latest snapshot helper)
+
+### Goal (what problem this solves)
+
+* Needed a clean way to fetch the **latest snapshot per project** without doing slow / repeated queries.
+* Prevents the **N+1 query** problem (looping project IDs and querying DB one by one).
+
+### What I implemented
+
+**1. New storage helper**
+
+* File: `src/capstone/storage.py`
+* Added: `fetch_latest_snapshots_for_projects(conn, project_ids)`
+* Behavior:
+
+  * Input: a DB connection + list of project IDs
+  * Output: a map/dict like:
+
+    ```python
+    {
+      "project-a": { ... latest snapshot row ... },
+      "project-b": { ... latest snapshot row ... },
+    }
+    ```
+  * Uses **one SQL query** to:
+
+    * Find latest `created_at` per `project_id`
+    * Join back to get the full snapshot row
+  * Handles edge cases:
+
+    * empty project_ids → returns `{}` immediately
+    * filters out blank IDs
+
+**2. Wired it into the app**
+
+* Files touched:
+
+  * `src/capstone/portfolio_retrieval.py` (and possibly `src/capstone/cli.py`)
+* Updated code so endpoints/flows that need “latest snapshot for these projects” call the new helper instead of doing repeated reads.
+
+### Testing + verification
+
+* Updated / made test resilient to CLI behavior:
+
+  * File: `tests/test_summarize_top_projects.py`
+  * Instead of asserting internal helper calls that don’t exist / may change, it:
+
+    * patches DB open/close + fetch
+    * captures `stdout`
+    * asserts the no-LLM path prints the expected project IDs
+* Confirmed the test passes locally.
+
+### Notes / housekeeping
+
+* Two local files showed up in git changes during testing:
+
+  * `config/user_config.json`
+  * `data/capstone.db`
+* These are **local artifacts** and usually should not be committed unless the project expects them tracked.
+
+---
+
+## B) Issue #138 — User Role Representation (Project Insight prompt)
+
+### Goal
+
+* When generating a “project insight” prompt, the system should clearly indicate:
+
+  * is the requesting user the **primary contributor**?
+  * a **collaborator**?
+  * or **unknown**?
+* This is based only on metadata already present in the snapshot.
+
+### What I implemented
+
+**1. Added a role inference function**
+
+* File: `src/capstone/project_insight.py`
+* Added: `_infer_user_role(snapshot, user)`
+* Logic (simple and deterministic):
+
+  1. If `user` is missing → `"unknown"`
+  2. If snapshot has `collaboration.primary_contributor`:
+
+     * if matches user (case-insensitive) → `"primary_contributor"`
+     * else → `"collaborator"` (because if a primary exists and it isn’t you, you’re not the owner)
+  3. Else fallback checks (only if fields exist):
+
+     * if user appears in `collaboration.contributors` keys → `"collaborator"`
+     * if user appears in `collaboration.coauthors` (handles dict/list shapes) → `"collaborator"`
+  4. Otherwise → `"unknown"`
+
+**2. Extended prompt builder**
+
+* File: `src/capstone/project_insight.py`
+* Updated: `build_project_insight_prompt(...)`
+
+  * Added a new optional param: `user: Optional[str] = None`
+  * Now prompt includes a line like:
+
+    * `- Requesting user's role: primary_contributor`
+    * `- Requesting user's role: collaborator`
+    * `- Requesting user's role: unknown`
+
+### Testing + verification
+
+**Unit test added/updated**
+
+* File: `tests/test_project_insight.py`
+* Checks:
+
+  * prompt contains “Requesting user's role”
+  * prompt contains `primary_contributor` when user matches primary contributor
+  * prompt contains `collaborator` when user != primary contributor (with contributors data)
+
+**Command run**
+
+* `PYTHONPATH=src pytest -q tests/test_project_insight.py`
+
+**Manual demo (CLI-less sanity check)**
+
+* Ran:
+
+  ```bash
+  PYTHONPATH=src python3 -c "
+  from capstone.project_insight import build_project_insight_prompt
+  snap={'collaboration':{'primary_contributor':'Alice','contributors':{'Alice':3,'Bob':1}},
+        'file_summary':{'active_days':3},
+        'languages':{'Python':10},
+        'frameworks':['Flask']}
+  print(build_project_insight_prompt(snap,'What did I do?',user='Bob'))
+  "
+  ```
+* Output showed:
+
+  * Primary contributor: Alice
+  * Requesting user's role: collaborator ✅
+
+---
+
+## C) Git / Workflow actions
+
+* Synced with develop:
+
+  * `git checkout develop`
+  * `git pull`
+* Created branch for Issue #138 work:
+
+  * `git checkout -b feature/user-role-representation`
+* Confirmed changes staged are only:
+
+  * `src/capstone/project_insight.py`
+  * `tests/test_project_insight.py`
+
+---
+
+## What I’m NOT doing today (planned)
+
+### Issue #140 — Project Image Association
+
+* Tomorrow I’ll implement:
+
+  * endpoint(s) to attach an image thumbnail to a project
+  * storage layer to store/retrieve image metadata
+  * tests for these endpoints using Flask test client (no real server)
+
+---
+
+## Deliverables summary (what I can tell prof/team)
+
+✅ Added a new DB helper to fetch latest snapshots for a set of project IDs in **one query**.
+✅ Updated CLI test to be stable and assert real output behavior.
+✅ Implemented Issue #138: project insight prompt now includes requesting user role (primary/collab/unknown).
+✅ Added unit tests + manual demo + verified passing with pytest.
+<img width="1140" height="619" alt="T2WEEK3PEEREVAL" src="https://github.com/user-attachments/assets/ff2d0f7b-cf35-4e9a-abf0-1d49e435d915" />
+
+---
+
 
