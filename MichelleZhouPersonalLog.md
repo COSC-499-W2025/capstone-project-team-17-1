@@ -246,7 +246,7 @@ Worked on creating a start up menu for the user to navigate with upon running th
 
 <img width="967" height="566" alt="image" src="https://github.com/user-attachments/assets/42266e56-1b77-4700-aca2-324e76ea68eb" />
 
-###Weekly Recap:
+### Weekly Recap:
 This week continued from last week's start up manu work by integrating all the underlying milestone features reliably. I focused on connecting the menu to existing modules, fixing integration issues caused by inconsistent snapshot data, and writing tests so future changes do not break basic navigation.
 
 Coding tasks
@@ -258,7 +258,7 @@ I debugged several runtime issues triggered by menu execution where functions ex
 Reviewing or collaboration tasks
 I helped review teammate prs for milestone 2 changes which includes success endpoints and resume textual display logic. I helped test new implementations and worked on adding additional tests which achieved better coverage for niche scenarios such as more consistent outputs even when input parameters may be missing.
 
-###Additionally:
+### Additionally:
 The primary blocked for this week was inconsistent snapshot schemas across the pipeline. This caused issues in both ranking and timeline utilities when called through the menu. I addressed this with normalization and correct data shaping prior to passing inputs to shared functions. Next week I plan to fully finalize the start menu in preparation for peer testing. I will also work on implementing milestone 2 features with the rest of the team.
 
 
@@ -268,7 +268,7 @@ The primary blocked for this week was inconsistent snapshot schemas across the p
 
 <img width="972" height="571" alt="image" src="https://github.com/user-attachments/assets/0c530656-2fa9-4d0c-b57b-f25d12c6f651" />
 
-###Weekly Recap:
+### Weekly Recap:
 This week built directly on last week's integration work by flushing out user facing flows and improving reliability across multiple core features. The focus shifted from just connecting features to making them correct, explicit, and user friendly. Several edge cases surfaced once features were tested through the menu which let to massive refinements in both logic and test coverage. In parallel, the team and I were preparing for the upcoming peer testing by designing a clear evaluation flow and participant guidance.
 
 Coding tasks
@@ -280,6 +280,6 @@ A significant portion of this week was spent debugging consent related edge case
 Reviewing or collaboration tasks
 I reviewed and tested teammate PRs by providing feedback on usability, code reuse, and test alignment. I helped validate that new features behaved correctly when invoked through the menu rather than in isolation. 
 
-###Additionally:
+### Additionally:
 This week's main blocker was the interaction between persisted configuration state and test isolation. This was resolved by redirecting congif and log paths to temporary directories during tests and avoiding implicit stdin reads. Next week, I will focus on implementing Resume Textual Display task #179. This will include generating resume ready project entries containing relevant details. The goal is to ensure the content is professionally formatted and suitable for direct inclusion in a resume while integrating cleanly with existing snapshot and resume pipelines.
 
