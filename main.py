@@ -13,7 +13,7 @@ from capstone.cli import main
 from capstone.company_profile import build_company_resume_lines
 from capstone.company_qualities import extract_company_qualities
 from capstone.config import load_config, reset_config
-from capstone.consent import ensure_consent, grant_consent
+from capstone.consent import ensure_consent, grant_consent, ensure_or_prompt_consent
 from capstone.github_contributors import get_contributor_rankings, parse_repo_url, sync_contributor_stats
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.modes import resolve_mode
@@ -223,9 +223,9 @@ def main():
     print("=" * 60)
     print()
     
-    if not grant_consent():
+    if not ensure_or_prompt_consent():
         print("Consent is required to proceed. Exiting application.")
-        print("Please run program again and provide consent to continue.")
+        print("Please run program again and grant consent to continue.")
         return
     print("\n Consent granted. Proceeding with analysis...\n")
     

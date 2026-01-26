@@ -55,6 +55,27 @@ def ensure_consent(require_granted: bool = True) -> ConsentState:
         )
     return consent
 
+def ensure_or_prompt_consent(
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> bool:
+    config = load_config()
+    consent = config.consent
+    
+    if consent.granted:
+        return True
+    
+    output_fn("This application processes and stores your project data.")
+    output_fn("Your consent is required to proceed.")
+    
+    user_decision = prompt_for_consent(input_fn=input_fn, output_fn=output_fn)
+    
+    if user_decision == "y":
+        grant_consent("allow")
+        return True
+    else:
+        revoke_consent("deny")
+        return False
 
 def grant_consent(decision: str = "allow") -> Config:
     return update_consent(granted=decision in _ALLOW_DECISIONS, decision=decision, source="cli")
