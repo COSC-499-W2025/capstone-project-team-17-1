@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import cli  # noqa: E402
+import main as app_main  # noqa: E402
 from capstone.consent import ExternalPermissionDenied  # noqa: E402
 from capstone.modes import ModeResolution  # noqa: E402
 
@@ -300,6 +301,131 @@ class CLITestCase(unittest.TestCase):
         self.assertIsInstance(parsed, list)
         self.assertEqual(parsed[0]["title"], "Top Project")
         self.assertEqual(parsed[0]["score"], 0.9)
+
+    def test_print_human_summary_contributor_label(self) -> None:
+        summary = {
+            "resolved_mode": "local",
+            "metadata_output": "meta.jsonl",
+            "file_summary": {"file_count": 1, "total_bytes": 10},
+            "languages": {"Python": 1},
+            "frameworks": [],
+            "collaboration": {
+                "classification": "collaborative",
+                "contributors (commits, PRs, issues, reviews)": {
+                    "alice": "[3, 1, 2, 4]"
+                },
+            },
+            "scan_duration_seconds": 0.1,
+        }
+        args = SimpleNamespace(summary_output="summary.json", quiet=False)
+        with patch("sys.stdout", new_callable=io.StringIO) as fake_out:
+            cli._print_human_summary(summary, args)
+        output = fake_out.getvalue()
+        self.assertIn("Contributors (commits, PRs, issues, reviews):", output)
+        self.assertIn(" - alice: 3, 1, 2, 4", output)
+
+    def test_github_url_analysis_uses_zip_and_github_contributors(self) -> None:
+        inputs = iter(
+            [
+                "2",  # main menu: import from GitHub URL
+                "https://github.com/org/repo",  # repo URL
+                "ghp_testtoken",  # token
+                "1",  # submenu: analyze current project
+                "4",  # submenu: back to main menu
+                "12",  # exit
+            ]
+        )
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self, _size=-1):
+                return b""
+
+        class DummyCtx:
+            def __enter__(self):
+                return object()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        captured = {}
+
+        class FakeArchiveService:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def validate_archive(self, archive_arg):
+                return Path(archive_arg), None, 0
+
+            def analyze(
+                self,
+                *,
+                zip_path,
+                metadata_path,
+                summary_path,
+                mode,
+                preferences,
+                project_id,
+                db_dir,
+            ):
+                captured["analyze_called"] = True
+                return {
+                    "collaboration": {
+                        "classification": "unknown",
+                        "primary_contributor": None,
+                    }
+                }
+
+        class FakeStore:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def store_snapshot(self, **kwargs):
+                captured["snapshot"] = kwargs.get("snapshot")
+
+            def close(self):
+                pass
+
+        fake_contributors = [
+            {
+                "contributor": "alice",
+                "commits": 3,
+                "pull_requests": 1,
+                "issues": 2,
+                "reviews": 4,
+            }
+        ]
+
+        with patch("builtins.input", side_effect=lambda _prompt="": next(inputs)), \
+            patch.object(app_main, "grant_consent", return_value=True), \
+            patch.object(app_main, "_open_app_db", return_value=DummyCtx()), \
+            patch.object(app_main, "store_github_source"), \
+            patch.object(app_main, "sync_contributor_stats"), \
+            patch.object(app_main, "fetch_github_source", return_value={"repo_url": "https://github.com/org/repo", "token": "ghp_testtoken"}), \
+            patch.object(app_main, "fetch_latest_contributor_stats", return_value=fake_contributors), \
+            patch.object(app_main, "ensure_consent", return_value=SimpleNamespace(granted=True, decision="allow")), \
+            patch.object(app_main, "load_config", return_value=SimpleNamespace(preferences=SimpleNamespace(labels={"local_mode": "Local Analysis Mode"}))), \
+            patch.object(app_main, "resolve_mode", return_value=ModeResolution(requested="local", resolved="local", reason="Local analysis enforced")), \
+            patch.object(app_main, "ArchiveAnalyzerService", FakeArchiveService), \
+            patch.object(app_main, "SnapshotStore", FakeStore), \
+            patch.object(app_main.urllib.request, "urlopen", return_value=DummyResponse()):
+            with self.assertRaises(SystemExit):
+                app_main.main()
+
+        self.assertTrue(captured.get("analyze_called"))
+        collaboration = captured["snapshot"]["collaboration"]
+        self.assertEqual(collaboration["classification"], "individual")
+        self.assertEqual(collaboration["primary_contributor"], "alice")
+        self.assertIn("contributors (commits, PRs, issues, reviews)", collaboration)
+        self.assertEqual(
+            collaboration["contributors (commits, PRs, issues, reviews)"]["alice"],
+            "[3, 1, 2, 4]",
+        )
 
 
 if __name__ == "__main__":

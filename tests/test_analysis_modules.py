@@ -20,6 +20,7 @@ from capstone.collaboration import analyze_git_logs  # noqa: E402
 from capstone.collaboration_analysis import (  # noqa: E402
     build_collaboration_analysis,
     collect_git_contributions,
+    compact_contributors,
     format_analysis_as_csv,
 )
 from capstone.metrics import FileMetric, compute_metrics  # noqa: E402
@@ -93,6 +94,17 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(summary["classification"], "collaborative")
         self.assertEqual(summary["primary_contributor"], "Bob")
 
+    def test_compact_contributors_accepts_prs_issues_format(self) -> None:
+        collaboration = {
+            "contributors (commits, PRs, issues, reviews)": {
+                "alice": "[3, 2, 1, 4]",
+                "bob": [5, 1, 0, 2],
+            }
+        }
+        parsed = compact_contributors(collaboration)
+        self.assertEqual(parsed["alice"], 3)
+        self.assertEqual(parsed["bob"], 5)
+
 
 class MetricsTests(unittest.TestCase):
     def test_compute_metrics_summary(self) -> None:
@@ -154,7 +166,7 @@ class AdvancedCollaborationAnalysisTests(unittest.TestCase):
         analysis = build_collaboration_analysis(self._sample_entries(), main_user="Alice")
         self.assertEqual(analysis.classification, "collaborative")
         self.assertEqual(analysis.primary_contributor, "Alice")
-        self.assertIn("Alice", analysis.coauthors)
+        self.assertTrue(any("Alice" in names for names in analysis.coauthors.values()))
         self.assertIn("csv", analysis.exports)
         csv_output = analysis.exports["csv"]
         self.assertIn("Alice", csv_output)

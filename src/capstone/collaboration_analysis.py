@@ -332,7 +332,11 @@ def to_compact_collaboration(analysis: ContributionSummary) -> dict[str, object]
 def compact_contributors(collaboration: dict[str, object]) -> Dict[str, int]:
     """Extract commit counts from compact collaboration payload."""
 
-    raw = collaboration.get("contributors (commits, line changes, reviews)", {})
+    raw = (
+        collaboration.get("contributors (commits, PRs, issues, reviews)")
+        or collaboration.get("contributors (commits, line changes, reviews)")
+        or {}
+    )
     if not isinstance(raw, dict):
         return {}
     parsed: Dict[str, int] = {}
