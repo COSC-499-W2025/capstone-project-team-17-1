@@ -11,6 +11,7 @@ from typing import Optional
 
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
+from typing import Iterable
 
 
 logger = get_logger(__name__)
@@ -549,6 +550,50 @@ def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -
         )
     return payload
 
+def fetch_latest_snapshots_for_projects(
+    conn: sqlite3.Connection,
+    project_ids: Iterable[str],
+) -> dict[str, dict | None]:
+    """
+    Return {project_id: latest_snapshot_dict_or_None} for ONLY the given project_ids.
+    One SQL query (no N+1).
+    """
+    ids = [str(pid) for pid in project_ids if pid]
+    if not ids:
+        return {}
+
+    placeholders = ",".join(["?"] * len(ids))
+
+    rows = conn.execute(
+        f"""
+        WITH latest_time AS (
+            SELECT project_id, MAX(created_at) AS created_at
+            FROM project_analysis
+            WHERE project_id IN ({placeholders})
+            GROUP BY project_id
+        ),
+        latest_row AS (
+            SELECT pa.project_id, MAX(pa.id) AS id
+            FROM project_analysis pa
+            JOIN latest_time lt
+              ON lt.project_id = pa.project_id
+             AND lt.created_at = pa.created_at
+            GROUP BY pa.project_id
+        )
+        SELECT pa.project_id, pa.snapshot
+        FROM project_analysis pa
+        JOIN latest_row lr ON lr.id = pa.id
+        """,
+        ids,
+    ).fetchall()
+
+    out: dict[str, dict | None] = {pid: None for pid in ids}
+    for pid, snap_json in rows:
+        try:
+            out[pid] = json.loads(snap_json)
+        except Exception:
+            out[pid] = {}
+    return out
 
 
 def backup_database(conn: sqlite3.Connection, destination: Path) -> Path:
@@ -599,6 +644,7 @@ __all__ = [
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
+    "fetch_latest_snapshots_for_projects",
     "store_github_source",
     "fetch_github_source",
     "store_contributor_stats",
