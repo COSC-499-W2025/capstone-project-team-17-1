@@ -1005,8 +1005,25 @@ def main():
                     print(_format_resume_preview(resume_preview))
 
                     if project_ids:
-                        action = _prompt_menu("Preview Options", ["Customize", "Back to main menu"])
+                        action = _prompt_menu(
+                        "Preview Options",
+                        ["Auto-generate resume", "Customize", "Back to main menu"]
+                        )
                         if action == "1":
+                            # Auto-generate resume entries and show final result
+                            with _open_app_db() as conn:
+                                generate_resume_project_descriptions(
+                                    conn,
+                                    project_ids=project_ids,
+                                    overwrite=True,
+                                )
+                                refreshed = query_resume_entries(conn)
+                                resume_preview = build_resume_preview(refreshed, conn=conn)
+
+                            print("\nAuto-Generated Resume:\n")
+                            print(_format_resume_preview(resume_preview))
+                            continue
+                        if action == "2":
                             while True:
                                 entry_map = _build_entry_target_map(resume_preview)
                                 if not entry_map:
