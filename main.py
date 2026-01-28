@@ -678,29 +678,13 @@ def main():
             print("5.  Generate portfolio summary")
             print("6.  Generate resume preview")
             print("7.  View chronological project timeline")
-            print("8.  View skills timeline")
+            print("8.  View chronological skills timeline")
             print("9.  Delete project insights")
             print("10. Manage consent")
             print("11. Contributor rankings (Quick Access)")
             print("12. Exit")
             print()
-            if not forced_choice:
-                print("\n" + "=" * 40)
-                print("Main Menu")
-                print("=" * 40)
-                print("1. Analyze new project archive (ZIP)")
-                print("2. Import from GitHub URL")
-                print("3. View all projects")
-                print("4. View project details")
-                print("5. Generate portfolio summary")
-                print("6. Generate resume preview")
-                print("7. View chronological project timeline")
-                print("8. View chronological skill timeline")
-                print("9. Delete project insights")
-                print("10. Manage consent")
-                print("11. Contributor rankings (Quick Access)")
-                print("12. Exit")
-                print()
+
             while True:
                 if forced_choice:
                     choice = forced_choice
@@ -749,7 +733,7 @@ def main():
                 finally:
                     store.close()
                 with _open_app_db() as conn:
-                    make_entry = _prompt_choice("Create a resume entry for this project? (y/n): ", ["y", "n"])
+                    make_entry = _prompt_choice("Do you want to begin processing this zip file? (y/n): ", ["y", "n"])
                     if make_entry == "y":
                         project_id = summary.get("project_id") or Path(zip_path).stem
                         insert_resume_entry(
