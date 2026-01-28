@@ -251,7 +251,6 @@ def _coverage(jd_terms: List[str], project_terms: List[str]) -> tuple[float, Lis
     cov = len(matched) / len(jd_terms)
     return cov, matched
 
-
 def _recency_factor(recency_days: Optional[float], half_life_days: float = 365.0) -> float:
     """
     Map recency (days since last activity) to [0, 1].

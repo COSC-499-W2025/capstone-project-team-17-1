@@ -54,6 +54,14 @@ from capstone.top_project_summaries import (
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
 
+from capstone.job_matching import (
+    build_jd_profile,
+    rank_projects_for_job,
+    match_job_to_project,
+    build_resume_snippet,
+    matches_to_json
+)
+
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -569,6 +577,128 @@ def _build_entry_target_map(preview: dict) -> dict[str, str]:
                 targets[entry_id] = f"{title}{period}"
     return targets
 
+# helper for loading snapshot from db
+def _snapshot_from_db_row(row: dict) -> dict:
+    raw = row.get("snapshot")
+    
+    if isinstance(raw, str):
+        try:
+            snapshot = json.loads(raw)
+        except Exception:
+            snapshot = {}
+    elif isinstance(raw, dict):
+        snap = dict(raw)
+    else:
+        snap = {}
+        
+    pid = (
+        row.get("project_id")
+        or snap.get("project_id")
+        or snap.get("projectId")
+        or snap.get("project_name")
+        or snap.get("name")
+        or f"row_{row.get('id', 'unknown')}"
+    )
+    snap.setdefault("project_id", str(pid))
+    
+    metrics = snap.get("metrics")
+    if not isinstance(metrics, dict):
+        snap["metrics"] = {}
+        
+    return snap
+
+def _read_job_description_text() -> str | None:
+    mode = input("Type 1 to paste job description, or 2 to load from a file path: ").strip()
+    
+    if mode == "1":
+        print("\nPlease paste the job description text below. End with an empty line:\n")
+        lines = []
+        while True:
+            line = input()
+            if not line.strip():
+                break
+            lines.append(line)
+        text = "\n".join(lines).strip()
+        return text if text else None
+    
+    if mode == "2":
+        path = input("Please enter the job description text file path: ").strip()
+        if not path or not os.path.isfile(path):
+            print("Invalid file path :(")
+            return None
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read().strip()
+        return text if text else None
+    
+    print("Invalid choice")
+    return None
+
+def _job_match_menu() -> None:
+    print("\n" + "=" * 40)
+    print("Job Match")
+    print("=" * 40)
+    
+    jd_text = _read_job_description_text()
+    if not jd_text:
+        print("No job description was provided.")
+        return
+    
+    mode = input("Type 1 to rank all projects, or 2 to compare a project: ").strip()
+    
+    db_dir = ROOT / "data"
+    
+    if mode == "2":
+        project_id = input("Please enter the project id: ").strip()
+        if not project_id:
+            print("No project id provided.")
+            return
+        result = match_job_to_project(jd_text, project_id, db_dir=db_dir)
+        print("\n" + build_resume_snippet(result))
+        return
+    
+    with _open_app_db() as conn:
+        rows = fetch_latest_snapshots(conn)
+        
+    if not rows:
+        print("No projects found. Please import and analyze a project first!")
+        return
+    
+    snapshots = [_snapshot_from_db_row(r) for r in rows]
+    jd_profile = build_jd_profile(jd_text)
+    ranked = rank_projects_for_job(jd_profile, snapshots)
+    
+    if not ranked:
+        print("Sorry, no ranking results available.")
+        return
+    
+    try:
+        limit = int(input("How many results to show (default 5): ").strip() or "5")
+    except ValueError:
+        limit = 5
+    limit = max(1, limit)
+    
+    print("\nTop matches: ")
+    for i, m in enumerate(ranked[:limit], 1):
+        print(
+            f"{i}. {m.project_id} "
+            f"score={m.score:.3f} "
+            f"required={m.required_coverage:.2f} "
+            f"preferred={m.preferred_coverage:.2f} "
+            f"recency={m.recency_factor:.2f}"
+        )
+    
+    save = input("\nSave results to JSON file (y or n): ").strip().lower()
+    if save == "y":
+        out_path = input("Output path (default analysis_output/job_match.json): ").strip() or "analysis_output/job_match.json"
+        out_dir = os.path.dirname(out_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        payload = matches_to_json(ranked[:limit])
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        print(f"Saved to {out_path}")
+           
+
 def main():
     # main entry point for user
     print("=" * 60)
@@ -611,34 +741,36 @@ def main():
             print("9.  Delete project insights")
             print("10. Manage consent")
             print("11. Contributor rankings (Quick Access)")
-            print("12. Exit")
+            print("12. Job decription match")
+            print("13. Exit")   
             print()
             if not forced_choice:
                 print("\n" + "=" * 40)
                 print("Main Menu")
                 print("=" * 40)
-                print("1. Analyze new project archive (ZIP)")
-                print("2. Import from GitHub URL")
-                print("3. View all projects")
-                print("4. View project details")
-                print("5. Generate portfolio summary")
-                print("6. Generate resume preview")
-                print("7. View chronological project timeline")
-                print("8. View skills timeline")
-                print("9. Delete project insights")
+                print("1.  Analyze new project archive (ZIP)")
+                print("2.  Import from GitHub URL")
+                print("3.  View all projects")
+                print("4.  View project details")
+                print("5.  Generate portfolio summary")
+                print("6.  Generate resume preview")
+                print("7.  View chronological project timeline")
+                print("8.  View skills timeline")
+                print("9.  Delete project insights")
                 print("10. Manage consent")
                 print("11. Contributor rankings (Quick Access)")
-                print("12. Exit")
+                print("12. Job description match")
+                print("13. Exit")
                 print()
             while True:
                 if forced_choice:
                     choice = forced_choice
                     forced_choice = None
                 else:
-                    choice = input("Please select an option (1-12): ").strip()
-                if choice in {str(i) for i in range(1, 13)}:
+                    choice = input("Please select an option (1-13): ").strip()
+                if choice in {str(i) for i in range(1, 14)}:
                     break
-                print("Invalid choice. Please enter a number between 1 and 12.")
+                print("Invalid choice. Please enter a number between 1 and 13.")
                 print()
 
             if choice == "1":
@@ -1378,6 +1510,8 @@ def main():
                     else:
                         print("Invalid choice. Please enter 1 or 2.")
             elif choice == "12":
+                _job_match_menu()
+            elif choice == "13":
                 _exit_app()
     except KeyboardInterrupt:
         _exit_app()
