@@ -946,10 +946,24 @@ def main():
                     else:
                         print("Invalid choice. Please enter 1 or 2.")
             elif choice == "4":
-                project_id = input("Enter the project ID to view details: ").strip()
-                project = None
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
+                    if not snapshots:
+                        print("No projects found.")
+                        continue
+                    print("\nProjects:")
+                    for idx, snap in enumerate(snapshots, start=1):
+                        snapshot_data = snap.get("snapshot") or {}
+                        project_label = snapshot_data.get("project_name") or snap.get("project_id")
+                        print(f"{idx}. {project_label} (ID: {snap.get('project_id')})")
+                    selection = input("Select a project number (blank to cancel): ").strip()
+                    if not selection:
+                        print("View cancelled.")
+                        continue
+                    if not selection.isdigit() or not (1 <= int(selection) <= len(snapshots)):
+                        print("Invalid selection.")
+                        continue
+                    project_id = str(snapshots[int(selection) - 1].get("project_id"))
                     project = next((s for s in snapshots if str(s.get("project_id")) == project_id), None)
                     if not project:
                         print("Project not found.")
@@ -957,17 +971,7 @@ def main():
                         snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
                         print(json.dumps(snapshot, indent=4))
                 if project:
-                    while True:
-                        print()
-                        print("1. View contributor rankings")
-                        print("2. Back")
-                        detail_choice = input("Please select an option (1-2): ").strip()
-                        if detail_choice == "1":
-                            _show_contributor_rankings(project_id)
-                        elif detail_choice == "2":
-                            break
-                        else:
-                            print("Invalid choice. Please enter 1 or 2.")
+                    pass
             elif choice == "5":
                 with _open_app_db() as conn:
                     snapshots = fetch_latest_snapshots(conn)
@@ -1002,12 +1006,17 @@ def main():
                                 if not entry_map:
                                     print("No resume entries available to edit.")
                                     break
+                                entry_items = list(entry_map.items())
                                 print("Available entries:")
-                                for entry_id, label in entry_map.items():
-                                    print(f"- {entry_id}: {label}")
-                                entry_id = input("Entry id to edit (blank to go back): ").strip()
-                                if not entry_id:
+                                for idx, (_entry_id, label) in enumerate(entry_items, start=1):
+                                    print(f"{idx}. {label}")
+                                selection = input("Select an entry number (blank to go back): ").strip()
+                                if not selection:
                                     break
+                                if not selection.isdigit() or not (1 <= int(selection) <= len(entry_items)):
+                                    print("Invalid selection.")
+                                    continue
+                                entry_id = entry_items[int(selection) - 1][0]
                                 entry = get_resume_entry(conn, entry_id)
                                 if not entry:
                                     print("Invalid entry id.")
@@ -1435,12 +1444,38 @@ def main():
                         break
                     print("Invalid choice. Please enter 1 or 2.")
             elif choice == "9":
-                project_id = input("Enter the project ID to delete insights: ").strip()
                 with _open_app_db() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM analysis_snapshots WHERE id = ?", (project_id,))
+                    snapshots = fetch_latest_snapshots(conn)
+                    if not snapshots:
+                        print("No projects found.")
+                        continue
+                    print("\nProjects:")
+                    for idx, snap in enumerate(snapshots, start=1):
+                        snapshot_data = snap.get("snapshot") or {}
+                        project_label = snapshot_data.get("project_name") or snap.get("project_id")
+                        print(f"{idx}. {project_label} (ID: {snap.get('project_id')})")
+                    selection = input("Select a project number to delete (blank to cancel): ").strip()
+                    if not selection:
+                        print("Delete cancelled.")
+                        continue
+                    if not selection.isdigit() or not (1 <= int(selection) <= len(snapshots)):
+                        print("Invalid selection.")
+                        continue
+                    project_id = str(snapshots[int(selection) - 1].get("project_id"))
+                    deleted = conn.execute(
+                        "DELETE FROM project_analysis WHERE project_id = ?",
+                        (project_id,),
+                    ).rowcount
+                    conn.execute(
+                        "DELETE FROM contributor_stats WHERE project_id = ?",
+                        (project_id,),
+                    )
+                    delete_resume_project_description(conn, project_id=project_id)
                     conn.commit()
-                    print("Project insights deleted.")
+                    if deleted:
+                        print("Project insights deleted.")
+                    else:
+                        print("No matching project insights found.")
             elif choice == "10":
                 consent = input("Do you wish to (g)rant or (r)evoke consent? (g/r): ").strip().lower()
                 if consent == "g":
