@@ -30,9 +30,11 @@ from capstone.resume_retrieval import (
     delete_resume_project_description,
     generate_resume_project_descriptions,
     get_resume_entry,
+    get_resume_project_description,
     insert_resume_entry,
     query_resume_entries,
     update_resume_entry,
+    upsert_resume_project_description,
 )
 from capstone.storage import (
     fetch_github_source,
@@ -722,6 +724,64 @@ def _build_resume_preview_from_snapshots(chosen_snapshots: List[dict]) -> dict:
     }
 
 
+# Build showcase items from selected snapshots
+def _build_portfolio_showcase_entries(chosen_snapshots: List[dict]) -> List[dict]:
+    entries: List[dict] = []
+    with _open_app_db() as conn:
+        for snap in chosen_snapshots:
+            snapshot_data = snap.get("snapshot") or {}
+            project_id = str(
+                snap.get("project_id")
+                or snapshot_data.get("project_id")
+                or snapshot_data.get("project")
+                or ""
+            )
+            name = (
+                snapshot_data.get("project_name")
+                or snapshot_data.get("project")
+                or snapshot_data.get("project_id")
+                or project_id
+                or "Untitled"
+            )
+            description = get_resume_project_description(
+                conn,
+                project_id,
+                variant_name="portfolio_showcase",
+            )
+            summary = (
+                description.summary if description else build_resume_project_summary(project_id or name, snapshot_data)
+            )
+            entries.append(
+                {
+                    "project_id": project_id,
+                    "name": name,
+                    "summary": summary,
+                    "source": "custom" if description else "auto",
+                }
+            )
+    return entries
+
+
+# Render the showcase items as a compact, readable block for CLI preview.
+def _format_portfolio_showcase(entries: List[dict]) -> str:
+    if not entries:
+        return "No portfolio showcase items."
+    lines: List[str] = []
+    lines.append("Portfolio Showcase")
+    lines.append("------------------")
+    for item in entries:
+        name = item.get("name") or item.get("project_id") or "Untitled"
+        summary = (item.get("summary") or "").strip()
+        source = item.get("source") or "-"
+        lines.append(f"* {name}")
+        if item.get("project_id"):
+            lines.append(f"  Project ID: {item.get('project_id')}")
+        if summary:
+            lines.append(f"  Summary: {summary}")
+        lines.append(f"  Source: {source}")
+    return "\n".join(lines).strip()
+
+
 def _build_project_target_map(preview: dict) -> dict[str, str]:
     targets: dict[str, set[str]] = {}
     for section in preview.get("sections") or []:
@@ -793,7 +853,7 @@ def main():
                 print("7.  View chronological project timeline")
                 print("8.  View chronological skills timeline")
                 print("9.  Delete project insights")
-                print("10. Manage consent")
+                print("10. Manage consent (LLM/external services)")
                 print("11. Contributor rankings (Quick Access)")
                 print("12. Exit")
                 print()
@@ -1037,7 +1097,10 @@ def main():
                         print("1. View project details")
                         print("2. Back")
                         follow = input("Please select an option (1-2, b to back): ").strip().lower()
+                        if follow == "m":
+                            raise _ReturnToMainMenu()
                         if follow == "1":
+                            project = None
                             with _open_app_db() as conn:
                                 snapshots = fetch_latest_snapshots(conn)
                             if not snapshots:
@@ -1058,18 +1121,6 @@ def main():
                             project_id = str(project.get("project_id"))
                             snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
                             print(json.dumps(snapshot, indent=4))
-                            if project:
-                                while True:
-                                    print()
-                                    print("1. View contributor rankings")
-                                    print("2. Back")
-                                    detail_choice = input("Please select an option (1-2, b to back): ").strip().lower()
-                                    if detail_choice == "1":
-                                        _show_contributor_rankings(project_id)
-                                    elif detail_choice in {"2", "b"}:
-                                        break
-                                    else:
-                                        print("Invalid choice. Please enter 1 or 2.")
                         elif follow in {"2", "b"}:
                             break
                         else:
@@ -1104,21 +1155,222 @@ def main():
                     if project:
                         pass
                 elif choice == "5":
-                    with _open_app_db() as conn:
-                        snapshots = fetch_latest_snapshots(conn)
-                        snapshot_map = {
-                            str(item.get("project_id")): (item.get("snapshot") or {})
-                            for item in snapshots
-                            if item.get("project_id")
-                        }
-                        summaries = generate_top_project_summaries(snapshot_map, limit=3)
-                        if not summaries:
-                            print("No project summaries available.")
-                        else:
-                            print("\nPortfolio Summary:\n")
-                            for summary in summaries:
-                                print(export_markdown(summary))
-                                print()
+                    while True:
+                        action = _prompt_menu(
+                            "Portfolio Options",
+                            ["Generate portfolio summary", "Portfolio Showcase Customization", "Back to main menu"],
+                        )
+                        if action in {"3", "b"}:
+                            break
+                        if action == "1":
+                            with _open_app_db() as conn:
+                                snapshots = fetch_latest_snapshots(conn)
+                                snapshot_map = {
+                                    str(item.get("project_id")): (item.get("snapshot") or {})
+                                    for item in snapshots
+                                    if item.get("project_id")
+                                }
+                                summaries = generate_top_project_summaries(snapshot_map, limit=3)
+                                if not summaries:
+                                    print("No project summaries available.")
+                                else:
+                                    print("\nPortfolio Summary:\n")
+                                    for summary in summaries:
+                                        print(export_markdown(summary))
+                                        print()
+                        if action == "2":
+                            with _open_app_db() as conn:
+                                snapshots = fetch_latest_snapshots(conn)
+                            if not snapshots:
+                                print("No projects found.")
+                                continue
+                            sorted_projects = sorted(
+                                snapshots,
+                                key=lambda s: (str(s.get("project_id") or "")).lower(),
+                            )
+                            print("\nAvailable projects (latest snapshot per project):")
+                            for idx, snap in enumerate(sorted_projects, start=1):
+                                snapshot_data = snap.get("snapshot") or {}
+                                label = snapshot_data.get("project_name") or snap.get("project_id") or f"Project {idx}"
+                                print(f"{idx}. {label} (ID: {snap.get('project_id')})")
+                            selection = _prompt_indices(
+                                "Select projects by number (space-separated, multi-select, blank to cancel, b to back): ",
+                                len(sorted_projects),
+                            )
+                            if selection is None or selection == "b":
+                                continue
+                            chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                            showcase_entries = _build_portfolio_showcase_entries(chosen_snapshots)
+                            print("\nPortfolio Showcase Preview:\n")
+                            print(_format_portfolio_showcase(showcase_entries))
+                            while True:
+                                sub = _prompt_menu(
+                                    "Showcase Options",
+                                    ["Auto-generate showcase", "Customize", "Back to portfolio menu"],
+                                )
+                                if sub in {"3", "b"}:
+                                    break
+                                if sub == "1":
+                                    # Persist auto-generated showcase
+                                    with _open_app_db() as conn:
+                                        for item in showcase_entries:
+                                            summary = item.get("summary") or ""
+                                            if not summary:
+                                                continue
+                                            try:
+                                                upsert_resume_project_description(
+                                                    conn,
+                                                    project_id=item["project_id"],
+                                                    summary=summary,
+                                                    variant_name="portfolio_showcase",
+                                                    metadata={"source": "auto"},
+                                                )
+                                            except Exception as exc:
+                                                print(f"Save failed for {item['project_id']}: {exc}")
+                                            else:
+                                                print(f"Saved showcase for {item['project_id']}.")
+                                    continue
+                                if sub == "2":
+                                    # Interactive editor
+                                    while True:
+                                        print("\nShowcase entries:")
+                                        for idx, item in enumerate(showcase_entries, start=1):
+                                            print(f"{idx}. {item.get('name') or item.get('project_id')}")
+                                        pick = input(
+                                            "Select an entry number (blank to cancel, b to back, m for main menu): "
+                                        ).strip().lower()
+                                        if not pick:
+                                            break
+                                        if pick == "m":
+                                            raise _ReturnToMainMenu()
+                                        if pick == "b":
+                                            break
+                                        if not pick.isdigit() or not (1 <= int(pick) <= len(showcase_entries)):
+                                            print("Invalid selection.")
+                                            continue
+                                        item = showcase_entries[int(pick) - 1]
+                                        while True:
+                                            # Show the full markdown
+                                            print("\nCurrent showcase (full):\n")
+                                            print(item.get("summary") or "")
+                                            edit = _prompt_menu(
+                                                "Showcase Editor",
+                                                [
+                                                    "Edit Top Project section",
+                                                    "Edit Highlights",
+                                                    "Edit References",
+                                                    "Edit full markdown",
+                                                    "Back",
+                                                ],
+                                            )
+                                            if edit in {"5", "b"}:
+                                                break
+                                            if edit == "4":
+                                                # Replace the entire markdown
+                                                new_text = input("Paste full markdown (blank to cancel): ").strip()
+                                                if not new_text:
+                                                    continue
+                                                new_summary = new_text
+                                            elif edit == "1":
+                                                # Update only the Top Project  
+                                                current = (item.get("summary") or "").split("\n\n", 1)
+                                                top_block = current[0] if current else ""
+                                                print(f"\nCurrent Top Project section:\n{top_block}\n")
+                                                top_text = input("Enter new Top Project section (blank to cancel): ").strip()
+                                                if not top_text:
+                                                    continue
+                                                rest = current[1] if len(current) > 1 else ""
+                                                new_summary = (top_text + "\n\n" + rest).strip() if rest else top_text
+                                            elif edit == "2":
+                                                # Edit the Highlights
+                                                summary = item.get("summary") or ""
+                                                parts = summary.split("\n## Highlights\n", 1)
+                                                before = parts[0]
+                                                after = parts[1] if len(parts) > 1 else ""
+                                                highlights_body, tail = (after.split("\n## References\n", 1) + [""])[0:2]
+                                                highlights = [line for line in highlights_body.splitlines() if line.strip().startswith("-")]
+                                                print("\nCurrent Highlights:\n" + "\n".join(highlights))
+                                                subh = _prompt_menu("Highlights", ["Add", "Delete", "Back"])
+                                                if subh in {"3", "b"}:
+                                                    continue
+                                                if subh == "1":
+                                                    text = input("Highlight to add (blank to cancel): ").strip()
+                                                    if not text:
+                                                        continue
+                                                    highlights.append(f"- {text}")
+                                                else:
+                                                    del_mode = _prompt_menu("Delete Highlight", ["Delete all", "Delete matching text", "Back"])
+                                                    if del_mode in {"3", "b"}:
+                                                        continue
+                                                    if del_mode == "1":
+                                                        highlights = []
+                                                    else:
+                                                        target = input("Text to delete (blank to cancel): ").strip()
+                                                        if not target:
+                                                            continue
+                                                        highlights = [h for h in highlights if target not in h]
+                                                new_highlights = "\n".join(highlights)
+                                                rebuilt = before.strip()
+                                                if new_highlights:
+                                                    rebuilt += "\n\n## Highlights\n" + new_highlights
+                                                if tail:
+                                                    rebuilt += "\n\n## References\n" + tail.strip()
+                                                new_summary = rebuilt.strip()
+                                            elif edit == "3":
+                                                # Edit the References bullet
+                                                summary = item.get("summary") or ""
+                                                parts = summary.split("\n## References\n", 1)
+                                                before = parts[0]
+                                                refs_body = parts[1] if len(parts) > 1 else ""
+                                                refs = [line for line in refs_body.splitlines() if line.strip().startswith("-")]
+                                                print("\nCurrent References:\n" + "\n".join(refs))
+                                                subr = _prompt_menu("References", ["Add", "Delete", "Back"])
+                                                if subr in {"3", "b"}:
+                                                    continue
+                                                if subr == "1":
+                                                    text = input("Reference to add (blank to cancel): ").strip()
+                                                    if not text:
+                                                        continue
+                                                    refs.append(f"- {text}")
+                                                else:
+                                                    del_mode = _prompt_menu("Delete Reference", ["Delete all", "Delete matching text", "Back"])
+                                                    if del_mode in {"3", "b"}:
+                                                        continue
+                                                    if del_mode == "1":
+                                                        refs = []
+                                                    else:
+                                                        target = input("Text to delete (blank to cancel): ").strip()
+                                                        if not target:
+                                                            continue
+                                                        refs = [r for r in refs if target not in r]
+                                                new_refs = "\n".join(refs)
+                                                rebuilt = before.strip()
+                                                if "## Highlights" in summary and "## References" in summary:
+                                                    highlights_split = before.split("\n## Highlights\n", 1)
+                                                    if len(highlights_split) == 2:
+                                                        rebuilt = highlights_split[0].strip() + "\n\n## Highlights\n" + highlights_split[1].strip()
+                                                if new_refs:
+                                                    rebuilt += "\n\n## References\n" + new_refs
+                                                new_summary = rebuilt.strip()
+                                            with _open_app_db() as conn:
+                                                if not new_summary:
+                                                    print("Summary cannot be empty. Add text or cancel.")
+                                                    continue
+                                                try:
+                                                    saved = upsert_resume_project_description(
+                                                        conn,
+                                                        project_id=item["project_id"],
+                                                        summary=new_summary,
+                                                        variant_name="portfolio_showcase",
+                                                        metadata={"source": "custom"},
+                                                    )
+                                                    item["summary"] = saved.summary
+                                                    item["source"] = "custom"
+                                                    print("Saved successfully.")
+                                                except Exception as exc:
+                                                    print(f"Save failed: {exc}")
+                                            print("\nUpdated Showcase Preview:\n")
+                                            print(_format_portfolio_showcase(showcase_entries))
                 elif choice == "6":
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
