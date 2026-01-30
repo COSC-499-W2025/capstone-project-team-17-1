@@ -1944,12 +1944,15 @@ def main():
                         for snap in snapshots:
                             snapshot_data = snap.get("snapshot") or {}
                             project_label = snapshot_data.get("project_name") or snap.get("project_id")
-                            print(f"- {project_label} (ID: {snap.get('project_id')})")
+                            print(f"- {project_label} (ID: {snap.get("project_id")})")
                     while True:
                         print()
+
                         print("1. View contributor rankings")
                         print("2. Back")
-                        follow = input("Please select an option (1-2, b to back): ").strip().lower()
+                        follow = input("Please select an option (1-2, b to back, m for main menu): ").strip().lower()
+                        if follow == "m":
+                            raise _ReturnToMainMenu()
                         if follow == "1":
                             print("\nProjects:")
                             for idx, snap in enumerate(snapshots, start=1):
