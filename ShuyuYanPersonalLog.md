@@ -309,3 +309,23 @@ Beyond feature development, I discussed implementation details and design decisi
 ### Completed Tasks Week 3
 - complete [Enhance resume preview functionality and fix menu problem (#165)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/165)
 - Add api documentation
+
+ ## Term2 week4 Personal LOG (Jan26-Feb1, 2026)
+ ### 1. Weekly Goals Recap
+  - complete [Add portfolio textual display, improve menu usability and test stability (#184)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/184)
+- edit api.md
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the portfolio textual display and showcase functionality by extending both the CLI and API to support structured portfolio viewing, generation, and customization. I implemented full portfolio showcase editing under menu option 5, allowing users to modify Top Project content, highlights, references, or the entire markdown output in a controlled and user-friendly way. Corresponding API endpoints were added to support portfolio retrieval, generation, and editing, enabling consistent behavior across interfaces.
+
+To improve usability and navigation, I enhanced the CLI menu flow by introducing global shortcuts and clearer prompts. Users can now press b to return to the previous level, m to jump directly back to the main menu, and use Enter to safely cancel actions. These changes resolve inconsistent navigation behavior across submenus and significantly improve the overall user experience when exploring portfolio and résumé features.
+
+In parallel, I improved résumé preview customization flows and system stability. Résumé add/delete menus were refined to use snapshot-based defaults with clear save feedback, ensuring predictable behavior during customization. I also edited and updated API documentation to reflect the new portfolio and résumé routes.
+
+Reliability was strengthened through comprehensive testing and fixes. I resolved existing test failures related to menu navigation and portfolio flows and added coverage for portfolio showcase preview, customization, and résumé preview paths. All tests now pass successfully (151 total), restoring full CI stability.
+
+Beyond feature development, I discussed implementation details and design decisions with team members to align menu behavior and API structure, and I reviewed teammates’ pull requests, providing feedback and assisting with integration to keep the system consistent with milestone requirements.
+  
+ ### Completed Tasks Week 4
+ - complete [Add portfolio textual display, improve menu usability and test stability (#184)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/184)
