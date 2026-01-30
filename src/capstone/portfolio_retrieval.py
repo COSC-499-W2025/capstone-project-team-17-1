@@ -661,26 +661,26 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
 
-        # use one DB query to check existence (no N+1)
-        if _fetch_latest_snapshots_for_projects is not None:
-            latest_map = _fetch_latest_snapshots_for_projects(c, ids)
-            missing = [pid for pid, snap in latest_map.items() if snap is None]
-        else:
-            missing = []
-            for pid in ids:
-                if get_latest_snapshot(c, pid) is None:
-                    missing.append(pid)
+            # use one DB query to check existence (no N+1)
+            if _fetch_latest_snapshots_for_projects is not None:
+                latest_map = _fetch_latest_snapshots_for_projects(c, ids)
+                missing = [pid for pid, snap in latest_map.items() if snap is None]
+            else:
+                missing = []
+                for pid in ids:
+                    if get_latest_snapshot(c, pid) is None:
+                        missing.append(pid)
 
-        if missing:
-            return jsonify(
-                {"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}
-            ), 404
+            if missing:
+                return jsonify(
+                    {"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}
+                ), 404
 
-        items = generate_resume_project_descriptions(
-            c,
-            project_ids=ids,
-            overwrite=overwrite,
-        )
+            items = generate_resume_project_descriptions(
+                c,
+                project_ids=ids,
+                overwrite=overwrite,
+            )
 
         payload = [item.to_dict() for item in items]
         return jsonify({"data": payload, "meta": {"total": len(payload)}, "error": None})

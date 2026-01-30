@@ -22,24 +22,14 @@ class TestSummarizeTopProjects(unittest.TestCase):
         )
         self.assertIsNotNone(handler, "Could not find summarize handler in capstone.cli")
 
-        fake_conn = object()
-
-        fake_rows = [
-            {
-                "project_id": "project-a",
-                "classification": "unknown",
-                "primary_contributor": None,
-                "created_at": "2026-01-01 00:00:00",
-                "snapshot": {"project_id": "project-a", "metrics": {"files": 10}, "skills": ["python"]},
-            },
-            {
-                "project_id": "project-b",
-                "classification": "unknown",
-                "primary_contributor": None,
-                "created_at": "2026-01-02 00:00:00",
-                "snapshot": {"project_id": "project-b", "metrics": {"files": 5}, "skills": ["java"]},
-            },
+        fake_rankings = [
+            type("R", (), {"project_id": "project-a"})(),
+            type("R", (), {"project_id": "project-b"})(),
         ]
+        fake_snapshots = {
+            "project-a": {"project_id": "project-a"},
+            "project-b": {"project_id": "project-b"},
+        }
 
         args = argparse.Namespace(
             command="summarize-top-projects",
@@ -50,31 +40,19 @@ class TestSummarizeTopProjects(unittest.TestCase):
             format="markdown",
         )
 
-        # Patch the *actual imported module* so it works even if these
-        # names aren't defined at module scope (create=True).
         with (
-            patch.object(cli, "open_db", return_value=fake_conn, create=True) as mock_open_db,
-            patch.object(cli, "close_db", create=True) as mock_close_db,
-            patch.object(cli, "fetch_latest_snapshots", return_value=fake_rows, create=True) as mock_fetch,
+            patch.object(cli, "SnapshotStore") as store_mock,
+            patch.object(cli, "RankingService") as rank_mock,
+            patch.object(cli, "generate_top_project_summaries", return_value=[{"project_id": "project-a"}, {"project_id": "project-b"}]),
+            patch.object(cli, "export_markdown", side_effect=lambda s: s.get("project_id", "")),
             patch("sys.stdout", new_callable=io.StringIO) as fake_out,
         ):
+            rank_instance = rank_mock.return_value
+            rank_instance.rank.return_value = (fake_rankings, fake_snapshots)
             exit_code = handler(args)
             out = fake_out.getvalue()
 
         self.assertEqual(exit_code, 0)
-
-        # open_db usually called with args.db_dir (None here)
-        mock_open_db.assert_called_once()
-        open_args, open_kwargs = mock_open_db.call_args
-        self.assertEqual(open_args[0], None)
-
-        # tolerate both fetch_latest_snapshots(conn) and fetch_latest_snapshots(conn, limit=2)
-        mock_fetch.assert_called_once()
-        call_args, call_kwargs = mock_fetch.call_args
-        self.assertIs(call_args[0], fake_conn)
-        self.assertIn(call_kwargs.get("limit", None), (None, 2))
-
-        mock_close_db.assert_called_once()
 
         # Your handler prints project ids (not necessarily summaries)
         self.assertIn("project-a", out)

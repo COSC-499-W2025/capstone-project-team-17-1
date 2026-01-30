@@ -348,7 +348,20 @@ class CLITestCase(unittest.TestCase):
 
         class DummyCtx:
             def __enter__(self):
-                return object()
+                class _Conn:
+                    def execute(self, *_args, **_kwargs):
+                        return self
+
+                    def fetchone(self):
+                        return None
+
+                    def fetchall(self):
+                        return []
+
+                    def commit(self):
+                        return None
+
+                return _Conn()
 
             def __exit__(self, exc_type, exc, tb):
                 return False
@@ -402,6 +415,7 @@ class CLITestCase(unittest.TestCase):
         ]
 
         with patch("builtins.input", side_effect=lambda _prompt="": next(inputs)), \
+            patch.dict(app_main.os.environ, {}, clear=True), \
             patch.object(app_main, "grant_consent", return_value=True), \
             patch.object(app_main, "_open_app_db", return_value=DummyCtx()), \
             patch.object(app_main, "store_github_source"), \
