@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tkinter as tk
+from tkinter import filedialog
 from pathlib import Path
 
 from capstone.storage import open_db, close_db, fetch_latest_snapshots  # <-- MUST exist for tests
@@ -1746,6 +1748,29 @@ def _handle_clean(args: argparse.Namespace) -> int:
     if args.all:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
+def prompt_project_metadata():
+    print("\nOptional Project Timeline Information")
+
+    start = input("Start date (YYYY-MM-DD) [optional]: ").strip()
+    end = input("End date (YYYY-MM-DD) [optional]: ").strip()
+    status = input("Status (ongoing/completed) [default: ongoing]: ").strip().lower()
+
+    return {
+        "start_date": start or None,
+        "end_date": end or None,
+        "status": status if status in {"ongoing", "completed"} else "ongoing",
+    }
+def pick_zip_file():
+    root = tk.Tk()
+    root.withdraw()  # hide the empty Tk window
+    root.attributes("-topmost", True)
+
+    file_path = filedialog.askopenfilename(
+        title="Select a ZIP file",
+        filetypes=[("ZIP files", "*.zip")]
+    )
+    root.destroy()
+    return file_path
 
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
