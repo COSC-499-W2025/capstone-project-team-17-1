@@ -1747,51 +1747,6 @@ def _handle_clean(args: argparse.Namespace) -> int:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
 
-def _handle_summarize_projects(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
-    try:
-        snapshots = fetch_latest_snapshots(conn, limit=getattr(args, "limit", None))
-
-        # storage.py returns list[dict]; tests may mock dict. Support both.
-        if isinstance(snapshots, list):
-            snapshots = {
-                row.get("project_id"): row
-                for row in snapshots
-                if isinstance(row, dict) and row.get("project_id")
-            }
-
-        if not snapshots:
-            print("No project analyses available to summarize.")
-            return 0
-
-        llm = None
-        if args.use_llm:
-            llm = build_default_llm()
-
-        # Optional: LLM enriched summaries (only if enabled)
-        llm = build_default_llm()
-
-        # If your generate_top_project_summaries expects a different signature,
-        # adjust here based on its definition.
-        summaries = generate_top_project_summaries(
-            snapshots=snapshots,
-            limit=args.limit,
-            user=getattr(args, "user", None),
-            use_llm=True,
-            llm=llm,
-        )
-
-        if getattr(args, "format", "markdown") == "json":
-            print(json.dumps(summaries, indent=2))
-        else:
-            for s in summaries:
-                print(export_markdown(s))
-                print()
-
-        return 0
-    finally:
-        close_db()
-
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()

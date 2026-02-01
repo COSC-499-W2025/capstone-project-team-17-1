@@ -58,6 +58,32 @@ Resume Project Wording
   - Auto-generates resume wording from project snapshots.
   - Body: `projectIds` array, optional `overwrite`.
 
+Portfolio Showcase
+- `GET /portfolio/{id}`
+  - Returns the saved showcase summary for a project (variant: `portfolio_showcase`).
+  - If no saved summary exists, returns an auto summary from the latest snapshot.
+- `POST /portfolio/generate`
+  - Auto-generates and saves showcase summaries for projects.
+  - Body: `projectIds` array.
+- `POST /portfolio/{id}/edit`
+  - Updates (or creates) the showcase summary for a project.
+  - Body: `summary` (string, required).
+
+Portfolio Showcase Examples
+```json
+POST /portfolio/generate
+{
+  "projectIds": ["demo-2", "project-xyz"]
+}
+```
+
+```json
+POST /portfolio/demo-2/edit
+{
+  "summary": "Built a web platform to automate QA workflows and reduce regression cycles."
+}
+```
+
 Priority Rules (Resume Display)
 - When rendering resume text: custom resume wording > auto-generated wording > resume entry body/summary.
 - Preview items include `source`: `custom | generated | fallback`.

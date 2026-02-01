@@ -23,6 +23,7 @@ except Exception:
 
 
 from .resume_retrieval import (
+    build_resume_project_summary,
     build_resume_preview,
     ensure_resume_schema,
     export_resume,
@@ -342,6 +343,65 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
             }
         )
 
+    # Portfolio showcase endpoints
+    @app.get("/portfolio/<project_id>")
+    def get_portfolio_showcase(project_id: str):
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            item = get_resume_project_description(c, project_id, variant_name="portfolio_showcase")
+            if item:
+                return jsonify({"data": item.to_dict(), "error": None})
+            snap = get_latest_snapshot(c, project_id)
+        if not snap:
+            return jsonify({"data": None, "error": {"code": "NotFound", "detail": "No snapshots found"}}), 404
+        summary = build_resume_project_summary(project_id, snap)
+        return jsonify({"data": {"project_id": project_id, "summary": summary}, "error": None})
+
+    @app.post("/portfolio/generate")
+    def generate_portfolio_showcase():
+        payload = request.get_json(silent=True) or {}
+        project_ids = payload.get("projectIds") or []
+        if not project_ids or not isinstance(project_ids, list):
+            return jsonify(
+                {"data": None, "error": {"code": "BadRequest", "detail": "projectIds must be a list"}}
+            ), 400
+        results = []
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            for pid in project_ids:
+                snap = get_latest_snapshot(c, str(pid))
+                if not snap:
+                    continue
+                summary = build_resume_project_summary(str(pid), snap)
+                item = upsert_resume_project_description(
+                    c,
+                    project_id=str(pid),
+                    summary=summary,
+                    variant_name="portfolio_showcase",
+                    metadata={"source": "auto"},
+                )
+                results.append(item.to_dict())
+        return jsonify({"data": results, "error": None})
+
+    @app.post("/portfolio/<project_id>/edit")
+    def edit_portfolio_showcase(project_id: str):
+        payload = request.get_json(silent=True) or {}
+        summary = (payload.get("summary") or "").strip()
+        if not summary:
+            return jsonify(
+                {"data": None, "error": {"code": "BadRequest", "detail": "summary is required"}}
+            ), 400
+        with _db_session(db_dir) as c:
+            ensure_resume_schema(c)
+            item = upsert_resume_project_description(
+                c,
+                project_id=project_id,
+                summary=summary,
+                variant_name="portfolio_showcase",
+                metadata={"source": "custom"},
+            )
+        return jsonify({"data": item.to_dict(), "error": None})
+
     @app.get("/resume")
     def resume_list():
         q = request.args
@@ -601,26 +661,26 @@ def create_app(db_dir: Optional[str] = None, auth_token: Optional[str] = None):
         with _db_session(db_dir) as c:
             ensure_resume_schema(c)
 
-        # use one DB query to check existence (no N+1)
-        if _fetch_latest_snapshots_for_projects is not None:
-            latest_map = _fetch_latest_snapshots_for_projects(c, ids)
-            missing = [pid for pid, snap in latest_map.items() if snap is None]
-        else:
-            missing = []
-            for pid in ids:
-                if get_latest_snapshot(c, pid) is None:
-                    missing.append(pid)
+            # use one DB query to check existence (no N+1)
+            if _fetch_latest_snapshots_for_projects is not None:
+                latest_map = _fetch_latest_snapshots_for_projects(c, ids)
+                missing = [pid for pid, snap in latest_map.items() if snap is None]
+            else:
+                missing = []
+                for pid in ids:
+                    if get_latest_snapshot(c, pid) is None:
+                        missing.append(pid)
 
-        if missing:
-            return jsonify(
-                {"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}
-            ), 404
+            if missing:
+                return jsonify(
+                    {"data": None, "error": {"code": "NotFound", "detail": "Project not found", "missing": missing}}
+                ), 404
 
-        items = generate_resume_project_descriptions(
-            c,
-            project_ids=ids,
-            overwrite=overwrite,
-        )
+            items = generate_resume_project_descriptions(
+                c,
+                project_ids=ids,
+                overwrite=overwrite,
+            )
 
         payload = [item.to_dict() for item in items]
         return jsonify({"data": payload, "meta": {"total": len(payload)}, "error": None})

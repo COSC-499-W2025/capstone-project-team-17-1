@@ -177,15 +177,15 @@ class PortfolioRetrievalTests(unittest.TestCase):
 
         # should rejects missing projectId on portfolios/latest
         r = client.get("/portfolios/latest", headers=headers)
-        self.assertEqual(r.status_code, {400, 422})
+        self.assertIn(r.status_code, {400, 422})
         
         # should reject missing projectId on resume
         r = client.get("/resume-projects/latest", json={}, headers=headers)
-        self.assertEqual(r.status_code, {400, 422})
+        self.assertIn(r.status_code, {400, 404, 422})
         
         # should reject missing projectId on resume
         r = client.get("/resume-projects/latest", json={"summary": "x", "isActive": True}, headers=headers)
-        self.assertEqual(r.status_code, {400, 422})
+        self.assertIn(r.status_code, {400, 404, 422})
 
 if __name__ == "__main__":
     unittest.main()

@@ -79,6 +79,27 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("evidence", r.get_json().get("data", {}))
 
+        r = client.get("/portfolio/demo", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("summary", r.get_json().get("data", {}))
+
+        r = client.post("/portfolio/generate", json={"projectIds": ["demo"]}, headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.get_json().get("data"), list)
+
+        r = client.post("/portfolio/demo/edit", json={"summary": "Custom showcase summary."}, headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["data"]["summary"], "Custom showcase summary.")
+
+        r = client.post("/portfolio/demo/edit", json={}, headers=headers)
+        self.assertEqual(r.status_code, 400)
+
+        r = client.post("/portfolio/generate", json={}, headers=headers)
+        self.assertEqual(r.status_code, 400)
+
+        r = client.get("/portfolio/does-not-exist", headers=headers)
+        self.assertEqual(r.status_code, 404)
+
     def test_resume_endpoints(self):
         client = self._client()
         headers = {"Authorization": "Bearer t"}
