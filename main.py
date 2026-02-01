@@ -52,12 +52,14 @@ from capstone.top_project_summaries import (
     export_markdown,
     generate_top_project_summaries,
 )
+from capstone.ai_insights import ask_project_question
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.cli import prompt_project_metadata
 from capstone.cli import pick_zip_file
 from capstone.storage import save_project_metadata
 from capstone.storage import load_project_metadata
+from capstone.storage import close_db
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -510,6 +512,60 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+def run_ai_project_analysis(conn, snapshot_map):
+    from capstone.llm_client import build_default_llm
+    from capstone.consent import ensure_external_permission
+
+    if not snapshot_map:
+        print("No analyzed projects available.")
+        return
+
+    # List projects
+    project_ids = sorted(snapshot_map.keys())
+    print("\nSelect a project for AI analysis:\n")
+    for idx, pid in enumerate(project_ids, start=1):
+        print(f"{idx}. {pid}")
+
+    choice = input("\nEnter project number: ").strip()
+    if not choice.isdigit() or not (1 <= int(choice) <= len(project_ids)):
+        print("Invalid selection.")
+        return
+
+    project_id = project_ids[int(choice) - 1]
+    snapshots = snapshot_map.get(project_id, [])
+    if not snapshots:
+        print("No snapshots found for selected project.")
+        return
+
+    latest_snapshot = snapshots[-1]
+
+    # External consent check
+    ensure_external_permission(
+        service="capstone.external.analysis",
+        data_types=["derived project metadata"],
+        purpose="Generate AI-based project insights",
+        destination="OpenAI API",
+        privacy="No source code is sent; only metadata summaries",
+        source="main-menu",
+    )
+
+    llm = build_default_llm()
+    if not llm:
+        print("LLM not configured. Set OPENAI_API_KEY.")
+        return
+
+
+
+    answer = ask_project_question(
+        project_id= project_id,
+        question="What are the strengths of this project and what could be improved?"
+    )
+
+    print("\nRunning AI analysis...\n")
+
+    print("=== AI Project Insights ===\n")
+    print(answer)
+    print("\n===========================\n")
 
 def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
     while True:
@@ -858,7 +914,8 @@ def main():
                 print("9.  Delete project insights")
                 print("10. Manage consent (LLM/external services)")
                 print("11. Contributor rankings (Quick Access)")
-                print("12. Exit")
+                print("12. AI-based project analysis (external LLM)")
+                print("13. Exit")
                 print()
 
                 while True:
@@ -866,14 +923,14 @@ def main():
                         choice = forced_choice
                         forced_choice = None
                     else:
-                        choice = input("Please select an option (1-12): ").strip()
+                        choice = input("Please select an option (1-13): ").strip()
                         import os
                         if os.environ.get("PYTEST_CURRENT_TEST"):
                             if choice == "2":
                                 choice = "3"
                             elif choice == "10":
                                 choice = "12"
-                    if choice in {str(i) for i in range(1, 13)}:
+                    if choice in {str(i) for i in range(1, 14)}:
                         break
                     print("Invalid choice. Please enter a number between 1 and 12.")
                     print()
@@ -2020,6 +2077,23 @@ def main():
                         else:
                             print("Invalid choice. Please enter 1 or 2.")
                 elif choice == "12":
+                    from capstone.storage import fetch_latest_snapshots
+
+                    conn = open_db()
+                    try:
+                        rows = fetch_latest_snapshots(conn)
+                        snapshot_map = {}
+
+                        for row in rows:
+                            snapshot_map.setdefault(row["project_id"], []).append(row["snapshot"])
+
+                        run_ai_project_analysis(conn, snapshot_map)
+
+
+                    finally:
+                        close_db()
+
+                elif choice == "13":
                     _exit_app()
         except _ReturnToMainMenu:
             if in_main_menu:
