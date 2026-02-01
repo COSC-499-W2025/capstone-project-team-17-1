@@ -1944,7 +1944,7 @@ def main():
                         for snap in snapshots:
                             snapshot_data = snap.get("snapshot") or {}
                             project_label = snapshot_data.get("project_name") or snap.get("project_id")
-                            print(f"- {project_label} (ID: {snap.get("project_id")})")
+                            print(f"- {project_label} (ID: {snap.get('project_id')})")
                     while True:
                         print()
 
