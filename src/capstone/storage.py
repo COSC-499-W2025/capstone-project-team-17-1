@@ -174,9 +174,50 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (project_id, "unknown", None, json.dumps({}), repo_url, token_enc),
-                )
+        )
         conn.execute("DROP TABLE github_sources")
         conn.commit()
+
+    # content-addressable file store tables
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS files (
+            file_id TEXT PRIMARY KEY,
+            hash TEXT UNIQUE,
+            size_bytes INTEGER NOT NULL,
+            mime TEXT,
+            path TEXT NOT NULL,
+            ref_count INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS uploads (
+            upload_id TEXT PRIMARY KEY,
+            original_name TEXT,
+            uploader TEXT,
+            source TEXT,
+            hash TEXT NOT NULL,
+            file_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_files_hash
+        ON files (hash)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_uploads_file
+        ON uploads (file_id)
+        """
+    )
+    conn.commit()
 
 
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:

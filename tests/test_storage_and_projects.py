@@ -109,6 +109,27 @@ class StorageTests(unittest.TestCase):
         ranked_commits = storage.fetch_contributor_rankings(conn, "demo", sort_by="commits")
         self.assertEqual(ranked_commits[0]["contributor"], "bob")
 
+    def test_files_and_uploads_schema_and_uniqueness(self) -> None:
+        base_dir = Path(self._tmpdir.name) / "db"
+        conn = storage.open_db(base_dir)
+
+        # verify tables and required columns exist
+        files_cols = {row[1] for row in conn.execute("PRAGMA table_info(files)").fetchall()}
+        uploads_cols = {row[1] for row in conn.execute("PRAGMA table_info(uploads)").fetchall()}
+        self.assertTrue({"file_id", "hash", "size_bytes", "path", "ref_count"}.issubset(files_cols))
+        self.assertTrue({"upload_id", "hash", "file_id"}.issubset(uploads_cols))
+
+        # unique hash constraint: inserting same hash twice should fail
+        conn.execute(
+            "INSERT INTO files (file_id, hash, size_bytes, path) VALUES (?, ?, ?, ?)",
+            ("id1", "hash-dup", 10, "/tmp/a"),
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO files (file_id, hash, size_bytes, path) VALUES (?, ?, ?, ?)",
+                ("id2", "hash-dup", 20, "/tmp/b"),
+            )
+
     def tearDown(self) -> None:
         storage.close_db()
 
