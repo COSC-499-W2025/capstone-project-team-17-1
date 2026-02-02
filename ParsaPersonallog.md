@@ -930,3 +930,95 @@ To wrap up the work, I prepared clean pull requests for each completed milestone
 ### Reflection
 
 This week emphasized system design, reliability, and responsible AI integration rather than introducing new algorithms. By grounding AI usage in stored metadata, gating it behind explicit user consent, and ensuring graceful degradation when external services are unavailable, the project now demonstrates production ready AI integration patterns. The added test coverage improves long term maintainability and ensures that future contributors can extend AI functionality without introducing regressions. Next steps include expanding documentation around AI usage and exploring additional CLI entry points for interactive project analysis.
+
+---
+
+## Week 4 Personal Log [Jan 26 – Feb 1, 2026]
+
+This week I focused on stabilizing and extending several core CLI features in the capstone project, with an emphasis on usability, correctness, and end to end workflow completion. The main areas of work included fixing the chronological project timeline output, fully integrating the AI project insights feature into the main menu, and completing the resume pipeline by adding PDF export support with user selected save locations. Much of the work involved debugging edge cases, clarifying data flow across modules, and ensuring features behave predictably in real user scenarios. I worked on these changes based on the feedback we got from the peer testing.
+
+**Peer Eval**  
+>
+> ![Week 4 — Timeline fixes, AI menu integration, resume export]
+> <img width="1065" height="624" alt="image" src="https://github.com/user-attachments/assets/4553abfc-9c6a-44c7-9a10-cbab33b76187" />
+>
+> _Figure 0. peer evaluation._
+>
+---
+
+### Chronological project timeline (Option 7) fixes
+
+One major task this week was repairing and completing the chronological project timeline feature, which was previously incomplete and confusing.
+
+* Investigated why start and end dates were showing as `Unknown` or incorrect and traced the issue to missing or uninitialized project metadata.
+* Designed a clear data model where timeline information can be optionally provided by the user during project analysis rather than inferred unreliably from file timestamps.
+* Added support for manually supplied start date, end date, and project status (ongoing or completed) during ZIP analysis.
+* Persisted timeline metadata correctly in storage and ensured it is loaded consistently when rendering the timeline view.
+* Updated Option 7 output to clearly display project name, active period, and status in a readable and meaningful format.
+* Fixed multiple scope and initialization errors related to database connections and project ID resolution.
+
+---
+
+### AI project insights integration into the main menu
+
+Another major focus was fully integrating the AI project insights feature into the main CLI menu so it is usable by end users.
+
+* Connected the existing AI analysis pipeline to a dedicated main menu option.
+* Added project selection logic that allows users to choose which analyzed project to send for AI analysis.
+* Ensured the feature retrieves the latest snapshot per project and builds a structured prompt from stored metadata.
+* Integrated the existing consent framework so all external LLM usage is explicitly gated and auditable.
+* Diagnosed and fixed environment variable issues on Windows that prevented the API key from being detected at runtime.
+* Verified end to end behavior by running real AI analyses and validating that insights are generated and displayed correctly.
+* Added defensive handling for empty results, invalid selections, and missing configuration.
+
+---
+
+### Resume PDF export and save location selection
+
+The final major task was completing the resume generation workflow by enabling users to export resumes as PDFs.
+
+* Extended the auto generate resume option to prompt users for optional PDF export after previewing the resume.
+* Integrated a system file save dialog so users can select where the PDF should be saved instead of hardcoding paths.
+* Connected the resume preview data to the existing Pandoc based PDF builder.
+* Fixed path handling issues by standardizing on `pathlib.Path` instead of raw strings.
+* Debugged rendering issues where sections were missing and ensured project summaries render correctly in the PDF.
+* Verified that generated PDFs are written successfully and open correctly outside the application.
+
+---
+
+### Resume content validation and skill aggregation
+
+While testing the PDF output, I identified gaps in the resume content itself.
+
+* Discovered that project skills were not appearing in the generated resume despite being present in analysis metadata.
+* Traced the issue to missing skill propagation into resume entries rather than a PDF rendering bug.
+* Updated the resume markdown generator to aggregate skills from project items when available.
+* Ensured the resume output remains robust even when some sections (experience, education, achievements) are missing.
+
+---
+
+### Debugging and integration work
+
+Across all features, a significant portion of the work involved debugging and integration.
+
+* Resolved multiple `UnboundLocalError` and scope related bugs in the CLI flow.
+* Used targeted debug output to inspect deeply nested resume and snapshot structures.
+* Ensured database connections are consistently opened and closed across menu options.
+* Verified that new features do not break existing functionality or navigation flow.
+
+---
+
+### PR preparation and issue tracking
+
+To conclude the week, I prepared the work for review and integration.
+
+* Created and updated GitHub issues to clearly define feature scope and expected behavior.
+* Filled out PR templates documenting design decisions, testing steps, and known limitations.
+* Ensured changes are isolated, non breaking, and aligned with milestone requirements.
+
+---
+
+### Reflection
+
+This week was heavily focused on turning partially implemented features into complete, user ready workflows. Rather than adding new high level functionality, the work emphasized correctness, clarity, and integration across modules. Fixing the timeline feature, exposing AI insights through the main menu, and completing the resume export pipeline significantly improve the usability and perceived polish of the application. The system now better reflects real world usage patterns, where users expect features to be discoverable, configurable, and persistent. Next steps include refining resume section coverage and expanding documentation for the new CLI options.
+
