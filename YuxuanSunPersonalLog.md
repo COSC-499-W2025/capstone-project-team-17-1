@@ -4,6 +4,7 @@
 - [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
 - [Milestone 2 - Week 2 [Jan 12 – Jan 18, 2026]](#week-2-m2)
 - [Milestone 2 - Week 3 [Jan 19 – Jan 25, 2026]](#week-3-m2)
+- [Milestone 2 - Week 4 [Jan 26 – Feb 2, 2026]](#week-4-m2)
 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -158,6 +159,17 @@ Beyond this, I further refined the chronological skill timeline feature. The out
 Next week, I plan to refactor the database design. Currently, ZIP uploads and analysis are tightly coupled, meaning analysis starts immediately upon upload. I intend to separate these concerns by introducing a new table to store uploaded source information (ZIP or URL) independently, with analysis becoming an explicit, optional step. I will also begin developing new features next week.
 
 <img width="1559" height="914" alt="e8da96c504674bc25c8c8e6e463453bd" src="https://github.com/user-attachments/assets/767342f6-0bde-4035-b5f1-5d0558a0bc70" />
+
+[Back](#table-of-contents)
+
+
+## Week 4 (M2)
+[Jan 26 – Feb 1, 2026]
+This week, I focused on improving file storage and deduplication in the system. I added two new database tables, files and uploads, to store file hashes, paths, and reference counts. On top of this schema, I implemented a file store that hashes each uploaded file, keeps a single canonical copy, restores the file if it is missing, and cleans up unreferenced (orphaned) files when they are no longer needed.
+
+I then integrated this file store with both the ZIP analyzer and the API upload and skill routes. These components now record file_id and hash values instead of storing duplicate files, which reduces redundant storage and improves consistency across the system. To ensure correctness, I added unit tests covering schema creation, file deduplication, restoration of missing files, and orphan cleanup behavior.
+
+During this work, I also identified an issue in the current database workflow where some data appears to be inserted multiple times. It seems that data may be written once in the zipAnalyzer and then written again when storing snapshots, resulting in duplicate records. Next week, I plan to investigate and fix this bug, and then begin development on new features.
 
 [Back](#table-of-contents)
 
