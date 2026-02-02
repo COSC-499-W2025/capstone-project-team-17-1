@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import storage  # noqa: E402
+from capstone import file_store  # noqa: E402
 from capstone.project_detection import detect_node_electron_project  # noqa: E402
 
 
@@ -129,6 +130,28 @@ class StorageTests(unittest.TestCase):
                 "INSERT INTO files (file_id, hash, size_bytes, path) VALUES (?, ?, ?, ?)",
                 ("id2", "hash-dup", 20, "/tmp/b"),
             )
+
+    def test_file_store_dedup_and_open(self) -> None:
+        base_dir = Path(self._tmpdir.name) / "db"
+        files_root = Path(self._tmpdir.name) / "files"
+        conn = storage.open_db(base_dir)
+
+        tmp_file = Path(self._tmpdir.name) / "sample.txt"
+        tmp_file.write_text("hello world", encoding="utf-8")
+
+        first = file_store.ensure_file(conn, tmp_file, original_name="sample.txt", files_root=files_root)
+        self.assertFalse(first["dedup"])
+        stored_path = Path(first["path"])
+        self.assertTrue(stored_path.exists())
+        # second time should deduplicate and bump ref_count
+        second = file_store.ensure_file(conn, tmp_file, original_name="sample.txt", files_root=files_root)
+        self.assertTrue(second["dedup"])
+
+        ref_count = conn.execute("SELECT ref_count FROM files WHERE file_id = ?", (first["file_id"],)).fetchone()[0]
+        self.assertEqual(ref_count, 2)
+
+        with file_store.open_file(conn, first["file_id"], files_root=files_root) as fh:
+            self.assertEqual(fh.read().decode("utf-8"), "hello world")
 
     def tearDown(self) -> None:
         storage.close_db()
