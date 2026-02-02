@@ -608,9 +608,15 @@ def _snapshot_from_db_row(row: dict) -> dict:
     return snap
 
 def _read_job_description_text() -> str | None:
-    mode = input("Type 1 to paste job description, or 2 to load from a file path: ").strip()
+    choice = _prompt_menu(
+        "Job Description Menu",
+        [
+            "Paste job description texts",
+            "Load from file path\n"
+        ]
+    )
     
-    if mode == "1":
+    if choice == "1":
         print("\nPlease paste the job description text below. End with an empty line:\n")
         lines = []
         while True:
@@ -621,7 +627,7 @@ def _read_job_description_text() -> str | None:
         text = "\n".join(lines).strip()
         return text if text else None
     
-    if mode == "2":
+    if choice == "2":
         path = input("Please enter the job description text file path: ").strip()
         if not path or not os.path.isfile(path):
             print("Invalid file path :(")
@@ -635,7 +641,6 @@ def _read_job_description_text() -> str | None:
 
 def _job_match_menu() -> None:
     print("\n" + "=" * 40)
-    print("Job Match")
     print("=" * 40)
     
     jd_text = _read_job_description_text()
@@ -648,12 +653,33 @@ def _job_match_menu() -> None:
     db_dir = ROOT / "data"
     
     if mode == "2":
-        project_id = input("Please enter the project id: ").strip()
-        if not project_id:
-            print("No project id provided.")
+        with _open_app_db() as conn:
+            rows = fetch_latest_snapshots(conn)
+            
+        if not rows:
+            print("No projects available for comparison, please upload one first!")
             return
+        
+        print("\nAvailable Projects:")
+        print("-" * 30)
+        for row in rows:
+            snap = row.get("snapshot") or {}
+            pid = row.get("project_id")
+            name = snap.get("project_name") or pid
+            print(f" {name} (ID: {pid})")
+            
+        print()
+        project_id = input("Enter the project ID you wish to compare: ").strip()
+        if not project_id:
+            print("No valid project id provided.")
+            return
+        
         result = match_job_to_project(jd_text, project_id, db_dir=db_dir)
-        print("\n" + build_resume_snippet(result))
+        
+        print("\n" + "=" * 40)
+        print("Job Description Match Results")
+        print("=" * 40)
+        print(build_resume_snippet(result))
         return
     
     with _open_app_db() as conn:
