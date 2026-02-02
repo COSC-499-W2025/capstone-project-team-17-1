@@ -4,6 +4,7 @@
 
 - [Week 2 Team Log (Term2)](#week-2-team-log-term2)
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
+- [Week 4 Team Log (Term2)](#week-4-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
@@ -480,3 +481,49 @@ Additionally, we introduced a unified ensure-or-prompt consent path that prompts
 In parallel, the team continued work on several Milestone 2 enhancements, including refinement of the chronological skill timeline, improvements to consent-related user prompts, richer project insight generation, and stronger test coverage for project summarization and snapshot handling.
 
 Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
+
+
+## WEEK 4 TEAM LOG (Term2)
+(Jan26 - Feb01, 2026)
+
+### Recap of Milestone Goal - Week 4
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Burnup chart Week 4
+<img width="1626" height="879" alt="image" src="https://github.com/user-attachments/assets/bdd9b246-6faa-4514-a7a6-10951fc7cd63" />
+
+### Completed Tasks Week 4
+<img width="1921" height="819" alt="image" src="https://github.com/user-attachments/assets/a298aefe-a490-41db-af4b-4ec54ddccf45" />
+<img width="1915" height="300" alt="image" src="https://github.com/user-attachments/assets/aba87ee5-1836-498b-a217-ae3f2f9768ed" />
+
+### In Progress Tasks Week 4
+<img width="1945" height="710" alt="image" src="https://github.com/user-attachments/assets/ead96d2e-398b-4dcf-9241-32fdc51e460d" />
+<img width="1950" height="103" alt="image" src="https://github.com/user-attachments/assets/6aa4a559-99f2-4221-bf7e-4a4e89bace3c" />
+
+### Test Report Week 4
+This week, the team made strong progress on usability, infrastructure stability, and Milestone 2 feature expansion. A series of PRs were merged to improve the CLI experience, strengthen backend foundations, and extend portfolio, résumé, and AI insight workflows.
+
+CLI usability and workflow consistency were noticeably improved. Menu rendering issues were fixed to prevent duplicate output during a single loop iteration, reducing confusion during demos and peer testing. [Fix duplicate main menu rendering (Single Menu) (#181)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/181) 
+
+Resume generation was refined to clearly present both customization and auto-generation options. [generate resume now shows both the customize option and auto generation (#183)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/183) 
+
+And portfolio showcase customization was significantly expanded with richer menu flows, improved navigation shortcuts, clearer consent text, and full API support for generation and editing. This work also resolved remaining menu inconsistencies and brought all tests back to a passing state. [Add portfolio textual display, improve menu usability and test stability (#184)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/184)
+
+System reliability and data handling were strengthened. Pytest stability in both local and CI environments was improved by ensuring the repository root is correctly added to `sys.path`, reducing test failures caused by import errors. [Fix pytest import path (reduce failing tests) (#182)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/182) 
+
+Project timelines were made more accurate and reviewer-friendly by introducing explicit lifecycle metadata (start date, end date, status) and updating the chronological timeline logic to use this metadata with sensible fallbacks. ZIP uploads were also improved by integrating the native Windows file picker. [fixed the option 7 for our main menu and added windows file explorer … (#190)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/190) 
+
+AI and insight-related functionality continued to mature. AI-based project analysis was fully exposed through the interactive main menu, completing the consent-gated, end-to-end insight workflow and fixing prompt issues that previously caused empty responses. [Feature/add llm option to menu (#191)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/191) 
+
+Evidence-of-success data is now persisted at the storage layer and verified through targeted unit tests to prevent silent regressions. [Add project success evidence storage + prompt evidence test (#195)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/195)
+
+Milestone 2 infrastructure also advanced. Project thumbnail support was added using SQLite storage, enabling visual previews without relying on local file paths. [Add thumbnail storage helpers + CLI skill timeline test fixes (#192)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/192) 
+
+A FastAPI backend skeleton with documented OpenAPI/Swagger endpoints was introduced to establish a stable API surface for upcoming milestone work. [Milestone 2 API: FastAPI entrypoint + consent + projects endpoints (#193)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/193) 
+
+Résumé workflows were further extended with PDF export support and corrected skill sourcing to ensure consistency between previews and exported documents. [Fix/generate resume menu (#194)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/194)
+
+Finally, foundational storage improvements were implemented by introducing deduplicated file and upload tables with hashing, reference counting, restoration, and cleanup logic, fully integrated into ZIP and API workflows and covered by unit tests. [Implementation of duplicate file recognition (#196)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/196)
+
+Overall, this week strengthened the system’s usability, test stability, and backend foundations while pushing Milestone 2 features—timelines, insights, portfolio/résumé workflows, and APIs—closer to a complete and review-ready state.
+
