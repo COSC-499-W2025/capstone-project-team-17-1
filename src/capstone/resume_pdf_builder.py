@@ -65,9 +65,6 @@ def build_pdf_with_pandoc(resume: Dict[str, Any], output_path: Path) -> Path:
     # 🔒 DEFENSIVE FIX: normalize path
     output_path = Path(output_path)
 
-    markdown_text = _generate_markdown(resume)
-    import pprint
-    pprint.pprint(resume)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         md_path = Path(tmpdir) / "resume.md"
