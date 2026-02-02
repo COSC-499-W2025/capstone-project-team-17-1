@@ -35,7 +35,17 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
+
     )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS project_metadata (
+            project_id TEXT PRIMARY KEY,
+            start_date TEXT,
+            end_date TEXT,
+            status TEXT
+        )
+    """)
+    
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS contributor_stats (
@@ -465,6 +475,35 @@ def update_contributor_score(
     )
     conn.commit()
 
+def save_project_metadata(conn, project_id, meta):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO project_metadata
+        (project_id, start_date, end_date, status)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            project_id,
+            meta["start_date"],
+            meta["end_date"],
+            meta["status"],
+        ),
+    )
+    conn.commit()
+
+def load_project_metadata(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT project_id, start_date, end_date, status FROM project_metadata")
+
+    return {
+        row[0]: {
+            "start_date": row[1],
+            "end_date": row[2],
+            "status": row[3],
+        }
+        for row in cursor.fetchall()
+    }
 
 def fetch_contributor_rankings(
     conn: sqlite3.Connection,
