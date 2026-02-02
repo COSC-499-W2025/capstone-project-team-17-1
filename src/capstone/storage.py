@@ -55,6 +55,25 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS project_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            filename TEXT,
+            content_type TEXT,
+            image_b64 TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_project_images_project
+        ON project_images (project_id, created_at)
+        """
+    )
+
+    conn.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
         ON contributor_stats (project_id, contributor, created_at)
         """
@@ -446,6 +465,89 @@ def fetch_latest_contributor_stats(
             }
         )
     return payload
+def upsert_project_thumbnail(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    image_bytes: bytes,
+    filename: str | None = None,
+    content_type: str | None = None,
+) -> None:
+    """
+    Store an image for a project. Latest row becomes the project's thumbnail.
+    We keep history by inserting a new row.
+    """
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    if not image_bytes:
+        raise ValueError("image_bytes must be provided")
+
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    conn.execute(
+        """
+        INSERT INTO project_images (project_id, filename, content_type, image_b64)
+        VALUES (?, ?, ?, ?)
+        """,
+        (project_id, filename, content_type, image_b64),
+    )
+    conn.commit()
+
+
+def fetch_project_thumbnail_meta(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    """
+    Return metadata for the latest thumbnail: {project_id, filename, content_type, created_at}
+    """
+    if not project_id:
+        return None
+
+    row = conn.execute(
+        """
+        SELECT project_id, filename, content_type, created_at
+        FROM project_images
+        WHERE project_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+
+    if not row:
+        return None
+
+    pid, filename, content_type, created_at = row
+    return {
+        "project_id": pid,
+        "filename": filename,
+        "content_type": content_type,
+        "created_at": created_at,
+    }
+
+
+def fetch_project_thumbnail_bytes(conn: sqlite3.Connection, project_id: str) -> bytes | None:
+    """
+    Return raw bytes for the latest thumbnail image for this project.
+    """
+    if not project_id:
+        return None
+
+    row = conn.execute(
+        """
+        SELECT image_b64
+        FROM project_images
+        WHERE project_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+
+    if not row:
+        return None
+
+    try:
+        return base64.b64decode(row[0].encode("ascii"))
+    except Exception:
+        return None
 
 
 def update_contributor_score(
@@ -653,4 +755,7 @@ __all__ = [
     "fetch_contributor_rankings",
     "backup_database",
     "export_snapshots_to_json",
+    "upsert_project_thumbnail",
+    "fetch_project_thumbnail_meta",
+    "fetch_project_thumbnail_bytes",
 ]

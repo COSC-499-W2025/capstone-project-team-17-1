@@ -1,9 +1,22 @@
 import contextlib
 import io
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import main
+import sys
+from pathlib import Path
+import importlib
+
+
+ROOT = Path(__file__).resolve().parents[1]      # repo root (where main.py lives)
+SRC = ROOT / "src"                              # src/ (where capstone/ package lives)
+
+for p in (str(ROOT), str(SRC)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+main = importlib.import_module("main")
+
 
 
 class CLISkillTimelineTests(unittest.TestCase):
