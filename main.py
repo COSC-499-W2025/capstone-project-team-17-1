@@ -14,6 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from capstone.storage import fetch_latest_snapshots
 from capstone.cli import main
 from capstone.config import load_config
 from capstone.company_profile import build_company_resume_lines
@@ -588,6 +589,24 @@ def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
             print(f"Indices must be in 1–{max_index}.")
             continue
         return nums
+
+def prompt_save_path(default_name="resume.pdf"):
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()  # hide the main window
+    root.attributes("-topmost", True)
+
+    path = filedialog.asksaveasfilename(
+        title="Save Resume As",
+        defaultextension=".pdf",
+        initialfile=default_name,
+        filetypes=[("PDF files", "*.pdf")]
+    )
+
+    root.destroy()
+    return path
 
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
@@ -1500,6 +1519,8 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
+                            from capstone.resume_pdf_builder import build_pdf_with_pandoc
+
                             with _open_app_db() as conn:
                                 generate_resume_project_descriptions(
                                     conn,
@@ -1508,9 +1529,30 @@ def main():
                                 )
                                 refreshed = query_resume_entries(conn)
                                 resume_preview = build_resume_preview(refreshed, conn=conn)
+
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))
+
+                            # 🔽 NEW PART STARTS HERE
+                            export = input("\nWould you like to export this resume as a PDF? (y/n): ").strip().lower()
+                            if export == "y":
+                                save_path = prompt_save_path(default_name="resume.pdf")
+
+                                if not save_path:
+                                    print("Resume export cancelled.")
+                                    continue
+
+                                try:
+                                    from pathlib import Path
+                                    
+                                    build_pdf_with_pandoc(resume_preview, Path(save_path))
+                                    print(f"\nResume PDF successfully saved to:\n{save_path}\n")
+                                except Exception as e:
+                                    print("Failed to generate resume PDF.")
+                                    print(f"Error: {e}")
+
                             continue
+
                         if action == "2":
                             with _open_app_db() as conn:
                                 generate_resume_project_descriptions(
@@ -2077,7 +2119,7 @@ def main():
                         else:
                             print("Invalid choice. Please enter 1 or 2.")
                 elif choice == "12":
-                    from capstone.storage import fetch_latest_snapshots
+                   # from capstone.storage import fetch_latest_snapshots
 
                     conn = open_db()
                     try:
