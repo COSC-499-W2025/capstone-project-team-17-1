@@ -52,9 +52,14 @@ from capstone.top_project_summaries import (
     export_markdown,
     generate_top_project_summaries,
 )
+from capstone.ai_insights import ask_project_question
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
-
+from capstone.cli import prompt_project_metadata
+from capstone.cli import pick_zip_file
+from capstone.storage import save_project_metadata
+from capstone.storage import load_project_metadata
+from capstone.storage import close_db
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -507,6 +512,60 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+def run_ai_project_analysis(conn, snapshot_map):
+    from capstone.llm_client import build_default_llm
+    from capstone.consent import ensure_external_permission
+
+    if not snapshot_map:
+        print("No analyzed projects available.")
+        return
+
+    # List projects
+    project_ids = sorted(snapshot_map.keys())
+    print("\nSelect a project for AI analysis:\n")
+    for idx, pid in enumerate(project_ids, start=1):
+        print(f"{idx}. {pid}")
+
+    choice = input("\nEnter project number: ").strip()
+    if not choice.isdigit() or not (1 <= int(choice) <= len(project_ids)):
+        print("Invalid selection.")
+        return
+
+    project_id = project_ids[int(choice) - 1]
+    snapshots = snapshot_map.get(project_id, [])
+    if not snapshots:
+        print("No snapshots found for selected project.")
+        return
+
+    latest_snapshot = snapshots[-1]
+
+    # External consent check
+    ensure_external_permission(
+        service="capstone.external.analysis",
+        data_types=["derived project metadata"],
+        purpose="Generate AI-based project insights",
+        destination="OpenAI API",
+        privacy="No source code is sent; only metadata summaries",
+        source="main-menu",
+    )
+
+    llm = build_default_llm()
+    if not llm:
+        print("LLM not configured. Set OPENAI_API_KEY.")
+        return
+
+
+
+    answer = ask_project_question(
+        project_id= project_id,
+        question="What are the strengths of this project and what could be improved?"
+    )
+
+    print("\nRunning AI analysis...\n")
+
+    print("=== AI Project Insights ===\n")
+    print(answer)
+    print("\n===========================\n")
 
 def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
     while True:
@@ -855,7 +914,8 @@ def main():
                 print("9.  Delete project insights")
                 print("10. Manage consent (LLM/external services)")
                 print("11. Contributor rankings (Quick Access)")
-                print("12. Exit")
+                print("12. AI-based project analysis (external LLM)")
+                print("13. Exit")
                 print()
 
                 while True:
@@ -863,20 +923,31 @@ def main():
                         choice = forced_choice
                         forced_choice = None
                     else:
-                        choice = input("Please select an option (1-12): ").strip()
+                        choice = input("Please select an option (1-13): ").strip()
                         import os
                         if os.environ.get("PYTEST_CURRENT_TEST"):
                             if choice == "2":
                                 choice = "3"
                             elif choice == "10":
                                 choice = "12"
-                    if choice in {str(i) for i in range(1, 13)}:
+                    if choice in {str(i) for i in range(1, 14)}:
                         break
                     print("Invalid choice. Please enter a number between 1 and 12.")
                     print()
 
                 if choice == "1":
-                    zip_path = input("Enter the path to the project ZIP archive: ").strip()
+                    print("Select a ZIP file to analyze...")
+                    use_picker = input("Open file explorer to select ZIP? (y/n): ").strip().lower()
+
+                    if use_picker == "y":
+                        zip_path = pick_zip_file()
+                    else:
+                        zip_path = input("Enter the path to the project ZIP archive: ").strip()
+
+                    if not zip_path:
+                        print("No ZIP file provided. Returning to main menu.")
+                        continue
+
                     if not os.path.isfile(zip_path):
                         print("Invalid file path. Please try again.")
                         continue
@@ -922,6 +993,11 @@ def main():
                                 body=f"Auto-generated resume entry for {project_id}.",
                                 projects=[project_id],
                             )
+                            add_meta = input("\nWould you like to add project timeline info? (y/n): ").strip().lower()
+
+                            if add_meta == "y":
+                                meta = prompt_project_metadata()
+                                save_project_metadata(conn, project_id, meta)
                     print("Project analysis completed and stored.")
                 elif choice == "2":
                     repo_url = input("Enter GitHub repository URL: ").strip()
@@ -1834,6 +1910,7 @@ def main():
 
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
+                        metadata_map = load_project_metadata(conn)
                         snapshot_map = {
                             str(item.get("project_id")): (item.get("snapshot") or {})
                             for item in snapshots
@@ -1841,12 +1918,40 @@ def main():
                         }
                         timeline = chronological_proj(snapshot_map)
                         print("\nChronological Project Timeline:\n")
-                        for entry in timeline:
-                            start = entry.get("start")
-                            end = entry.get("end")
-                            start_text = start.isoformat() if start else "-"
-                            end_text = end.isoformat() if end else "Present"
-                            print(f"- {entry['name']}: {start_text} -> {end_text}")
+                        project_ids = sorted(
+                            set(snapshot_map.keys()) | set(metadata_map.keys())
+                        )
+
+                        for project_id in sorted(project_ids):
+                            meta = metadata_map.get(project_id)
+
+                            if meta:
+                                start = meta.get("start_date")
+                                end = meta.get("end_date")
+                                status = meta.get("status", "ongoing").capitalize()
+
+                                start_text = start if start else "Unknown"
+                                end_text = end if end else "Present"
+
+                            else:
+                                # fallback: infer from analysis timestamps
+                                snapshots = snapshot_map.get(project_id, [])
+                                timestamps = [
+                                    s.get("analyzed_at")
+                                    for s in snapshots
+                                    if isinstance(s, dict) and s.get("analyzed_at")
+                                ]
+
+                                timestamps.sort()
+                                start_text = timestamps[0][:10] if timestamps else "Unknown"
+                                end_text = "Present"
+                                status = "Ongoing (inferred)"
+
+                            print(f"- {project_id}")
+                            print(f"  Active Period: {start_text} → {end_text}")
+                            print(f"  Status: {status}\n")
+
+
                 elif choice == "8":
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
@@ -1972,6 +2077,23 @@ def main():
                         else:
                             print("Invalid choice. Please enter 1 or 2.")
                 elif choice == "12":
+                    from capstone.storage import fetch_latest_snapshots
+
+                    conn = open_db()
+                    try:
+                        rows = fetch_latest_snapshots(conn)
+                        snapshot_map = {}
+
+                        for row in rows:
+                            snapshot_map.setdefault(row["project_id"], []).append(row["snapshot"])
+
+                        run_ai_project_analysis(conn, snapshot_map)
+
+
+                    finally:
+                        close_db()
+
+                elif choice == "13":
                     _exit_app()
         except _ReturnToMainMenu:
             if in_main_menu:
