@@ -60,64 +60,84 @@ def ensure_file(
             (file_hash,),
         ).fetchone()
 
-        if existing:
-            existing_id, path, stored_size = existing
-            if stored_size != size_bytes:
-                raise ValueError("Hash collision detected: stored size differs")
+    if existing:
+        existing_id, path_str, stored_size = existing
+        if stored_size != size_bytes:
+            raise ValueError("Hash collision detected: stored size differs")
 
+        dest_path = Path(path_str or _storage_path(root, file_hash))
+        if not dest_path.exists():
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = dest_path.with_suffix(".tmp")
+            with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
+                shutil.copyfileobj(src, dst, length=64 * 1024)
+            os.replace(tmp_path, dest_path)
+            conn.execute(
+                """
+                UPDATE files
+                SET path = ?, size_bytes = ?, mime = ?, ref_count = ref_count + 1
+                WHERE file_id = ?
+                """,
+                (str(dest_path), size_bytes, mime, existing_id),
+            )
+        else:
             conn.execute(
                 "UPDATE files SET ref_count = ref_count + 1 WHERE file_id = ?",
                 (existing_id,),
             )
-            _record_upload(
-                conn,
-                upload_id=str(uuid.uuid4()),
-                original_name=original_name,
-                uploader=uploader,
-                source=source,
-                file_hash=file_hash,
-                file_id=existing_id,
-            )
-            return {
-                "file_id": existing_id,
-                "hash": file_hash,
-                "path": path,
-                "size_bytes": size_bytes,
-                "dedup": True,
-            }
-
-        dest_path = _storage_path(root, file_hash)
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = dest_path.with_suffix(".tmp")
-
-        with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
-            shutil.copyfileobj(src, dst, length=64 * 1024)
-        os.replace(tmp_path, dest_path)  # atomic move
-
-        conn.execute(
-            """
-            INSERT INTO files (file_id, hash, size_bytes, mime, path, ref_count)
-            VALUES (?, ?, ?, ?, ?, 1)
-            """,
-            (file_id, file_hash, size_bytes, mime, str(dest_path)),
-        )
+        upload_id = str(uuid.uuid4())
         _record_upload(
             conn,
-            upload_id=str(uuid.uuid4()),
+            upload_id=upload_id,
             original_name=original_name,
             uploader=uploader,
             source=source,
             file_hash=file_hash,
-            file_id=file_id,
+            file_id=existing_id,
         )
-
         return {
-            "file_id": file_id,
+            "file_id": existing_id,
             "hash": file_hash,
             "path": str(dest_path),
             "size_bytes": size_bytes,
-            "dedup": False,
+            "dedup": True,
+            "upload_id": upload_id,
         }
+
+    dest_path = _storage_path(root, file_hash)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = dest_path.with_suffix(".tmp")
+
+    with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
+        shutil.copyfileobj(src, dst, length=64 * 1024)
+    os.replace(tmp_path, dest_path)  # atomic move
+
+    conn.execute(
+        """
+        INSERT INTO files (file_id, hash, size_bytes, mime, path, ref_count)
+        VALUES (?, ?, ?, ?, ?, 1)
+        """,
+        (file_id, file_hash, size_bytes, mime, str(dest_path)),
+    )
+    upload_id = str(uuid.uuid4())
+    _record_upload(
+        conn,
+        upload_id=upload_id,
+        original_name=original_name,
+        uploader=uploader,
+        source=source,
+        file_hash=file_hash,
+        file_id=file_id,
+    )
+
+    return {
+        "file_id": file_id,
+        "hash": file_hash,
+        "path": str(dest_path),
+        "size_bytes": size_bytes,
+        "dedup": False,
+        "upload_id": upload_id,
+    }
 
 
 def _record_upload(
