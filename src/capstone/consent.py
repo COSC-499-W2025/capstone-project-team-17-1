@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Sequence
+from typing import Callable, Dict, Iterable, Sequence, Literal
 
 from .config import Config, ConsentState, load_config, save_config, update_consent
 
@@ -25,6 +25,8 @@ _CONSENT_JOURNAL = _LOG_DIR / "consent_decisions.jsonl"
 
 _ALLOW_DECISIONS = {"allow", "allow_once", "allow_always"}
 _DENY_DECISIONS = {"deny", "deny_once", "deny_always"}
+
+ConsentResult = Literal["saved_existing", "saved_new", "sessions_only", "denied"]
 
 
 def prompt_for_consent(
@@ -55,7 +57,57 @@ def ensure_consent(require_granted: bool = True) -> ConsentState:
         )
     return consent
 
+# helper for prompting consent on startup
+def prompt_yes_no(
+    msg: str,
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> bool:
+    while True:
+        response = input_fn(f"{msg} (y/n): ").strip().lower()
+        if response in {"y", "yes"}:
+            return True
+        if response in {"n", "no"}:
+            return False
+        output_fn("Invalid input! Please enter 'y' for yes or 'n' for no.")
 
+def ensure_or_prompt_consent(
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> bool:
+    config = load_config()
+    consent = config.consent
+    
+    if consent.granted:
+        return "granted_existing"
+    
+    output_fn("\nWelcome! Thanks for being here. Let's get started :)")
+    output_fn("\n\nNOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)")
+    
+    # first decision - grant or not
+    allow_now = prompt_yes_no(
+        "Grant consent for this session",
+        input_fn=input_fn,
+        output_fn=output_fn
+    )
+    
+    if not allow_now:
+        return "denied"
+    
+    # second decision - remember for future sessions or not
+    remember = prompt_yes_no(
+        "Save consent decision for future sessions",
+        input_fn=input_fn,
+        output_fn=output_fn
+    )
+    
+    if remember:
+        grant_consent("allow")
+        return "granted_new"
+    else:
+        revoke_consent("deny")
+        return "sessions_only"
+        
 def grant_consent(decision: str = "allow") -> Config:
     return update_consent(granted=decision in _ALLOW_DECISIONS, decision=decision, source="cli")
 

@@ -8,11 +8,14 @@ from capstone.resume_retrieval import (
     build_resume_preview,
     describe_resume_schema,
     export_resume,
+    get_resume_project_description,
     insert_resume_entry,
+    list_resume_project_descriptions,
     query_resume_entries,
     resolve_resume_projects,
     resume_to_json,
     resume_to_markdown,
+    upsert_resume_project_description,
 )
 
 
@@ -103,15 +106,45 @@ class ResumeRetrievalTests(unittest.TestCase):
 
     def test_export_formats(self):
         self._create_sample_entries()
+        desc = upsert_resume_project_description(
+            self.conn,
+            project_id="proj-1",
+            summary="Resume-specific project summary.",
+        )
+        desc_map = {desc.project_id: desc}
         result = query_resume_entries(self.conn)
-        markdown = resume_to_markdown(result.entries)
-        self.assertIn("Telemetry Platform", markdown)
-        payload = resume_to_json(result.entries)
+        markdown = resume_to_markdown(result.entries, project_descriptions=desc_map)
+        self.assertIn("Resume-specific project summary.", markdown)
+        payload = resume_to_json(result.entries, project_descriptions=desc_map)
         self.assertIn("sections", payload)
         export_path = Path(self.tmp.name) / "resume.pdf"
-        pdf_bytes = export_resume(result.entries, fmt="pdf", destination=export_path)
+        pdf_bytes = export_resume(
+            result.entries,
+            fmt="pdf",
+            destination=export_path,
+            project_descriptions=desc_map,
+        )
         self.assertTrue(export_path.exists())
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
+    def test_resume_project_description_upsert(self):
+        first = upsert_resume_project_description(
+            self.conn,
+            project_id="proj-1",
+            summary="Concise resume summary.",
+        )
+        self.assertEqual(first.summary, "Concise resume summary.")
+        updated = upsert_resume_project_description(
+            self.conn,
+            project_id="proj-1",
+            summary="Updated resume summary.",
+        )
+        self.assertEqual(updated.summary, "Updated resume summary.")
+        fetched = get_resume_project_description(self.conn, "proj-1")
+        self.assertIsNotNone(fetched)
+        self.assertEqual(fetched.summary, "Updated resume summary.")
+        listed = list_resume_project_descriptions(self.conn)
+        self.assertEqual(len(listed), 1)
 
 
 if __name__ == "__main__":

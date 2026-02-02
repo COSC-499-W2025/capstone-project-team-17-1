@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from .logging_utils import get_logger
@@ -120,14 +120,104 @@ def ensure_resume_schema(conn: sqlite3.Connection) -> None:
         ON resume_entry_links(link_type, link_value, entry_id);
         """
     )
+    _ensure_resume_project_description_table(conn)
     conn.commit()
+
+
+def _ensure_resume_project_description_table(conn: sqlite3.Connection) -> None:
+    exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='resume_project_descriptions'"
+    ).fetchone()
+    if not exists:
+        # create the multi-variant wording table
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS resume_project_descriptions (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                variant_name TEXT,
+                audience TEXT,
+                summary TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                metadata TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_resume_project_descriptions_project
+            ON resume_project_descriptions(project_id, is_active, updated_at);
+            """
+        )
+        return
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(resume_project_descriptions)").fetchall()}
+    if "id" in columns:
+        return
+    # Legacy table had project_id as the primary key
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS resume_project_descriptions_v2 (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            variant_name TEXT,
+            audience TEXT,
+            summary TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            metadata TEXT
+        );
+        INSERT INTO resume_project_descriptions_v2(
+            id, project_id, variant_name, audience, summary, is_active, created_at, updated_at, metadata
+        )
+        SELECT
+            lower(hex(randomblob(16))),
+            project_id,
+            NULL,
+            NULL,
+            summary,
+            1,
+            created_at,
+            updated_at,
+            metadata
+        FROM resume_project_descriptions;
+        DROP TABLE resume_project_descriptions;
+        ALTER TABLE resume_project_descriptions_v2 RENAME TO resume_project_descriptions;
+        CREATE INDEX IF NOT EXISTS idx_resume_project_descriptions_project
+        ON resume_project_descriptions(project_id, is_active, updated_at);
+        """
+    )
+
+
+@dataclass(frozen=True)
+class ResumeProjectDescription:
+    id: str
+    project_id: str
+    variant_name: Optional[str]
+    audience: Optional[str]
+    summary: str
+    is_active: bool
+    created_at: str
+    updated_at: str
+    metadata: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "variant_name": self.variant_name,
+            "audience": self.audience,
+            "summary": self.summary,
+            "is_active": self.is_active,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "metadata": self.metadata,
+        }
 
 
 def describe_resume_schema(conn: sqlite3.Connection) -> Dict[str, Any]:
     ensure_resume_schema(conn)
     tables = {}
     counts = {}
-    for table in ("resume_entries", "resume_entry_links"):
+    for table in ("resume_entries", "resume_entry_links", "resume_project_descriptions"):
         info = conn.execute(f"PRAGMA table_info({table})").fetchall()
         columns = [
             {"name": row[1], "type": row[2], "notnull": bool(row[3]), "default": row[4]}
@@ -153,9 +243,27 @@ def insert_resume_entry(
     created_at: Optional[str] = None,
 ) -> str:
     ensure_resume_schema(conn)
-    entry_id = entry_id or str(uuid4())
     section = section.lower()
-    payload = json.dumps(metadata or {})
+    metadata = metadata or {}
+    payload = json.dumps(metadata)
+    projects = list(dict.fromkeys(projects or []))
+    skills = [str(s).lower() for s in (skills or [])]
+    skills = list(dict.fromkeys(skills))
+    # Skip insertion 
+    duplicate_id = _find_duplicate_resume_entry(
+        conn,
+        section=section,
+        title=title,
+        body=body,
+        summary=summary,
+        status=status,
+        metadata=metadata,
+        projects=projects,
+        skills=skills,
+    )
+    if duplicate_id:
+        return duplicate_id
+    entry_id = entry_id or str(uuid4())
     conn.execute( # insert into entries
         """
         INSERT INTO resume_entries(id, section, title, summary, body, status, metadata)
@@ -172,23 +280,154 @@ def insert_resume_entry(
             """,
             (created_at, created_at, entry_id),
         )
-    _insert_links(conn, entry_id, projects or [], skills or [])
+    _insert_links(conn, entry_id, projects, skills)
     conn.commit()
     return entry_id
 
 
 def _insert_links(conn: sqlite3.Connection, entry_id: str, projects: Sequence[str], skills: Sequence[str]) -> None:
-    for pid in projects:
+    for pid in dict.fromkeys(projects):
         conn.execute(
             "INSERT INTO resume_entry_links(entry_id, link_type, link_value) VALUES (?, 'project', ?)",
             (entry_id, pid),
         )
-    for skill in skills:
+    for skill in dict.fromkeys(skills):
         conn.execute(
             "INSERT INTO resume_entry_links(entry_id, link_type, link_value) VALUES (?, 'skill', ?)",
             (entry_id, skill.lower()),
         )
 
+
+def _find_duplicate_resume_entry(
+    conn: sqlite3.Connection,
+    *,
+    section: str,
+    title: str,
+    body: str,
+    summary: Optional[str],
+    status: str,
+    metadata: Dict[str, Any],
+    projects: Sequence[str],
+    skills: Sequence[str],
+) -> Optional[str]:
+    # Detect duplicate entries
+    rows = conn.execute(
+        """
+        SELECT id, summary, status, metadata
+        FROM resume_entries
+        WHERE section = ? AND title = ? AND body = ?
+        """,
+        (section, title, body),
+    ).fetchall()
+    if not rows:
+        return None
+    target_projects = tuple(sorted(projects))
+    target_skills = tuple(sorted(skills))
+    links = _fetch_links(conn, [row[0] for row in rows])
+    for row in rows:
+        if row[1] != summary:
+            continue
+        if row[2] != status:
+            continue
+        raw_meta = row[3]
+        if raw_meta:
+            try:
+                stored_meta = json.loads(raw_meta)
+            except json.JSONDecodeError:
+                stored_meta = {}
+        else:
+            stored_meta = {}
+        if stored_meta != metadata:
+            continue
+        link = links.get(row[0], {})
+        if tuple(sorted(link.get("project", ()))) != target_projects:
+            continue
+        if tuple(sorted(link.get("skill", ()))) != target_skills:
+            continue
+        return row[0]
+    return None
+
+
+def get_resume_entry(conn: sqlite3.Connection, entry_id: str) -> Optional[ResumeEntry]:
+    ensure_resume_schema(conn)
+    row = conn.execute(
+        """
+        SELECT id, section, title, summary, body, status, created_at, updated_at, metadata
+        FROM resume_entries
+        WHERE id = ?
+        """,
+        (entry_id,),
+    ).fetchone()
+    if not row:
+        return None
+    link_map = _fetch_links(conn, [entry_id])
+    return _row_to_entry(row, link_map)
+
+
+def update_resume_entry(
+    conn: sqlite3.Connection,
+    *,
+    entry_id: str,
+    section: Any = None,
+    title: Any = None,
+    summary: Any = None,
+    body: Any = None,
+    status: Any = None,
+    metadata: Any = None,
+    projects: Any = None,
+    skills: Any = None,
+    _summary_provided: bool = False,
+    _metadata_provided: bool = False,
+    _projects_provided: bool = False,
+    _skills_provided: bool = False,
+) -> Optional[ResumeEntry]:
+    ensure_resume_schema(conn)
+    existing = get_resume_entry(conn, entry_id)
+    if not existing:
+        return None
+
+    updates: List[str] = []
+    params: List[Any] = []
+    if section is not None:
+        updates.append("section = ?")
+        params.append(str(section).lower())
+    if title is not None:
+        updates.append("title = ?")
+        params.append(str(title))
+    if body is not None:
+        updates.append("body = ?")
+        params.append(str(body))
+    if status is not None:
+        updates.append("status = ?")
+        params.append(str(status))
+    if _summary_provided:
+        updates.append("summary = ?")
+        params.append(summary)
+    if _metadata_provided:
+        updates.append("metadata = ?")
+        params.append(json.dumps(metadata or {}))
+
+    if updates:
+        now = datetime.now(timezone.utc).isoformat()
+        updates.append("updated_at = ?")
+        params.append(now)
+        params.append(entry_id)
+        conn.execute(
+            f"UPDATE resume_entries SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+
+    if _projects_provided or _skills_provided:
+        conn.execute("DELETE FROM resume_entry_links WHERE entry_id = ?", (entry_id,))
+        _insert_links(
+            conn,
+            entry_id,
+            projects if _projects_provided and isinstance(projects, (list, tuple)) else (),
+            skills if _skills_provided and isinstance(skills, (list, tuple)) else (),
+        )
+
+    conn.commit()
+    return get_resume_entry(conn, entry_id)
 #query 
 def query_resume_entries(
     conn: sqlite3.Connection,
@@ -307,6 +546,211 @@ def _fetch_links(conn: sqlite3.Connection, entry_ids: Sequence[str]) -> Dict[str
     }
 
 
+def upsert_resume_project_description(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    summary: str,
+    variant_name: Optional[str] = None,
+    audience: Optional[str] = None,
+    is_active: bool = True,
+    metadata: Optional[Dict[str, Any]] = None,
+    created_at: Optional[str] = None,
+    updated_at: Optional[str] = None,
+) -> ResumeProjectDescription:
+    ensure_resume_schema(conn)
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    if not summary:
+        raise ValueError("summary must be provided")
+    now = updated_at or datetime.now(timezone.utc).isoformat()
+    created_value = created_at or now
+    payload = json.dumps(metadata or {})
+    row = conn.execute(
+        """
+        SELECT id
+        FROM resume_project_descriptions
+        WHERE project_id = ?
+          AND variant_name IS ?
+          AND audience IS ?
+        LIMIT 1
+        """,
+        (project_id, variant_name, audience),
+    ).fetchone()
+    if row:
+        entry_id = row[0]
+        conn.execute(
+            """
+            UPDATE resume_project_descriptions
+            SET summary = ?, metadata = ?, is_active = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (summary, payload, 1 if is_active else 0, now, entry_id),
+        )
+    else:
+        entry_id = str(uuid4())
+        conn.execute(
+            """
+            INSERT INTO resume_project_descriptions(
+                id, project_id, variant_name, audience, summary, is_active, metadata, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (entry_id, project_id, variant_name, audience, summary, 1 if is_active else 0, payload, created_value, now),
+        )
+    if is_active:
+        # Keep a single active wording per project
+        conn.execute(
+            """
+            UPDATE resume_project_descriptions
+            SET is_active = 0
+            WHERE project_id = ? AND id != ?
+            """,
+            (project_id, entry_id),
+        )
+    conn.commit()
+    result = get_resume_project_description(
+        conn,
+        project_id,
+        variant_name=variant_name,
+        audience=audience,
+        active_only=False,
+    )
+    if result is None:
+        raise RuntimeError("Failed to persist resume project description")
+    return result
+
+
+def get_resume_project_description(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    variant_name: Optional[str] = None,
+    audience: Optional[str] = None,
+    active_only: bool = True,
+) -> Optional[ResumeProjectDescription]:
+    ensure_resume_schema(conn)
+    if variant_name is not None or audience is not None:
+        row = conn.execute(
+            """
+            SELECT id, project_id, variant_name, audience, summary, is_active, created_at, updated_at, metadata
+            FROM resume_project_descriptions
+            WHERE project_id = ?
+              AND variant_name IS ?
+              AND audience IS ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (project_id, variant_name, audience),
+        ).fetchone()
+        return _row_to_project_description(row) if row else None
+    if active_only:
+        row = conn.execute(
+            """
+            SELECT id, project_id, variant_name, audience, summary, is_active, created_at, updated_at, metadata
+            FROM resume_project_descriptions
+            WHERE project_id = ? AND is_active = 1
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            SELECT id, project_id, variant_name, audience, summary, is_active, created_at, updated_at, metadata
+            FROM resume_project_descriptions
+            WHERE project_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+    return _row_to_project_description(row) if row else None
+
+
+def list_resume_project_descriptions(
+    conn: sqlite3.Connection,
+    *,
+    project_ids: Optional[Sequence[str]] = None,
+    active_only: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[ResumeProjectDescription]:
+    ensure_resume_schema(conn)
+    where = []
+    params: List[Any] = []
+    if project_ids:
+        placeholders = ",".join("?" * len(project_ids))
+        where.append(f"project_id IN ({placeholders})")
+        params.extend(list(project_ids))
+    if active_only:
+        where.append("is_active = 1")
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    rows = conn.execute(
+        f"""
+        SELECT id, project_id, variant_name, audience, summary, is_active, created_at, updated_at, metadata
+        FROM resume_project_descriptions
+        {where_sql}
+        ORDER BY updated_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        (*params, max(1, limit), max(0, offset)),
+    ).fetchall()
+    return [_row_to_project_description(row) for row in rows]
+
+
+def delete_resume_project_description(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    variant_name: Optional[str] = None,
+    audience: Optional[str] = None,
+    active_only: bool = True,
+) -> int:
+    ensure_resume_schema(conn)
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    where = ["project_id = ?"]
+    params: List[Any] = [project_id]
+    if variant_name is not None:
+        where.append("variant_name IS ?")
+        params.append(variant_name)
+    if audience is not None:
+        where.append("audience IS ?")
+        params.append(audience)
+    if active_only:
+        where.append("is_active = 1")
+    sql = f"""
+        DELETE FROM resume_project_descriptions
+        WHERE {' AND '.join(where)}
+    """
+    cur = conn.execute(sql, params)
+    conn.commit()
+    return int(cur.rowcount or 0)
+
+
+def _row_to_project_description(row: sqlite3.Row | Sequence[Any]) -> ResumeProjectDescription:
+    metadata: Dict[str, Any] = {}
+    if row[8]:
+        try:
+            metadata = json.loads(row[8])
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse metadata for resume project %s", row[1])
+            metadata = {}
+    return ResumeProjectDescription(
+        id=row[0],
+        project_id=row[1],
+        variant_name=row[2],
+        audience=row[3],
+        summary=row[4],
+        is_active=bool(row[5]),
+        created_at=row[6],
+        updated_at=row[7],
+        metadata=metadata,
+    )
+
+
 def resolve_resume_projects(conn: sqlite3.Connection, entries: Iterable[ResumeEntry]) -> Dict[str, Optional[dict]]:
     ids = sorted({pid for entry in entries for pid in entry.project_ids})
     context: Dict[str, Optional[dict]] = {}
@@ -315,20 +759,147 @@ def resolve_resume_projects(conn: sqlite3.Connection, entries: Iterable[ResumeEn
     return context
 
 
+def resolve_resume_project_descriptions(
+    conn: sqlite3.Connection,
+    entries: Iterable[ResumeEntry],
+) -> Dict[str, Optional[dict]]:
+    ids = sorted({pid for entry in entries for pid in entry.project_ids})
+    if not ids:
+        return {}
+    descriptions = list_resume_project_descriptions(conn, project_ids=ids, active_only=True, limit=len(ids))
+    by_id = {desc.project_id: desc.to_dict() for desc in descriptions}
+    return {pid: by_id.get(pid) for pid in ids}
+
+
+def build_resume_project_summary(project_id: str, snapshot: Mapping[str, Any]) -> str:
+    name = str(snapshot.get("project_name") or snapshot.get("project") or snapshot.get("project_id") or project_id)
+    classification = snapshot.get("classification") or snapshot.get("project_type")
+    file_summary = snapshot.get("file_summary") if isinstance(snapshot.get("file_summary"), dict) else {}
+
+    file_count = _coerce_int(file_summary.get("file_count"))
+    active_days = _coerce_int(file_summary.get("active_days") or file_summary.get("duration_days"))
+
+    languages = snapshot.get("languages") if isinstance(snapshot.get("languages"), dict) else {}
+    frameworks = snapshot.get("frameworks") or []
+    skills = snapshot.get("skills") or []
+
+    stack_items: List[str] = []
+    for name_item in _normalise_list(frameworks):
+        stack_items.append(name_item)
+    for name_item in _pick_top_language_names(languages, limit=2):
+        stack_items.append(name_item)
+    for name_item in _pick_top_skill_names(skills, limit=2):
+        stack_items.append(name_item)
+
+    stack_items = _dedupe_preserve_order(stack_items)
+    stack_text = f" using {', '.join(stack_items[:3])}" if stack_items else ""
+    if classification:
+        opening = f"Built {name}, a {classification} project{stack_text}."
+    else:
+        opening = f"Built {name}{stack_text}."
+
+    impact_parts: List[str] = []
+    if file_count:
+        impact_parts.append(f"{file_count} files")
+    if active_days:
+        impact_parts.append(f"{active_days} active days")
+    if impact_parts:
+        return f"{opening} Delivered {', '.join(impact_parts)}."
+    return opening
+
+
+def generate_resume_project_descriptions(
+    conn: sqlite3.Connection,
+    *,
+    project_ids: Sequence[str],
+    overwrite: bool = False,
+) -> List[ResumeProjectDescription]:
+    ensure_resume_schema(conn)
+    results: List[ResumeProjectDescription] = []
+    now = datetime.now(timezone.utc).isoformat()
+    for project_id in project_ids:
+        if not project_id:
+            continue
+        existing_active = get_resume_project_description(conn, str(project_id))
+        if existing_active and not overwrite:
+            summary = existing_active.summary
+            if summary:
+                conn.execute(
+                    """
+                    UPDATE resume_entries
+                    SET summary = ?, updated_at = ?
+                    WHERE id IN (
+                        SELECT entry_id
+                        FROM resume_entry_links
+                        WHERE link_type = 'project' AND link_value = ?
+                    )
+                    AND (summary IS NULL OR TRIM(summary) = '')
+                    """,
+                    (summary, now, str(project_id)),
+                )
+            results.append(existing_active)
+            continue
+        snapshot = fetch_latest_snapshot(conn, str(project_id))
+        if not snapshot:
+            logger.warning("No snapshot found for resume project %s", project_id)
+            continue
+        active = True
+        if existing_active:
+            # Avoid overriding a custom active wording with auto-generated content.
+            source = (existing_active.metadata or {}).get("source")
+            if source == "custom":
+                active = False
+        summary = build_resume_project_summary(str(project_id), snapshot)
+        item = upsert_resume_project_description(
+            conn,
+            project_id=str(project_id),
+            summary=summary,
+            variant_name="auto",
+            is_active=active,
+            metadata={"source": "auto", "generated_at": now},
+        )
+        # Write back auto summaries into linked resume entries when blank.
+        conn.execute(
+            """
+            UPDATE resume_entries
+            SET summary = ?, updated_at = ?
+            WHERE id IN (
+                SELECT entry_id
+                FROM resume_entry_links
+                WHERE link_type = 'project' AND link_value = ?
+            )
+            AND (summary IS NULL OR TRIM(summary) = '')
+            """,
+            (summary, now, str(project_id)),
+        )
+        results.append(item)
+    return results
+
+
 def build_resume_preview(
     result: ResumeRetrievalResult,
     conn: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
+    resume_project_descriptions = (
+        resolve_resume_project_descriptions(conn, result.entries) if conn else {}
+    )
     grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for entry in result.entries:
+        override_summary, source = _resolve_summary_override(entry, resume_project_descriptions)
         fallback = entry.body.splitlines()[0] if entry.body.splitlines() else entry.body
-        excerpt = (entry.summary or fallback or entry.title).strip()
+        excerpt = (override_summary or entry.summary or fallback or entry.title).strip()
         grouped[entry.section].append(
             {
                 "id": entry.id,
+                "section": entry.section,
                 "title": entry.title,
                 "excerpt": excerpt,
+                "source": source,
                 "updated_at": entry.updated_at,
+                "metadata": entry.metadata,
+                "entrySummary": entry.summary,
+                "entryBody": entry.body,
+                "status": entry.status,
                 "projectIds": list(entry.project_ids),
                 "skills": list(entry.skills),
             }
@@ -344,26 +915,39 @@ def build_resume_preview(
         sections_payload.append({"name": section, "items": grouped[section]})
 
     project_context = resolve_resume_projects(conn, result.entries) if conn else {}
-    last_updated = max((entry.updated for entry in result.entries if entry.updated), default=None)
+    updated_values: List[datetime] = []
+    for entry in result.entries:
+        updated = entry.updated
+        if not updated:
+            continue
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        updated_values.append(updated)
+    last_updated = max(updated_values, default=None)
     preview = {
         "sections": sections_payload,
         "warnings": result.warnings,
         "missingSections": result.missing_sections,
         "schema": result.schema_state,
         "projectContext": project_context,
+        "resumeProjectDescriptions": resume_project_descriptions,
         "lastUpdated": last_updated.isoformat() if last_updated else None,
     }
     return preview
 
 
-def resume_to_markdown(entries: Sequence[ResumeEntry]) -> str:
+def resume_to_markdown(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> str:
     grouped = _group_by_section(entries)
     lines: List[str] = []
     for section, items in grouped:
         lines.append(f"## {section.title()}")
         for entry in items:
             period = _format_period(entry.metadata)
-            summary = entry.summary or entry.body
+            summary = _resolve_entry_summary(entry, project_descriptions)
             lines.append(f"- **{entry.title}** {period} — {summary.strip()}")
             if entry.skills:
                 lines.append(f"  - Skills: {', '.join(entry.skills)}")
@@ -371,29 +955,53 @@ def resume_to_markdown(entries: Sequence[ResumeEntry]) -> str:
     return "\n".join(line for line in lines if line).strip()
 
 
-def resume_to_json(entries: Sequence[ResumeEntry]) -> Dict[str, Any]:
+def resume_to_json(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> Dict[str, Any]:
     grouped = _group_by_section(entries)
     sections = []
     for section, items in grouped:
-        sections.append({"name": section, "items": [entry.to_dict() for entry in items]})
+        rendered: List[Dict[str, Any]] = []
+        for entry in items:
+            payload = entry.to_dict()
+            summary = _resolve_entry_summary(entry, project_descriptions)
+            if summary:
+                payload["summary"] = summary
+            rendered.append(payload)
+        sections.append({"name": section, "items": rendered})
     return {"generatedAt": datetime.now(timezone.utc).isoformat(), "sections": sections}
 
 
-def resume_to_pdf(entries: Sequence[ResumeEntry]) -> bytes:
-    markdown = resume_to_markdown(entries)
+def resume_to_pdf(
+    entries: Sequence[ResumeEntry],
+    *,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> bytes:
+    markdown = resume_to_markdown(entries, project_descriptions=project_descriptions)
     return _markdown_to_pdf(markdown)
 
 # export in differnt formats
-def export_resume(entries: Sequence[ResumeEntry], *, fmt: str, destination: Optional[Path] = None) -> bytes:
+def export_resume(
+    entries: Sequence[ResumeEntry],
+    *,
+    fmt: str,
+    destination: Optional[Path] = None,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]] = None,
+) -> bytes:
     fmt = fmt.lower()
     if fmt not in {"markdown", "json", "pdf"}:
         raise ValueError(f"Unsupported export format: {fmt}")
     if fmt == "markdown":
-        data = resume_to_markdown(entries).encode("utf-8")
+        data = resume_to_markdown(entries, project_descriptions=project_descriptions).encode("utf-8")
     elif fmt == "json":
-        data = json.dumps(resume_to_json(entries), indent=2).encode("utf-8")
+        data = json.dumps(
+            resume_to_json(entries, project_descriptions=project_descriptions),
+            indent=2,
+        ).encode("utf-8")
     else:
-        data = resume_to_pdf(entries)
+        data = resume_to_pdf(entries, project_descriptions=project_descriptions)
     if destination:
         destination.write_bytes(data)
         logger.info("Wrote resume export (%s) to %s", fmt, destination)
@@ -418,6 +1026,106 @@ def _format_period(metadata: Dict[str, Any]) -> str:
     if not start:
         return f"({end})"
     return f"({start} – {end})"
+
+
+def _resolve_entry_summary(
+    entry: ResumeEntry,
+    project_descriptions: Optional[Mapping[str, ResumeProjectDescription]],
+) -> str:
+    if project_descriptions and entry.project_ids:
+        for project_id in entry.project_ids:
+            desc = project_descriptions.get(project_id)
+            if desc and desc.summary:
+                return desc.summary
+    return entry.summary or entry.body
+
+
+def _resolve_summary_override(
+    entry: ResumeEntry,
+    resume_project_descriptions: Mapping[str, Optional[dict]],
+) -> tuple[Optional[str], str]:
+    if not entry.project_ids or not resume_project_descriptions:
+        return None, "fallback"
+    for project_id in entry.project_ids:
+        desc = resume_project_descriptions.get(project_id) or {}
+        summary = desc.get("summary") if isinstance(desc, dict) else None
+        if summary:
+            # custom wording beats generated wording
+            source = "custom"
+            metadata = desc.get("metadata") if isinstance(desc, dict) else None
+            if isinstance(metadata, dict) and metadata.get("source") == "auto":
+                source = "generated"
+            return str(summary), source
+    return None, "fallback"
+
+
+def _coerce_int(value: Any) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return 0
+
+
+def _normalise_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        items = value
+    elif value is None:
+        items = []
+    else:
+        items = [value]
+    results: List[str] = []
+    for item in items:
+        if item is None:
+            continue
+        results.append(str(item))
+    return results
+
+
+def _pick_top_language_names(languages: Mapping[str, Any], limit: int = 2) -> List[str]:
+    items = []
+    for name, value in languages.items():
+        score = 0.0
+        try:
+            score = float(value)
+        except Exception:
+            score = 0.0
+        items.append((name, score))
+    items.sort(key=lambda item: (-item[1], str(item[0]).lower()))
+    return [str(name) for name, _ in items[:limit]]
+
+
+def _pick_top_skill_names(skills: Any, limit: int = 2) -> List[str]:
+    items: List[tuple[str, float]] = []
+    if not isinstance(skills, list):
+        skills = [] if skills is None else [skills]
+    for skill in skills:
+        if isinstance(skill, dict):
+            name = str(skill.get("skill") or skill.get("name") or "")
+            if not name:
+                continue
+            score = 0.0
+            try:
+                score = float(skill.get("confidence") or 0.0)
+            except Exception:
+                score = 0.0
+            items.append((name, score))
+            continue
+        if skill is not None:
+            items.append((str(skill), 0.0))
+    items.sort(key=lambda item: (-item[1], item[0].lower()))
+    return [name for name, _ in items[:limit]]
+
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    results: List[str] = []
+    for item in items:
+        key = item.strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        results.append(item)
+    return results
 
 
 def _markdown_to_pdf(markdown: str) -> bytes:
@@ -464,12 +1172,22 @@ def _markdown_to_pdf(markdown: str) -> bytes:
 
 __all__ = [
     "ResumeEntry",
+    "ResumeProjectDescription",
     "ResumeRetrievalResult",
     "ensure_resume_schema",
     "describe_resume_schema",
     "insert_resume_entry",
+    "get_resume_entry",
+    "update_resume_entry",
+    "upsert_resume_project_description",
+    "get_resume_project_description",
+    "list_resume_project_descriptions",
+    "delete_resume_project_description",
     "query_resume_entries",
     "resolve_resume_projects",
+    "resolve_resume_project_descriptions",
+    "build_resume_project_summary",
+    "generate_resume_project_descriptions",
     "build_resume_preview",
     "resume_to_markdown",
     "resume_to_json",

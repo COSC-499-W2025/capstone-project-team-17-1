@@ -61,7 +61,7 @@ class RepositoryAnalysisTests(unittest.TestCase):
 
         self.assertEqual(snapshot["classification"], "collaborative")
         self.assertEqual(snapshot["primary_contributor"], "Alice Example")
-        self.assertIn("csv", snapshot["exports"])
+        self.assertIn("collaboration", snapshot)
 
         conn = storage.open_db(db_dir)
         cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
@@ -71,7 +71,7 @@ class RepositoryAnalysisTests(unittest.TestCase):
         latest = storage.fetch_latest_snapshot(conn, "sample")
         self.assertIsNotNone(latest)
         self.assertEqual(latest["project_id"], "sample")
-        self.assertIn("scores", latest)
+        self.assertIn("collaboration", latest)
 
     def test_analyze_repository_adds_external_artifacts(self) -> None:
         descriptor = RepositoryDescriptor(provider="github", owner="acme", name="demo", url="https://github.com/acme/demo")
