@@ -96,6 +96,25 @@ class FileStoreUnitTests(unittest.TestCase):
         self.assertTrue(second["dedup"])
         self.assertTrue(Path(second["path"]).exists())
 
+    def test_cleanup_orphans_removes_unreferenced(self) -> None:
+        zip_path = self._make_zip_file()
+        meta = file_store.ensure_file(self.conn, zip_path, original_name="demo.zip", source="unit")
+        file_id = meta["file_id"]
+
+        # simulate orphan by setting ref_count=0 and deleting uploads
+        self.conn.execute("UPDATE files SET ref_count = 0 WHERE file_id = ?", (file_id,))
+        self.conn.execute("DELETE FROM uploads WHERE file_id = ?", (file_id,))
+        self.conn.commit()
+
+        path = Path(meta["path"])
+        self.assertTrue(path.exists())
+
+        stats = file_store.cleanup_orphans(self.conn)
+        self.assertEqual(stats["deleted_rows"], 1)
+        self.assertTrue(stats["deleted_files"] >= 0)  # may already be gone
+        self.assertFalse(path.exists())
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -175,3 +175,51 @@ def open_file(conn: sqlite3.Connection, file_id: str, *, files_root: Path | None
         if dest_path.exists():
             path = dest_path
     return open(path, "rb")
+
+
+def cleanup_orphans(
+    conn: sqlite3.Connection,
+    *,
+    files_root: Path | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Remove file blobs and DB rows that are no longer referenced.
+
+    Orphan criteria:
+      - files.ref_count <= 0, or
+      - no matching uploads rows for the file_id.
+    Returns {"checked": n, "deleted_rows": x, "deleted_files": y}.
+    """
+    root = files_root or DEFAULT_FILES_ROOT
+    stats = {"checked": 0, "deleted_rows": 0, "deleted_files": 0}
+
+    rows = conn.execute(
+        """
+        SELECT f.file_id, f.path, f.ref_count,
+               (SELECT COUNT(1) FROM uploads u WHERE u.file_id = f.file_id) AS upload_refs
+        FROM files f
+        """
+    ).fetchall()
+
+    for file_id, path_str, ref_count, upload_refs in rows:
+        stats["checked"] += 1
+        is_orphan = (ref_count or 0) <= 0 or (upload_refs or 0) == 0
+        if not is_orphan:
+            continue
+
+        dest_path = Path(path_str or _storage_path(root, file_id))
+        if not dry_run and dest_path.exists():
+            try:
+                dest_path.unlink()
+                stats["deleted_files"] += 1
+            except Exception:
+                logger.warning("Failed to delete orphan file %s", dest_path, exc_info=True)
+
+        if not dry_run:
+            conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+            stats["deleted_rows"] += 1
+
+    if not dry_run:
+        conn.commit()
+    return stats
