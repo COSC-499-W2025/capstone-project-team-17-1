@@ -24,3 +24,4 @@ data/capstone.db
 # databases
 *.db
 data/*.db
+data/files

@@ -27,6 +27,7 @@ from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
 from .storage import open_db, store_analysis_snapshot
+from . import file_store
 
 
 logger = get_logger(__name__)
@@ -63,11 +64,20 @@ class ZipAnalyzer:
             self._logger.error("Invalid input format for %s", zip_path)
             raise InvalidArchiveError(detail)
 
+        conn = open_db(db_dir)
+        stored = file_store.ensure_file(
+            conn,
+            zip_path,
+            original_name=zip_path.name,
+            source="zip_analyzer",
+        )
+        canonical_zip_path = Path(stored["path"])
+
         try:
-            with ZipFile(zip_path) as archive:
+            with ZipFile(canonical_zip_path) as archive:
                 return self._analyze_archive(
                     archive,
-                    zip_path,
+                    canonical_zip_path,
                     metadata_path,
                     summary_path,
                     mode,
@@ -75,6 +85,8 @@ class ZipAnalyzer:
                     start,
                     project_id,
                     db_dir,
+                    conn,
+                    stored,
                 )
         except BadZipFile as exc:
             detail = f"Corrupted zip archive ({exc})"
@@ -92,6 +104,8 @@ class ZipAnalyzer:
         start: float,
         project_id: str | None,
         db_dir: Path | None,
+        conn,
+        stored_file: dict,
     ) -> dict[str, object]:
         metadata_records: List[dict[str, object]] = []
         metrics_inputs: List[FileMetric] = []
@@ -276,6 +290,9 @@ class ZipAnalyzer:
 
         summary = {
             "archive": str(zip_path),
+            "archive_file_id": stored_file["file_id"],
+            "archive_hash": stored_file["hash"],
+            "archive_dedup": stored_file["dedup"],
             "requested_mode": mode.requested,
             "resolved_mode": mode.resolved,
             "mode_reason": mode.reason,

@@ -2119,7 +2119,6 @@ def main():
                         else:
                             print("Invalid choice. Please enter 1 or 2.")
                 elif choice == "12":
-                   # from capstone.storage import fetch_latest_snapshots
 
                     conn = open_db()
                     try:
