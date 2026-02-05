@@ -1423,47 +1423,33 @@ def main():
                             while True:
                                 sub = _prompt_menu(
                                     "Showcase Options",
-                                    ["Auto-generate showcase", "Customize", "Export PDF (LaTeX)", "Back to portfolio menu"],
+                                    ["Customize", "Export PDF (LaTeX)", "Back to portfolio menu"],
                                 )
-                                if sub in {"4", "b"}:
+                                if sub in {"3", "b"}:
                                     break
                                 if sub == "1":
-                                    # Persist auto-generated showcase
-                                    with _open_app_db() as conn:
-                                        for item in showcase_entries:
-                                            summary = item.get("summary") or ""
-                                            if not summary:
-                                                continue
-                                            try:
-                                                upsert_resume_project_description(
-                                                    conn,
-                                                    project_id=item["project_id"],
-                                                    summary=summary,
-                                                    variant_name="portfolio_showcase",
-                                                    metadata={"source": "auto"},
-                                                )
-                                            except Exception as exc:
-                                                print(f"Save failed for {item['project_id']}: {exc}")
-                                            else:
-                                                print(f"Saved showcase for {item['project_id']}.")
-                                    continue
-                                if sub == "2":
                                     # Interactive editor
                                     while True:
-                                        print("\nShowcase entries:")
-                                        for idx, item in enumerate(showcase_entries, start=1):
-                                            print(f"{idx}. {item.get('name') or item.get('project_id')}")
-                                        pick = input(
-                                            "Select an entry number (blank to cancel, b to back): "
-                                        ).strip().lower()
-                                        if not pick:
-                                            break
-                                        if pick == "b":
-                                            break
-                                        if not pick.isdigit() or not (1 <= int(pick) <= len(showcase_entries)):
-                                            print("Invalid selection.")
-                                            continue
-                                        item = showcase_entries[int(pick) - 1]
+                                        single_item = len(showcase_entries) == 1
+                                        if single_item:
+                                            item = showcase_entries[0]
+                                        else:
+                                            print("\nShowcase entries:")
+                                            for idx, item in enumerate(showcase_entries, start=1):
+                                                print(f"{idx}. {item.get('name') or item.get('project_id')}")
+                                            pick = input(
+                                                "Select an entry number (blank to cancel, b to back): "
+                                            ).strip().lower()
+                                            if not pick:
+                                                break
+                                            if pick == "b":
+                                                break
+                                            if not pick.isdigit() or not (1 <= int(pick) <= len(showcase_entries)):
+                                                print("Invalid selection.")
+                                                continue
+                                            item = showcase_entries[int(pick) - 1]
+                                        back_to_entries = False
+                                        back_to_options = False
                                         while True:
                                             # Show the full markdown
                                             print("\nCurrent showcase (full):\n")
@@ -1475,13 +1461,11 @@ def main():
                                                     "Edit Highlights",
                                                     "Edit References",
                                                     "Edit full markdown",
-                                                    "Back to entries",
                                                     "Back to showcase options",
                                                 ],
                                             )
                                             if edit in {"5", "b"}:
-                                                break
-                                            if edit == "6":
+                                                back_to_options = True
                                                 break
                                             edit_label = "Showcase"
                                             if edit == "4":
@@ -1598,7 +1582,11 @@ def main():
                                                     print(f"Save failed: {exc}")
                                             print("\nUpdated Showcase Preview:\n")
                                             print(_format_portfolio_showcase(showcase_entries))
-                                if sub == "3":
+                                        if back_to_options:
+                                            break
+                                    if back_to_options:
+                                        break
+                                if sub == "2":
                                     from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 
                                     preview_path = pathlib.Path("analysis_output") / "portfolio_showcase.pdf"
