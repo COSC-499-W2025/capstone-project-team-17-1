@@ -1,7 +1,7 @@
 API Endpoints
 
 Overview
-- The API is served by `capstone.portfolio_retrieval.create_app` (FastAPI).
+- The API is served by `capstone.api.server.create_app` (FastAPI).
 - All endpoints are JSON and return `{ data, error, meta? }`.
 - Base URL defaults to `http://127.0.0.1:<port>` when launched via the CLI.
 
@@ -42,11 +42,9 @@ Resume Entries
   - Creates a resume entry.
   - Body: `section`, `title`, `body` required. Optional `summary`, `status`, `metadata` (object),
     `projects` (array), `skills` (array), `created_at`.
-- `POST /resume/{id}/edit`
+- `PATCH /resume/{id}`
   - Updates a resume entry.
-  - Alias: `POST /resume/<entry_id>/edit`.
   - Body: any subset of `section`, `title`, `summary`, `body`, `status`, `metadata`, `projects`, `skills`.
-  - Note: FastAPI variant accepts `PATCH /resume/{entry_id}` as well.
 
 Resume Generation
 - `POST /resume/generate`
