@@ -27,7 +27,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._build_skills_timeline_rows", return_value=builder_return) as build_mock, \
             patch("main._format_skills_timeline", return_value="formatted skills"):
 
-            inputs = ["8", "2", "2", "12"]  # select project #2 (Bravo), then back, then exit
+            inputs = ["8", "2", "2", "13"]  # select project #2 (Bravo), then back, then exit
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO) as buf:
                 try:
                     main.main()
@@ -58,7 +58,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._build_skills_timeline_rows") as build_mock, \
             patch("main._format_skills_timeline", return_value="formatted skills"):
 
-            inputs = ["8", "", "12"]  # enter option 8, cancel selection, then exit
+            inputs = ["8", "", "13"]  # enter option 8, cancel selection, then exit
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO):
                 try:
                     main.main()
@@ -80,7 +80,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._build_skills_timeline_rows", return_value=[]) as build_mock, \
             patch("main._format_skills_timeline", return_value="formatted"):
 
-            inputs = ["8", "1 2", "2", "12"]  # pick both, back to menu, exit
+            inputs = ["8", "1 2", "2", "13"]  # pick both, back to menu, exit
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO):
                 with self.assertRaises(SystemExit):
                     main.main()
@@ -102,7 +102,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._format_skills_timeline", return_value="formatted"):
 
             # First run select 1, then choose "view another" -> forced_choice triggers second run, then select 1 again, back, exit
-            inputs = ["8", "1", "1", "1", "2", "12"]
+            inputs = ["8", "1", "1", "1", "2", "13"]
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO):
                 with self.assertRaises(SystemExit):
                     main.main()
@@ -123,7 +123,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._format_skills_timeline", return_value="formatted"):
 
             # invalid: non-numeric, out-of-range 5, then valid 1; back, exit
-            inputs = ["8", "a b", "5", "1", "2", "12"]
+            inputs = ["8", "a b", "5", "1", "2", "13"]
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO) as buf:
                 with self.assertRaises(SystemExit):
                     main.main()
@@ -143,7 +143,7 @@ class CLISkillTimelineTests(unittest.TestCase):
             patch("main._build_skills_timeline_rows") as build_mock, \
             patch("main._format_skills_timeline", return_value="formatted"):
 
-            inputs = ["8", "12"]
+            inputs = ["8", "13"]
             with patch("builtins.input", side_effect=inputs), patch("sys.stdout", new_callable=io.StringIO) as buf:
                 with self.assertRaises(SystemExit):
                     main.main()

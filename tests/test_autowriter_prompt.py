@@ -34,7 +34,7 @@ class TestAutoWriterPrompt(unittest.TestCase):
                 "active_days": 42,
             },
             "languages": {"Python": 10},
-            "frameworks": ["Flask"],
+            "frameworks": [],
             "collaboration": {
                 "primary_contributor": "alice",
                 "contributors": {"alice": 8, "bob": 2},

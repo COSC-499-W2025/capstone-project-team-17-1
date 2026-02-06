@@ -106,8 +106,6 @@ async def resume_insert(request: Request):
             skills=payload.get("skills"),
             projects=payload.get("projects"),
             status=payload.get("status"),
-            start_date=payload.get("start_date"),
-            end_date=payload.get("end_date"),
             metadata=payload.get("metadata"),
         )
     return {"data": result.to_dict(), "error": None}
@@ -288,3 +286,32 @@ async def resume_projects_post(request: Request):
 
 
 @router.post("/resume-projects/generate")
+async def resume_projects_generate(request: Request):
+    _check_auth(request)
+    payload = await _get_payload(request)
+    project_ids = payload.get("projectIds") or payload.get("project_ids") or payload.get("projectId")
+    overwrite = bool(payload.get("overwrite", False))
+
+    if isinstance(project_ids, str):
+        project_ids = [project_ids]
+
+    if not project_ids or not isinstance(project_ids, list):
+        raise HTTPException(status_code=400, detail="projectIds is required")
+
+    ids = [str(pid) for pid in project_ids]
+
+    with _db_session(_DB_DIR) as c:
+        ensure_resume_schema(c)
+        latest_map = fetch_latest_snapshots_for_projects(c, ids)
+        missing = [pid for pid, snap in latest_map.items() if snap is None]
+        if missing:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        items = generate_resume_project_descriptions(
+            c,
+            project_ids=ids,
+            overwrite=overwrite,
+        )
+
+    payload = [item.to_dict() for item in items]
+    return {"data": payload, "meta": {"total": len(payload)}, "error": None}

@@ -21,6 +21,9 @@ from capstone.api.portfolio_helpers import ensure_indexes, list_snapshots
 
 router = APIRouter(tags=["portfolio", "resume", "users"])
 
+# align naming used in handlers
+get_latest_snapshot = fetch_latest_snapshot
+
 _DB_DIR: Optional[str] = None
 _TOKEN: Optional[str] = None
 
@@ -184,6 +187,17 @@ async def generate_portfolio_showcase(request: Request):
     return {"data": results, "error": None}
 
 
+@router.post("/portfolio/showcase/edit")
+async def edit_portfolio_showcase_query(request: Request):
+    _check_auth(request)
+    payload = await _get_payload(request)
+    project_id = (payload.get("projectId") or "").strip()
+    summary = (payload.get("summary") or "").strip()
+    if not project_id or not summary:
+        raise HTTPException(status_code=400, detail="projectId and summary are required")
+    return await edit_portfolio_showcase(project_id, request)
+
+
 @router.post("/portfolio/{project_id}/edit")
 async def edit_portfolio_showcase(project_id: str, request: Request):
     _check_auth(request)
@@ -201,45 +215,3 @@ async def edit_portfolio_showcase(project_id: str, request: Request):
             metadata={"source": "custom"},
         )
     return {"data": item.to_dict(), "error": None}
-
-
-@router.post("/portfolio/showcase/edit")
-async def edit_portfolio_showcase_query(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_id = (payload.get("projectId") or "").strip()
-    summary = (payload.get("summary") or "").strip()
-    if not project_id or not summary:
-        raise HTTPException(status_code=400, detail="projectId and summary are required")
-    return await edit_portfolio_showcase(project_id, request)
-
-
-async def resume_projects_generate(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_ids = payload.get("projectIds") or payload.get("project_ids") or payload.get("projectId")
-    overwrite = bool(payload.get("overwrite", False))
-
-    if isinstance(project_ids, str):
-        project_ids = [project_ids]
-
-    if not project_ids or not isinstance(project_ids, list):
-        raise HTTPException(status_code=400, detail="projectIds is required")
-
-    ids = [str(pid) for pid in project_ids]
-
-    with _db_session(_DB_DIR) as c:
-        ensure_resume_schema(c)
-        latest_map = fetch_latest_snapshots_for_projects(c, ids)
-        missing = [pid for pid, snap in latest_map.items() if snap is None]
-        if missing:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        items = generate_resume_project_descriptions(
-            c,
-            project_ids=ids,
-            overwrite=overwrite,
-        )
-
-    payload = [item.to_dict() for item in items]
-    return {"data": payload, "meta": {"total": len(payload)}, "error": None}

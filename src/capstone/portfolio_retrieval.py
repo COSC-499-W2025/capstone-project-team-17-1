@@ -39,7 +39,10 @@ def _db_session(db_dir: str | None):
         yield conn
     finally:
         if _close_db is not None:
-            _close_db(conn)
+            try:
+                _close_db(conn)
+            except TypeError:
+                _close_db()
         else:
             conn.close()
 
