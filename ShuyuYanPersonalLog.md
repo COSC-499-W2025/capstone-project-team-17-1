@@ -333,6 +333,7 @@ Beyond feature development, I discussed implementation details and design decisi
 
  ## Term2 week5 Personal LOG (Feb2-Feb8, 2026)
 ### 1. Type of Tasks Worked On
+<img width="1073" height="616" alt="Screenshot 2026-02-06 at 6 14 36 PM" src="https://github.com/user-attachments/assets/e93c3441-bdef-441f-acfe-45deba9dab70" />
 
 ### 2. Weekly Goals Recap
 - complete [portfolio showcase customizatio+ export pdf (#200)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/200)
