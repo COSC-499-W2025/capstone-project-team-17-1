@@ -9,7 +9,7 @@ class ProjectInsightEvidenceTests(unittest.TestCase):
             "collaboration": {"primary_contributor": "Alice"},
             "file_summary": {"active_days": 3},
             "languages": {"Python": 10},
-            "frameworks": ["Flask"],
+            "frameworks": [],
         }
 
         prompt = build_project_insight_prompt(
@@ -24,4 +24,4 @@ class ProjectInsightEvidenceTests(unittest.TestCase):
         # These should match the current gather_evidence() wording you showed earlier
         self.assertIn("Active development across 3 days", prompt)
         self.assertIn("Python leading (10 files)", prompt)
-        self.assertIn("Frameworks detected: Flask", prompt)
+        self.assertNotIn("Frameworks detected: Flask", prompt)

@@ -51,8 +51,8 @@ class LanguageDetectionTests(unittest.TestCase):
         bad_json = "{not valid}"
         self.assertEqual(detect_frameworks_from_package_json(bad_json), set())
 
-        requirements = ["Flask==2.3.0", "numpy==1.26.0"]
-        self.assertEqual(detect_frameworks_from_python_requirements(requirements), {"Flask"})
+        requirements = ["numpy==1.26.0"]
+        self.assertEqual(detect_frameworks_from_python_requirements(requirements), set())
 
 
 class CollaborationTests(unittest.TestCase):

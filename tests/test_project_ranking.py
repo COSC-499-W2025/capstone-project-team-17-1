@@ -73,7 +73,7 @@ class ProjectRankingTests(unittest.TestCase):
                 "activity_breakdown": {"code": 2, "documentation": 1},
             },
             "languages": {"Python": 2, "Markdown": 1},
-            "frameworks": ["Flask"],
+            "frameworks": [],
             "collaboration": {
                 "contributors": {"me": 3},
                 "primary_contributor": "me",

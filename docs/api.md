@@ -1,7 +1,7 @@
 API Endpoints
 
 Overview
-- The API is served by `capstone.portfolio_retrieval.create_app` (Flask).
+- The API is served by `capstone.api.server.create_app` (FastAPI).
 - All endpoints are JSON and return `{ data, error, meta? }`.
 - Base URL defaults to `http://127.0.0.1:<port>` when launched via the CLI.
 
@@ -18,6 +18,18 @@ Portfolios
 - `GET /portfolios/evidence?projectId=<id>`
   - Returns a simple evidence/metrics summary for a project.
 
+Portfolio API (`src/capstone/api/routes/portfolio.py`)
+
+Users
+- `GET /users`
+  - Returns a list of contributor usernames (bot accounts filtered out).
+- `GET /users/{user}/projects`
+  - Returns the project IDs a contributor appears in.
+- `GET /portfolio/summary?user=<user>&limit=3`
+  - Returns markdown portfolio summaries for a user.
+
+Resume API (`src/capstone/api/routes/resume.py`)
+
 Resume Entries
 - `GET /resume?format=preview|json&section=projects&keyword=...`
   - Lists resume entries or returns a preview payload when `format=preview`.
@@ -30,9 +42,8 @@ Resume Entries
   - Creates a resume entry.
   - Body: `section`, `title`, `body` required. Optional `summary`, `status`, `metadata` (object),
     `projects` (array), `skills` (array), `created_at`.
-- `POST /resume/{id}/edit`
+- `PATCH /resume/{id}`
   - Updates a resume entry.
-  - Alias: `POST /resume/<entry_id>/edit`.
   - Body: any subset of `section`, `title`, `summary`, `body`, `status`, `metadata`, `projects`, `skills`.
 
 Resume Generation
@@ -62,12 +73,16 @@ Portfolio Showcase
 - `GET /portfolio/{id}`
   - Returns the saved showcase summary for a project (variant: `portfolio_showcase`).
   - If no saved summary exists, returns an auto summary from the latest snapshot.
+- `GET /portfolio/showcase?projectId=<id>`
+  - Query alias for `GET /portfolio/{id}`.
 - `POST /portfolio/generate`
   - Auto-generates and saves showcase summaries for projects.
   - Body: `projectIds` array.
 - `POST /portfolio/{id}/edit`
   - Updates (or creates) the showcase summary for a project.
   - Body: `summary` (string, required).
+- `POST /portfolio/showcase/edit`
+  - Body: `projectId`, `summary` (string, required).
 
 Portfolio Showcase Examples
 ```json

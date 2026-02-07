@@ -32,6 +32,14 @@ capstone config reset
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
+## PDF Export Dependencies
+
+PDF export requires `pandoc` and a LaTeX engine (`tectonic` recommended). On macOS you can install both with:
+
+```bash
+./scripts/setup.sh
+```
+
 Key features:
 - Encrypted local configuration that stores consent decisions, analysis preferences, and last-opened folders.
 - Consent workflow that blocks analysis until users explicitly grant permission.
@@ -371,4 +379,3 @@ Member Name: **Raunak Khanna** Signature: **Raunakk>.** Date: **11/24/2025**
 Member Name: **Shuyu Yan** Signature: **Shuyu yan** Date: **11/24/2025**
 
 Member Name: **Michelle Zhou** Signature: **Michelle Zhou** **Date: 11/24/2025**
-

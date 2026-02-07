@@ -15,9 +15,11 @@ if str(ROOT) not in sys.path:
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-# Avoid importing the real capstone.cli (it can pull in Flask)
+# Avoid importing the real capstone.cli (heavy imports)
 dummy_cli = types.ModuleType("capstone.cli")
 dummy_cli.main = lambda argv=None: 0
+dummy_cli.prompt_project_metadata = lambda *args, **kwargs: {}
+dummy_cli.pick_zip_file = lambda *args, **kwargs: ""
 sys.modules["capstone.cli"] = dummy_cli
 
 import main as app  # noqa: E402
@@ -35,16 +37,24 @@ def _entrypoint():
 class _FakeCursor:
     def __init__(self):
         self.calls = []
+        self._rows = []
 
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
+        sql_lower = sql.lower()
+        if "select distinct contributor" in sql_lower:
+            self._rows = getattr(self, "_user_rows", [])
+        elif "from contributor_stats" in sql_lower and "contributor" in sql_lower:
+            self._rows = getattr(self, "_project_rows", [])
+        elif "from contributor_stats" in sql_lower:
+            self._rows = getattr(self, "_user_rows", [])
         return self
 
     def fetchone(self):
         return None
 
     def fetchall(self):
-        return []
+        return list(self._rows)
 
 
 class _FakeConn:
@@ -81,19 +91,32 @@ class _ConnCM:
 
 
 class MainMenuTests(unittest.TestCase):
-    def run_menu(self, inputs, *, grant=True, rows=None, consent_status="granted_existing"):
+    def run_menu(self, inputs, *, grant=True, rows=None, consent_status="granted_existing", user_rows=None):
         out = io.StringIO()
         conn = _FakeConn()
+        conn.cursor_obj._user_rows = [("alice",)]
+        conn.cursor_obj._project_rows = [("p1",)]
+        if user_rows is not None:
+            conn.cursor_obj._user_rows = user_rows
+        if user_rows is not None and rows:
+            conn.cursor_obj._project_rows = [(rows[0]["project_id"],)]
 
         if rows is None:
             rows = []
+
+        input_iter = iter(list(inputs))
+        def _next_input(_prompt=""):
+            try:
+                return next(input_iter)
+            except StopIteration:
+                raise SystemExit
 
         with (
             patch.object(app, "grant_consent", return_value=grant),
             patch.object(app, "ensure_or_prompt_consent", return_value=consent_status),
             patch.object(app, "open_db", return_value=_ConnCM(conn)),
             patch.object(app, "fetch_latest_snapshots", return_value=rows),
-            patch("builtins.input", side_effect=list(inputs)),
+            patch("builtins.input", side_effect=_next_input),
             redirect_stdout(out),
         ):
             try:
@@ -108,7 +131,7 @@ class MainMenuTests(unittest.TestCase):
         self.assertIn("Consent is required", text)
 
     def test_no_projects(self):
-        text, _ = self.run_menu(inputs=["3", "12"], rows=[])
+        text, _ = self.run_menu(inputs=["3", "13"], rows=[])
         self.assertIn("No projects found", text)
 
     def test_lists_projects(self):
@@ -121,7 +144,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["3", "2", "12"], rows=rows)
+        text, _ = self.run_menu(inputs=["3", "2", "13"], rows=rows)
 
         # Accept either name key depending on your printing logic
         self.assertTrue(("Demo" in text) or ("p1" in text))
@@ -135,11 +158,12 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "grant_consent", return_value=True),
             patch.object(app, "ensure_or_prompt_consent", return_value="granted_existing"),
             patch.object(app, "open_db", return_value=_ConnCM(conn)),
+            patch.object(app, "_open_app_db", return_value=_ConnCM(conn)),
             patch.object(app, "fetch_latest_snapshots", return_value=rows),
             patch.object(app, "SnapshotStore") as store_mock,
             patch.object(app, "ArchiveAnalyzerService") as svc_mock,
             patch.object(app.os.path, "isfile", return_value=True),
-            patch("builtins.input", side_effect=["1", "C:\\tmp\\demo.zip", "n", "12"]),
+            patch("builtins.input", side_effect=["1", "n", "C:\\tmp\\demo.zip", "n", "13"]),
             redirect_stdout(out),
         ):
             svc_instance = svc_mock.return_value
@@ -166,6 +190,8 @@ class MainMenuTests(unittest.TestCase):
 
         out = io.StringIO()
         conn = _FakeConn()
+        conn.cursor_obj._user_rows = [("alice",)]
+        conn.cursor_obj._project_rows = [("p1",)]
 
         with (
             patch.object(app, "grant_consent", return_value=True),
@@ -174,7 +200,7 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "fetch_latest_snapshots", return_value=rows),
             patch.object(app, "generate_top_project_summaries", return_value=[{"id": "p1"}]),
             patch.object(app, "export_markdown", return_value="SUMMARY") as export_mock,
-            patch("builtins.input", side_effect=["5", "1", "3", "12"]),
+            patch("builtins.input", side_effect=["5", "1", "1", "n", "3", "13"]),
             redirect_stdout(out),
         ):
             try:
@@ -195,7 +221,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["5", "2", "1", "3", "3", "12"], rows=rows)
+        text, _ = self.run_menu(inputs=["5", "1", "2", "1", "3", "3", "13"], rows=rows, user_rows=[("alice",)])
         self.assertIn("Portfolio Showcase Preview", text)
 
     def test_resume_preview_menu_flow(self):
@@ -208,7 +234,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["6", "1", "3", "12"], rows=rows)
+        text, _ = self.run_menu(inputs=["6", "1", "3", "13"], rows=rows)
         self.assertIn("Resume Preview", text)
 
     def test_resume_customize_summary_add(self):
@@ -283,7 +309,7 @@ class MainMenuTests(unittest.TestCase):
                     "8",  # back from edit entry
                     "",   # cancel entry selection
                     "2",  # back to main menu
-                    "12", # exit
+                    "13", # exit
                 ],
                 rows=rows,
             )
@@ -352,12 +378,12 @@ class MainMenuTests(unittest.TestCase):
                     "1",
                     "3",  # skills
                     "1",  # add
-                    "Python, Flask",
+                    "Python",
                     "3",  # back from skills
                     "8",
                     "",
                     "2",
-                    "12",
+                    "13",
                 ],
                 rows=rows,
             )
@@ -397,23 +423,22 @@ class MainMenuTests(unittest.TestCase):
             text, _ = self.run_menu(
                 inputs=[
                     "5",  # portfolio options
+                    "1",  # user select
                     "2",  # showcase
                     "1",  # select project
-                    "2",  # customize
-                    "1",  # entry 1
+                    "1",  # customize
                     "2",  # edit highlights
                     "1",  # add
                     "New highlight",
-                    "5",  # back from editor
-                    "b",  # back from entry list
+                    "5",  # back to showcase options
                     "3",  # back to portfolio menu
-                    "3",  # back to main menu
-                    "12",
+                    "13",
                 ],
                 rows=rows,
+                user_rows=[("alice",)],
             )
 
-        self.assertIn("Saved successfully.", text)
+        self.assertIn("Highlights updated successfully.", text)
 
     def test_portfolio_showcase_customize_references_delete(self):
         rows = [
@@ -448,19 +473,19 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "5", "2", "1",
-                    "2", "1",
+                    "5", "1", "2", "1",
+                    "1",  # customize
                     "3",  # edit references
                     "2",  # delete
                     "1",  # delete all
-                    "5",  # back from editor
-                    "b",  # back from entry list
-                    "3", "3", "12",
+                    "5",  # back to showcase options
+                    "3", "13",
                 ],
                 rows=rows,
+                user_rows=[("alice",)],
             )
 
-        self.assertIn("Saved successfully.", text)
+        self.assertIn("References updated successfully.", text)
 
     def test_portfolio_showcase_edit_full_markdown(self):
         rows = [
@@ -482,18 +507,18 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "5", "2", "1",
-                    "2", "1",
+                    "5", "1", "2", "1",
+                    "1",  # customize
                     "4",  # edit full markdown
                     "FULL MARKDOWN",
-                    "5",  # back from editor
-                    "b",  # back from entry list
-                    "3", "3", "12",
+                    "5",  # back to showcase options
+                    "3", "13",
                 ],
                 rows=rows,
+                user_rows=[("alice",)],
             )
 
-        self.assertIn("Saved successfully.", text)
+        self.assertIn("Showcase content updated successfully.", text)
 
     def test_resume_customize_linked_projects_add(self):
         rows = [
@@ -556,7 +581,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # add
                     "1",  # select project
                     "3",  # back
-                    "8", "", "2", "12",
+                    "8", "", "2", "13",
                 ],
                 rows=rows,
             )
@@ -624,7 +649,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # add
                     "2026-01", "2026-02",
                     "3",  # back
-                    "8", "", "2", "12",
+                    "8", "", "2", "13",
                 ],
                 rows=rows,
             )
