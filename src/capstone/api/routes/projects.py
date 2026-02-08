@@ -107,3 +107,47 @@ def get_project(project_id: str):
         "size_bytes": row[5],
         "stored_path": row[6],
     }
+
+@router.delete("/{project_id}")
+def delete_project(project_id: str):
+    """
+    Deletes a project upload and its associated stored file.
+    """
+    conn = storage.open_db()
+
+    row = conn.execute(
+        """
+        SELECT u.file_id, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    file_id, file_path = row
+
+    # delete upload reference
+    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (project_id,))
+    # delete file reference
+    conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    conn.commit()
+
+    # best-effort physical file removal
+    try:
+        Path(file_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    return {
+        "data": {
+            "deleted": True,
+            "project_id": project_id,
+            "file_id": file_id,
+        },
+        "error": None,
+    }
+
