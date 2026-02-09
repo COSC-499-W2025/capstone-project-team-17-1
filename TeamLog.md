@@ -5,7 +5,7 @@
 - [Week 2 Team Log (Term2)](#week-2-team-log-term2)
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
 - [Week 4 Team Log (Term2)](#week-4-team-log-term2)
-- [Week 5 Team Log (Term2)](#week-5-team-log-term2)
+- [Week 4&5 Team Log (Term2)](#week-4&5-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
