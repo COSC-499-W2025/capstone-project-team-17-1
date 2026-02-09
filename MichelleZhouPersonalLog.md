@@ -297,7 +297,7 @@ The past two weeks continued from previous last week’s focus on stabilization 
 Coding tasks
 I fully completed the job description matching feature ([PR #207](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/207)), enabling users to input or load a job posting and compare it against analyzed project skills through a unified, menu-driven flow. This involved integrating skill extraction, project skill retrieval, and resume-friendly result formatting that clearly distinguishes matched and missing skills.
 
-In parallel, I expanded and aligned the backend by adding new FastAPI portfolio endpoints ([PR #205](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/205) for generating, retrieving, editing, and exporting portfolios. Export supports JSON, Markdown, and PDF formats, with proper binary handling and response headers for PDF downloads.
+In parallel, I expanded and aligned the backend by adding new FastAPI portfolio endpoints ([PR #205](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/205)) for generating, retrieving, editing, and exporting portfolios. Export supports JSON, Markdown, and PDF formats, with proper binary handling and response headers for PDF downloads.
 
 To ensure consistency across the system, I aligned CLI behavior with the new FastAPI routes so portfolio and job matching features follow the same logic regardless of access point. I also refactored shared logic into helper functions, introduced enum-based export validation, and spent time researching and applying FastAPI concepts such as routing, request validation, and dependency handling to improve reliability and extensibility.
 
