@@ -491,7 +491,7 @@ Overall, the team has strengthened the system foundation by stabilizing core pip
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
 
 ### Burnup chart Week 4+5
-<img width="1626" height="879" alt="image" src="https://github.com/user-attachments/assets/bdd9b246-6faa-4514-a7a6-10951fc7cd63" />
+<img width="831" height="552" alt="image" src="https://github.com/user-attachments/assets/9c3a9932-2d21-46dc-8eab-f95dc3eb553b" />
 
 ### Completed Tasks Week 4+5
 <img width="1921" height="819" alt="image" src="https://github.com/user-attachments/assets/a298aefe-a490-41db-af4b-4ec54ddccf45" />
