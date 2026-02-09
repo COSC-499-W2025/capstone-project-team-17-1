@@ -16,6 +16,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -565,6 +566,117 @@ def fetch_github_source(conn: sqlite3.Connection, project_id: str) -> dict | Non
         "created_at": created_at,
     }
 
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def store_uploaded_file_bytes(
+    conn: sqlite3.Connection,
+    *,
+    data: bytes,
+    original_name: str | None = None,
+    uploader: str | None = None,
+    source: str | None = None,
+    base_dir: Path | None = None,
+    mime: str | None = None,
+) -> dict:
+    """
+    Content-addressable storage:
+    - Hash file bytes (sha256)
+    - If hash already exists in `files`, increment ref_count and reuse file_id
+    - Always create a row in `uploads` for traceability
+    Returns dict with upload_id, file_id, hash, path.
+    """
+    if data is None:
+        raise ValueError("data must be provided")
+
+    file_hash = _sha256_bytes(data)
+    size_bytes = len(data)
+
+    # Where to store the file on disk
+    # Keep it deterministic so dedupe is easy.
+    root = base_dir or DB_DIR
+    files_dir = root / "blobs"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    blob_path = files_dir / f"{file_hash}.bin"
+
+    # Try to insert new file row, otherwise reuse existing row
+    file_id = str(uuid.uuid4())
+
+    # Use a transaction so ref_count + upload row stays consistent
+    with conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO files (file_id, hash, size_bytes, mime, path, ref_count)
+                VALUES (?, ?, ?, ?, ?, 1)
+                """,
+                (file_id, file_hash, size_bytes, mime, str(blob_path)),
+            )
+            # Only write bytes when we successfully inserted a new hash
+            blob_path.write_bytes(data)
+        except sqlite3.IntegrityError:
+            # hash already exists -> increment ref_count and reuse existing file_id/path
+            conn.execute(
+                """
+                UPDATE files
+                SET ref_count = ref_count + 1
+                WHERE hash = ?
+                """,
+                (file_hash,),
+            )
+            row = conn.execute(
+                """
+                SELECT file_id, path
+                FROM files
+                WHERE hash = ?
+                LIMIT 1
+                """,
+                (file_hash,),
+            ).fetchone()
+            file_id = row[0]
+            blob_path = Path(row[1])
+
+        upload_id = str(uuid.uuid4())
+        conn.execute(
+            """
+            INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (upload_id, original_name, uploader, source, file_hash, file_id),
+        )
+
+    return {
+        "upload_id": upload_id,
+        "file_id": file_id,
+        "hash": file_hash,
+        "path": str(blob_path),
+        "size_bytes": size_bytes,
+    }
+
+
+def fetch_file_row_by_hash(conn: sqlite3.Connection, file_hash: str) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT file_id, hash, size_bytes, mime, path, ref_count, created_at
+        FROM files
+        WHERE hash = ?
+        LIMIT 1
+        """,
+        (file_hash,),
+    ).fetchone()
+    if not row:
+        return None
+    file_id, h, size_bytes, mime, path, ref_count, created_at = row
+    return {
+        "file_id": file_id,
+        "hash": h,
+        "size_bytes": size_bytes,
+        "mime": mime,
+        "path": path,
+        "ref_count": ref_count,
+        "created_at": created_at,
+    }
 
 
 # Contributor stats
@@ -915,4 +1027,7 @@ __all__ = [
     # backup/export
     "backup_database",
     "export_snapshots_to_json",
+    "store_uploaded_file_bytes",
+    "fetch_file_row_by_hash",
+
 ]
