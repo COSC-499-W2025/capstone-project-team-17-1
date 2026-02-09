@@ -367,6 +367,61 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     return json.loads(row[0]) if row else None
 
 
+def fetch_project_snapshot_history(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    limit: int | None = None,
+) -> list[dict]:
+    """
+    Fetch ALL snapshots for one project (history), newest-first by default.
+
+    This supports Milestone #21 (incremental information over time):
+    multiple uploads for the same project should produce multiple rows.
+    """
+    if not project_id:
+        return []
+
+    sql = """
+        SELECT
+            id,
+            project_id,
+            classification,
+            primary_contributor,
+            snapshot,
+            created_at
+        FROM project_analysis
+        WHERE project_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+    """
+    params: tuple = (project_id,)
+
+    if limit is not None:
+        if int(limit) <= 0:
+            return []
+        sql += " LIMIT ?"
+        params = (project_id, int(limit))
+
+    rows = conn.execute(sql, params).fetchall()
+
+    out: list[dict] = []
+    for row_id, pid, classification, contributor, snapshot_json, created_at in rows:
+        try:
+            snap = json.loads(snapshot_json)
+        except Exception:
+            snap = {}
+        out.append(
+            {
+                "id": row_id,
+                "project_id": pid,
+                "classification": classification,
+                "primary_contributor": contributor,
+                "created_at": created_at,
+                "snapshot": snap,
+            }
+        )
+    return out
+
 def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
     """
     Return newest snapshot for every project saved in the database.
