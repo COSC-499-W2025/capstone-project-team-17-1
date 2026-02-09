@@ -5,7 +5,7 @@
 - [T2 Week 1 Personal Log](#T2-week-1-personal-log)
 - [T2 Week 2 Personal Log](#T2-week-2-personal-log)
 - [T2 Week 3 Personal Log](#T2-week-3-personal-log)
-- [T2 Week 4+5 Personal Log](#T2-week-4+5-personal-log)
+- [T2 Week 5 Personal Log](#T2-week-5-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -285,7 +285,7 @@ I reviewed and tested teammate PRs by providing feedback on usability, code reus
 This week's main blocker was the interaction between persisted configuration state and test isolation. This was resolved by redirecting congif and log paths to temporary directories during tests and avoiding implicit stdin reads. Next week, I will focus on implementing Resume Textual Display task #179. This will include generating resume ready project entries containing relevant details. The goal is to ensure the content is professionally formatted and suitable for direct inclusion in a resume while integrating cleanly with existing snapshot and resume pipelines.
 
 
-## T2 Week 4+5 Personal Log
+## T2 Week 5 Personal Log
 
 - (Jan 26 - Feb 08, 2025)<br />
 
