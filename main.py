@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import pathlib
+import base64
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -29,13 +30,11 @@ from capstone.resume_retrieval import (
     build_resume_project_summary,
     build_resume_preview,
     delete_resume_project_description,
-    export_resume,
     generate_resume_project_descriptions,
     get_resume_entry,
     get_resume_project_description,
     insert_resume_entry,
     query_resume_entries,
-    resolve_resume_project_descriptions,
     update_resume_entry,
     upsert_resume_project_description,
 )
@@ -635,6 +634,30 @@ def prompt_save_path_any(
     root.destroy()
     return path
 
+
+def _export_resume_pdf_via_api(resume_preview: dict, destination: pathlib.Path) -> tuple[bool, str]:
+    api_base = (os.environ.get("CAPSTONE_API_URL") or "http://127.0.0.1:5000").rstrip("/")
+    endpoint = f"{api_base}/resume/render-pdf"
+    token = os.environ.get("CAPSTONE_API_TOKEN") or os.environ.get("CAPSTONE_API_AUTH_TOKEN")
+    payload = json.dumps({"resume": resume_preview}).encode("utf-8")
+    req = urllib.request.Request(endpoint, data=payload, method="POST")
+    req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            body = response.read().decode("utf-8")
+        data = json.loads(body)
+        encoded = ((data or {}).get("data") or {}).get("payload")
+        if not encoded:
+            return False, "API response missing PDF payload"
+        pdf_bytes = base64.b64decode(encoded)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(pdf_bytes)
+        return True, ""
+    except Exception as exc:
+        return False, str(exc)
+
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
         raw = input(prompt).strip()
@@ -1026,6 +1049,201 @@ def _filter_resume_result_by_project_ids(result, project_ids: Iterable[str]):
         missing_sections=list(result.missing_sections or []),
         schema_state=dict(result.schema_state or {}),
     )
+
+
+def _extract_skill_names(snapshot_data: dict) -> List[str]:
+    names: List[str] = []
+    raw_skills = snapshot_data.get("skills") or []
+    for skill in raw_skills:
+        if isinstance(skill, str):
+            token = skill.strip()
+        elif isinstance(skill, dict):
+            token = (
+                str(skill.get("skill") or skill.get("name") or skill.get("framework") or skill.get("language") or "")
+            ).strip()
+        else:
+            token = str(skill).strip()
+        if token:
+            names.append(token)
+    for fw in snapshot_data.get("frameworks") or []:
+        token = str(fw).strip()
+        if token:
+            names.append(token)
+    deduped: List[str] = []
+    seen: set[str] = set()
+    for token in names:
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(token)
+    return deduped
+
+
+def _load_user_contribution_map(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    username: str,
+    project_ids: Iterable[str],
+) -> dict[str, dict]:
+    payload: dict[str, dict] = {}
+    normalized = username.strip().lower()
+    for project_id in project_ids:
+        rows = fetch_latest_contributor_stats(conn, str(project_id))
+        matched = None
+        for row in rows:
+            row_user_id = row.get("user_id")
+            row_contributor = str(row.get("contributor") or "").strip().lower()
+            if row_user_id is not None and int(row_user_id) == int(user_id):
+                matched = row
+                break
+            if row_contributor and row_contributor == normalized:
+                matched = row
+                break
+        if not matched:
+            continue
+        payload[str(project_id)] = {
+            "commits": int(matched.get("commits") or 0),
+            "pull_requests": int(matched.get("pull_requests") or 0),
+            "issues": int(matched.get("issues") or 0),
+            "reviews": int(matched.get("reviews") or 0),
+            "score": float(matched.get("score") or 0.0),
+        }
+    return payload
+
+
+def _build_user_resume_preview(
+    *,
+    selected_username: str,
+    chosen_snapshots: List[dict],
+    contribution_map: dict[str, dict],
+) -> dict:
+    project_items: List[dict] = []
+    project_context: dict[str, dict] = {}
+    all_skills: List[str] = []
+    total_commits = 0
+    total_prs = 0
+    total_issues = 0
+    total_reviews = 0
+
+    for snap in chosen_snapshots:
+        snapshot_data = snap.get("snapshot") or {}
+        project_id = str(
+            snap.get("project_id")
+            or snapshot_data.get("project_id")
+            or snapshot_data.get("project")
+            or ""
+        )
+        name = (
+            snapshot_data.get("project_name")
+            or snapshot_data.get("project")
+            or snapshot_data.get("project_id")
+            or project_id
+            or "Untitled"
+        )
+        base_summary = build_resume_project_summary(project_id or name, snapshot_data)
+        contrib = contribution_map.get(project_id, {})
+        commits = int(contrib.get("commits") or 0)
+        prs = int(contrib.get("pull_requests") or 0)
+        issues = int(contrib.get("issues") or 0)
+        reviews = int(contrib.get("reviews") or 0)
+        contribution_line = (
+            f"Contribution: {commits} commits, {prs} PRs, {issues} issues, {reviews} reviews."
+            if contrib
+            else ""
+        )
+        excerpt = f"{base_summary} {contribution_line}".strip()
+        skills = _extract_skill_names(snapshot_data)
+        all_skills.extend(skills)
+        total_commits += commits
+        total_prs += prs
+        total_issues += issues
+        total_reviews += reviews
+
+        project_items.append(
+            {
+                "id": None,
+                "section": "projects",
+                "title": name,
+                "excerpt": excerpt,
+                "source": "snapshot+contributor_stats",
+                "updated_at": snap.get("created_at") or "-",
+                "metadata": {},
+                "status": "active",
+                "projectIds": [project_id] if project_id else [],
+                "skills": skills,
+            }
+        )
+        if project_id:
+            project_context[project_id] = snapshot_data
+
+    deduped_skills: List[str] = []
+    seen_skills: set[str] = set()
+    for token in all_skills:
+        key = token.lower()
+        if key in seen_skills:
+            continue
+        seen_skills.add(key)
+        deduped_skills.append(token)
+
+    summary_lines = [
+        f"{selected_username} contributed to {len(project_items)} selected project(s).",
+    ]
+    if total_commits or total_prs or total_issues or total_reviews:
+        summary_lines.append(
+            f"Totals: {total_commits} commits, {total_prs} PRs, {total_issues} issues, {total_reviews} reviews."
+        )
+    if deduped_skills:
+        summary_lines.append(f"Core skills: {', '.join(deduped_skills[:12])}.")
+
+    summary_items = [
+        {
+            "id": None,
+            "section": "summary",
+            "title": f"{selected_username} - Professional Summary",
+            "excerpt": " ".join(summary_lines).strip(),
+            "source": "instant",
+            "updated_at": datetime.utcnow().isoformat(),
+            "metadata": {},
+            "status": "active",
+            "projectIds": [],
+            "skills": deduped_skills[:12],
+        }
+    ]
+    skills_items = []
+    if deduped_skills:
+        skills_items.append(
+            {
+                "id": None,
+                "section": "skills",
+                "title": "Core Skills",
+                "excerpt": ", ".join(deduped_skills),
+                "source": "instant",
+                "updated_at": datetime.utcnow().isoformat(),
+                "metadata": {},
+                "status": "active",
+                "projectIds": [],
+                "skills": deduped_skills,
+            }
+        )
+
+    sections = [
+        {"name": "summary", "items": summary_items},
+        {"name": "projects", "items": project_items},
+    ]
+    if skills_items:
+        sections.append({"name": "skills", "items": skills_items})
+
+    return {
+        "sections": sections,
+        "warnings": [],
+        "missingSections": [],
+        "schema": None,
+        "projectContext": project_context,
+        "resumeProjectDescriptions": {},
+        "lastUpdated": datetime.utcnow().isoformat(),
+    }
 
 def main():
     in_main_menu = False
@@ -1804,6 +2022,18 @@ def main():
                         chosen_snapshots = list(sorted_projects)
                     else:
                         chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                    project_ids = [
+                        str(snap.get("project_id"))
+                        for snap in chosen_snapshots
+                        if snap.get("project_id")
+                    ]
+                    with _open_app_db() as conn:
+                        contribution_map = _load_user_contribution_map(
+                            conn,
+                            user_id=selected_user_id,
+                            username=selected_username,
+                            project_ids=project_ids,
+                        )
                     selected_snapshot_skills: List[str] = []
                     for snap in chosen_snapshots:
                         snap_skills = (snap.get("snapshot") or {}).get("skills") or []
@@ -1812,14 +2042,13 @@ def main():
                     selected_snapshot_skills = [
                         s for i, s in enumerate(selected_snapshot_skills) if s and s not in selected_snapshot_skills[:i]
                     ]
-                    resume_preview = _build_resume_preview_from_snapshots(chosen_snapshots)
+                    resume_preview = _build_user_resume_preview(
+                        selected_username=selected_username,
+                        chosen_snapshots=chosen_snapshots,
+                        contribution_map=contribution_map,
+                    )
                     print("\nResume Preview:\n")
                     print(_format_resume_preview(resume_preview))
-                    project_ids = [
-                        str(snap.get("project_id"))
-                        for snap in chosen_snapshots
-                        if snap.get("project_id")
-                    ]
                     if project_ids:
                         action = _prompt_menu(
                             "Preview Options",
@@ -1828,17 +2057,20 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
-                            from capstone.resume_pdf_builder import build_pdf_with_latex
+                            from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_pandoc
 
                             with _open_app_db() as conn:
-                                generate_resume_project_descriptions(
+                                contribution_map = _load_user_contribution_map(
                                     conn,
+                                    user_id=selected_user_id,
+                                    username=selected_username,
                                     project_ids=project_ids,
-                                    overwrite=True,
                                 )
-                                refreshed = query_resume_entries(conn)
-                                filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
-                                resume_preview = build_resume_preview(filtered, conn=conn)
+                            resume_preview = _build_user_resume_preview(
+                                selected_username=selected_username,
+                                chosen_snapshots=chosen_snapshots,
+                                contribution_map=contribution_map,
+                            )
 
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))
@@ -1855,8 +2087,8 @@ def main():
                                 "Export Resume",
                                 [
                                     "Markdown",
-                                    "PDF (LaTeX)",
-                                    "Markdown + PDF (LaTeX)",
+                                    "PDF (Pandoc)",
+                                    "Markdown + PDF (Pandoc)",
                                     "Skip",
                                 ],
                             )
@@ -1875,14 +2107,8 @@ def main():
                                 )
                                 if save_md_path:
                                     try:
-                                        with _open_app_db() as conn:
-                                            descriptions = resolve_resume_project_descriptions(conn, filtered.entries)
-                                        export_resume(
-                                            filtered.entries,
-                                            fmt="markdown",
-                                            destination=pathlib.Path(save_md_path),
-                                            project_descriptions=descriptions,
-                                        )
+                                        markdown_text = build_markdown_from_resume(resume_preview)
+                                        pathlib.Path(save_md_path).write_text(markdown_text, encoding="utf-8")
                                         print(f"\nResume Markdown successfully saved to:\n{save_md_path}\n")
                                     except Exception as e:
                                         print("Failed to generate resume Markdown.")
@@ -1894,10 +2120,20 @@ def main():
                                 save_pdf_path = prompt_save_path(default_name=default_pdf_name)
                                 if save_pdf_path:
                                     try:
-                                        build_pdf_with_latex(resume_preview, pathlib.Path(save_pdf_path))
+                                        save_pdf = pathlib.Path(save_pdf_path)
+                                        remote_ok, remote_err = _export_resume_pdf_via_api(
+                                            resume_preview,
+                                            save_pdf,
+                                        )
+                                        if remote_ok:
+                                            print("Rendered via API /resume/render-pdf.")
+                                        else:
+                                            print(f"Server-side PDF render unavailable: {remote_err}")
+                                            print("Falling back to local Pandoc renderer...")
+                                            build_pdf_with_pandoc(resume_preview, save_pdf)
                                         print(f"\nResume PDF successfully saved to:\n{save_pdf_path}\n")
                                     except Exception as e:
-                                        print("Failed to generate resume PDF (LaTeX).")
+                                        print("Failed to generate resume PDF (Pandoc).")
                                         print(f"Error: {e}")
                                 else:
                                     print("Resume PDF export cancelled.")

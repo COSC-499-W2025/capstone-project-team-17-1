@@ -72,6 +72,10 @@ def _generate_markdown(resume: Dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def build_markdown_from_resume(resume: Dict[str, Any]) -> str:
+    return _generate_markdown(resume)
+
+
 def _generate_latex(resume: Dict[str, Any]) -> str:
     lines = [
         r"\documentclass[11pt]{article}",
@@ -119,6 +123,14 @@ def _pick_tex_engine() -> str | None:
     return None
 
 
+def _pick_pandoc_pdf_engine() -> str | None:
+    # Prefer HTML-based engines first to avoid LaTeX dependency.
+    for engine in ("wkhtmltopdf", "weasyprint"):
+        if shutil.which(engine):
+            return engine
+    return _pick_tex_engine()
+
+
 def build_pdf_with_latex(resume: Dict[str, Any], output_path: Path) -> Path:
     """
     Render PDF by generating LaTeX directly and compiling with a local TeX engine.
@@ -154,7 +166,8 @@ def build_pdf_with_latex(resume: Dict[str, Any], output_path: Path) -> Path:
 
 def build_pdf_with_pandoc(resume: Dict[str, Any], output_path: Path) -> Path:
     """
-    Legacy path kept for compatibility. Converts markdown to PDF with pandoc.
+    Convert markdown to PDF with pandoc.
+    Prefers wkhtmltopdf/weasyprint so PDF export can work without LaTeX.
     """
     output_path = Path(output_path)
     markdown_text = _generate_markdown(resume)
@@ -164,14 +177,25 @@ def build_pdf_with_pandoc(resume: Dict[str, Any], output_path: Path) -> Path:
         pdf_path = Path(tmpdir) / "resume.pdf"
         md_path.write_text(markdown_text, encoding="utf-8")
 
-        engine = _pick_tex_engine() or "pdflatex"
+        engine = _pick_pandoc_pdf_engine()
+        if not engine:
+            raise RuntimeError(
+                "No pandoc PDF engine found. Install wkhtmltopdf, weasyprint, or a LaTeX engine (xelatex/lualatex/pdflatex)."
+            )
         try:
             subprocess.run(
                 ["pandoc", md_path, "-o", pdf_path, f"--pdf-engine={engine}"],
                 check=True,
+                capture_output=True,
+                text=True,
             )
         except FileNotFoundError:
             raise RuntimeError("Pandoc is not installed. Install it from https://pandoc.org")
+        except subprocess.CalledProcessError as exc:
+            stderr_tail = (exc.stderr or "").strip().splitlines()[-20:]
+            stdout_tail = (exc.stdout or "").strip().splitlines()[-20:]
+            detail = "\n".join(stderr_tail or stdout_tail)
+            raise RuntimeError(f"Pandoc PDF generation failed using {engine}.\n{detail}".strip())
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(pdf_path.read_bytes())
