@@ -50,6 +50,17 @@ def _normalize_email_candidate(email: object) -> str | None:
     return value
 
 
+def _is_bot_contributor(login: str | None, account_type: object = None) -> bool:
+    if not login:
+        return False
+    lowered = login.strip().lower()
+    if lowered.endswith("[bot]"):
+        return True
+    if isinstance(account_type, str) and account_type.strip().lower() == "bot":
+        return True
+    return False
+
+
 def parse_repo_url(repo_url: str) -> tuple[str, str]:
     if not repo_url:
         raise ValueError("Repository URL must not be empty")
@@ -216,6 +227,7 @@ def collect_contributor_stats(
     client: GitHubClient,
     weights: dict | None = None,
     max_contributors: int = 50,
+    include_bots: bool = False,
     progress_cb: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None,
 ) -> list[ContributorStats]:
     if progress_cb:
@@ -225,11 +237,23 @@ def collect_contributor_stats(
         progress_cb("Fetching contributor list", None, None)
     contributors_data = client.get_contributors(owner, repo)
 
+    bot_logins: set[str] = set()
+    for entry in contributors_data:
+        if not isinstance(entry, dict):
+            continue
+        login = entry.get("login")
+        if not isinstance(login, str) or not login:
+            continue
+        if _is_bot_contributor(login, entry.get("type")):
+            bot_logins.add(login)
+
     stats_by_login: dict[str, ContributorStats] = {}
     for entry in stats_data:
         author = entry.get("author") if isinstance(entry, dict) else None
         login = author.get("login") if isinstance(author, dict) else None
         if not login:
+            continue
+        if not include_bots and (login in bot_logins or _is_bot_contributor(login, author.get("type") if isinstance(author, dict) else None)):
             continue
         stats_by_login[login] = ContributorStats(
             contributor=login,
@@ -241,6 +265,8 @@ def collect_contributor_stats(
             continue
         login = entry.get("login")
         if not login:
+            continue
+        if not include_bots and (login in bot_logins or _is_bot_contributor(login, entry.get("type"))):
             continue
         if login not in stats_by_login:
             stats_by_login[login] = ContributorStats(
@@ -294,6 +320,7 @@ def sync_contributor_stats(
     db_dir: Path | None = None,
     weights: dict | None = None,
     max_contributors: int = 50,
+    include_bots: bool = False,
     client: GitHubClient | None = None,
     progress_cb: Optional[Callable[[str, Optional[int], Optional[int]], None]] = None,
 ) -> list[ContributorStats]:
@@ -307,6 +334,7 @@ def sync_contributor_stats(
         client=client,
         weights=weights,
         max_contributors=max_contributors,
+        include_bots=include_bots,
         progress_cb=progress_cb,
     )
     if progress_cb:
