@@ -5,6 +5,7 @@
 - [Week 2 Team Log (Term2)](#week-2-team-log-term2)
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
 - [Week 4 Team Log (Term2)](#week-4-team-log-term2)
+- [Week 5 Team Log (Term2)](#week-5-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
@@ -483,24 +484,24 @@ In parallel, the team continued work on several Milestone 2 enhancements, includ
 Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
 
 
-## WEEK 4 TEAM LOG (Term2)
+## WEEK 5 TEAM LOG (Term2)
 (Jan26 - Feb01, 2026)
 
-### Recap of Milestone Goal - Week 4
+### Recap of Milestone Goal - Week 4+5
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
 
-### Burnup chart Week 4
-<img width="1626" height="879" alt="image" src="https://github.com/user-attachments/assets/bdd9b246-6faa-4514-a7a6-10951fc7cd63" />
+### Burnup chart Week 4+5
+<img width="831" height="552" alt="image" src="https://github.com/user-attachments/assets/9c3a9932-2d21-46dc-8eab-f95dc3eb553b" />
 
-### Completed Tasks Week 4
+### Completed Tasks Week 4+5
 <img width="1921" height="819" alt="image" src="https://github.com/user-attachments/assets/a298aefe-a490-41db-af4b-4ec54ddccf45" />
 <img width="1915" height="300" alt="image" src="https://github.com/user-attachments/assets/aba87ee5-1836-498b-a217-ae3f2f9768ed" />
 
-### In Progress Tasks Week 4
+### In Progress Tasks Week 4+5
 <img width="1945" height="710" alt="image" src="https://github.com/user-attachments/assets/ead96d2e-398b-4dcf-9241-32fdc51e460d" />
 <img width="1950" height="103" alt="image" src="https://github.com/user-attachments/assets/6aa4a559-99f2-4221-bf7e-4a4e89bace3c" />
 
-### Test Report Week 4
+### Test Report Week 4+5
 This week, the team made strong progress on usability, infrastructure stability, and Milestone 2 feature expansion. A series of PRs were merged to improve the CLI experience, strengthen backend foundations, and extend portfolio, résumé, and AI insight workflows.
 
 CLI usability and workflow consistency were noticeably improved. Menu rendering issues were fixed to prevent duplicate output during a single loop iteration, reducing confusion during demos and peer testing. [Fix duplicate main menu rendering (Single Menu) (#181)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/181) 

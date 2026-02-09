@@ -329,3 +329,26 @@ Beyond feature development, I discussed implementation details and design decisi
   
  ### Completed Tasks Week 4
  - complete [Add portfolio textual display, improve menu usability and test stability (#184)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/184)
+
+
+ ## Term2 week5 Personal LOG (Feb2-Feb8, 2026)
+### 1. Type of Tasks Worked On
+<img width="1073" height="616" alt="Screenshot 2026-02-06 at 6 14 36 PM" src="https://github.com/user-attachments/assets/e93c3441-bdef-441f-acfe-45deba9dab70" />
+
+### 2. Weekly Goals Recap
+- complete [portfolio showcase customizatio+ export pdf (#200)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/200)
+- Make sure only use Fastapi
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the portfolio showcase customization and PDF export functionality and prepared it for merging into the develop branch (#200).([portfolio showcase customizatio+ export pdf (#200)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/200))The work involved refactoring the backend from Flask to FastAPI to fully comply with project requirements and consolidating API routes to ensure consistency between the CLI workflow and future frontend integration. Portfolio-related endpoints were reorganized and extended to support stable portfolio summary retrieval, customization, and export.
+
+To improve output quality and reliability, I enhanced the LaTeX-based PDF export pipeline, ensuring that customized portfolio showcases can be consistently generated as polished PDF documents. A setup script was added to streamline the installation of required PDF dependencies, making the export workflow reproducible across development environments.
+
+Also, I updated and aligned tests to reflect the new FastAPI endpoints and revised CLI menu flow, resolving mismatches introduced by the backend refactor and maintaining system stability after the changes.
+
+Beyond feature implementation, I discussed code-level details and design decisions with team members to align API structure and integration logic, and I reviewed teammates’ pull requests, providing feedback and technical assistance to help unblock issues and keep the project aligned with milestone requirements.
+
+### Completed Tasks Week 5
+- complete [portfolio showcase customizatio+ export pdf (#200)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/200)
+- Make sure only use Fastapi

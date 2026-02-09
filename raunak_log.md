@@ -15,6 +15,7 @@
 - [Term 2 Week 1 Personal Log](#term-2-week-1-personal-log)
 - [Term 2 Week 2 Personal Log](#term-2-week-2-personal-log)
 - [Term 2 Week 3 Personal Log](#term-2-week-3-personal-log)
+- [Term 2 Week 5 Personal Log](#term-2-week-5-personal-log)
 
 ---
 
@@ -957,5 +958,115 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 <img width="1140" height="619" alt="T2WEEK3PEEREVAL" src="https://github.com/user-attachments/assets/ff2d0f7b-cf35-4e9a-abf0-1d49e435d915" />
 
 ---
+### TERM 2 WEEK 5 PERSONAL LOG
+# (WEEK 4+5 Logs) 
+# Merged PR's and their impact 
 
+### PR: Add project success evidence storage + prompt evidence test
+**What I changed**
+- Added persistence for “evidence of project success” (quant + qual signals) so it can be stored/retrieved later (DB-backed, keyed by `project_id`).
+- Extended the storage layer to support writing/reading this evidence in a structured payload (e.g., metrics/feedback/evaluation fields).
+- Added/updated a unit test (`tests/test_project_insight_evidence.py`) to exercise the evidence prompt/flow and assert the stored snapshot includes the evidence fields.
+
+**Impact**
+- Enables Milestone 2 requirement: persist evidence for later display (not just compute it once).
+- Makes project insight/resume/portfolio outputs auditable: “claims” can be backed by stored evidence.
+- Regression protection: evidence flow is test-covered, lowering risk of future refactors breaking it silently.
+
+---
+
+### PR: Milestone 2 API — FastAPI entrypoint + consent + projects endpoints
+**What I changed**
+- Implemented FastAPI app entrypoint and routing layout (`capstone.api.server:app`) with OpenAPI/Swagger support.
+- Added/verified core endpoints:
+  - `GET /health` for liveness checks
+  - `POST /privacy-consent` for consent capture/validation
+  - `POST /projects/upload` for ingestion (zip upload / metadata creation)
+  - `GET /projects` list view (project index)
+  - `GET /projects/{project_id}` project detail fetch
+- Wired endpoints into existing services/storage so API calls exercise the same backend logic as CLI.
+- Proof:
+<img width="1470" height="956" alt="Screenshot 2026-02-08 at 7 16 23 PM" src="https://github.com/user-attachments/assets/88fbd3e4-8345-40a5-b439-6be11f64ea5b" />
+
+**Impact**
+- Converts the system into an API-first service (Milestone 2 expectation: operate via API calls).
+- Consent becomes enforceable at the API boundary (privacy-safe by design).
+- Unblocks frontend integration + automated endpoint tests (no “manual CLI only” bottleneck).
+
+---
+
+### PR: Fix pytest import path (reduce failing tests)
+**What I changed**
+- Fixed test discovery/import issues by aligning `sys.path`/package imports with `src/` layout.
+- Updated tests to import modules through the package namespace instead of assuming a top-level `main` module exists in the runtime path.
+
+**Impact**
+- Eliminates `ModuleNotFoundError` during pytest collection across environments.
+- Improves portability (local/CI) and reduces time wasted on non-functional test failures.
+
+---
+
+### PR: Fix duplicate main menu rendering (Single Menu)
+**What I changed**
+- Fixed a CLI bug where the **Main Menu was printed twice** during a single loop iteration.
+- Removed the **redundant menu-rendering block** so the menu prints **exactly once per loop**.
+- Kept the menu options consistent so navigation still works normally.
+
+**Impact**
+- **Better UX:** CLI output is no longer confusing/noisy during demos and peer testing.
+- **More predictable control flow:** one loop = one menu render (cleaner state transitions).
+- **Less risk of input/output bugs:** duplicate prints often hide deeper loop/branching issues.
+- **Easier to test/debug:** stable output makes CLI tests + debugging way more deterministic.
+
+---
+
+### PR: (User Role Representation) Add user-role inference to project insight
+**What I changed**
+- Added role inference logic in the project insight pipeline to map contribution signals which a likely user role (e.g., primary contributor, collaborator).
+- Integrated role inference into snapshot/insight output so downstream consumers (portfolio/resume/UI) can display it consistently.
+
+**Impact**
+- Improves interpretability: insights now include “who did what” rather than only raw stats.
+- Supports human-in-the-loop customization: users can validate/override role framing for final portfolio/resume output.
+
+---
+### PR: Add snapshot history helper + test
+
+**What I did**
+- Updated `src/capstone/storage.py` to support **incremental snapshots** for projects (multiple snapshot rows over time per `project_id`) instead of treating snapshots as a single overwrite.
+- Implemented/used a **snapshot history retrieval** path that returns entries **newest-first** for a given project.
+- Added `tests/test_incremental_snapshots.py` to validate:
+  - storing multiple snapshots for the same project works
+  - history length is correct
+  - ordering is correct (latest snapshot first)
+
+**Impact**
+- Unlocks Milestone 2 “incremental information” requirement: the system can now **accumulate project state over time** instead of losing earlier snapshots.
+- Improves traceability + auditability (you can inspect how a project evolved and support timeline/diff features later).
+- Hardens the feature with a regression test so future schema/storage edits don’t silently break snapshot history behavior.
+---
+### PR: Duplicate file recognition
+
+### What I did
+- Added a **content-addressable file storage layer** to `src/capstone/storage.py`.
+- Introduced/extended DB schema to support dedup:
+  - `files` table keyed by content `hash` (plus `size_bytes`, `mime`, `path`, `ref_count`)
+  - `uploads` table to store per-upload metadata and link each upload to a stored file (`file_id`)
+  - indexes to keep lookups fast (`idx_files_hash`, `idx_uploads_file`)
+- Implemented storage helpers to:
+  - store uploaded bytes once (by hash)
+  - reuse existing file records on duplicate uploads (increment `ref_count`)
+  - fetch file metadata by hash for verification/debugging
+- Wrote a focused unit test (`tests/test_file_dedup.py`) to validate dedup logic end-to-end.
+
+### Testing / Evidence
+- `PYTHONPATH=src pytest -q tests/test_file_dedup.py` (passes)
+
+### Impact
+- **No more duplicate blobs** in the DB/file store when the same content is uploaded repeatedly.
+- **Lower storage usage** and cleaner persistence model (one canonical file, many upload references).
+- **Deterministic identity** for artifacts via hash → makes snapshots/analysis reproducible.
+- **Foundation for API uploads**: backend now has the right primitives for `/projects/upload`-style flows without ballooning DB size.
+
+<img width="1141" height="647" alt="Screenshot 2026-02-08 at 8 26 25 PM" src="https://github.com/user-attachments/assets/56a68622-b4fa-4897-abde-949389fec312" />
 

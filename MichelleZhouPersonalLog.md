@@ -5,6 +5,7 @@
 - [T2 Week 1 Personal Log](#T2-week-1-personal-log)
 - [T2 Week 2 Personal Log](#T2-week-2-personal-log)
 - [T2 Week 3 Personal Log](#T2-week-3-personal-log)
+- [T2 Week 5 Personal Log](#T2-week-5-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -249,13 +250,13 @@ Worked on creating a start up menu for the user to navigate with upon running th
 ### Weekly Recap:
 This week continued from last week's start up manu work by integrating all the underlying milestone features reliably. I focused on connecting the menu to existing modules, fixing integration issues caused by inconsistent snapshot data, and writing tests so future changes do not break basic navigation.
 
-Coding tasks
+Coding tasks<br />
 I expanded the startup menu so each option routes to the correct functionality. I also included normalization logic to bridge differences beteween database row fields and snapshot payload keys so the menu can work across multiple stored snapshot shapes without breaking the program. 
 
-Testing or debugging tasks
+Testing or debugging tasks<br />
 I debugged several runtime issues triggered by menu execution where functions expected dict maps but received lists. I added unittest coverage for the flow using mock data inputs and core helper calls. I also adjusted imports to avoid environment failures.
 
-Reviewing or collaboration tasks
+Reviewing or collaboration tasks<br />
 I helped review teammate prs for milestone 2 changes which includes success endpoints and resume textual display logic. I helped test new implementations and worked on adding additional tests which achieved better coverage for niche scenarios such as more consistent outputs even when input parameters may be missing.
 
 ### Additionally:
@@ -271,15 +272,42 @@ The primary blocked for this week was inconsistent snapshot schemas across the p
 ### Weekly Recap:
 This week built directly on last week's integration work by flushing out user facing flows and improving reliability across multiple core features. The focus shifted from just connecting features to making them correct, explicit, and user friendly. Several edge cases surfaced once features were tested through the menu which let to massive refinements in both logic and test coverage. In parallel, the team and I were preparing for the upcoming peer testing by designing a clear evaluation flow and participant guidance.
 
-Coding tasks
+Coding tasks<br />
 I refractored the consent handling to ensure user permission is never implicitly granted. A unified method was introduced to only prompt when no prior consent decisions exists. This additionally supports session verses saved consent and correctly persists decisions to config. The consent flow now displays various messages for first time users vs returning users for imroved clarity. The application also exits cleanly without progressing further to the main menu when consent is denied. This structure was designed specifically to be compatible with future GUI frontend implementation by separating prompting logic from enforcement.
 
-Testing or debugging tasks
+Testing or debugging tasks<br />
 A significant portion of this week was spent debugging consent related edge cases. Early versions of the flow incorrectly auto granted consent, failed to reprompt after revocation, or existed prematurely after acceptance. These were traced to mismatches between prompt return values and decision handling. The updated unittests now cover all possible user behaviours. 
 
-Reviewing or collaboration tasks
+Reviewing or collaboration tasks<br />
 I reviewed and tested teammate PRs by providing feedback on usability, code reuse, and test alignment. I helped validate that new features behaved correctly when invoked through the menu rather than in isolation. 
 
 ### Additionally:
 This week's main blocker was the interaction between persisted configuration state and test isolation. This was resolved by redirecting congif and log paths to temporary directories during tests and avoiding implicit stdin reads. Next week, I will focus on implementing Resume Textual Display task #179. This will include generating resume ready project entries containing relevant details. The goal is to ensure the content is professionally formatted and suitable for direct inclusion in a resume while integrating cleanly with existing snapshot and resume pipelines.
 
+
+## T2 Week 5 Personal Log
+
+- (Jan 26 - Feb 08, 2025)<br />
+
+<img width="971" height="570" alt="image" src="https://github.com/user-attachments/assets/780451ca-e297-4063-ab69-89a7da9e9348" />
+
+### Weekly Recap:
+The past two weeks continued from previous last week’s focus on stabilization and consent integration work by expanding the backend API surface and completing the job description matching feature from the end of Milestone 1. The focus shifted from purely internal CLI flows to designing, implementing, and validating a clean FastAPI interface for portfolio. Subsequently, I ensured these features remain fully aligned with existing menu-driven workflows. A significant portion of time was spent researching and learning how API endpoints, request validation, and response handling work in FastAPI, particularly in comparison to the earlier Flask-based retrieval layer. This effort resulted in clearer API contracts, stronger validation, more consistent behavior across entry points, and improved test coverage.
+
+Coding tasks<br />
+I fully completed the job description matching feature ([PR #207](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/207)), enabling users to input or load a job posting and compare it against analyzed project skills through a unified, menu-driven flow. This involved integrating skill extraction, project skill retrieval, and resume-friendly result formatting that clearly distinguishes matched and missing skills.
+
+In parallel, I expanded and aligned the backend by adding new FastAPI portfolio endpoints ([PR #205](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/205)) for generating, retrieving, editing, and exporting portfolios. Export supports JSON, Markdown, and PDF formats, with proper binary handling and response headers for PDF downloads.
+
+To ensure consistency across the system, I aligned CLI behavior with the new FastAPI routes so portfolio and job matching features follow the same logic regardless of access point. I also refactored shared logic into helper functions, introduced enum-based export validation, and spent time researching and applying FastAPI concepts such as routing, request validation, and dependency handling to improve reliability and extensibility.
+
+Testing or Debugging Tasks<br />
+I expanded unit test coverage for the job matching feature, validating skill extraction, overlap detection, partial matches, and resume snippet generation, and fixed edge cases such as case sensitivity and no-match scenarios. I added a FastAPI TestClient suite for portfolio endpoints, covering success paths, validation errors, and PDF responses, and resolved issues related to request schema mismatches, router registration, and FastAPI’s 422 validation behavior.
+
+Minor refactor-related bugs were fixed, and the test suite now runs reliably without external dependencies or persistent storage.
+
+Reviewing or collaboration tasks<br />
+I reviewed and provided feedback on teammate pull requests related to backend storage improvements, including a content addressable file storage and deduplication layer. I also tested related changes locally to ensure compatibility with existing analysis and retrieval workflows. In parallel, I collaborated with teammates by aligning API design decisions with the broader project architecture and ensuring the new FastAPI endpoints fit cleanly alongside the existing APIs.
+
+### Additionally:
+Next week, I plan to focus on integrating portfolio and resume generation more tightly by implementing resume ready textual outputs derived from analyzed projects. The goal is to ensure generated content is professionally formatted, reusable across interfaces, and integrates cleanly with the existing snapshot, storage, and resume pipelines. I also plan to learn and experiment using Postman with the team to properly test api calls and endpoints.

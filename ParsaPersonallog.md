@@ -1022,3 +1022,79 @@ To conclude the week, I prepared the work for review and integration.
 
 This week was heavily focused on turning partially implemented features into complete, user ready workflows. Rather than adding new high level functionality, the work emphasized correctness, clarity, and integration across modules. Fixing the timeline feature, exposing AI insights through the main menu, and completing the resume export pipeline significantly improve the usability and perceived polish of the application. The system now better reflects real world usage patterns, where users expect features to be discoverable, configurable, and persistent. Next steps include refining resume section coverage and expanding documentation for the new CLI options.
 
+---
+
+## Week 5 Personal Log [Feb 2 – Feb 8, 2026]
+
+This week I focused on reviewing, completing, and validating the FastAPI backend for the capstone project to ensure it fully supports the required frontend and CLI workflows. The main goal was to close remaining API gaps, and performing manual end to end testing using Postman.
+
+**Peer Eval**  
+>
+> ![Week 5 — API completion and Postman testing]
+> <img width="1605" height="933" alt="image" src="https://github.com/user-attachments/assets/d228c899-b84e-4936-af37-0bf9beeffdf9" />
+>
+> _Figure 0. peer evaluation._
+>
+---
+
+### API audit and missing endpoint analysis
+
+A major task this week was performing a full audit of the existing FastAPI routes to ensure all required functionality is properly exposed and no critical lifecycle operations were missing.
+
+* Reviewed all existing API route files including consent, projects, skills, resume, and portfolio routes.
+* Compared implemented endpoints against the capstone requirements and frontend usage patterns.
+* Identified that while consent could be set via the API, there was no endpoint to retrieve the current consent state.
+* Identified that uploaded projects could not be deleted, leaving an incomplete project lifecycle.
+* Confirmed that all resume, portfolio, and AI driven generation endpoints were already functionally complete and correctly scoped.
+
+---
+
+### Consent API completion
+
+To improve privacy transparency and frontend usability, I extended the consent API.
+
+* Added a `GET /privacy-consent` endpoint to allow clients to query the current consent state.
+* Ensured consent handling remains explicitly gated and simple, without exposing AI internals.
+* Verified that consent can be set and retrieved correctly through the API.
+* Confirmed that AI powered generation endpoints remain implicitly protected behind consent checks.
+
+---
+
+### Project lifecycle completion
+
+To close the remaining CRUD gap in the projects API, I added project deletion support.
+
+* Implemented `DELETE /projects/{project_id}` to remove uploaded projects.
+* Ensured associated database records and stored files are cleaned up correctly.
+* Verified that deleted projects no longer appear in project listings and cannot be accessed afterward.
+* Confirmed that deletion does not impact unrelated snapshots, resume entries, or portfolio data.
+
+---
+
+### Postman based API testing
+
+To support team testing and demonstration requirements, I validated the API using Postman.
+
+* Installed and configured Postman for manual API testing.
+* Tested core endpoints including health checks, consent handling, project upload, project deletion, and resume generation.
+* Verified correct request and response behavior outside of Swagger UI.
+* Captured screenshots of successful requests and responses for documentation and reporting.
+* Confirmed that Postman testing complements existing Swagger based testing rather than replacing it.
+
+---
+
+### PR preparation and documentation
+
+To conclude the work, I prepared the changes for review and integration.
+
+* Filled out a detailed PR template describing the added endpoints and design rationale.
+* Documented testing steps and validation methods clearly.
+* Ensured all changes are non breaking and isolated to API surface improvements.
+* Marked additional potential endpoints such as project reanalysis as future work rather than in scope changes.
+
+---
+
+### Reflection
+
+This week focused on turning an already functional API into a complete and defensible system. By auditing the existing endpoints, filling small but important gaps, and validating the design of the AI integration, the backend now cleanly supports the full consent to upload to generate workflow. Using Postman for external testing also strengthens the project’s credibility by demonstrating that the API behaves correctly outside of the built in Swagger interface. Overall, this work improved the completeness, clarity, and polish of the system without introducing unnecessary complexity.
+
