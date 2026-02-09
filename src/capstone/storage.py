@@ -84,6 +84,46 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
     )
 
+    # Users derived from contribution data (GitHub or local logs)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
+        ON users (username, COALESCE(email, ''))
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            project_id TEXT NOT NULL,
+            contributor_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, project_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_user_projects_project
+        ON user_projects (project_id)
+        """
+    )
+
     # Evidence of success (metrics/feedback/evaluations), append-only
     conn.execute(
         """
@@ -711,6 +751,94 @@ def update_contributor_score(
     )
     conn.commit()
 
+
+# -----------------------------
+# Users and user-project links
+# -----------------------------
+
+def upsert_user(
+    conn: sqlite3.Connection,
+    username: str,
+    *,
+    email: str | None = None,
+    source: str | None = None,
+) -> int:
+    if not username:
+        raise ValueError("username must be provided")
+
+    # Prefer matching by email when available, otherwise by username.
+    row = None
+    if email:
+        row = conn.execute(
+            "SELECT id, username, email FROM users WHERE email = ? LIMIT 1",
+            (email,),
+        ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT id, username, email FROM users WHERE username = ? LIMIT 1",
+            (username,),
+        ).fetchone()
+    if row:
+        user_id = int(row[0])
+        conn.execute(
+            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), source = COALESCE(?, source), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (username, email, source, user_id),
+        )
+        conn.commit()
+        return user_id
+
+    cursor = conn.execute(
+        """
+        INSERT INTO users (username, email, source)
+        VALUES (?, ?, ?)
+        """,
+        (username, email, source),
+    )
+    conn.commit()
+    return int(cursor.lastrowid)
+
+
+def link_user_to_project(
+    conn: sqlite3.Connection,
+    user_id: int,
+    project_id: str,
+    *,
+    contributor_name: str | None = None,
+) -> None:
+    if not user_id:
+        raise ValueError("user_id must be provided")
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+        VALUES (?, ?, ?)
+        """,
+        (int(user_id), project_id, contributor_name),
+    )
+    conn.commit()
+
+
+def upsert_users_from_contributors(
+    conn: sqlite3.Connection,
+    project_id: str,
+    contributors: Iterable[object],
+    *,
+    source: str | None = None,
+) -> None:
+    """
+    Bulk upsert helpers: accepts any iterable with 'contributor' and optional 'email'.
+    """
+    if not project_id:
+        return
+    for row in contributors:
+        username = getattr(row, "contributor", None) or getattr(row, "username", None)
+        email = getattr(row, "email", None)
+        if not username:
+            continue
+        user_id = upsert_user(conn, username, email=email, source=source)
+        link_user_to_project(conn, user_id, project_id, contributor_name=username)
+
 def save_project_metadata(conn, project_id, meta):
     cursor = conn.cursor()
     cursor.execute(
@@ -909,6 +1037,10 @@ __all__ = [
     "fetch_latest_contributor_stats",
     "update_contributor_score",
     "fetch_contributor_rankings",
+    # users
+    "upsert_user",
+    "link_user_to_project",
+    "upsert_users_from_contributors",
     # evidence
     "store_project_evidence",
     "fetch_project_evidence",
