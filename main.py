@@ -3,17 +3,18 @@ import os
 import sqlite3
 import sys
 import tempfile
+import pathlib
 import urllib.error
 import urllib.request
 from datetime import datetime
-from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Mapping
 
-ROOT = Path(__file__).resolve().parent
+ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from capstone.storage import fetch_latest_snapshots
 from capstone.cli import main
 from capstone.config import load_config
 from capstone.company_profile import build_company_resume_lines
@@ -52,9 +53,14 @@ from capstone.top_project_summaries import (
     export_markdown,
     generate_top_project_summaries,
 )
+from capstone.ai_insights import ask_project_question
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
-
+from capstone.cli import prompt_project_metadata
+from capstone.cli import pick_zip_file
+from capstone.storage import save_project_metadata
+from capstone.storage import load_project_metadata
+from capstone.storage import close_db
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -507,6 +513,60 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+def run_ai_project_analysis(conn, snapshot_map):
+    from capstone.llm_client import build_default_llm
+    from capstone.consent import ensure_external_permission
+
+    if not snapshot_map:
+        print("No analyzed projects available.")
+        return
+
+    # List projects
+    project_ids = sorted(snapshot_map.keys())
+    print("\nSelect a project for AI analysis:\n")
+    for idx, pid in enumerate(project_ids, start=1):
+        print(f"{idx}. {pid}")
+
+    choice = input("\nEnter project number: ").strip()
+    if not choice.isdigit() or not (1 <= int(choice) <= len(project_ids)):
+        print("Invalid selection.")
+        return
+
+    project_id = project_ids[int(choice) - 1]
+    snapshots = snapshot_map.get(project_id, [])
+    if not snapshots:
+        print("No snapshots found for selected project.")
+        return
+
+    latest_snapshot = snapshots[-1]
+
+    # External consent check
+    ensure_external_permission(
+        service="capstone.external.analysis",
+        data_types=["derived project metadata"],
+        purpose="Generate AI-based project insights",
+        destination="OpenAI API",
+        privacy="No source code is sent; only metadata summaries",
+        source="main-menu",
+    )
+
+    llm = build_default_llm()
+    if not llm:
+        print("LLM not configured. Set OPENAI_API_KEY.")
+        return
+
+
+
+    answer = ask_project_question(
+        project_id= project_id,
+        question="What are the strengths of this project and what could be improved?"
+    )
+
+    print("\nRunning AI analysis...\n")
+
+    print("=== AI Project Insights ===\n")
+    print(answer)
+    print("\n===========================\n")
 
 def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
     while True:
@@ -529,6 +589,24 @@ def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
             print(f"Indices must be in 1–{max_index}.")
             continue
         return nums
+
+def prompt_save_path(default_name="resume.pdf"):
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()  # hide the main window
+    root.attributes("-topmost", True)
+
+    path = filedialog.asksaveasfilename(
+        title="Save Resume As",
+        defaultextension=".pdf",
+        initialfile=default_name,
+        filetypes=[("PDF files", "*.pdf")]
+    )
+
+    root.destroy()
+    return path
 
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
@@ -725,8 +803,33 @@ def _build_resume_preview_from_snapshots(chosen_snapshots: List[dict]) -> dict:
 
 
 # Build showcase items from selected snapshots
-def _build_portfolio_showcase_entries(chosen_snapshots: List[dict]) -> List[dict]:
+def _build_portfolio_showcase_entries(
+    chosen_snapshots: List[dict],
+    *,
+    user: str | None = None,
+) -> List[dict]:
     entries: List[dict] = []
+    summary_map: dict[str, str] = {}
+    if user:
+        # Build a user-specific summary map
+        snapshot_map: dict[str, Mapping[str, object]] = {}
+        for snap in chosen_snapshots:
+            snapshot_data = snap.get("snapshot") or {}
+            project_id = str(
+                snap.get("project_id")
+                or snapshot_data.get("project_id")
+                or snapshot_data.get("project")
+                or ""
+            )
+            if project_id:
+                snapshot_map[project_id] = snapshot_data
+        if snapshot_map:
+            summaries = generate_top_project_summaries(
+                snapshot_map,
+                limit=len(snapshot_map),
+                user=user,
+            )
+            summary_map = {str(item.get("project_id")): export_markdown(item) for item in summaries}
     with _open_app_db() as conn:
         for snap in chosen_snapshots:
             snapshot_data = snap.get("snapshot") or {}
@@ -748,15 +851,22 @@ def _build_portfolio_showcase_entries(chosen_snapshots: List[dict]) -> List[dict
                 project_id,
                 variant_name="portfolio_showcase",
             )
-            summary = (
-                description.summary if description else build_resume_project_summary(project_id or name, snapshot_data)
-            )
+            if project_id in summary_map:
+                # Prefer portfolio summary
+                summary = summary_map[project_id]
+                source = "portfolio_summary"
+            elif description:
+                summary = description.summary
+                source = "custom"
+            else:
+                summary = build_resume_project_summary(project_id or name, snapshot_data)
+                source = "auto"
             entries.append(
                 {
                     "project_id": project_id,
                     "name": name,
                     "summary": summary,
-                    "source": "custom" if description else "auto",
+                    "source": source,
                 }
             )
     return entries
@@ -855,7 +965,8 @@ def main():
                 print("9.  Delete project insights")
                 print("10. Manage consent (LLM/external services)")
                 print("11. Contributor rankings (Quick Access)")
-                print("12. Exit")
+                print("12. AI-based project analysis (external LLM)")
+                print("13. Exit")
                 print()
 
                 while True:
@@ -863,20 +974,31 @@ def main():
                         choice = forced_choice
                         forced_choice = None
                     else:
-                        choice = input("Please select an option (1-12): ").strip()
+                        choice = input("Please select an option (1-13): ").strip()
                         import os
                         if os.environ.get("PYTEST_CURRENT_TEST"):
                             if choice == "2":
                                 choice = "3"
                             elif choice == "10":
                                 choice = "12"
-                    if choice in {str(i) for i in range(1, 13)}:
+                    if choice in {str(i) for i in range(1, 14)}:
                         break
                     print("Invalid choice. Please enter a number between 1 and 12.")
                     print()
 
                 if choice == "1":
-                    zip_path = input("Enter the path to the project ZIP archive: ").strip()
+                    print("Select a ZIP file to analyze...")
+                    use_picker = input("Open file explorer to select ZIP? (y/n): ").strip().lower()
+
+                    if use_picker == "y":
+                        zip_path = pick_zip_file()
+                    else:
+                        zip_path = input("Enter the path to the project ZIP archive: ").strip()
+
+                    if not zip_path:
+                        print("No ZIP file provided. Returning to main menu.")
+                        continue
+
                     if not os.path.isfile(zip_path):
                         print("Invalid file path. Please try again.")
                         continue
@@ -891,11 +1013,11 @@ def main():
                     try:
                         summary = archive_service.analyze(
                             zip_path=archive_path,
-                            metadata_path=Path("analysis_output/metadata.jsonl"),
-                            summary_path=Path("analysis_output/summary.json"),
+                            metadata_path=pathlib.Path("analysis_output/metadata.jsonl"),
+                            summary_path=pathlib.Path("analysis_output/summary.json"),
                             mode=mode,
                             preferences=config.preferences,
-                            project_id=Path(zip_path).stem,
+                            project_id=pathlib.Path(zip_path).stem,
                             db_dir=ROOT / "data",
                         )
                     except ArchiveAnalysisError as exc:
@@ -904,7 +1026,7 @@ def main():
                     store = SnapshotStore(ROOT / "data")
                     try:
                         store.store_snapshot(
-                            project_id=summary.get("project_id") or Path(zip_path).stem,
+                            project_id=summary.get("project_id") or pathlib.Path(zip_path).stem,
                             classification=summary.get("collaboration", {}).get("classification", "unknown"),
                             primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
                             snapshot=summary,
@@ -914,7 +1036,7 @@ def main():
                     with _open_app_db() as conn:
                         make_entry = _prompt_choice("Do you want to begin processing this zip file? (y/n): ", ["y", "n"])
                         if make_entry == "y":
-                            project_id = summary.get("project_id") or Path(zip_path).stem
+                            project_id = summary.get("project_id") or pathlib.Path(zip_path).stem
                             insert_resume_entry(
                                 conn,
                                 section="projects",
@@ -922,6 +1044,11 @@ def main():
                                 body=f"Auto-generated resume entry for {project_id}.",
                                 projects=[project_id],
                             )
+                            add_meta = input("\nWould you like to add project timeline info? (y/n): ").strip().lower()
+
+                            if add_meta == "y":
+                                meta = prompt_project_metadata()
+                                save_project_metadata(conn, project_id, meta)
                     print("Project analysis completed and stored.")
                 elif choice == "2":
                     repo_url = input("Enter GitHub repository URL: ").strip()
@@ -987,7 +1114,7 @@ def main():
                             temp_path = None
                             try:
                                 with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_file:
-                                    temp_path = Path(temp_file.name)
+                                    temp_path = pathlib.Path(temp_file.name)
                                     req = urllib.request.Request(zip_url, headers=headers)
                                     with urllib.request.urlopen(req) as response:
                                         while True:
@@ -1008,8 +1135,8 @@ def main():
                                 try:
                                     summary = archive_service.analyze(
                                         zip_path=archive_path,
-                                        metadata_path=Path("analysis_output/metadata.jsonl"),
-                                        summary_path=Path("analysis_output/summary.json"),
+                                        metadata_path=pathlib.Path("analysis_output/metadata.jsonl"),
+                                        summary_path=pathlib.Path("analysis_output/summary.json"),
                                         mode=mode,
                                         preferences=config.preferences,
                                         project_id=project_id,
@@ -1155,6 +1282,38 @@ def main():
                     if project:
                         pass
                 elif choice == "5":
+                    with _open_app_db() as conn:
+                        users = [
+                            row[0]
+                            for row in conn.execute(
+                                "SELECT DISTINCT contributor FROM contributor_stats ORDER BY LOWER(contributor)"
+                            ).fetchall()
+                            if row and row[0]
+                        ]
+                    # Hide bot accounts
+                    users = [u for u in users if "[bot]" not in u.lower()]
+                    if not users:
+                        print("No contributors found.")
+                        continue
+                    print("\nAvailable users:")
+                    for idx, name in enumerate(users, start=1):
+                        print(f"{idx}. {name}")
+                    user_pick = _prompt_single_index(
+                        "Select a user number (blank to cancel, b to back): ",
+                        len(users),
+                    )
+                    if user_pick is None or user_pick == "b":
+                        continue
+                    selected_user = users[int(user_pick) - 1]
+                    with _open_app_db() as conn:
+                        user_project_ids = {
+                            row[0]
+                            for row in conn.execute(
+                                "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ?",
+                                (selected_user,),
+                            ).fetchall()
+                            if row and row[0]
+                        }
                     while True:
                         action = _prompt_menu(
                             "Portfolio Options",
@@ -1165,24 +1324,79 @@ def main():
                         if action == "1":
                             with _open_app_db() as conn:
                                 snapshots = fetch_latest_snapshots(conn)
+                                if user_project_ids:
+                                    # Filter
+                                    snapshots = [
+                                        item
+                                        for item in snapshots
+                                        if str(item.get("project_id")) in user_project_ids
+                                    ]
                                 snapshot_map = {
                                     str(item.get("project_id")): (item.get("snapshot") or {})
                                     for item in snapshots
                                     if item.get("project_id")
                                 }
-                                summaries = generate_top_project_summaries(snapshot_map, limit=3)
+                                summaries = generate_top_project_summaries(
+                                    snapshot_map,
+                                    limit=3,
+                                    user=selected_user,
+                                )
                                 if not summaries:
                                     print("No project summaries available.")
                                 else:
-                                    print("\nPortfolio Summary:\n")
+                                    print(f"\nPortfolio Summary for {selected_user}:\n")
                                     for summary in summaries:
                                         print(export_markdown(summary))
                                         print()
+                            if summaries:
+                                # Offer PDF export
+                                export = input(
+                                    "Would you like to export this summary as a PDF? (y/n): "
+                                ).strip().lower()
+                                if export == "y":
+                                    from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
+
+                                    entries = [
+                                        {
+                                            "project_id": item.get("project_id"),
+                                            "name": item.get("title") or item.get("project_id"),
+                                            "summary": export_markdown(item),
+                                            "source": "portfolio_summary",
+                                        }
+                                        for item in summaries
+                                    ]
+                                    preview_path = pathlib.Path("analysis_output") / "portfolio_summary.pdf"
+                                    try:
+                                        build_portfolio_pdf_with_pandoc(
+                                            entries,
+                                            preview_path,
+                                            title=f"Portfolio Summary for {selected_user}",
+                                        )
+                                        print(f"\nPortfolio PDF preview generated at:\n{preview_path}\n")
+                                    except Exception as exc:
+                                        print("Failed to generate portfolio PDF preview.")
+                                        print(f"Error: {exc}")
+                                        continue
+                                    save = input("Save a local copy now? (y/n): ").strip().lower()
+                                    if save == "y":
+                                        save_path = prompt_save_path(default_name="portfolio_summary.pdf")
+                                        if save_path:
+                                            pathlib.Path(save_path).write_bytes(preview_path.read_bytes())
+                                            print(f"\nPortfolio PDF successfully saved to:\n{save_path}\n")
                         if action == "2":
                             with _open_app_db() as conn:
                                 snapshots = fetch_latest_snapshots(conn)
                             if not snapshots:
                                 print("No projects found.")
+                                continue
+                            if user_project_ids:
+                                snapshots = [
+                                    item
+                                    for item in snapshots
+                                    if str(item.get("project_id")) in user_project_ids
+                                ]
+                            if not snapshots:
+                                print(f"No projects found for {selected_user}.")
                                 continue
                             sorted_projects = sorted(
                                 snapshots,
@@ -1200,55 +1414,42 @@ def main():
                             if selection is None or selection == "b":
                                 continue
                             chosen_snapshots = [sorted_projects[n - 1] for n in selection]
-                            showcase_entries = _build_portfolio_showcase_entries(chosen_snapshots)
+                            showcase_entries = _build_portfolio_showcase_entries(
+                                chosen_snapshots,
+                                user=selected_user,
+                            )
                             print("\nPortfolio Showcase Preview:\n")
                             print(_format_portfolio_showcase(showcase_entries))
                             while True:
                                 sub = _prompt_menu(
                                     "Showcase Options",
-                                    ["Auto-generate showcase", "Customize", "Back to portfolio menu"],
+                                    ["Customize", "Export PDF (LaTeX)", "Back to portfolio menu"],
                                 )
                                 if sub in {"3", "b"}:
                                     break
                                 if sub == "1":
-                                    # Persist auto-generated showcase
-                                    with _open_app_db() as conn:
-                                        for item in showcase_entries:
-                                            summary = item.get("summary") or ""
-                                            if not summary:
-                                                continue
-                                            try:
-                                                upsert_resume_project_description(
-                                                    conn,
-                                                    project_id=item["project_id"],
-                                                    summary=summary,
-                                                    variant_name="portfolio_showcase",
-                                                    metadata={"source": "auto"},
-                                                )
-                                            except Exception as exc:
-                                                print(f"Save failed for {item['project_id']}: {exc}")
-                                            else:
-                                                print(f"Saved showcase for {item['project_id']}.")
-                                    continue
-                                if sub == "2":
                                     # Interactive editor
                                     while True:
-                                        print("\nShowcase entries:")
-                                        for idx, item in enumerate(showcase_entries, start=1):
-                                            print(f"{idx}. {item.get('name') or item.get('project_id')}")
-                                        pick = input(
-                                            "Select an entry number (blank to cancel, b to back, m for main menu): "
-                                        ).strip().lower()
-                                        if not pick:
-                                            break
-                                        if pick == "m":
-                                            raise _ReturnToMainMenu()
-                                        if pick == "b":
-                                            break
-                                        if not pick.isdigit() or not (1 <= int(pick) <= len(showcase_entries)):
-                                            print("Invalid selection.")
-                                            continue
-                                        item = showcase_entries[int(pick) - 1]
+                                        single_item = len(showcase_entries) == 1
+                                        if single_item:
+                                            item = showcase_entries[0]
+                                        else:
+                                            print("\nShowcase entries:")
+                                            for idx, item in enumerate(showcase_entries, start=1):
+                                                print(f"{idx}. {item.get('name') or item.get('project_id')}")
+                                            pick = input(
+                                                "Select an entry number (blank to cancel, b to back): "
+                                            ).strip().lower()
+                                            if not pick:
+                                                break
+                                            if pick == "b":
+                                                break
+                                            if not pick.isdigit() or not (1 <= int(pick) <= len(showcase_entries)):
+                                                print("Invalid selection.")
+                                                continue
+                                            item = showcase_entries[int(pick) - 1]
+                                        back_to_entries = False
+                                        back_to_options = False
                                         while True:
                                             # Show the full markdown
                                             print("\nCurrent showcase (full):\n")
@@ -1260,19 +1461,23 @@ def main():
                                                     "Edit Highlights",
                                                     "Edit References",
                                                     "Edit full markdown",
-                                                    "Back",
+                                                    "Back to showcase options",
                                                 ],
                                             )
                                             if edit in {"5", "b"}:
+                                                back_to_options = True
                                                 break
+                                            edit_label = "Showcase"
                                             if edit == "4":
                                                 # Replace the entire markdown
+                                                edit_label = "Showcase content"
                                                 new_text = input("Paste full markdown (blank to cancel): ").strip()
                                                 if not new_text:
                                                     continue
                                                 new_summary = new_text
                                             elif edit == "1":
                                                 # Update only the Top Project  
+                                                edit_label = "Top Project section"
                                                 current = (item.get("summary") or "").split("\n\n", 1)
                                                 top_block = current[0] if current else ""
                                                 print(f"\nCurrent Top Project section:\n{top_block}\n")
@@ -1283,6 +1488,7 @@ def main():
                                                 new_summary = (top_text + "\n\n" + rest).strip() if rest else top_text
                                             elif edit == "2":
                                                 # Edit the Highlights
+                                                edit_label = "Highlights"
                                                 summary = item.get("summary") or ""
                                                 parts = summary.split("\n## Highlights\n", 1)
                                                 before = parts[0]
@@ -1294,6 +1500,7 @@ def main():
                                                 if subh in {"3", "b"}:
                                                     continue
                                                 if subh == "1":
+                                                    print("\nCurrent Highlights:\n" + "\n".join(highlights))
                                                     text = input("Highlight to add (blank to cancel): ").strip()
                                                     if not text:
                                                         continue
@@ -1305,6 +1512,7 @@ def main():
                                                     if del_mode == "1":
                                                         highlights = []
                                                     else:
+                                                        print("\nCurrent Highlights:\n" + "\n".join(highlights))
                                                         target = input("Text to delete (blank to cancel): ").strip()
                                                         if not target:
                                                             continue
@@ -1318,6 +1526,7 @@ def main():
                                                 new_summary = rebuilt.strip()
                                             elif edit == "3":
                                                 # Edit the References bullet
+                                                edit_label = "References"
                                                 summary = item.get("summary") or ""
                                                 parts = summary.split("\n## References\n", 1)
                                                 before = parts[0]
@@ -1328,6 +1537,7 @@ def main():
                                                 if subr in {"3", "b"}:
                                                     continue
                                                 if subr == "1":
+                                                    print("\nCurrent References:\n" + "\n".join(refs))
                                                     text = input("Reference to add (blank to cancel): ").strip()
                                                     if not text:
                                                         continue
@@ -1339,6 +1549,7 @@ def main():
                                                     if del_mode == "1":
                                                         refs = []
                                                     else:
+                                                        print("\nCurrent References:\n" + "\n".join(refs))
                                                         target = input("Text to delete (blank to cancel): ").strip()
                                                         if not target:
                                                             continue
@@ -1366,11 +1577,45 @@ def main():
                                                     )
                                                     item["summary"] = saved.summary
                                                     item["source"] = "custom"
-                                                    print("Saved successfully.")
+                                                    print(f"{edit_label} updated successfully.")
                                                 except Exception as exc:
                                                     print(f"Save failed: {exc}")
                                             print("\nUpdated Showcase Preview:\n")
                                             print(_format_portfolio_showcase(showcase_entries))
+                                        if back_to_options:
+                                            break
+                                    if back_to_options:
+                                        break
+                                if sub == "2":
+                                    from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
+
+                                    preview_path = pathlib.Path("analysis_output") / "portfolio_showcase.pdf"
+                                    try:
+                                        build_portfolio_pdf_with_pandoc(
+                                            showcase_entries,
+                                            preview_path,
+                                            title=f"Portfolio Summary for {selected_user}",
+                                        )
+                                        print(f"\nPortfolio PDF preview generated at:\n{preview_path}\n")
+                                    except Exception as exc:
+                                        print("Failed to generate portfolio PDF preview.")
+                                        print(f"Error: {exc}")
+                                        continue
+
+                                    export = input(
+                                        "Would you like to save a copy to your local machine? (y/n): "
+                                    ).strip().lower()
+                                    if export == "y":
+                                        save_path = prompt_save_path(default_name="portfolio_showcase.pdf")
+                                        if not save_path:
+                                            print("Portfolio export cancelled.")
+                                            continue
+                                        try:
+                                            pathlib.Path(save_path).write_bytes(preview_path.read_bytes())
+                                            print(f"\nPortfolio PDF successfully saved to:\n{save_path}\n")
+                                        except Exception as exc:
+                                            print("Failed to save portfolio PDF.")
+                                            print(f"Error: {exc}")
                 elif choice == "6":
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
@@ -1424,6 +1669,8 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
+                            from capstone.resume_pdf_builder import build_pdf_with_pandoc
+
                             with _open_app_db() as conn:
                                 generate_resume_project_descriptions(
                                     conn,
@@ -1432,9 +1679,28 @@ def main():
                                 )
                                 refreshed = query_resume_entries(conn)
                                 resume_preview = build_resume_preview(refreshed, conn=conn)
+
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))
+
+                            # 🔽 NEW PART STARTS HERE
+                            export = input("\nWould you like to export this resume as a PDF? (y/n): ").strip().lower()
+                            if export == "y":
+                                save_path = prompt_save_path(default_name="resume.pdf")
+
+                                if not save_path:
+                                    print("Resume export cancelled.")
+                                    continue
+
+                                try:
+                                    build_pdf_with_pandoc(resume_preview, pathlib.Path(save_path))
+                                    print(f"\nResume PDF successfully saved to:\n{save_path}\n")
+                                except Exception as e:
+                                    print("Failed to generate resume PDF.")
+                                    print(f"Error: {e}")
+
                             continue
+
                         if action == "2":
                             with _open_app_db() as conn:
                                 generate_resume_project_descriptions(
@@ -1834,6 +2100,7 @@ def main():
 
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
+                        metadata_map = load_project_metadata(conn)
                         snapshot_map = {
                             str(item.get("project_id")): (item.get("snapshot") or {})
                             for item in snapshots
@@ -1841,12 +2108,40 @@ def main():
                         }
                         timeline = chronological_proj(snapshot_map)
                         print("\nChronological Project Timeline:\n")
-                        for entry in timeline:
-                            start = entry.get("start")
-                            end = entry.get("end")
-                            start_text = start.isoformat() if start else "-"
-                            end_text = end.isoformat() if end else "Present"
-                            print(f"- {entry['name']}: {start_text} -> {end_text}")
+                        project_ids = sorted(
+                            set(snapshot_map.keys()) | set(metadata_map.keys())
+                        )
+
+                        for project_id in sorted(project_ids):
+                            meta = metadata_map.get(project_id)
+
+                            if meta:
+                                start = meta.get("start_date")
+                                end = meta.get("end_date")
+                                status = meta.get("status", "ongoing").capitalize()
+
+                                start_text = start if start else "Unknown"
+                                end_text = end if end else "Present"
+
+                            else:
+                                # fallback: infer from analysis timestamps
+                                snapshots = snapshot_map.get(project_id, [])
+                                timestamps = [
+                                    s.get("analyzed_at")
+                                    for s in snapshots
+                                    if isinstance(s, dict) and s.get("analyzed_at")
+                                ]
+
+                                timestamps.sort()
+                                start_text = timestamps[0][:10] if timestamps else "Unknown"
+                                end_text = "Present"
+                                status = "Ongoing (inferred)"
+
+                            print(f"- {project_id}")
+                            print(f"  Active Period: {start_text} → {end_text}")
+                            print(f"  Status: {status}\n")
+
+
                 elif choice == "8":
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
@@ -1972,6 +2267,22 @@ def main():
                         else:
                             print("Invalid choice. Please enter 1 or 2.")
                 elif choice == "12":
+
+                    conn = open_db()
+                    try:
+                        rows = fetch_latest_snapshots(conn)
+                        snapshot_map = {}
+
+                        for row in rows:
+                            snapshot_map.setdefault(row["project_id"], []).append(row["snapshot"])
+
+                        run_ai_project_analysis(conn, snapshot_map)
+
+
+                    finally:
+                        close_db()
+
+                elif choice == "13":
                     _exit_app()
         except _ReturnToMainMenu:
             if in_main_menu:

@@ -50,7 +50,6 @@ JOB_SKILL_KEYWORDS: Dict[str, List[str]] = {
     "node.js": ["node", "node.js", "nodejs"],
     "express": ["express", "express.js"],
     "django": ["django"],
-    "flask": ["flask"],
     "fastapi": ["fastapi"],
     "spring": ["spring", "spring boot"],
     ".net": [".net", "asp.net", "asp net", "dotnet"],

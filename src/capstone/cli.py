@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tkinter as tk
+from tkinter import filedialog
 from pathlib import Path
 
 from capstone.storage import open_db, close_db, fetch_latest_snapshots  # <-- MUST exist for tests
@@ -53,10 +55,9 @@ from .resume_retrieval import (
 )
 from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
-from .portfolio_retrieval import create_app as create_portfolio_app
-from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
-from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
-from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
+from .storage import fetch_latest_snapshot as get_portfolio_latest
+from .api.portfolio_helpers import ensure_indexes as ensure_portfolio_indexes
+from .api.portfolio_helpers import list_snapshots as list_portfolio_snapshots
 from .top_project_summaries import export_markdown, generate_top_project_summaries
 from .github_contributors import get_contributor_rankings, sync_contributor_stats
 
@@ -941,8 +942,14 @@ def _handle_resume_project(args: argparse.Namespace) -> int:
 
 def _handle_api(args: argparse.Namespace) -> int:
     db_dir = str(args.db_dir) if args.db_dir else None
-    app = create_portfolio_app(db_dir=db_dir, auth_token=args.token)
-    app.run(host=args.host, port=args.port)
+    from capstone.api.server import create_app as create_api_app
+    app = create_api_app(db_dir=db_dir, auth_token=args.token)
+    try:
+        import uvicorn
+    except Exception:
+        print("Uvicorn is required to run the FastAPI server. Install with `pip install uvicorn`.", file=sys.stderr)
+        return 2
+    uvicorn.run(app, host=args.host, port=args.port)
     return 0
 
 
@@ -1746,6 +1753,29 @@ def _handle_clean(args: argparse.Namespace) -> int:
     if args.all:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
+def prompt_project_metadata():
+    print("\nOptional Project Timeline Information")
+
+    start = input("Start date (YYYY-MM-DD) [optional]: ").strip()
+    end = input("End date (YYYY-MM-DD) [optional]: ").strip()
+    status = input("Status (ongoing/completed) [default: ongoing]: ").strip().lower()
+
+    return {
+        "start_date": start or None,
+        "end_date": end or None,
+        "status": status if status in {"ongoing", "completed"} else "ongoing",
+    }
+def pick_zip_file():
+    root = tk.Tk()
+    root.withdraw()  # hide the empty Tk window
+    root.attributes("-topmost", True)
+
+    file_path = filedialog.askopenfilename(
+        title="Select a ZIP file",
+        filetypes=[("ZIP files", "*.zip")]
+    )
+    root.destroy()
+    return file_path
 
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:

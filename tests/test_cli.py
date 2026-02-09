@@ -331,8 +331,9 @@ class CLITestCase(unittest.TestCase):
                 "https://github.com/org/repo",  # repo URL
                 "ghp_testtoken",  # token
                 "1",  # submenu: analyze current project
+                "n",  # skip processing zip file into resume entry
                 "4",  # submenu: back to main menu
-                "12",  # exit
+                "13",  # exit
             ]
         )
 

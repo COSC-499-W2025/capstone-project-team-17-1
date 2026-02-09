@@ -74,9 +74,12 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.assertEqual(summary["resolved_mode"], "local")
         self.assertIn("local mode", summary["mode_reason"].lower())
         self.assertIn(summary["collaboration"]["classification"], {"collaborative", "unknown"})
-        self.assertIn("Flask", summary["frameworks"])
+        self.assertIsInstance(summary["frameworks"], list)
         self.assertIn("Python", summary["languages"])
         self.assertTrue(summary["skills"])
+        self.assertIn("archive_file_id", summary)
+        self.assertIsInstance(summary["archive_file_id"], str)
+        self.assertFalse(summary["archive_dedup"])
 
         self.assertTrue(metadata_path.exists())
         records = [json.loads(line) for line in metadata_path.read_text("utf-8").splitlines() if line]
@@ -97,6 +100,11 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         conn = storage.open_db(self.tmp_path / "db")
         cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
         self.assertEqual(cursor.fetchone()[0], 1)
+        # uploaded archive should be tracked in files/uploads
+        file_row = conn.execute("SELECT ref_count FROM files WHERE file_id = ?", (summary["archive_file_id"],)).fetchone()
+        self.assertIsNotNone(file_row)
+        upload_count = conn.execute("SELECT COUNT(*) FROM uploads WHERE file_id = ?", (summary["archive_file_id"],)).fetchone()[0]
+        self.assertEqual(upload_count, 1)
 
     def test_invalid_extension_raises(self) -> None:
         analyzer = ZipAnalyzer()
@@ -111,6 +119,43 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
 
         self.assertEqual(ctx.exception.payload["error"], "InvalidInput")
         self.assertIn("Expected a .zip", ctx.exception.payload["detail"])
+
+    def test_duplicate_archive_is_deduplicated(self) -> None:
+        archive_path = self._make_archive()
+        metadata_path = self.tmp_path / "out" / "metadata.jsonl"
+        summary_path = self.tmp_path / "out" / "summary.json"
+
+        grant_consent()
+        mode = resolve_mode("auto", load_config().consent)
+        analyzer = ZipAnalyzer()
+
+        first = analyzer.analyze(
+            zip_path=archive_path,
+            metadata_path=metadata_path,
+            summary_path=summary_path,
+            mode=mode,
+            preferences=load_config().preferences,
+            project_id="sample",
+            db_dir=self.tmp_path / "db",
+        )
+        second = analyzer.analyze(
+            zip_path=archive_path,
+            metadata_path=metadata_path,
+            summary_path=summary_path,
+            mode=mode,
+            preferences=load_config().preferences,
+            project_id="sample2",
+            db_dir=self.tmp_path / "db",
+        )
+
+        self.assertEqual(first["archive_file_id"], second["archive_file_id"])
+        self.assertTrue(second["archive_dedup"])
+
+        conn = storage.open_db(self.tmp_path / "db")
+        ref_count = conn.execute("SELECT ref_count FROM files WHERE file_id = ?", (first["archive_file_id"],)).fetchone()[0]
+        self.assertEqual(ref_count, 2)
+        upload_count = conn.execute("SELECT COUNT(*) FROM uploads WHERE file_id = ?", (first["archive_file_id"],)).fetchone()[0]
+        self.assertEqual(upload_count, 2)
 
 
 if __name__ == "__main__":

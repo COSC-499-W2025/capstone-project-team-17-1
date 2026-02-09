@@ -1,13 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
-import os
+import tempfile
 import shutil
 import time
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+from capstone import file_store, storage
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post("/upload")
@@ -16,34 +15,64 @@ async def upload_project(file: UploadFile = File(...)):
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
 
-    ts = int(time.time())
-    safe_name = f"{ts}_{os.path.basename(filename)}"
-    out_path = UPLOAD_DIR / safe_name
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
 
-    with out_path.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
+    conn = storage.open_db()
+    try:
+        stored = file_store.ensure_file(
+            conn,
+            tmp_path,
+            original_name=filename,
+            source="api_upload",
+            mime="application/zip",
+        )
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
-    project_id = out_path.stem  # filename without .zip
-    return {"project_id": project_id, "saved_as": str(out_path)}
+    project_id = stored["upload_id"]
+    return {
+        "project_id": project_id,
+        "file_id": stored["file_id"],
+        "hash": stored["hash"],
+        "dedup": stored["dedup"],
+        "size_bytes": stored["size_bytes"],
+        "stored_path": stored["path"],
+    }
 
 
 @router.get("")
 def list_projects():
     """
-    Lists uploaded .zip projects.
+    Lists uploaded .zip projects from CAS storage.
     """
-    zips = sorted(UPLOAD_DIR.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    conn = storage.open_db()
+    rows = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        ORDER BY datetime(u.created_at) DESC
+        """
+    ).fetchall()
     return {
-        "count": len(zips),
+        "count": len(rows),
         "projects": [
             {
-                "project_id": p.stem,
-                "filename": p.name,
-                "saved_as": str(p),
-                "size_bytes": p.stat().st_size,
-                "modified": int(p.stat().st_mtime),
+                "project_id": r[0],
+                "filename": r[1],
+                "file_id": r[2],
+                "hash": r[3],
+                "created_at": r[4],
+                "size_bytes": r[5],
+                "stored_path": r[6],
             }
-            for p in zips
+            for r in rows
         ],
     }
 
@@ -51,22 +80,74 @@ def list_projects():
 @router.get("/{project_id}")
 def get_project(project_id: str):
     """
-    Returns info for a specific uploaded project zip.
+    Returns info for a specific uploaded project zip by upload_id.
     """
-    # Find any zip whose stem matches the id
-    matches = list(UPLOAD_DIR.glob(f"{project_id}.zip"))
-    if not matches:
-        # also allow partial match (in case you later change naming)
-        matches = list(UPLOAD_DIR.glob(f"*{project_id}*.zip"))
+    conn = storage.open_db()
+    row = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
 
-    if not matches:
+    if not row:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    p = matches[0]
     return {
-        "project_id": p.stem,
-        "filename": p.name,
-        "saved_as": str(p),
-        "size_bytes": p.stat().st_size,
-        "modified": int(p.stat().st_mtime),
+        "project_id": row[0],
+        "filename": row[1],
+        "file_id": row[2],
+        "hash": row[3],
+        "created_at": row[4],
+        "size_bytes": row[5],
+        "stored_path": row[6],
     }
+
+@router.delete("/{project_id}")
+def delete_project(project_id: str):
+    """
+    Deletes a project upload and its associated stored file.
+    """
+    conn = storage.open_db()
+
+    row = conn.execute(
+        """
+        SELECT u.file_id, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    file_id, file_path = row
+
+    # delete upload reference
+    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (project_id,))
+    # delete file reference
+    conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    conn.commit()
+
+    # best-effort physical file removal
+    try:
+        Path(file_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    return {
+        "data": {
+            "deleted": True,
+            "project_id": project_id,
+            "file_id": file_id,
+        },
+        "error": None,
+    }
+
