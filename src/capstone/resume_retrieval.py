@@ -822,6 +822,21 @@ def generate_resume_project_descriptions(
             continue
         existing_active = get_resume_project_description(conn, str(project_id))
         if existing_active and not overwrite:
+            summary = existing_active.summary
+            if summary:
+                conn.execute(
+                    """
+                    UPDATE resume_entries
+                    SET summary = ?, updated_at = ?
+                    WHERE id IN (
+                        SELECT entry_id
+                        FROM resume_entry_links
+                        WHERE link_type = 'project' AND link_value = ?
+                    )
+                    AND (summary IS NULL OR TRIM(summary) = '')
+                    """,
+                    (summary, now, str(project_id)),
+                )
             results.append(existing_active)
             continue
         snapshot = fetch_latest_snapshot(conn, str(project_id))
@@ -835,16 +850,29 @@ def generate_resume_project_descriptions(
             if source == "custom":
                 active = False
         summary = build_resume_project_summary(str(project_id), snapshot)
-        results.append(
-            upsert_resume_project_description(
-                conn,
-                project_id=str(project_id),
-                summary=summary,
-                variant_name="auto",
-                is_active=active,
-                metadata={"source": "auto", "generated_at": now},
-            )
+        item = upsert_resume_project_description(
+            conn,
+            project_id=str(project_id),
+            summary=summary,
+            variant_name="auto",
+            is_active=active,
+            metadata={"source": "auto", "generated_at": now},
         )
+        # Write back auto summaries into linked resume entries when blank.
+        conn.execute(
+            """
+            UPDATE resume_entries
+            SET summary = ?, updated_at = ?
+            WHERE id IN (
+                SELECT entry_id
+                FROM resume_entry_links
+                WHERE link_type = 'project' AND link_value = ?
+            )
+            AND (summary IS NULL OR TRIM(summary) = '')
+            """,
+            (summary, now, str(project_id)),
+        )
+        results.append(item)
     return results
 
 

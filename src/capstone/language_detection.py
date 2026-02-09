@@ -51,7 +51,6 @@ _KNOWN_FRAMEWORK_DEPENDENCIES = {
     "next": "Next.js",
     "nuxt": "Nuxt.js",
     "django": "Django",
-    "flask": "Flask",
     "fastapi": "FastAPI",
     "express": "Express",
     "rails": "Ruby on Rails",

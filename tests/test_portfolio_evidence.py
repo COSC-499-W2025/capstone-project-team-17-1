@@ -2,12 +2,16 @@ import json
 import sqlite3
 from pathlib import Path
 
-import capstone.portfolio_retrieval as pr
+import pytest
+
+fastapi = pytest.importorskip("fastapi")
+from capstone.api.server import create_app
+from fastapi.testclient import TestClient
 
 
 def _make_db(tmp_path: Path):
     """
-    Create the SQLite DB in the exact location expected by portfolio_retrieval's fallback:
+    Create the SQLite DB in the exact location expected by API helpers:
       sqlite3.connect(Path(db_dir) / "capstone.db")
     """
     db_path = tmp_path / "capstone.db"
@@ -32,7 +36,7 @@ def _insert_snapshot(tmp_path: Path, project_id: str = "p1"):
 
     snapshot = {
         "metrics": {"Accuracy": "92%", "Users": "50+"},
-        "skills": ["Python", "Flask"],
+        "skills": ["Python"],
     }
 
     conn.execute(
@@ -44,26 +48,18 @@ def _insert_snapshot(tmp_path: Path, project_id: str = "p1"):
     conn.close()
 
 
-def _force_sqlite_fallback(monkeypatch):
-    """
-    Ensure create_app/_db_session uses local sqlite fallback rather than capstone.storage.open_db.
-    """
-    monkeypatch.setattr(pr, "_open_db", None)
-    monkeypatch.setattr(pr, "_close_db", None)
-    monkeypatch.setattr(pr, "_fetch_latest_snapshot", None)
-
-
 def test_portfolios_evidence_happy_path(tmp_path, monkeypatch):
-    _force_sqlite_fallback(monkeypatch)
+    if TestClient is None:
+        return
     _insert_snapshot(tmp_path, project_id="p1")
 
-    app = pr.create_app(db_dir=str(tmp_path), auth_token=None)
-    client = app.test_client()
+    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    client = TestClient(app)
 
     resp = client.get("/portfolios/evidence?projectId=p1")
-    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.status_code == 200, resp.text
 
-    body = resp.get_json()
+    body = resp.json()
     assert body["error"] is None
     assert body["data"]["projectId"] == "p1"
 
@@ -76,21 +72,23 @@ def test_portfolios_evidence_happy_path(tmp_path, monkeypatch):
 
 
 def test_portfolios_evidence_missing_project_id(tmp_path, monkeypatch):
-    _force_sqlite_fallback(monkeypatch)
+    if TestClient is None:
+        return
 
-    app = pr.create_app(db_dir=str(tmp_path), auth_token=None)
-    client = app.test_client()
+    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    client = TestClient(app)
 
     resp = client.get("/portfolios/evidence")
-    assert resp.status_code == 400, resp.get_data(as_text=True)
+    assert resp.status_code in {400, 422}, resp.text
 
 
 def test_portfolios_evidence_not_found(tmp_path, monkeypatch):
-    _force_sqlite_fallback(monkeypatch)
+    if TestClient is None:
+        return
     _make_db(tmp_path)  # empty DB but table exists
 
-    app = pr.create_app(db_dir=str(tmp_path), auth_token=None)
-    client = app.test_client()
+    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    client = TestClient(app)
 
     resp = client.get("/portfolios/evidence?projectId=does-not-exist")
-    assert resp.status_code == 404, resp.get_data(as_text=True)
+    assert resp.status_code == 404, resp.text

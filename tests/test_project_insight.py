@@ -7,7 +7,7 @@ class ProjectInsightTests(unittest.TestCase):
             "collaboration": {"primary_contributor": "Alice"},
             "file_summary": {"active_days": 3},
             "languages": {"Python": 10},
-            "frameworks": ["Flask"],
+            "frameworks": [],
         }
         prompt = build_project_insight_prompt(snapshot, "What did I do?", user="Alice")
         self.assertIn("Requesting user's role", prompt)

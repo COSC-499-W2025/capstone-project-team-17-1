@@ -50,7 +50,6 @@ JOB_SKILL_KEYWORDS: Dict[str, List[str]] = {
     "node.js": ["node", "node.js", "nodejs"],
     "express": ["express", "express.js"],
     "django": ["django"],
-    "flask": ["flask"],
     "fastapi": ["fastapi"],
     "spring": ["spring", "spring boot"],
     ".net": [".net", "asp.net", "asp net", "dotnet"],
@@ -250,7 +249,6 @@ def _coverage(jd_terms: List[str], project_terms: List[str]) -> tuple[float, Lis
     matched = [t for t in jd_terms if t in proj_set]
     cov = len(matched) / len(jd_terms)
     return cov, matched
-
 
 def _recency_factor(recency_days: Optional[float], half_life_days: float = 365.0) -> float:
     """

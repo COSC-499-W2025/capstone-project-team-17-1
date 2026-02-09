@@ -9,72 +9,62 @@ import textwrap
 
 
 def _generate_markdown(resume: Dict[str, Any]) -> str:
-    """
-    Convert the resume JSON structure into Markdown that Pandoc
-    will render into a clean, professional PDF.
-    """
-    company = resume.get("company", "")
-    projects = resume.get("projects", [])
-    skills = resume.get("skills", [])
-    values = resume.get("values", [])
-    work_style = resume.get("work_style", [])
-    traits = resume.get("traits", [])
+    lines = []
 
-    md = []
+    # -----------------------
+    # TITLE
+    # -----------------------
+    lines.append("# Tailored Resume\n")
 
-    # Title
-    md.append(f"# Tailored Resume — {company}\n")
+    # -----------------------
+    # SKILLS SECTION (FIXED)
+    # -----------------------
+    skills_set = set()
 
-    # Skills section
-    md.append("## Skills")
-    for s in skills:
-        flags = []
-        if s["in_required"]:
-            flags.append("Required")
-        if s["in_preferred"]:
-            flags.append("Preferred")
-        if s["in_company_profile"]:
-            flags.append("Company Profile")
-        flag_str = f" ({', '.join(flags)})" if flags else ""
-        md.append(f"- **{s['name']}**{flag_str}")
-    md.append("")
+    project_context = resume.get("projectContext", {})
 
-    # Values / Traits / Work Style
-    if values:
-        md.append("## Company Values Alignment")
-        for v in values:
-            md.append(f"- {v}")
-        md.append("")
+    for project in project_context.values():
+        for skill in project.get("skills", []):
+            if isinstance(skill, dict) and "skill" in skill:
+                skills_set.add(skill["skill"])
 
-    if work_style:
-        md.append("## Work Style Match")
-        for w in work_style:
-            md.append(f"- {w}")
-        md.append("")
+    if skills_set:
+        lines.append("## Skills\n")
+        lines.append(", ".join(sorted(skills_set)))
+        lines.append("")
 
-    if traits:
-        md.append("## Traits")
-        for t in traits:
-            md.append(f"- {t}")
-        md.append("")
+    # -----------------------
+    # PROJECTS SECTION
+    # -----------------------
+    lines.append("## Projects\n")
 
-    # Projects
-    md.append("## Relevant Projects")
-    for p in projects:
-        md.append(f"### {p['project_id']}")
-        md.append(f"- **Relevance Score:** {p['relevance_score']:.3f}")
-        md.append(f"- **Bullet:** {p['resume_bullet']}")
-        md.append("")
-    md.append("")
+    for section in resume.get("sections", []):
+        if section.get("name") != "projects":
+            continue
 
-    return "\n".join(md)
+        for item in section.get("items", []):
+            title = item.get("title", "Untitled Project")
+            summary = item.get("entrySummary") or item.get("entryBody", "")
 
+            lines.append(f"### {title}")
+            lines.append(summary.strip())
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+
+from pathlib import Path
 
 def build_pdf_with_pandoc(resume: Dict[str, Any], output_path: Path) -> Path:
     """
     Render PDF using Pandoc.
     Requires pandoc installed system-wide.
     """
+
+    # 🔒 DEFENSIVE FIX: normalize path
+    output_path = Path(output_path)
+
     markdown_text = _generate_markdown(resume)
 
     with tempfile.TemporaryDirectory() as tmpdir:
