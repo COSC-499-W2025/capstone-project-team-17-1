@@ -87,4 +87,7 @@ def test_export_portfolio_pdf():
     
 def test_export_portfolio_invalid_format():
     response = client.get("/portfolio/demo/export?format=exe")
-    assert response.status_code == 400
+    assert response.status_code == 422
+    
+    body = response.json()
+    assert body["detail"][0]["loc"][-1] == "format"
