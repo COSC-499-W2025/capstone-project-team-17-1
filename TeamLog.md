@@ -5,7 +5,7 @@
 - [Week 2 Team Log (Term2)](#week-2-team-log-term2)
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
 - [Week 4 Team Log (Term2)](#week-4-team-log-term2)
-- [Week 4&5 Team Log (Term2)](#week-4&5-team-log-term2)
+- [Week 5 Team Log (Term2)](#week-5-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
@@ -484,7 +484,7 @@ In parallel, the team continued work on several Milestone 2 enhancements, includ
 Overall, the team has strengthened the system foundation by stabilizing core pipelines, enforcing consent-aware AI integration, and improving usability, while continuing development on advanced insight and timeline features.
 
 
-## WEEK 4+5 TEAM LOG (Term2)
+## WEEK 5 TEAM LOG (Term2)
 (Jan26 - Feb01, 2026)
 
 ### Recap of Milestone Goal - Week 4+5
