@@ -250,13 +250,13 @@ Worked on creating a start up menu for the user to navigate with upon running th
 ### Weekly Recap:
 This week continued from last week's start up manu work by integrating all the underlying milestone features reliably. I focused on connecting the menu to existing modules, fixing integration issues caused by inconsistent snapshot data, and writing tests so future changes do not break basic navigation.
 
-Coding tasks
+Coding tasks<br />
 I expanded the startup menu so each option routes to the correct functionality. I also included normalization logic to bridge differences beteween database row fields and snapshot payload keys so the menu can work across multiple stored snapshot shapes without breaking the program. 
 
-Testing or debugging tasks
+Testing or debugging tasks<br />
 I debugged several runtime issues triggered by menu execution where functions expected dict maps but received lists. I added unittest coverage for the flow using mock data inputs and core helper calls. I also adjusted imports to avoid environment failures.
 
-Reviewing or collaboration tasks
+Reviewing or collaboration tasks<br />
 I helped review teammate prs for milestone 2 changes which includes success endpoints and resume textual display logic. I helped test new implementations and worked on adding additional tests which achieved better coverage for niche scenarios such as more consistent outputs even when input parameters may be missing.
 
 ### Additionally:
@@ -272,13 +272,13 @@ The primary blocked for this week was inconsistent snapshot schemas across the p
 ### Weekly Recap:
 This week built directly on last week's integration work by flushing out user facing flows and improving reliability across multiple core features. The focus shifted from just connecting features to making them correct, explicit, and user friendly. Several edge cases surfaced once features were tested through the menu which let to massive refinements in both logic and test coverage. In parallel, the team and I were preparing for the upcoming peer testing by designing a clear evaluation flow and participant guidance.
 
-Coding tasks
+Coding tasks<br />
 I refractored the consent handling to ensure user permission is never implicitly granted. A unified method was introduced to only prompt when no prior consent decisions exists. This additionally supports session verses saved consent and correctly persists decisions to config. The consent flow now displays various messages for first time users vs returning users for imroved clarity. The application also exits cleanly without progressing further to the main menu when consent is denied. This structure was designed specifically to be compatible with future GUI frontend implementation by separating prompting logic from enforcement.
 
-Testing or debugging tasks
+Testing or debugging tasks<br />
 A significant portion of this week was spent debugging consent related edge cases. Early versions of the flow incorrectly auto granted consent, failed to reprompt after revocation, or existed prematurely after acceptance. These were traced to mismatches between prompt return values and decision handling. The updated unittests now cover all possible user behaviours. 
 
-Reviewing or collaboration tasks
+Reviewing or collaboration tasks<br />
 I reviewed and tested teammate PRs by providing feedback on usability, code reuse, and test alignment. I helped validate that new features behaved correctly when invoked through the menu rather than in isolation. 
 
 ### Additionally:
