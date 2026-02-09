@@ -172,6 +172,8 @@ I then integrated this file store with both the ZIP analyzer and the API upload 
 
 During this work, I also identified an issue in the current database workflow where some data appears to be inserted multiple times. It seems that data may be written once in the zipAnalyzer and then written again when storing snapshots, resulting in duplicate records. Next week, I plan to investigate and fix this bug, and then begin development on new features.
 
+<img width="1550" height="906" alt="52df745191a1b8479f91131401628d59" src="https://github.com/user-attachments/assets/7e8a0bce-496a-47fb-9e98-748e1b6a0eb9" />
+
 [Back](#table-of-contents)
 
 ## Week 5 (M2)
@@ -181,6 +183,8 @@ Last week, I implemented duplicate file detection by assigning hash values to ea
 As a result, a new workflow was introduced. In the “Generate Resume Preview” process, the system first outputs a list of users, then the projects associated with the selected user, and finally a basic resume preview. However, several issues remain. Some users’ email addresses cannot be correctly retrieved from GitHub, so a feature allowing users to manually supplement their information needs to be added. In addition, PDF generation is currently not working due to unresolved dependency and engine issues, both on the API client side and the host environment. The current resume content and styling are also very minimal.
 
 Finally, database tables such as resume_entry and resume_section may no longer be necessary, since resume generation no longer relies on stored resume content but is instead generated dynamically based on the user and their associated projects. The final result should be stored in a resumes table linked to user IDs and project IDs, and the resume customization feature will be redesigned accordingly. My goal for next week is to deliver a complete and functional resume module.
+
+<img width="1550" height="906" alt="52df745191a1b8479f91131401628d59" src="https://github.com/user-attachments/assets/664a4ce0-ef0a-419d-99ef-336363362a97" />
 
 [Back](#table-of-contents)
 
