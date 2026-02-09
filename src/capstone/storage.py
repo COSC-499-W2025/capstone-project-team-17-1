@@ -66,6 +66,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
             contributor TEXT NOT NULL,
+            user_id INTEGER,
             commits INTEGER NOT NULL DEFAULT 0,
             pull_requests INTEGER NOT NULL DEFAULT 0,
             issues INTEGER NOT NULL DEFAULT 0,
@@ -91,7 +92,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             email TEXT,
-            source TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -205,6 +205,47 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             ON contributor_stats (project_id, contributor, created_at)
             """
         )
+        conn.commit()
+
+    # Add user_id column to contributor_stats when missing
+    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
+    columns = {row[1] for row in info}
+    if "user_id" not in columns:
+        conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
+        conn.commit()
+
+    # Repair legacy FK if user_projects points to users_old.
+    fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
+    fk_targets = {row[2] for row in fk_rows if len(row) > 2}
+    if "users_old" in fk_targets:
+        conn.execute("ALTER TABLE user_projects RENAME TO user_projects_old")
+        conn.execute(
+            """
+            CREATE TABLE user_projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                project_id TEXT NOT NULL,
+                contributor_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, project_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_user_projects_project
+            ON user_projects (project_id)
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_projects (id, user_id, project_id, contributor_name, created_at)
+            SELECT id, user_id, project_id, contributor_name, created_at
+            FROM user_projects_old
+            """
+        )
+        conn.execute("DROP TABLE user_projects_old")
         conn.commit()
 
     # 2) project_analysis legacy columns backfill / add columns if missing
@@ -614,6 +655,7 @@ def store_contributor_stats(
     project_id: str,
     contributor: str,
     *,
+    user_id: int | None = None,
     commits: int = 0,
     pull_requests: int = 0,
     issues: int = 0,
@@ -632,6 +674,7 @@ def store_contributor_stats(
         INSERT INTO contributor_stats (
             project_id,
             contributor,
+            user_id,
             commits,
             pull_requests,
             issues,
@@ -640,11 +683,12 @@ def store_contributor_stats(
             weights_hash,
             source
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project_id,
             contributor,
+            user_id,
             int(commits),
             int(pull_requests),
             int(issues),
@@ -685,6 +729,7 @@ def fetch_latest_contributor_stats(
             cs.id,
             cs.project_id,
             cs.contributor,
+            cs.user_id,
             cs.commits,
             cs.pull_requests,
             cs.issues,
@@ -707,6 +752,7 @@ def fetch_latest_contributor_stats(
             row_id,
             project_id,
             contributor,
+            user_id,
             commits,
             pull_requests,
             issues,
@@ -718,13 +764,14 @@ def fetch_latest_contributor_stats(
         ) = row
         payload.append(
             {
-                "id": row_id,
-                "project_id": project_id,
-                "contributor": contributor,
-                "commits": commits,
-                "pull_requests": pull_requests,
-                "issues": issues,
-                "reviews": reviews,
+            "id": row_id,
+            "project_id": project_id,
+            "contributor": contributor,
+            "user_id": user_id,
+            "commits": commits,
+            "pull_requests": pull_requests,
+            "issues": issues,
+            "reviews": reviews,
                 "score": score,
                 "weights_hash": weights_hash,
                 "source": source,
@@ -761,7 +808,6 @@ def upsert_user(
     username: str,
     *,
     email: str | None = None,
-    source: str | None = None,
 ) -> int:
     if not username:
         raise ValueError("username must be provided")
@@ -781,18 +827,18 @@ def upsert_user(
     if row:
         user_id = int(row[0])
         conn.execute(
-            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), source = COALESCE(?, source), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (username, email, source, user_id),
+            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (username, email, user_id),
         )
         conn.commit()
         return user_id
 
     cursor = conn.execute(
         """
-        INSERT INTO users (username, email, source)
-        VALUES (?, ?, ?)
+        INSERT INTO users (username, email)
+        VALUES (?, ?)
         """,
-        (username, email, source),
+        (username, email),
     )
     conn.commit()
     return int(cursor.lastrowid)
@@ -823,8 +869,6 @@ def upsert_users_from_contributors(
     conn: sqlite3.Connection,
     project_id: str,
     contributors: Iterable[object],
-    *,
-    source: str | None = None,
 ) -> None:
     """
     Bulk upsert helpers: accepts any iterable with 'contributor' and optional 'email'.
@@ -836,7 +880,7 @@ def upsert_users_from_contributors(
         email = getattr(row, "email", None)
         if not username:
             continue
-        user_id = upsert_user(conn, username, email=email, source=source)
+        user_id = upsert_user(conn, username, email=email)
         link_user_to_project(conn, user_id, project_id, contributor_name=username)
 
 def save_project_metadata(conn, project_id, meta):

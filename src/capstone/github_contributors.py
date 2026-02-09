@@ -13,8 +13,10 @@ from typing import Callable, Iterable, Optional
 from .logging_utils import get_logger
 from .storage import (
     fetch_latest_contributor_stats,
+    link_user_to_project,
     open_db,
     store_contributor_stats,
+    upsert_user,
     update_contributor_score,
 )
 
@@ -72,6 +74,7 @@ class ContributorStats:
     issues: int = 0
     reviews: int = 0
     score: float = 0.0
+    email: str | None = None
 
 
 class GitHubClient:
@@ -134,6 +137,33 @@ class GitHubClient:
             logger.info("GitHub stats not ready, retrying (%s/%s)", attempt + 1, retries)
         return []
 
+    def get_user_email(self, owner: str, repo: str, login: str) -> str | None:
+        if not login:
+            return None
+        data, _ = self._request_json(f"/users/{login}")
+        if not isinstance(data, dict):
+            return None
+        email = data.get("email")
+        if isinstance(email, str) and email:
+            return email
+        # Fallback: pull most recent commit by this author
+        commits, _ = self._request_json(
+            f"/repos/{owner}/{repo}/commits",
+            {"author": login, "per_page": 1},
+        )
+        if isinstance(commits, list) and commits:
+            commit = commits[0]
+            # prefer author.email from commit payload
+            email = (
+                commit.get("commit", {})
+                .get("author", {})
+                .get("email")
+                if isinstance(commit, dict)
+                else None
+            )
+            return email if isinstance(email, str) else None
+        return None
+
     def search_issues_count(self, query: str) -> int:
         payload = self._request_graphql(
             {
@@ -187,6 +217,10 @@ def collect_contributor_stats(
                 contributor=login,
                 commits=int(entry.get("contributions", 0)),
             )
+        # Enrich email (profile -> latest commit fallback)
+        email = client.get_user_email(owner, repo, login)
+        if login in stats_by_login and email:
+            stats_by_login[login].email = email
 
     ranked = sorted(
         stats_by_login.values(),
@@ -249,10 +283,14 @@ def sync_contributor_stats(
         progress_cb("Saving contributor stats", None, None)
     conn = open_db(db_dir)
     for row in stats:
+        # upsert user first to get stable id
+        user_id = upsert_user(conn, row.contributor, email=row.email)
+        link_user_to_project(conn, user_id, resolved_project_id, contributor_name=row.contributor)
         store_contributor_stats(
             conn,
             project_id=resolved_project_id,
             contributor=row.contributor,
+            user_id=user_id,
             commits=row.commits,
             pull_requests=row.pull_requests,
             issues=row.issues,

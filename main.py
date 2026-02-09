@@ -44,7 +44,6 @@ from capstone.storage import (
     fetch_latest_snapshots,
     open_db,
     store_github_source,
-    upsert_users_from_contributors,
 )
 from capstone.services import ArchiveAnalysisError, ArchiveAnalyzerService, SnapshotStore
 from capstone.top_project_summaries import (
@@ -287,8 +286,6 @@ def _contributor_menu(project_id: str) -> None:
                         project_id=project_id,
                         progress_cb=progress.update,
                     )
-                    with _open_app_db() as conn:
-                        upsert_users_from_contributors(conn, project_id, stats, source="github")
                 except Exception as exc:
                     progress.clear()
                     print(f"Failed to sync contributor stats: {exc}")
@@ -1071,8 +1068,6 @@ def main():
                             token=token,
                             progress_cb=progress.update,
                         )
-                        with _open_app_db() as conn:
-                            upsert_users_from_contributors(conn, project_id, stats, source="github")
                     except Exception as exc:
                         progress.clear()
                         print(f"Failed to import from GitHub: {exc}")
