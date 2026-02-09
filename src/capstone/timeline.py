@@ -31,6 +31,24 @@ def _iter_snapshots(conn) -> Iterable[Tuple[str, Dict[str, Any]]]:
         if isinstance(snap, dict):
             yield pid, snap
 
+def build_project_timeline(projects, snapshots, metadata_map):
+    timeline = []
+
+    for project_id in projects:
+        meta = metadata_map.get(project_id, {})
+
+        start = meta.get("start_date")
+        end = meta.get("end_date")
+        status = meta.get("status", "ongoing")
+
+        timeline.append({
+            "project_id": project_id,
+            "start": start,
+            "end": end,
+            "status": status,
+        })
+
+    return timeline
 
 def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
     conn = open_db(db_dir)

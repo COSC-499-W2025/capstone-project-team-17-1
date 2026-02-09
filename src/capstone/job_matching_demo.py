@@ -12,7 +12,7 @@ def main() -> None:
     # Fake JD profile (what Step 1 would output)
     jd_profile = {
         "title": "Backend Python Intern",
-        "required_skills": ["python", "flask", "sql"],
+        "required_skills": ["python", "sql"],
         "preferred_skills": ["docker", "linux"],
         "keywords": ["backend", "rest api"],
     }
@@ -20,10 +20,9 @@ def main() -> None:
     # Fake analysed projects (what the analyzer would roughly give you)
     project_snapshots = [
         {
-            "project_id": "flask_backend",
+            "project_id": "backend_service",
             "skills": [
                 SkillScore("python", 0.5, "language"),
-                SkillScore("flask", 0.3, "framework"),
                 SkillScore("sql", 0.2, "database"),
             ],
             "metrics": {"recency_days": 30},

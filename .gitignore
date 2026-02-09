@@ -20,3 +20,8 @@ log/consent_decisions.jsonl
 /.venv
 config/user_config.json
 data/capstone.db
+*.db
+# databases
+*.db
+data/*.db
+data/files
