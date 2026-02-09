@@ -91,7 +91,16 @@ class _ConnCM:
 
 
 class MainMenuTests(unittest.TestCase):
-    def run_menu(self, inputs, *, grant=True, rows=None, consent_status="granted_existing", user_rows=None):
+    def run_menu(
+        self,
+        inputs,
+        *,
+        grant=True,
+        rows=None,
+        consent_status="granted_existing",
+        user_rows=None,
+        resume_users=None,
+    ):
         out = io.StringIO()
         conn = _FakeConn()
         conn.cursor_obj._user_rows = [("alice",)]
@@ -103,6 +112,8 @@ class MainMenuTests(unittest.TestCase):
 
         if rows is None:
             rows = []
+        if resume_users is None:
+            resume_users = [{"id": 1, "username": "alice", "project_count": 1, "email": None}]
 
         input_iter = iter(list(inputs))
         def _next_input(_prompt=""):
@@ -115,7 +126,14 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "grant_consent", return_value=grant),
             patch.object(app, "ensure_or_prompt_consent", return_value=consent_status),
             patch.object(app, "open_db", return_value=_ConnCM(conn)),
+            patch.object(app, "_open_app_db", return_value=_ConnCM(conn)),
             patch.object(app, "fetch_latest_snapshots", return_value=rows),
+            patch.object(app, "_list_resume_users", return_value=resume_users),
+            patch.object(app, "_list_user_project_ids", return_value={r[0] for r in conn.cursor_obj._project_rows}),
+            patch.object(app, "_load_user_contribution_map", return_value={}),
+            patch.object(app, "_build_user_resume_preview", return_value={"sections": []}),
+            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
+            patch.object(app, "_export_resume_pdf_via_api", return_value=(False, "skip")),
             patch("builtins.input", side_effect=_next_input),
             redirect_stdout(out),
         ):
@@ -234,8 +252,40 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["6", "1", "3", "13"], rows=rows)
+        text, _ = self.run_menu(inputs=["6", "1", "", "3", "13"], rows=rows)
         self.assertIn("Resume Preview", text)
+
+    def test_resume_auto_generate_skip_export(self):
+        rows = [
+            {
+                "id": 1,
+                "project_id": "p1",
+                "snapshot": {"project_id": "p1", "project_name": "Demo"},
+                "created_at": "2026-01-11T00:00:00Z",
+            }
+        ]
+
+        resume_preview = {"sections": [{"name": "summary", "items": [{"excerpt": "ok"}]}]}
+
+        with (
+            patch.object(app, "_build_user_resume_preview", return_value=resume_preview),
+            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
+            patch.object(app, "fetch_latest_snapshots", return_value=rows),
+            patch("capstone.resume_pdf_builder.build_markdown_from_resume", return_value="MD"),
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",  # resume
+                    "1",  # user
+                    "",   # all projects
+                    "1",  # auto-generate
+                    "4",  # skip export
+                    "13",
+                ],
+                rows=rows,
+            )
+
+        self.assertIn("Auto-Generated Resume", text)
 
     def test_resume_customize_summary_add(self):
         rows = [
@@ -298,7 +348,8 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6",  # main menu -> resume preview
+                    "6",  # resume preview
+                    "1",  # pick user
                     "1",  # select project
                     "2",  # customize
                     "1",  # entry 1
@@ -372,10 +423,11 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6",
-                    "1",
-                    "2",
-                    "1",
+                    "6",  # resume preview
+                    "1",  # user
+                    "1",  # project
+                    "2",  # customize
+                    "1",  # entry
                     "3",  # skills
                     "1",  # add
                     "Python",
@@ -576,7 +628,8 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6", "1", "2", "1",
+                    "6", "1", "1", "2",  # resume, user, project, customize
+                    "1",  # entry
                     "4",  # linked projects
                     "1",  # add
                     "1",  # select project
@@ -644,7 +697,8 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6", "1", "2", "1",
+                    "6", "1", "1", "2",  # resume, user, project, customize
+                    "1",  # entry
                     "7",  # metadata
                     "1",  # add
                     "2026-01", "2026-02",
