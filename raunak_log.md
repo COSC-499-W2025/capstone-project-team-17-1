@@ -1044,7 +1044,7 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 - Unlocks Milestone 2 “incremental information” requirement: the system can now **accumulate project state over time** instead of losing earlier snapshots.
 - Improves traceability + auditability (you can inspect how a project evolved and support timeline/diff features later).
 - Hardens the feature with a regression test so future schema/storage edits don’t silently break snapshot history behavior.
-
+---
 ### PR: Duplicate file recognition
 
 ### What I did
@@ -1067,3 +1067,6 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 - **Lower storage usage** and cleaner persistence model (one canonical file, many upload references).
 - **Deterministic identity** for artifacts via hash → makes snapshots/analysis reproducible.
 - **Foundation for API uploads**: backend now has the right primitives for `/projects/upload`-style flows without ballooning DB size.
+
+<img width="1141" height="647" alt="Screenshot 2026-02-08 at 8 26 25 PM" src="https://github.com/user-attachments/assets/56a68622-b4fa-4897-abde-949389fec312" />
+
