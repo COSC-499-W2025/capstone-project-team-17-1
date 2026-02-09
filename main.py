@@ -29,11 +29,13 @@ from capstone.resume_retrieval import (
     build_resume_project_summary,
     build_resume_preview,
     delete_resume_project_description,
+    export_resume,
     generate_resume_project_descriptions,
     get_resume_entry,
     get_resume_project_description,
     insert_resume_entry,
     query_resume_entries,
+    resolve_resume_project_descriptions,
     update_resume_entry,
     upsert_resume_project_description,
 )
@@ -608,6 +610,31 @@ def prompt_save_path(default_name="resume.pdf"):
     root.destroy()
     return path
 
+
+def prompt_save_path_any(
+    *,
+    title: str,
+    default_name: str,
+    default_extension: str,
+    filetypes: list[tuple[str, str]],
+):
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+
+    path = filedialog.asksaveasfilename(
+        title=title,
+        defaultextension=default_extension,
+        initialfile=default_name,
+        filetypes=filetypes,
+    )
+
+    root.destroy()
+    return path
+
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
         raw = input(prompt).strip()
@@ -979,6 +1006,26 @@ def _list_user_project_ids(
         (user_id, username),
     ).fetchall()
     return [str(row[0]) for row in rows if row and row[0]]
+
+
+def _filter_resume_result_by_project_ids(result, project_ids: Iterable[str]):
+    selected = {str(pid) for pid in project_ids if pid}
+    if not selected:
+        return result
+    filtered_entries = []
+    for entry in result.entries:
+        entry_project_ids = {str(pid) for pid in (entry.project_ids or []) if pid}
+        if entry_project_ids and entry_project_ids.intersection(selected):
+            filtered_entries.append(entry)
+    warnings = list(result.warnings or [])
+    if not filtered_entries:
+        warnings.append("No resume entries linked to the selected projects.")
+    return type(result)(
+        entries=filtered_entries,
+        warnings=warnings,
+        missing_sections=list(result.missing_sections or []),
+        schema_state=dict(result.schema_state or {}),
+    )
 
 def main():
     in_main_menu = False
@@ -1781,7 +1828,7 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
-                            from capstone.resume_pdf_builder import build_pdf_with_pandoc
+                            from capstone.resume_pdf_builder import build_pdf_with_latex
 
                             with _open_app_db() as conn:
                                 generate_resume_project_descriptions(
@@ -1790,26 +1837,70 @@ def main():
                                     overwrite=True,
                                 )
                                 refreshed = query_resume_entries(conn)
-                                resume_preview = build_resume_preview(refreshed, conn=conn)
+                                filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
+                                resume_preview = build_resume_preview(filtered, conn=conn)
 
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))
 
-                            # 🔽 NEW PART STARTS HERE
-                            export = input("\nWould you like to export this resume as a PDF? (y/n): ").strip().lower()
-                            if export == "y":
-                                save_path = prompt_save_path(default_name="resume.pdf")
+                            if not (resume_preview.get("sections") or []):
+                                print("No resume sections generated for the selected projects.")
+                                continue
 
-                                if not save_path:
-                                    print("Resume export cancelled.")
-                                    continue
+                            safe_user = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in selected_username)
+                            default_md_name = f"resume_{safe_user or 'user'}.md"
+                            default_pdf_name = f"resume_{safe_user or 'user'}.pdf"
 
-                                try:
-                                    build_pdf_with_pandoc(resume_preview, pathlib.Path(save_path))
-                                    print(f"\nResume PDF successfully saved to:\n{save_path}\n")
-                                except Exception as e:
-                                    print("Failed to generate resume PDF.")
-                                    print(f"Error: {e}")
+                            export_choice = _prompt_menu(
+                                "Export Resume",
+                                [
+                                    "Markdown",
+                                    "PDF (LaTeX)",
+                                    "Markdown + PDF (LaTeX)",
+                                    "Skip",
+                                ],
+                            )
+                            if export_choice == "b":
+                                export_choice = "4"
+
+                            do_md = export_choice in {"1", "3"}
+                            do_pdf = export_choice in {"2", "3"}
+
+                            if do_md:
+                                save_md_path = prompt_save_path_any(
+                                    title="Save Resume Markdown As",
+                                    default_name=default_md_name,
+                                    default_extension=".md",
+                                    filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+                                )
+                                if save_md_path:
+                                    try:
+                                        with _open_app_db() as conn:
+                                            descriptions = resolve_resume_project_descriptions(conn, filtered.entries)
+                                        export_resume(
+                                            filtered.entries,
+                                            fmt="markdown",
+                                            destination=pathlib.Path(save_md_path),
+                                            project_descriptions=descriptions,
+                                        )
+                                        print(f"\nResume Markdown successfully saved to:\n{save_md_path}\n")
+                                    except Exception as e:
+                                        print("Failed to generate resume Markdown.")
+                                        print(f"Error: {e}")
+                                else:
+                                    print("Resume Markdown export cancelled.")
+
+                            if do_pdf:
+                                save_pdf_path = prompt_save_path(default_name=default_pdf_name)
+                                if save_pdf_path:
+                                    try:
+                                        build_pdf_with_latex(resume_preview, pathlib.Path(save_pdf_path))
+                                        print(f"\nResume PDF successfully saved to:\n{save_pdf_path}\n")
+                                    except Exception as e:
+                                        print("Failed to generate resume PDF (LaTeX).")
+                                        print(f"Error: {e}")
+                                else:
+                                    print("Resume PDF export cancelled.")
 
                             continue
 
@@ -1821,7 +1912,8 @@ def main():
                                     overwrite=False,
                                 )
                                 refreshed = query_resume_entries(conn)
-                                resume_preview = build_resume_preview(refreshed, conn=conn)
+                                filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
+                                resume_preview = build_resume_preview(filtered, conn=conn)
                             while True:
                                 entry_map = _build_entry_target_map(resume_preview)
                                 if not entry_map:
@@ -2193,7 +2285,8 @@ def main():
                                                         print(f"Save failed: {exc}")
                                 with _open_app_db() as conn:
                                     refreshed = query_resume_entries(conn)
-                                    resume_preview = build_resume_preview(refreshed, conn=conn)
+                                    filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
+                                    resume_preview = build_resume_preview(filtered, conn=conn)
                                 print("\nUpdated Resume Preview:\n")
                                 print(_format_resume_preview(resume_preview))
                         if action == "3":
