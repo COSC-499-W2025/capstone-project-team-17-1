@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import base64
 import json
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from capstone.portfolio_retrieval import _db_session
+from capstone.resume_pdf_builder import build_pdf_with_pandoc
 from capstone.resume_retrieval import (
     build_resume_preview,
     ensure_resume_schema,
@@ -44,6 +48,24 @@ async def _get_payload(request: Request) -> dict:
         return await request.json()
     except Exception:
         return {}
+
+
+@router.post("/resume/render-pdf")
+async def resume_render_pdf(request: Request):
+    _check_auth(request)
+    payload = await _get_payload(request)
+    resume_payload = payload.get("resume")
+    if not isinstance(resume_payload, dict):
+        raise HTTPException(status_code=400, detail="resume object is required")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "resume.pdf"
+        try:
+            build_pdf_with_pandoc(resume_payload, out_path)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
+        encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")
+    return {"data": {"format": "pdf", "payload": encoded}, "error": None}
 
 @router.get("/resume")
 def resume_list(

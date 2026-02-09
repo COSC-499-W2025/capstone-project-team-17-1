@@ -29,6 +29,30 @@ _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
 
+def _is_noreply_email(email: str | None) -> bool:
+    if not email:
+        return False
+    lowered = email.strip().lower()
+    if not lowered:
+        return False
+    return (
+        lowered == "noreply@github.com"
+        or lowered.endswith("@users.noreply.github.com")
+        or lowered.endswith("@noreply.github.com")
+    )
+
+
+def _normalize_user_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    value = email.strip()
+    if not value:
+        return None
+    if _is_noreply_email(value):
+        return None
+    return value
+
+
 
 # Schema + migrations
 
@@ -66,6 +90,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
             contributor TEXT NOT NULL,
+            user_id INTEGER,
             commits INTEGER NOT NULL DEFAULT 0,
             pull_requests INTEGER NOT NULL DEFAULT 0,
             issues INTEGER NOT NULL DEFAULT 0,
@@ -100,6 +125,45 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
         ON contributor_stats (project_id, contributor, created_at)
+        """
+    )
+
+    # Users derived from contribution data (GitHub or local logs)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
+        ON users (username, COALESCE(email, ''))
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            project_id TEXT NOT NULL,
+            contributor_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (user_id, project_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_user_projects_project
+        ON user_projects (project_id)
         """
     )
 
@@ -184,6 +248,47 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             ON contributor_stats (project_id, contributor, created_at)
             """
         )
+        conn.commit()
+
+    # Add user_id column to contributor_stats when missing
+    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
+    columns = {row[1] for row in info}
+    if "user_id" not in columns:
+        conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
+        conn.commit()
+
+    # Repair legacy FK if user_projects points to users_old.
+    fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
+    fk_targets = {row[2] for row in fk_rows if len(row) > 2}
+    if "users_old" in fk_targets:
+        conn.execute("ALTER TABLE user_projects RENAME TO user_projects_old")
+        conn.execute(
+            """
+            CREATE TABLE user_projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                project_id TEXT NOT NULL,
+                contributor_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, project_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_user_projects_project
+            ON user_projects (project_id)
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_projects (id, user_id, project_id, contributor_name, created_at)
+            SELECT id, user_id, project_id, contributor_name, created_at
+            FROM user_projects_old
+            """
+        )
+        conn.execute("DROP TABLE user_projects_old")
         conn.commit()
 
     # 2) project_analysis legacy columns backfill / add columns if missing
@@ -286,7 +391,97 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON uploads (file_id)
         """
     )
+    _repair_user_identity_links(conn)
     conn.commit()
+
+
+def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
+    """
+    Repair user identity rows that were merged by generic noreply emails.
+    """
+    users = conn.execute(
+        "SELECT id, username, email FROM users ORDER BY id"
+    ).fetchall()
+
+    # First pass: normalize/remove noreply emails while preserving uniqueness.
+    for user_id, username, email in users:
+        if not _is_noreply_email(email):
+            continue
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
+            (username,),
+        ).fetchone()
+        if existing and int(existing[0]) != int(user_id):
+            canonical_id = int(existing[0])
+            conn.execute(
+                "UPDATE contributor_stats SET user_id = ? WHERE user_id = ?",
+                (canonical_id, int(user_id)),
+            )
+            old_links = conn.execute(
+                """
+                SELECT project_id, contributor_name
+                FROM user_projects
+                WHERE user_id = ?
+                """,
+                (int(user_id),),
+            ).fetchall()
+            for project_id, contributor_name in old_links:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+                    VALUES (?, ?, ?)
+                    """,
+                    (canonical_id, project_id, contributor_name),
+                )
+            conn.execute("DELETE FROM user_projects WHERE user_id = ?", (int(user_id),))
+            conn.execute("DELETE FROM users WHERE id = ?", (int(user_id),))
+        else:
+            conn.execute("UPDATE users SET email = NULL WHERE id = ?", (int(user_id),))
+
+    # Second pass: enforce contributor -> username mapping for every stats row.
+    contributors = conn.execute(
+        "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
+    ).fetchall()
+    for (contributor,) in contributors:
+        row = conn.execute(
+            "SELECT id FROM users WHERE username = ? ORDER BY id LIMIT 1",
+            (contributor,),
+        ).fetchone()
+        if row:
+            canonical_user_id = int(row[0])
+        else:
+            cursor = conn.execute(
+                "INSERT INTO users (username, email) VALUES (?, NULL)",
+                (contributor,),
+            )
+            canonical_user_id = int(cursor.lastrowid)
+
+        conn.execute(
+            "UPDATE contributor_stats SET user_id = ? WHERE contributor = ?",
+            (canonical_user_id, contributor),
+        )
+
+        projects = conn.execute(
+            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? AND project_id IS NOT NULL",
+            (contributor,),
+        ).fetchall()
+        for (project_id,) in projects:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+                VALUES (?, ?, ?)
+                """,
+                (canonical_user_id, project_id, contributor),
+            )
+            conn.execute(
+                """
+                DELETE FROM user_projects
+                WHERE contributor_name = ?
+                  AND project_id = ?
+                  AND user_id != ?
+                """,
+                (contributor, project_id, canonical_user_id),
+            )
 
 
 # -----------------------------
@@ -593,6 +788,7 @@ def store_contributor_stats(
     project_id: str,
     contributor: str,
     *,
+    user_id: int | None = None,
     commits: int = 0,
     pull_requests: int = 0,
     issues: int = 0,
@@ -611,6 +807,7 @@ def store_contributor_stats(
         INSERT INTO contributor_stats (
             project_id,
             contributor,
+            user_id,
             commits,
             pull_requests,
             issues,
@@ -619,11 +816,12 @@ def store_contributor_stats(
             weights_hash,
             source
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             project_id,
             contributor,
+            user_id,
             int(commits),
             int(pull_requests),
             int(issues),
@@ -664,6 +862,7 @@ def fetch_latest_contributor_stats(
             cs.id,
             cs.project_id,
             cs.contributor,
+            cs.user_id,
             cs.commits,
             cs.pull_requests,
             cs.issues,
@@ -686,6 +885,7 @@ def fetch_latest_contributor_stats(
             row_id,
             project_id,
             contributor,
+            user_id,
             commits,
             pull_requests,
             issues,
@@ -697,13 +897,14 @@ def fetch_latest_contributor_stats(
         ) = row
         payload.append(
             {
-                "id": row_id,
-                "project_id": project_id,
-                "contributor": contributor,
-                "commits": commits,
-                "pull_requests": pull_requests,
-                "issues": issues,
-                "reviews": reviews,
+            "id": row_id,
+            "project_id": project_id,
+            "contributor": contributor,
+            "user_id": user_id,
+            "commits": commits,
+            "pull_requests": pull_requests,
+            "issues": issues,
+            "reviews": reviews,
                 "score": score,
                 "weights_hash": weights_hash,
                 "source": source,
@@ -812,6 +1013,92 @@ def update_contributor_score(
         (float(score), weights_hash, int(row_id)),
     )
     conn.commit()
+
+
+# -----------------------------
+# Users and user-project links
+# -----------------------------
+
+def upsert_user(
+    conn: sqlite3.Connection,
+    username: str,
+    *,
+    email: str | None = None,
+) -> int:
+    if not username:
+        raise ValueError("username must be provided")
+    email = _normalize_user_email(email)
+
+    # Prefer matching by email when available, otherwise by username.
+    row = None
+    if email:
+        row = conn.execute(
+            "SELECT id, username, email FROM users WHERE email = ? LIMIT 1",
+            (email,),
+        ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT id, username, email FROM users WHERE username = ? LIMIT 1",
+            (username,),
+        ).fetchone()
+    if row:
+        user_id = int(row[0])
+        conn.execute(
+            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (username, email, user_id),
+        )
+        conn.commit()
+        return user_id
+
+    cursor = conn.execute(
+        """
+        INSERT INTO users (username, email)
+        VALUES (?, ?)
+        """,
+        (username, email),
+    )
+    conn.commit()
+    return int(cursor.lastrowid)
+
+
+def link_user_to_project(
+    conn: sqlite3.Connection,
+    user_id: int,
+    project_id: str,
+    *,
+    contributor_name: str | None = None,
+) -> None:
+    if not user_id:
+        raise ValueError("user_id must be provided")
+    if not project_id:
+        raise ValueError("project_id must be provided")
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+        VALUES (?, ?, ?)
+        """,
+        (int(user_id), project_id, contributor_name),
+    )
+    conn.commit()
+
+
+def upsert_users_from_contributors(
+    conn: sqlite3.Connection,
+    project_id: str,
+    contributors: Iterable[object],
+) -> None:
+    """
+    Bulk upsert helpers: accepts any iterable with 'contributor' and optional 'email'.
+    """
+    if not project_id:
+        return
+    for row in contributors:
+        username = getattr(row, "contributor", None) or getattr(row, "username", None)
+        email = getattr(row, "email", None)
+        if not username:
+            continue
+        user_id = upsert_user(conn, username, email=email)
+        link_user_to_project(conn, user_id, project_id, contributor_name=username)
 
 def save_project_metadata(conn, project_id, meta):
     cursor = conn.cursor()
@@ -1011,6 +1298,10 @@ __all__ = [
     "fetch_latest_contributor_stats",
     "update_contributor_score",
     "fetch_contributor_rankings",
+    # users
+    "upsert_user",
+    "link_user_to_project",
+    "upsert_users_from_contributors",
     # evidence
     "store_project_evidence",
     "fetch_project_evidence",

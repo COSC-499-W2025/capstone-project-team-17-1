@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import pathlib
+import base64
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -56,15 +57,6 @@ from capstone.top_project_summaries import (
 from capstone.ai_insights import ask_project_question
 from capstone.top_project_summaries import export_readme_snippet
 from capstone.zip_analyzer import ZipAnalyzer
-
-from capstone.job_matching import (
-    build_jd_profile,
-    rank_projects_for_job,
-    match_job_to_project,
-    build_resume_snippet,
-    matches_to_json
-)
-
 from capstone.cli import prompt_project_metadata
 from capstone.cli import pick_zip_file
 from capstone.storage import save_project_metadata
@@ -289,7 +281,7 @@ def _contributor_menu(project_id: str) -> None:
                         print(f"Failed to save GitHub source: {exc}")
                 progress = _ProgressLine()
                 try:
-                    sync_contributor_stats(
+                    stats = sync_contributor_stats(
                         repo_url,
                         token=token,
                         project_id=project_id,
@@ -617,6 +609,55 @@ def prompt_save_path(default_name="resume.pdf"):
     root.destroy()
     return path
 
+
+def prompt_save_path_any(
+    *,
+    title: str,
+    default_name: str,
+    default_extension: str,
+    filetypes: list[tuple[str, str]],
+):
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+
+    path = filedialog.asksaveasfilename(
+        title=title,
+        defaultextension=default_extension,
+        initialfile=default_name,
+        filetypes=filetypes,
+    )
+
+    root.destroy()
+    return path
+
+
+def _export_resume_pdf_via_api(resume_preview: dict, destination: pathlib.Path) -> tuple[bool, str]:
+    api_base = (os.environ.get("CAPSTONE_API_URL") or "http://127.0.0.1:5000").rstrip("/")
+    endpoint = f"{api_base}/resume/render-pdf"
+    token = os.environ.get("CAPSTONE_API_TOKEN") or os.environ.get("CAPSTONE_API_AUTH_TOKEN")
+    payload = json.dumps({"resume": resume_preview}).encode("utf-8")
+    req = urllib.request.Request(endpoint, data=payload, method="POST")
+    req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            body = response.read().decode("utf-8")
+        data = json.loads(body)
+        encoded = ((data or {}).get("data") or {}).get("payload")
+        if not encoded:
+            return False, "API response missing PDF payload"
+        pdf_bytes = base64.b64decode(encoded)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(pdf_bytes)
+        return True, ""
+    except Exception as exc:
+        return False, str(exc)
+
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
         raw = input(prompt).strip()
@@ -927,153 +968,282 @@ def _build_entry_target_map(preview: dict) -> dict[str, str]:
                 targets[entry_id] = f"{title}{period}"
     return targets
 
-# helper for loading snapshot from db
-def _snapshot_from_db_row(row: dict) -> dict:
-    raw = row.get("snapshot")
-    
-    if isinstance(raw, str):
-        try:
-            snapshot = json.loads(raw)
-        except Exception:
-            snapshot = {}
-    elif isinstance(raw, dict):
-        snap = dict(raw)
-    else:
-        snap = {}
-        
-    pid = (
-        row.get("project_id")
-        or snap.get("project_id")
-        or snap.get("projectId")
-        or snap.get("project_name")
-        or snap.get("name")
-        or f"row_{row.get('id', 'unknown')}"
-    )
-    snap.setdefault("project_id", str(pid))
-    
-    metrics = snap.get("metrics")
-    if not isinstance(metrics, dict):
-        snap["metrics"] = {}
-        
-    return snap
 
-def _read_job_description_text() -> str | None:
-    choice = _prompt_menu(
-        "Job Description Menu",
-        [
-            "Paste job description texts",
-            "Load from file path\n"
-        ]
-    )
-    
-    if choice == "1":
-        print("\nPlease paste the job description text below. End with an empty line:\n")
-        lines = []
-        while True:
-            line = input()
-            if not line.strip():
-                break
-            lines.append(line)
-        text = "\n".join(lines).strip()
-        return text if text else None
-    
-    if choice == "2":
-        path = input("Please enter the job description text file path: ").strip()
-        if not path or not os.path.isfile(path):
-            print("Invalid file path :(")
-            return None
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read().strip()
-        return text if text else None
-    
-    print("Invalid choice")
-    return None
+def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
+    rows = conn.execute(
+        """
+        SELECT
+            u.id,
+            u.username,
+            u.email,
+            COUNT(DISTINCT up.project_id) AS project_count
+        FROM users u
+        LEFT JOIN user_projects up ON up.user_id = u.id
+        WHERE LOWER(COALESCE(u.username, '')) NOT LIKE '%[bot]%'
+        GROUP BY u.id, u.username, u.email
+        ORDER BY LOWER(u.username), u.id
+        """
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0]),
+            "username": str(row[1]),
+            "email": row[2],
+            "project_count": int(row[3] or 0),
+        }
+        for row in rows
+        if row and row[1]
+    ]
 
-def _job_match_menu() -> None:
-    print("\n" + "=" * 40)
-    print("=" * 40)
-    
-    jd_text = _read_job_description_text()
-    if not jd_text:
-        print("No job description was provided.")
-        return
-    
-    mode = input("Type 1 to rank all projects, or 2 to compare a project: ").strip()
-    
-    db_dir = ROOT / "data"
-    
-    if mode == "2":
-        with _open_app_db() as conn:
-            rows = fetch_latest_snapshots(conn)
-            
-        if not rows:
-            print("No projects available for comparison, please upload one first!")
-            return
-        
-        print("\nAvailable Projects:")
-        print("-" * 30)
+
+def _list_user_project_ids(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    username: str,
+) -> List[str]:
+    rows = conn.execute(
+        """
+        SELECT DISTINCT project_id
+        FROM user_projects
+        WHERE user_id = ?
+          AND project_id IS NOT NULL
+          AND TRIM(project_id) != ''
+        ORDER BY LOWER(project_id)
+        """,
+        (user_id,),
+    ).fetchall()
+    project_ids = [str(row[0]) for row in rows if row and row[0]]
+    if project_ids:
+        return project_ids
+    # Fallback for older rows where user_projects might not have been populated yet.
+    rows = conn.execute(
+        """
+        SELECT DISTINCT project_id
+        FROM contributor_stats
+        WHERE (user_id = ? OR contributor = ?)
+          AND project_id IS NOT NULL
+          AND TRIM(project_id) != ''
+        ORDER BY LOWER(project_id)
+        """,
+        (user_id, username),
+    ).fetchall()
+    return [str(row[0]) for row in rows if row and row[0]]
+
+
+def _filter_resume_result_by_project_ids(result, project_ids: Iterable[str]):
+    selected = {str(pid) for pid in project_ids if pid}
+    if not selected:
+        return result
+    filtered_entries = []
+    for entry in result.entries:
+        entry_project_ids = {str(pid) for pid in (entry.project_ids or []) if pid}
+        if entry_project_ids and entry_project_ids.intersection(selected):
+            filtered_entries.append(entry)
+    warnings = list(result.warnings or [])
+    if not filtered_entries:
+        warnings.append("No resume entries linked to the selected projects.")
+    return type(result)(
+        entries=filtered_entries,
+        warnings=warnings,
+        missing_sections=list(result.missing_sections or []),
+        schema_state=dict(result.schema_state or {}),
+    )
+
+
+def _extract_skill_names(snapshot_data: dict) -> List[str]:
+    names: List[str] = []
+    raw_skills = snapshot_data.get("skills") or []
+    for skill in raw_skills:
+        if isinstance(skill, str):
+            token = skill.strip()
+        elif isinstance(skill, dict):
+            token = (
+                str(skill.get("skill") or skill.get("name") or skill.get("framework") or skill.get("language") or "")
+            ).strip()
+        else:
+            token = str(skill).strip()
+        if token:
+            names.append(token)
+    for fw in snapshot_data.get("frameworks") or []:
+        token = str(fw).strip()
+        if token:
+            names.append(token)
+    deduped: List[str] = []
+    seen: set[str] = set()
+    for token in names:
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(token)
+    return deduped
+
+
+def _load_user_contribution_map(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    username: str,
+    project_ids: Iterable[str],
+) -> dict[str, dict]:
+    payload: dict[str, dict] = {}
+    normalized = username.strip().lower()
+    for project_id in project_ids:
+        rows = fetch_latest_contributor_stats(conn, str(project_id))
+        matched = None
         for row in rows:
-            snap = row.get("snapshot") or {}
-            pid = row.get("project_id")
-            name = snap.get("project_name") or pid
-            print(f" {name} (ID: {pid})")
-            
-        print()
-        project_id = input("Enter the project ID you wish to compare: ").strip()
-        if not project_id:
-            print("No valid project id provided.")
-            return
-        
-        result = match_job_to_project(jd_text, project_id, db_dir=db_dir)
-        
-        print("\n" + "=" * 40)
-        print("Job Description Match Results")
-        print("=" * 40)
-        print(build_resume_snippet(result))
-        return
-    
-    with _open_app_db() as conn:
-        rows = fetch_latest_snapshots(conn)
-        
-    if not rows:
-        print("No projects found. Please import and analyze a project first!")
-        return
-    
-    snapshots = [_snapshot_from_db_row(r) for r in rows]
-    jd_profile = build_jd_profile(jd_text)
-    ranked = rank_projects_for_job(jd_profile, snapshots)
-    
-    if not ranked:
-        print("Sorry, no ranking results available.")
-        return
-    
-    try:
-        limit = int(input("How many results to show (default 5): ").strip() or "5")
-    except ValueError:
-        limit = 5
-    limit = max(1, limit)
-    
-    print("\nTop matches: ")
-    for i, m in enumerate(ranked[:limit], 1):
-        print(
-            f"{i}. {m.project_id} "
-            f"score={m.score:.3f} "
-            f"required={m.required_coverage:.2f} "
-            f"preferred={m.preferred_coverage:.2f} "
-            f"recency={m.recency_factor:.2f}"
+            row_user_id = row.get("user_id")
+            row_contributor = str(row.get("contributor") or "").strip().lower()
+            if row_user_id is not None and int(row_user_id) == int(user_id):
+                matched = row
+                break
+            if row_contributor and row_contributor == normalized:
+                matched = row
+                break
+        if not matched:
+            continue
+        payload[str(project_id)] = {
+            "commits": int(matched.get("commits") or 0),
+            "pull_requests": int(matched.get("pull_requests") or 0),
+            "issues": int(matched.get("issues") or 0),
+            "reviews": int(matched.get("reviews") or 0),
+            "score": float(matched.get("score") or 0.0),
+        }
+    return payload
+
+
+def _build_user_resume_preview(
+    *,
+    selected_username: str,
+    chosen_snapshots: List[dict],
+    contribution_map: dict[str, dict],
+) -> dict:
+    project_items: List[dict] = []
+    project_context: dict[str, dict] = {}
+    all_skills: List[str] = []
+    total_commits = 0
+    total_prs = 0
+    total_issues = 0
+    total_reviews = 0
+
+    for snap in chosen_snapshots:
+        snapshot_data = snap.get("snapshot") or {}
+        project_id = str(
+            snap.get("project_id")
+            or snapshot_data.get("project_id")
+            or snapshot_data.get("project")
+            or ""
         )
-    
-    save = input("\nSave results to JSON file (y or n): ").strip().lower()
-    if save == "y":
-        out_path = input("Output path (default analysis_output/job_match.json): ").strip() or "analysis_output/job_match.json"
-        out_dir = os.path.dirname(out_path)
-        if out_dir:
-            os.makedirs(out_dir, exist_ok=True)
-        payload = matches_to_json(ranked[:limit])
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-        print(f"Saved to {out_path}")
-           
+        name = (
+            snapshot_data.get("project_name")
+            or snapshot_data.get("project")
+            or snapshot_data.get("project_id")
+            or project_id
+            or "Untitled"
+        )
+        base_summary = build_resume_project_summary(project_id or name, snapshot_data)
+        contrib = contribution_map.get(project_id, {})
+        commits = int(contrib.get("commits") or 0)
+        prs = int(contrib.get("pull_requests") or 0)
+        issues = int(contrib.get("issues") or 0)
+        reviews = int(contrib.get("reviews") or 0)
+        contribution_line = (
+            f"Contribution: {commits} commits, {prs} PRs, {issues} issues, {reviews} reviews."
+            if contrib
+            else ""
+        )
+        excerpt = f"{base_summary} {contribution_line}".strip()
+        skills = _extract_skill_names(snapshot_data)
+        all_skills.extend(skills)
+        total_commits += commits
+        total_prs += prs
+        total_issues += issues
+        total_reviews += reviews
+
+        project_items.append(
+            {
+                "id": None,
+                "section": "projects",
+                "title": name,
+                "excerpt": excerpt,
+                "source": "snapshot+contributor_stats",
+                "updated_at": snap.get("created_at") or "-",
+                "metadata": {},
+                "status": "active",
+                "projectIds": [project_id] if project_id else [],
+                "skills": skills,
+            }
+        )
+        if project_id:
+            project_context[project_id] = snapshot_data
+
+    deduped_skills: List[str] = []
+    seen_skills: set[str] = set()
+    for token in all_skills:
+        key = token.lower()
+        if key in seen_skills:
+            continue
+        seen_skills.add(key)
+        deduped_skills.append(token)
+
+    summary_lines = [
+        f"{selected_username} contributed to {len(project_items)} selected project(s).",
+    ]
+    if total_commits or total_prs or total_issues or total_reviews:
+        summary_lines.append(
+            f"Totals: {total_commits} commits, {total_prs} PRs, {total_issues} issues, {total_reviews} reviews."
+        )
+    if deduped_skills:
+        summary_lines.append(f"Core skills: {', '.join(deduped_skills[:12])}.")
+
+    summary_items = [
+        {
+            "id": None,
+            "section": "summary",
+            "title": f"{selected_username} - Professional Summary",
+            "excerpt": " ".join(summary_lines).strip(),
+            "source": "instant",
+            "updated_at": datetime.utcnow().isoformat(),
+            "metadata": {},
+            "status": "active",
+            "projectIds": [],
+            "skills": deduped_skills[:12],
+        }
+    ]
+    skills_items = []
+    if deduped_skills:
+        skills_items.append(
+            {
+                "id": None,
+                "section": "skills",
+                "title": "Core Skills",
+                "excerpt": ", ".join(deduped_skills),
+                "source": "instant",
+                "updated_at": datetime.utcnow().isoformat(),
+                "metadata": {},
+                "status": "active",
+                "projectIds": [],
+                "skills": deduped_skills,
+            }
+        )
+
+    sections = [
+        {"name": "summary", "items": summary_items},
+        {"name": "projects", "items": project_items},
+    ]
+    if skills_items:
+        sections.append({"name": "skills", "items": skills_items})
+
+    return {
+        "sections": sections,
+        "warnings": [],
+        "missingSections": [],
+        "schema": None,
+        "projectContext": project_context,
+        "resumeProjectDescriptions": {},
+        "lastUpdated": datetime.utcnow().isoformat(),
+    }
 
 def main():
     in_main_menu = False
@@ -1103,27 +1273,6 @@ def main():
     print("Input shortcuts: b = back, m = main menu, Enter = cancel.")
     
     # main menu loop
-    try:
-        forced_choice = None
-        while True:
-            print("\n" + "=" * 40)
-            print("Main Menu")
-            print("=" * 40)
-            print("1.  Analyze new project archive (ZIP)")
-            print("2.  Import from GitHub URL")
-            print("3.  View all projects")
-            print("4.  View project details")
-            print("5.  Generate portfolio summary")
-            print("6.  Generate resume preview")
-            print("7.  View chronological project timeline")
-            print("8.  View skills timeline")
-            print("9.  Delete project insights")
-            print("10. Manage consent")
-            print("11. Contributor rankings (Quick Access)")
-            print("12. Job decription match")
-            print("13. Exit")   
-            print()
-            if not forced_choice:
     while True:
         try:
             forced_choice = None
@@ -1139,22 +1288,6 @@ def main():
                 print("5.  Generate portfolio summary")
                 print("6.  Generate resume preview")
                 print("7.  View chronological project timeline")
-                print("8.  View skills timeline")
-                print("9.  Delete project insights")
-                print("10. Manage consent")
-                print("11. Contributor rankings (Quick Access)")
-                print("12. Job description match")
-                print("13. Exit")
-                print()
-            while True:
-                if forced_choice:
-                    choice = forced_choice
-                    forced_choice = None
-                else:
-                    choice = input("Please select an option (1-13): ").strip()
-                if choice in {str(i) for i in range(1, 14)}:
-                    break
-                print("Invalid choice. Please enter a number between 1 and 13.")
                 print("8.  View chronological skills timeline")
                 print("9.  Delete project insights")
                 print("10. Manage consent (LLM/external services)")
@@ -1257,7 +1390,7 @@ def main():
                         project_id = f"{owner}/{repo}"
                         with _open_app_db() as conn:
                             store_github_source(conn, project_id, repo_url, token)
-                        sync_contributor_stats(
+                        stats = sync_contributor_stats(
                             repo_url,
                             token=token,
                             progress_cb=progress.update,
@@ -1812,33 +1945,95 @@ def main():
                                             print(f"Error: {exc}")
                 elif choice == "6":
                     with _open_app_db() as conn:
+                        users = _list_resume_users(conn)
                         snapshots = fetch_latest_snapshots(conn)
 
+                    if not users:
+                        print("\nResume Preview\n--------------\n")
+                        print("No users found. Import from GitHub URL first.")
+                        continue
                     if not snapshots:
                         print("\nResume Preview\n--------------\n")
                         print("No projects found.")
                         continue
 
+                    print("\nAvailable users:")
+                    for idx, user_row in enumerate(users, start=1):
+                        username = user_row.get("username") or f"User {idx}"
+                        project_count = int(user_row.get("project_count") or 0)
+                        email = user_row.get("email")
+                        suffix = f" ({email})" if email else ""
+                        print(f"{idx}. {username}{suffix} - {project_count} project(s)")
+
+                    user_pick = _prompt_single_index(
+                        "Select a user number (blank to cancel, b to back): ",
+                        len(users),
+                    )
+                    if user_pick is None or user_pick == "b":
+                        if user_pick is None:
+                            print("Cancelled.")
+                        continue
+
+                    selected_user = users[int(user_pick) - 1]
+                    selected_user_id = int(selected_user["id"])
+                    selected_username = str(selected_user["username"])
+
+                    with _open_app_db() as conn:
+                        user_project_ids = _list_user_project_ids(
+                            conn,
+                            user_id=selected_user_id,
+                            username=selected_username,
+                        )
+                    if not user_project_ids:
+                        print(f"No projects found for {selected_username}.")
+                        continue
+
+                    snapshot_map = {
+                        str(item.get("project_id")): item
+                        for item in snapshots
+                        if item.get("project_id")
+                    }
+                    user_snapshots = [
+                        snapshot_map[pid]
+                        for pid in user_project_ids
+                        if pid in snapshot_map
+                    ]
+                    if not user_snapshots:
+                        print(f"No analyzed snapshots found for {selected_username}.")
+                        continue
+
                     sorted_projects = sorted(
-                        snapshots,
+                        user_snapshots,
                         key=lambda s: (str(s.get("project_id") or "")).lower(),
                     )
-                    print("\nAvailable projects (latest snapshot per project):")
+                    print(f"\nProjects for {selected_username}:")
                     for idx, snap in enumerate(sorted_projects, start=1):
                         snapshot_data = snap.get("snapshot") or {}
                         label = snapshot_data.get("project_name") or snap.get("project_id") or f"Project {idx}"
                         print(f"{idx}. {label} (ID: {snap.get('project_id')})")
 
                     selection = _prompt_indices(
-                        "Select projects by number (space-separated, blank to cancel, b to back): ",
+                        "Select projects by number (space-separated, blank = all, b to back): ",
                         len(sorted_projects),
                     )
-                    if selection is None or selection == "b":
-                        if selection is None:
-                            print("Cancelled.")
+                    if selection == "b":
                         continue
-
-                    chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                    if selection is None:
+                        chosen_snapshots = list(sorted_projects)
+                    else:
+                        chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                    project_ids = [
+                        str(snap.get("project_id"))
+                        for snap in chosen_snapshots
+                        if snap.get("project_id")
+                    ]
+                    with _open_app_db() as conn:
+                        contribution_map = _load_user_contribution_map(
+                            conn,
+                            user_id=selected_user_id,
+                            username=selected_username,
+                            project_ids=project_ids,
+                        )
                     selected_snapshot_skills: List[str] = []
                     for snap in chosen_snapshots:
                         snap_skills = (snap.get("snapshot") or {}).get("skills") or []
@@ -1847,14 +2042,13 @@ def main():
                     selected_snapshot_skills = [
                         s for i, s in enumerate(selected_snapshot_skills) if s and s not in selected_snapshot_skills[:i]
                     ]
-                    resume_preview = _build_resume_preview_from_snapshots(chosen_snapshots)
+                    resume_preview = _build_user_resume_preview(
+                        selected_username=selected_username,
+                        chosen_snapshots=chosen_snapshots,
+                        contribution_map=contribution_map,
+                    )
                     print("\nResume Preview:\n")
                     print(_format_resume_preview(resume_preview))
-                    project_ids = [
-                        str(snap.get("project_id"))
-                        for snap in chosen_snapshots
-                        if snap.get("project_id")
-                    ]
                     if project_ids:
                         action = _prompt_menu(
                             "Preview Options",
@@ -1863,35 +2057,86 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
-                            from capstone.resume_pdf_builder import build_pdf_with_pandoc
+                            from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_pandoc
 
                             with _open_app_db() as conn:
-                                generate_resume_project_descriptions(
+                                contribution_map = _load_user_contribution_map(
                                     conn,
+                                    user_id=selected_user_id,
+                                    username=selected_username,
                                     project_ids=project_ids,
-                                    overwrite=True,
                                 )
-                                refreshed = query_resume_entries(conn)
-                                resume_preview = build_resume_preview(refreshed, conn=conn)
+                            resume_preview = _build_user_resume_preview(
+                                selected_username=selected_username,
+                                chosen_snapshots=chosen_snapshots,
+                                contribution_map=contribution_map,
+                            )
 
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))
 
-                            # 🔽 NEW PART STARTS HERE
-                            export = input("\nWould you like to export this resume as a PDF? (y/n): ").strip().lower()
-                            if export == "y":
-                                save_path = prompt_save_path(default_name="resume.pdf")
+                            if not (resume_preview.get("sections") or []):
+                                print("No resume sections generated for the selected projects.")
+                                continue
 
-                                if not save_path:
-                                    print("Resume export cancelled.")
-                                    continue
+                            safe_user = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in selected_username)
+                            default_md_name = f"resume_{safe_user or 'user'}.md"
+                            default_pdf_name = f"resume_{safe_user or 'user'}.pdf"
 
-                                try:
-                                    build_pdf_with_pandoc(resume_preview, pathlib.Path(save_path))
-                                    print(f"\nResume PDF successfully saved to:\n{save_path}\n")
-                                except Exception as e:
-                                    print("Failed to generate resume PDF.")
-                                    print(f"Error: {e}")
+                            export_choice = _prompt_menu(
+                                "Export Resume",
+                                [
+                                    "Markdown",
+                                    "PDF (Pandoc)",
+                                    "Markdown + PDF (Pandoc)",
+                                    "Skip",
+                                ],
+                            )
+                            if export_choice == "b":
+                                export_choice = "4"
+
+                            do_md = export_choice in {"1", "3"}
+                            do_pdf = export_choice in {"2", "3"}
+
+                            if do_md:
+                                save_md_path = prompt_save_path_any(
+                                    title="Save Resume Markdown As",
+                                    default_name=default_md_name,
+                                    default_extension=".md",
+                                    filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+                                )
+                                if save_md_path:
+                                    try:
+                                        markdown_text = build_markdown_from_resume(resume_preview)
+                                        pathlib.Path(save_md_path).write_text(markdown_text, encoding="utf-8")
+                                        print(f"\nResume Markdown successfully saved to:\n{save_md_path}\n")
+                                    except Exception as e:
+                                        print("Failed to generate resume Markdown.")
+                                        print(f"Error: {e}")
+                                else:
+                                    print("Resume Markdown export cancelled.")
+
+                            if do_pdf:
+                                save_pdf_path = prompt_save_path(default_name=default_pdf_name)
+                                if save_pdf_path:
+                                    try:
+                                        save_pdf = pathlib.Path(save_pdf_path)
+                                        remote_ok, remote_err = _export_resume_pdf_via_api(
+                                            resume_preview,
+                                            save_pdf,
+                                        )
+                                        if remote_ok:
+                                            print("Rendered via API /resume/render-pdf.")
+                                        else:
+                                            print(f"Server-side PDF render unavailable: {remote_err}")
+                                            print("Falling back to local Pandoc renderer...")
+                                            build_pdf_with_pandoc(resume_preview, save_pdf)
+                                        print(f"\nResume PDF successfully saved to:\n{save_pdf_path}\n")
+                                    except Exception as e:
+                                        print("Failed to generate resume PDF (Pandoc).")
+                                        print(f"Error: {e}")
+                                else:
+                                    print("Resume PDF export cancelled.")
 
                             continue
 
@@ -1903,7 +2148,8 @@ def main():
                                     overwrite=False,
                                 )
                                 refreshed = query_resume_entries(conn)
-                                resume_preview = build_resume_preview(refreshed, conn=conn)
+                                filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
+                                resume_preview = build_resume_preview(filtered, conn=conn)
                             while True:
                                 entry_map = _build_entry_target_map(resume_preview)
                                 if not entry_map:
@@ -2275,7 +2521,8 @@ def main():
                                                         print(f"Save failed: {exc}")
                                 with _open_app_db() as conn:
                                     refreshed = query_resume_entries(conn)
-                                    resume_preview = build_resume_preview(refreshed, conn=conn)
+                                    filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
+                                    resume_preview = build_resume_preview(filtered, conn=conn)
                                 print("\nUpdated Resume Preview:\n")
                                 print(_format_resume_preview(resume_preview))
                         if action == "3":
@@ -2378,13 +2625,6 @@ def main():
                         if follow in {"2", "b"}:
                             break
                         print("Invalid choice. Please enter 1 or 2.")
-            elif choice == "12":
-                _job_match_menu()
-            elif choice == "13":
-                _exit_app()
-    except KeyboardInterrupt:
-        _exit_app()
-    
                 elif choice == "9":
                     with _open_app_db() as conn:
                         snapshots = fetch_latest_snapshots(conn)
