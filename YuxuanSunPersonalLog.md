@@ -5,7 +5,8 @@
 - [Milestone 2 - Week 2 [Jan 12 – Jan 18, 2026]](#week-2-m2)
 - [Milestone 2 - Week 3 [Jan 19 – Jan 25, 2026]](#week-3-m2)
 - [Milestone 2 - Week 4 [Jan 26 – Feb 2, 2026]](#week-4-m2)
-
+- [Milestone 2 - Week 5 [Feb 3 – Feb 9, 2026]](#week-5-m2)
+- 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
 - [Week 5 [Sep 29 – Oct 5, 2025]](#week-5)
@@ -170,6 +171,20 @@ This week, I focused on improving file storage and deduplication in the system. 
 I then integrated this file store with both the ZIP analyzer and the API upload and skill routes. These components now record file_id and hash values instead of storing duplicate files, which reduces redundant storage and improves consistency across the system. To ensure correctness, I added unit tests covering schema creation, file deduplication, restoration of missing files, and orphan cleanup behavior.
 
 During this work, I also identified an issue in the current database workflow where some data appears to be inserted multiple times. It seems that data may be written once in the zipAnalyzer and then written again when storing snapshots, resulting in duplicate records. Next week, I plan to investigate and fix this bug, and then begin development on new features.
+
+<img width="1550" height="906" alt="52df745191a1b8479f91131401628d59" src="https://github.com/user-attachments/assets/7e8a0bce-496a-47fb-9e98-748e1b6a0eb9" />
+
+[Back](#table-of-contents)
+
+## Week 5 (M2)
+[Feb 3 – Feb 9, 2026]
+Last week, I implemented duplicate file detection by assigning hash values to each file and added an uploads table to record upload logs. This week, I made a major update to the resume module, changing the analysis from all projects in the database to a user-specific flow that analyzes a selected set of projects. To support this change, I introduced new users and user_projects tables in the database. However, due to an existing bug in the local ZIP analysis collaboration module that prevents correct collaboration analysis, these tables are currently intentionally limited to retrieving data only from GitHub URL–imported projects.
+
+As a result, a new workflow was introduced. In the “Generate Resume Preview” process, the system first outputs a list of users, then the projects associated with the selected user, and finally a basic resume preview. However, several issues remain. Some users’ email addresses cannot be correctly retrieved from GitHub, so a feature allowing users to manually supplement their information needs to be added. In addition, PDF generation is currently not working due to unresolved dependency and engine issues, both on the API client side and the host environment. The current resume content and styling are also very minimal.
+
+Finally, database tables such as resume_entry and resume_section may no longer be necessary, since resume generation no longer relies on stored resume content but is instead generated dynamically based on the user and their associated projects. The final result should be stored in a resumes table linked to user IDs and project IDs, and the resume customization feature will be redesigned accordingly. My goal for next week is to deliver a complete and functional resume module.
+
+<img width="1550" height="906" alt="52df745191a1b8479f91131401628d59" src="https://github.com/user-attachments/assets/664a4ce0-ef0a-419d-99ef-336363362a97" />
 
 [Back](#table-of-contents)
 
