@@ -918,6 +918,68 @@ def _build_entry_target_map(preview: dict) -> dict[str, str]:
                 targets[entry_id] = f"{title}{period}"
     return targets
 
+
+def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
+    rows = conn.execute(
+        """
+        SELECT
+            u.id,
+            u.username,
+            u.email,
+            COUNT(DISTINCT up.project_id) AS project_count
+        FROM users u
+        LEFT JOIN user_projects up ON up.user_id = u.id
+        WHERE LOWER(COALESCE(u.username, '')) NOT LIKE '%[bot]%'
+        GROUP BY u.id, u.username, u.email
+        ORDER BY LOWER(u.username), u.id
+        """
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0]),
+            "username": str(row[1]),
+            "email": row[2],
+            "project_count": int(row[3] or 0),
+        }
+        for row in rows
+        if row and row[1]
+    ]
+
+
+def _list_user_project_ids(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    username: str,
+) -> List[str]:
+    rows = conn.execute(
+        """
+        SELECT DISTINCT project_id
+        FROM user_projects
+        WHERE user_id = ?
+          AND project_id IS NOT NULL
+          AND TRIM(project_id) != ''
+        ORDER BY LOWER(project_id)
+        """,
+        (user_id,),
+    ).fetchall()
+    project_ids = [str(row[0]) for row in rows if row and row[0]]
+    if project_ids:
+        return project_ids
+    # Fallback for older rows where user_projects might not have been populated yet.
+    rows = conn.execute(
+        """
+        SELECT DISTINCT project_id
+        FROM contributor_stats
+        WHERE (user_id = ? OR contributor = ?)
+          AND project_id IS NOT NULL
+          AND TRIM(project_id) != ''
+        ORDER BY LOWER(project_id)
+        """,
+        (user_id, username),
+    ).fetchall()
+    return [str(row[0]) for row in rows if row and row[0]]
+
 def main():
     in_main_menu = False
     # main entry point for user
@@ -1618,33 +1680,83 @@ def main():
                                             print(f"Error: {exc}")
                 elif choice == "6":
                     with _open_app_db() as conn:
+                        users = _list_resume_users(conn)
                         snapshots = fetch_latest_snapshots(conn)
 
+                    if not users:
+                        print("\nResume Preview\n--------------\n")
+                        print("No users found. Import from GitHub URL first.")
+                        continue
                     if not snapshots:
                         print("\nResume Preview\n--------------\n")
                         print("No projects found.")
                         continue
 
+                    print("\nAvailable users:")
+                    for idx, user_row in enumerate(users, start=1):
+                        username = user_row.get("username") or f"User {idx}"
+                        project_count = int(user_row.get("project_count") or 0)
+                        email = user_row.get("email")
+                        suffix = f" ({email})" if email else ""
+                        print(f"{idx}. {username}{suffix} - {project_count} project(s)")
+
+                    user_pick = _prompt_single_index(
+                        "Select a user number (blank to cancel, b to back): ",
+                        len(users),
+                    )
+                    if user_pick is None or user_pick == "b":
+                        if user_pick is None:
+                            print("Cancelled.")
+                        continue
+
+                    selected_user = users[int(user_pick) - 1]
+                    selected_user_id = int(selected_user["id"])
+                    selected_username = str(selected_user["username"])
+
+                    with _open_app_db() as conn:
+                        user_project_ids = _list_user_project_ids(
+                            conn,
+                            user_id=selected_user_id,
+                            username=selected_username,
+                        )
+                    if not user_project_ids:
+                        print(f"No projects found for {selected_username}.")
+                        continue
+
+                    snapshot_map = {
+                        str(item.get("project_id")): item
+                        for item in snapshots
+                        if item.get("project_id")
+                    }
+                    user_snapshots = [
+                        snapshot_map[pid]
+                        for pid in user_project_ids
+                        if pid in snapshot_map
+                    ]
+                    if not user_snapshots:
+                        print(f"No analyzed snapshots found for {selected_username}.")
+                        continue
+
                     sorted_projects = sorted(
-                        snapshots,
+                        user_snapshots,
                         key=lambda s: (str(s.get("project_id") or "")).lower(),
                     )
-                    print("\nAvailable projects (latest snapshot per project):")
+                    print(f"\nProjects for {selected_username}:")
                     for idx, snap in enumerate(sorted_projects, start=1):
                         snapshot_data = snap.get("snapshot") or {}
                         label = snapshot_data.get("project_name") or snap.get("project_id") or f"Project {idx}"
                         print(f"{idx}. {label} (ID: {snap.get('project_id')})")
 
                     selection = _prompt_indices(
-                        "Select projects by number (space-separated, blank to cancel, b to back): ",
+                        "Select projects by number (space-separated, blank = all, b to back): ",
                         len(sorted_projects),
                     )
-                    if selection is None or selection == "b":
-                        if selection is None:
-                            print("Cancelled.")
+                    if selection == "b":
                         continue
-
-                    chosen_snapshots = [sorted_projects[n - 1] for n in selection]
+                    if selection is None:
+                        chosen_snapshots = list(sorted_projects)
+                    else:
+                        chosen_snapshots = [sorted_projects[n - 1] for n in selection]
                     selected_snapshot_skills: List[str] = []
                     for snap in chosen_snapshots:
                         snap_skills = (snap.get("snapshot") or {}).get("skills") or []
