@@ -956,6 +956,7 @@ __all__ = [
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
     "fetch_latest_snapshots_for_projects",
+    "fetch_project_snapshot_history",
     # github sources
     "store_github_source",
     "fetch_github_source",
