@@ -29,6 +29,30 @@ _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
 
+def _is_noreply_email(email: str | None) -> bool:
+    if not email:
+        return False
+    lowered = email.strip().lower()
+    if not lowered:
+        return False
+    return (
+        lowered == "noreply@github.com"
+        or lowered.endswith("@users.noreply.github.com")
+        or lowered.endswith("@noreply.github.com")
+    )
+
+
+def _normalize_user_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    value = email.strip()
+    if not value:
+        return None
+    if _is_noreply_email(value):
+        return None
+    return value
+
+
 
 # Schema + migrations
 
@@ -348,7 +372,97 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON uploads (file_id)
         """
     )
+    _repair_user_identity_links(conn)
     conn.commit()
+
+
+def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
+    """
+    Repair user identity rows that were merged by generic noreply emails.
+    """
+    users = conn.execute(
+        "SELECT id, username, email FROM users ORDER BY id"
+    ).fetchall()
+
+    # First pass: normalize/remove noreply emails while preserving uniqueness.
+    for user_id, username, email in users:
+        if not _is_noreply_email(email):
+            continue
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
+            (username,),
+        ).fetchone()
+        if existing and int(existing[0]) != int(user_id):
+            canonical_id = int(existing[0])
+            conn.execute(
+                "UPDATE contributor_stats SET user_id = ? WHERE user_id = ?",
+                (canonical_id, int(user_id)),
+            )
+            old_links = conn.execute(
+                """
+                SELECT project_id, contributor_name
+                FROM user_projects
+                WHERE user_id = ?
+                """,
+                (int(user_id),),
+            ).fetchall()
+            for project_id, contributor_name in old_links:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+                    VALUES (?, ?, ?)
+                    """,
+                    (canonical_id, project_id, contributor_name),
+                )
+            conn.execute("DELETE FROM user_projects WHERE user_id = ?", (int(user_id),))
+            conn.execute("DELETE FROM users WHERE id = ?", (int(user_id),))
+        else:
+            conn.execute("UPDATE users SET email = NULL WHERE id = ?", (int(user_id),))
+
+    # Second pass: enforce contributor -> username mapping for every stats row.
+    contributors = conn.execute(
+        "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
+    ).fetchall()
+    for (contributor,) in contributors:
+        row = conn.execute(
+            "SELECT id FROM users WHERE username = ? ORDER BY id LIMIT 1",
+            (contributor,),
+        ).fetchone()
+        if row:
+            canonical_user_id = int(row[0])
+        else:
+            cursor = conn.execute(
+                "INSERT INTO users (username, email) VALUES (?, NULL)",
+                (contributor,),
+            )
+            canonical_user_id = int(cursor.lastrowid)
+
+        conn.execute(
+            "UPDATE contributor_stats SET user_id = ? WHERE contributor = ?",
+            (canonical_user_id, contributor),
+        )
+
+        projects = conn.execute(
+            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? AND project_id IS NOT NULL",
+            (contributor,),
+        ).fetchall()
+        for (project_id,) in projects:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
+                VALUES (?, ?, ?)
+                """,
+                (canonical_user_id, project_id, contributor),
+            )
+            conn.execute(
+                """
+                DELETE FROM user_projects
+                WHERE contributor_name = ?
+                  AND project_id = ?
+                  AND user_id != ?
+                """,
+                (contributor, project_id, canonical_user_id),
+            )
 
 
 # -----------------------------
@@ -811,6 +925,7 @@ def upsert_user(
 ) -> int:
     if not username:
         raise ValueError("username must be provided")
+    email = _normalize_user_email(email)
 
     # Prefer matching by email when available, otherwise by username.
     row = None

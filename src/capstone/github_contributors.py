@@ -30,6 +30,26 @@ DEFAULT_WEIGHTS = {
 }
 
 
+def _is_noreply_email(email: str | None) -> bool:
+    if not email:
+        return False
+    lowered = email.strip().lower()
+    return (
+        lowered == "noreply@github.com"
+        or lowered.endswith("@users.noreply.github.com")
+        or lowered.endswith("@noreply.github.com")
+    )
+
+
+def _normalize_email_candidate(email: object) -> str | None:
+    if not isinstance(email, str):
+        return None
+    value = email.strip()
+    if not value or _is_noreply_email(value):
+        return None
+    return value
+
+
 def parse_repo_url(repo_url: str) -> tuple[str, str]:
     if not repo_url:
         raise ValueError("Repository URL must not be empty")
@@ -143,25 +163,35 @@ class GitHubClient:
         data, _ = self._request_json(f"/users/{login}")
         if not isinstance(data, dict):
             return None
-        email = data.get("email")
-        if isinstance(email, str) and email:
+        email = _normalize_email_candidate(data.get("email"))
+        if email:
             return email
-        # Fallback: pull most recent commit by this author
+        # Fallback: walk recent commits by this author and pick first non-noreply email.
         commits, _ = self._request_json(
             f"/repos/{owner}/{repo}/commits",
-            {"author": login, "per_page": 1},
+            {"author": login, "per_page": 30},
         )
         if isinstance(commits, list) and commits:
-            commit = commits[0]
-            # prefer author.email from commit payload
-            email = (
-                commit.get("commit", {})
-                .get("author", {})
-                .get("email")
-                if isinstance(commit, dict)
-                else None
-            )
-            return email if isinstance(email, str) else None
+            for commit in commits:
+                if not isinstance(commit, dict):
+                    continue
+                # Prefer commit payload author email, fallback to committer email.
+                candidate = (
+                    commit.get("commit", {})
+                    .get("author", {})
+                    .get("email")
+                )
+                email = _normalize_email_candidate(candidate)
+                if email:
+                    return email
+                candidate = (
+                    commit.get("commit", {})
+                    .get("committer", {})
+                    .get("email")
+                )
+                email = _normalize_email_candidate(candidate)
+                if email:
+                    return email
         return None
 
     def search_issues_count(self, query: str) -> int:
