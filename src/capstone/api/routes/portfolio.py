@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from datetime import datetime, UTC
+from enum import Enum
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -9,8 +10,8 @@ class PortfolioProject(BaseModel):
     project_id: str
     title: str
     summary: Optional[str] = None
-    technologies: List[str] = []
-    highlights: List[str] = []
+    technologies: List[str] = Field(default_factory=list)
+    highlights: List[str] = Field(default_factory=list)
     
 class Portfolio(BaseModel):
     id: str
@@ -32,23 +33,38 @@ class EditPortfolioRequest(BaseModel):
 class PortfolioResponse(BaseModel):
     portfolio: Portfolio
     
+class ExportFormat(str, Enum):
+    json = "json"
+    markdown = "markdown"
+    pdf = "pdf"
+    
+def require_demo_portfolio(portfolio_id: str):
+    if portfolio_id != "demo":
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+def build_portfolio(portfolio_id: str, owner: Optional[str], projects: List[PortfolioProject]) -> Portfolio:
+    now = datetime.now(UTC)
+    
+    return Portfolio(
+        id = portfolio_id,
+        owner = owner,
+        projects = projects,
+        created_at = now,
+        updated_at = now
+    )
+    
 # Endpoints    
 
 # GET /portfolio/{id} for fetching existing portfolio
 @router.get("/{portfolio_id}", response_model=PortfolioResponse)
 def get_portfolio(portfolio_id: str):
-    if portfolio_id != "demo":
-        raise HTTPException(status_code=404, detail="Portfolio not found")
+    require_demo_portfolio(portfolio_id)
     
-    now = datetime.now(UTC)
-    
-    portfolio = Portfolio(
-        id=portfolio_id, 
-        owner="user123", 
-        projects=[], 
-        created_at=now, 
-        updated_at=now
-        )
+    portfolio = build_portfolio(
+        portfolio_id = portfolio_id,
+        owner = "user123",
+        projects = []
+    )
     
     return {"portfolio": portfolio}
 
@@ -57,48 +73,39 @@ def get_portfolio(portfolio_id: str):
 # ranks and generates project summaries
 @router.post("/generate", response_model=PortfolioResponse)
 def generate_portfolio(payload: GeneratePortfolioRequest):
-    now = datetime.now(UTC)
-    
-    portfolio = Portfolio(
-        id="portfolio_001", 
-        owner=payload.owner, 
-        projects=[PortfolioProject(
-            project_id=pid, 
-            title=f"Project_{pid}", 
-            technologies=[], 
-            highlights=[]
+        projects=[
+            PortfolioProject(
+                project_id=pid, 
+                title=f"Project_{pid}"
             ) 
             for pid in payload.project_ids
-            ], 
-        created_at=now, 
-        updated_at=now
+        ]
+        
+        portfolio = build_portfolio(
+            portfolio_id = "portfolio_001",
+            owner = payload.owner,
+            projects = projects
         )
     
-    return {"portfolio": portfolio}
+        return {"portfolio": portfolio}
 
 # POST /portfolio/{id}/edit to modify existing portfolio contents
 @router.post("/{portfolio_id}/edit", response_model=PortfolioResponse)
 def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest):
-    if portfolio_id != "demo":
-        raise HTTPException(status_code=404, detail="Portfolio not found")
+    require_demo_portfolio(portfolio_id)
     
-    now = datetime.now(UTC)
-    
-    portfolio = Portfolio(
-        id=portfolio_id, 
-        owner="user123", 
-        projects=payload.projects or [], 
-        created_at=now, 
-        updated_at=now
-        )
+    portfolio = build_portfolio(
+        portfolio_id = portfolio_id,
+        owner = "user123",
+        projects = payload.projects or []
+    )
     
     return {"portfolio": portfolio}
 
 # GET /portfolio/{id}/export to return exportable portfolio
 @router.get("/{portfolio_id}/export")
-def export_portfolio(portfolio_id: str, format: str = "json"):
-    if portfolio_id != "demo":
-        raise HTTPException(status_code=404, detail="Portfolio not found")
+def export_portfolio(portfolio_id: str, format: ExportFormat = ExportFormat.json):
+    require_demo_portfolio(portfolio_id)
     
     if format == "json":
         return {
