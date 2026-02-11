@@ -1,146 +1,11 @@
-from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime, UTC
-from enum import Enum
-
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
-
-class PortfolioProject(BaseModel):
-    project_id: str
-    title: str
-    summary: Optional[str] = None
-    technologies: List[str] = Field(default_factory=list)
-    highlights: List[str] = Field(default_factory=list)
-    
-class Portfolio(BaseModel):
-    id: str
-    owner: Optional[str] = None
-    projects: List[PortfolioProject]
-    created_at: datetime
-    updated_at: datetime
-    
-class GeneratePortfolioRequest(BaseModel):
-    project_ids: List[str] = Field(..., min_length=1)
-    owner: Optional[str] = None
-    style: Optional[str] = "default"
-    
-class EditPortfolioRequest(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    projects: Optional[List[PortfolioProject]] = None
-    
-class PortfolioResponse(BaseModel):
-    portfolio: Portfolio
-    
-class ExportFormat(str, Enum):
-    json = "json"
-    markdown = "markdown"
-    pdf = "pdf"
-    
-def require_demo_portfolio(portfolio_id: str):
-    if portfolio_id != "demo":
-        raise HTTPException(status_code=404, detail="Portfolio not found")
-    
-def build_portfolio(portfolio_id: str, owner: Optional[str], projects: List[PortfolioProject]) -> Portfolio:
-    now = datetime.now(UTC)
-    
-    return Portfolio(
-        id = portfolio_id,
-        owner = owner,
-        projects = projects,
-        created_at = now,
-        updated_at = now
-    )
-    
-# Endpoints    
-
-# GET /portfolio/{id} for fetching existing portfolio
-@router.get("/{portfolio_id}", response_model=PortfolioResponse)
-def get_portfolio(portfolio_id: str):
-    require_demo_portfolio(portfolio_id)
-    
-    portfolio = build_portfolio(
-        portfolio_id = portfolio_id,
-        owner = "user123",
-        projects = []
-    )
-    
-    return {"portfolio": portfolio}
-
-# POST /portfolio/generate to create portfolio from newly analyzed projects
-# pulls project snapshots from db
-# ranks and generates project summaries
-@router.post("/generate", response_model=PortfolioResponse)
-def generate_portfolio(payload: GeneratePortfolioRequest):
-        projects=[
-            PortfolioProject(
-                project_id=pid, 
-                title=f"Project_{pid}"
-            ) 
-            for pid in payload.project_ids
-        ]
-        
-        portfolio = build_portfolio(
-            portfolio_id = "portfolio_001",
-            owner = payload.owner,
-            projects = projects
-        )
-    
-        return {"portfolio": portfolio}
-
-# POST /portfolio/{id}/edit to modify existing portfolio contents
-@router.post("/{portfolio_id}/edit", response_model=PortfolioResponse)
-def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest):
-    require_demo_portfolio(portfolio_id)
-    
-    portfolio = build_portfolio(
-        portfolio_id = portfolio_id,
-        owner = "user123",
-        projects = payload.projects or []
-    )
-    
-    return {"portfolio": portfolio}
-
-# GET /portfolio/{id}/export to return exportable portfolio
-@router.get("/{portfolio_id}/export")
-def export_portfolio(portfolio_id: str, format: ExportFormat = ExportFormat.json):
-    require_demo_portfolio(portfolio_id)
-    
-    if format == "json":
-        return {
-            "portfolio_id": portfolio_id,
-            "exported_at": datetime.now(UTC).isoformat()
-        }
-    
-    if format == "markdown":
-        return {
-            "content": "# Portfolio\n\nGenerated portfolio content here"
-        }
-        
-    if format == "pdf":
-        pdf_bytes = (
-            b"%PDF-1.4\n"
-            b"1 0 obj<<>>\n"
-            b"trailer<<>>\n"
-            b"%%EOF"
-        )
-        
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="portfolio_{portfolio_id}.pdf"'
-            }
-        )
-        
-    raise HTTPException(status_code=400, detail="Unsupported format")
 from __future__ import annotations
 
 import json
 from typing import List, Optional
+from datetime import datetime, UTC
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from enum import Enum
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
@@ -166,6 +31,12 @@ _DB_DIR: Optional[str] = None
 _TOKEN: Optional[str] = None
 
 
+class ExportFormat(str, Enum):
+    json = "json"
+    markdown = "markdown"
+    pdf = "pdf"
+
+
 def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
     global _DB_DIR, _TOKEN
     _DB_DIR = db_dir
@@ -173,11 +44,27 @@ def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
 
 
 def _check_auth(request: Request) -> None:
-    if not _TOKEN:
+    token = getattr(request.app.state, "auth_token", _TOKEN)
+    if not token:
         return
     h = request.headers.get("Authorization", "")
-    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
+    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+
+def _demo_enabled(request: Request | None = None) -> bool:
+    token = getattr(request.app.state, "auth_token", _TOKEN) if request else _TOKEN
+    return token is None
+
+
+def _build_demo_portfolio(portfolio_id: str, owner: Optional[str], project_ids: list[str] | None = None, projects: list[dict] | None = None) -> dict:
+    if projects is None:
+        projects = [{"project_id": pid, "title": f"Project_{pid}"} for pid in (project_ids or [])]
+    return {
+        "id": portfolio_id,
+        "owner": owner,
+        "projects": projects,
+    }
 
 
 async def _get_payload(request: Request) -> dict:
@@ -236,11 +123,11 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
         if not item:
             raise HTTPException(status_code=404, detail="No resume project found")
         meta = {"projectId": projectId, "view": "resume"}
-    if user:
-        # Include role in response metadata
-        with _db_session(_DB_DIR) as c:
-            snap = get_latest_snapshot(c, projectId)
-        if snap:
+        if user:
+            # Include role in response metadata
+            with _db_session(_DB_DIR) as c:
+                snap = get_latest_snapshot(c, projectId)
+            if snap:
                 meta["userRole"] = infer_user_role(snap, user)
         return {"data": item.to_dict(), "meta": meta, "error": None}
 
@@ -292,6 +179,10 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
 
 @router.get("/portfolio/{project_id}")
 def get_portfolio_showcase(project_id: str, request: Request, user: Optional[str] = None):
+    if _demo_enabled(request):
+        if project_id != "demo":
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+        return {"portfolio": _build_demo_portfolio("demo", owner="user123", projects=[])}
     _check_auth(request)
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
@@ -320,6 +211,13 @@ def get_portfolio_showcase_query(request: Request, projectId: str):
 
 @router.post("/portfolio/generate")
 async def generate_portfolio_showcase(request: Request):
+    if _demo_enabled(request):
+        payload = await _get_payload(request)
+        project_ids = payload.get("project_ids") or []
+        if not isinstance(project_ids, list):
+            raise HTTPException(status_code=422, detail="project_ids must be a list")
+        portfolio = _build_demo_portfolio("portfolio_001", owner=payload.get("owner"), project_ids=project_ids)
+        return {"portfolio": portfolio}
     _check_auth(request)
     payload = await _get_payload(request)
     project_ids = payload.get("projectIds") or []
@@ -357,6 +255,11 @@ async def edit_portfolio_showcase_query(request: Request):
 
 @router.post("/portfolio/{project_id}/edit")
 async def edit_portfolio_showcase(project_id: str, request: Request):
+    if _demo_enabled(request):
+        if project_id != "demo":
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+        payload = await _get_payload(request)
+        return {"portfolio": _build_demo_portfolio("demo", owner="user123", projects=payload.get("projects") or [])}
     _check_auth(request)
     payload = await _get_payload(request)
     summary = (payload.get("summary") or "").strip()
@@ -372,3 +275,27 @@ async def edit_portfolio_showcase(project_id: str, request: Request):
             metadata={"source": "custom"},
         )
     return {"data": item.to_dict(), "error": None}
+
+
+@router.get("/portfolio/{portfolio_id}/export")
+def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat = ExportFormat.json):
+    if _demo_enabled(request):
+        if portfolio_id != "demo":
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+        if format == ExportFormat.json:
+            return {"portfolio_id": portfolio_id, "exported_at": datetime.now(UTC).isoformat()}
+        if format == ExportFormat.markdown:
+            return {"content": "# Portfolio\n\nGenerated portfolio content here"}
+        if format == ExportFormat.pdf:
+            pdf_bytes = (
+                b"%PDF-1.4\n"
+                b"1 0 obj<<>>\n"
+                b"trailer<<>>\n"
+                b"%%EOF"
+            )
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="portfolio_{portfolio_id}.pdf"'},
+            )
+    raise HTTPException(status_code=404, detail="Not found")

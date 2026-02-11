@@ -63,6 +63,14 @@ def _extract_evidence(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         if items:
             return {"type": "metrics", "items": items}
 
+    # Legacy metrics dict support
+    metrics = snapshot.get("metrics")
+    if isinstance(metrics, dict) and metrics:
+        return {
+            "type": "metrics",
+            "items": [{"label": str(k), "value": str(v)} for k, v in metrics.items()],
+        }
+
     # Structured evidence fields
     items: List[Dict[str, str]] = []
     for key in ("impact_metrics", "feedback", "evaluation"):

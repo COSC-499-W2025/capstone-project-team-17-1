@@ -35,7 +35,11 @@ async def upload_project(file: UploadFile = File(...)):
             pass
 
     project_id = stored["upload_id"]
+    message = "Upload stored successfully."
+    if stored.get("dedup"):
+        message = "Duplicate upload detected; existing file reused."
     return {
+        "message": message,
         "project_id": project_id,
         "file_id": stored["file_id"],
         "hash": stored["hash"],

@@ -62,6 +62,7 @@ from capstone.cli import pick_zip_file
 from capstone.storage import save_project_metadata
 from capstone.storage import load_project_metadata
 from capstone.storage import close_db
+from capstone import file_store
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -313,6 +314,27 @@ def _contributor_menu(project_id: str) -> None:
 def _open_app_db():
     # Pin to repo-local data directory to avoid cwd-dependent DBs.
     return open_db(ROOT / "data")
+
+
+def _record_zip_upload(path: pathlib.Path, original_name: str | None = None) -> None:
+    """
+    Store the uploaded zip in CAS storage and print a user-facing status message.
+    """
+    try:
+        with _open_app_db() as conn:
+            stored = file_store.ensure_file(
+                conn,
+                path,
+                original_name=original_name or path.name,
+                source="cli_upload",
+                mime="application/zip",
+            )
+        if stored.get("dedup"):
+            print("Duplicate upload detected; existing file reused.")
+        else:
+            print("Upload stored successfully.")
+    except Exception as exc:
+        print(f"Upload failed: {exc}")
 
 def _merge_year_counts(target, incoming):
     for year, weight in (incoming or {}).items():
@@ -1334,6 +1356,7 @@ def main():
                     if payload:
                         print(json.dumps(payload))
                         continue
+                    _record_zip_upload(pathlib.Path(archive_path), pathlib.Path(zip_path).name)
                     consent = ensure_consent()
                     config = load_config()
                     mode = resolve_mode("local", consent)
@@ -1455,6 +1478,7 @@ def main():
                                 if payload:
                                     print(json.dumps(payload))
                                     continue
+                                _record_zip_upload(pathlib.Path(archive_path), f"{project_id}.zip")
 
                                 consent = ensure_consent()
                                 config = load_config()

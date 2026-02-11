@@ -211,7 +211,7 @@ class ApiEndpointTests(unittest.TestCase):
 
         r = client.post("/resume-projects/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)
-        self.assertIsInstance(r.get_json()["data"], list)
+        self.assertIsInstance(r.json()["data"], list)
 
     def test_skills_and_thumbnails(self):
         client = self._client()
@@ -257,7 +257,7 @@ class ApiEndpointTests(unittest.TestCase):
         # reject non-image
         r = client.post(
             f"/projects/{project_id}/thumbnail",
-            files={"file": ("note.txt", io.BytesIO(b\"hi\"), "text/plain")},
+            files={"file": ("note.txt", io.BytesIO(b"hi"), "text/plain")},
         )
         self.assertEqual(r.status_code, 400)
 

@@ -22,6 +22,7 @@ Consent
 Projects
 - `POST /projects/upload`
   - Upload a `.zip` project archive.
+  - Response includes `message` and `dedup` indicating duplicate reuse.
 - `GET /projects`
   - Lists uploaded project archives.
 - `GET /projects/{id}`
@@ -105,6 +106,8 @@ Portfolio Showcase
   - Optional: `user` to include `user_role` in response.
 - `GET /portfolio/showcase?projectId=<id>`
   - Query alias for `GET /portfolio/{id}`.
+- `GET /portfolio/{id}/export?format=json|markdown|pdf`
+  - Demo export endpoint (enabled when no auth token is configured).
 - `POST /portfolio/generate`
   - Auto-generates and saves showcase summaries for projects.
   - Body: `projectIds` array.
@@ -114,15 +117,6 @@ Portfolio Showcase
 - `POST /portfolio/showcase/edit`
   - Body: `projectId`, `summary` (string, required).
 
-Demo Portfolio (placeholder endpoints)
-- `GET /portfolio/{id}`
-  - Returns a demo portfolio object (from the prefixed router).
-- `POST /portfolio/generate`
-  - Generates a demo portfolio object.
-- `POST /portfolio/{id}/edit`
-  - Updates a demo portfolio object.
-- `GET /portfolio/{id}/export?format=json|markdown|pdf`
-  - Exports a demo portfolio.
 
 Portfolio Showcase Examples
 ```json
