@@ -352,3 +352,22 @@ Beyond feature implementation, I discussed code-level details and design decisio
 ### Completed Tasks Week 5
 - complete [portfolio showcase customizatio+ export pdf (#200)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/200)
 - Make sure only use Fastapi
+
+ ## Term2 week6 Personal LOG (Feb9-Feb15, 2026)
+### 1. Type of Tasks Worked On
+
+### 2. Weekly Goals Recap
+- complete [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the M2 validation requirements by adding required test data, expanding API coverage, and improving upload feedback mechanisms (#212). The update includes officially structured test ZIP files for incremental snapshot validation and multi-project archive testing (including mixed code and non-code content), ensuring that the system can be evaluated against milestone specifications in a reproducible manner.
+
+To address remaining M2 gaps, I extended backend and CLI support for multi-project ZIP detection with an optional split-into-projects workflow. I also finalized missing API behaviors, including skills aggregation consistency, project thumbnail handling, user role exposure, evidence handling improvements, and résumé edit alias alignment. These changes ensure that portfolio, résumé, and project analysis features remain coherent across CLI and API layers.
+
+In addition, I implemented explicit duplicate upload feedback to improve user transparency and system robustness. Instead of silently deduplicating uploads, the system now clearly informs users when an identical archive has already been processed, reducing confusion and improving usability.
+
+Beyond feature completion, I discussed implementation details and integration decisions with team members to ensure consistency with M2 expectations. I also reviewed teammates’ pull requests, provided technical feedback, and assisted in resolving issues to keep the project aligned with milestone requirements.
+
+### Completed Tasks Week 6
+- complete [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)
