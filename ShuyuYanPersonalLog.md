@@ -361,7 +361,7 @@ Beyond feature implementation, I discussed code-level details and design decisio
 - discussed the code details with members
 - review member's PR and help them
 
-This week, I completed the M2 validation requirements by adding required test data, expanding API coverage, and improving upload feedback mechanisms (#212). The update includes officially structured test ZIP files for incremental snapshot validation and multi-project archive testing (including mixed code and non-code content), ensuring that the system can be evaluated against milestone specifications in a reproducible manner.
+This week, I completed the M2 validation requirements by adding required test data, expanding API coverage, and improving upload feedback mechanisms (#212). [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212) The update includes officially structured test ZIP files for incremental snapshot validation and multi-project archive testing (including mixed code and non-code content), ensuring that the system can be evaluated against milestone specifications in a reproducible manner.
 
 To address remaining M2 gaps, I extended backend and CLI support for multi-project ZIP detection with an optional split-into-projects workflow. I also finalized missing API behaviors, including skills aggregation consistency, project thumbnail handling, user role exposure, evidence handling improvements, and résumé edit alias alignment. These changes ensure that portfolio, résumé, and project analysis features remain coherent across CLI and API layers.
 
