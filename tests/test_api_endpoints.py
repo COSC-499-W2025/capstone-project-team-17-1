@@ -16,6 +16,7 @@ fastapi = pytest.importorskip("fastapi")
 from capstone.api.server import create_app
 from capstone.api.portfolio_helpers import ensure_indexes
 from capstone.resume_retrieval import ensure_resume_schema
+from capstone import storage
 from fastapi.testclient import TestClient
 
 
@@ -46,6 +47,7 @@ def seed_project(conn: sqlite3.Connection, project_id: str = "demo"):
     snap = {
         "project_name": "Demo Project",
         "file_summary": {"file_count": 2, "total_bytes": 123, "active_days": 1},
+        "collaboration": {"primary_contributor": "alice"},
     }
     conn.execute(
         "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
@@ -64,6 +66,8 @@ class ApiEndpointTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
+        storage.DB_DIR = self.dbdir
+        storage.open_db(self.dbdir)
         self.con = sqlite3.connect(self.dbdir / "capstone.db")
         self.con.executescript(SCHEMA)
         ensure_indexes(self.con)
@@ -77,6 +81,7 @@ class ApiEndpointTests(unittest.TestCase):
 
     def tearDown(self):
         self.con.close()
+        storage.close_db()
         self.tmp.cleanup()
 
     def _client(self):
@@ -92,6 +97,10 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("data", r.json())
 
+        r = client.get("/portfolios/latest?projectId=demo&user=alice", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("meta", {}).get("userRole"), "primary_contributor")
+
         r = client.get("/portfolios?projectId=demo&page=1&pageSize=20", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
@@ -103,6 +112,10 @@ class ApiEndpointTests(unittest.TestCase):
         r = client.get("/portfolio/demo", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIn("summary", r.json().get("data", {}))
+
+        r = client.get("/portfolio/demo?user=alice", headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("data", {}).get("user_role"), "primary_contributor")
 
         r = client.post("/portfolio/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)
@@ -164,6 +177,14 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["data"]["summary"], "Custom resume summary.")
 
+        r = client.post(
+            f"/resume/{entry_id}/edit",
+            json={"summary": "Custom resume summary via POST.", "projects": ["demo"]},
+            headers=headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["data"]["summary"], "Custom resume summary via POST.")
+
         r = client.get("/resume?format=preview", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIn("sections", r.json()["data"])
@@ -191,6 +212,54 @@ class ApiEndpointTests(unittest.TestCase):
         r = client.post("/resume-projects/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.get_json()["data"], list)
+
+    def test_skills_and_thumbnails(self):
+        client = self._client()
+
+        # upload a zip project
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("app/main.py", "print('hi')")
+            z.writestr("web/app.js", "console.log('hi')")
+        buf.seek(0)
+
+        r = client.post(
+            "/projects/upload",
+            files={"file": ("demo.zip", buf, "application/zip")},
+        )
+        self.assertEqual(r.status_code, 200)
+        project_id = r.json()["project_id"]
+
+        r = client.get(f"/projects/{project_id}/skills")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.json().get("skills"), list)
+
+        r = client.get("/skills")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("skills", r.json())
+
+        # upload thumbnail
+        image_bytes = b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR"
+        r = client.post(
+            f"/projects/{project_id}/thumbnail",
+            files={"file": ("thumb.png", io.BytesIO(image_bytes), "image/png")},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("data", r.json())
+
+        r = client.get(f"/projects/{project_id}/thumbnail")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers.get("content-type"), "image/png")
+
+        # reject non-image
+        r = client.post(
+            f"/projects/{project_id}/thumbnail",
+            files={"file": ("note.txt", io.BytesIO(b\"hi\"), "text/plain")},
+        )
+        self.assertEqual(r.status_code, 400)
 
 
 if __name__ == "__main__":

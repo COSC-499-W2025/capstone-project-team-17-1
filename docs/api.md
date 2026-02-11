@@ -5,13 +5,35 @@ Overview
 - All endpoints are JSON and return `{ data, error, meta? }`.
 - Base URL defaults to `http://127.0.0.1:<port>` when launched via the CLI.
 
+System
+- `GET /`
+  - Basic API status message.
+- `GET /health`
+  - Health check.
 Auth
 - If `PORTFOLIO_API_TOKEN` or `--token` is set, pass `Authorization: Bearer <token>` for every request.
+
+Consent
+- `POST /privacy-consent`
+  - Body: `{ "consent": true|false }`
+- `GET /privacy-consent`
+  - Returns current consent state.
+
+Projects
+- `POST /projects/upload`
+  - Upload a `.zip` project archive.
+- `GET /projects`
+  - Lists uploaded project archives.
+- `GET /projects/{id}`
+  - Returns a single uploaded project archive.
+- `DELETE /projects/{id}`
+  - Deletes an uploaded project and its stored file.
 
 Portfolios
 - `GET /portfolios/latest?projectId=<id>&view=portfolio|resume`
   - Returns the latest snapshot for a project (`view=portfolio`, default) or the active resume wording (`view=resume`).
   - Query: `projectId` (required), `view` (optional).
+  - Optional: `user` to include `userRole` in `meta`.
 - `GET /portfolios?projectId=<id>&page=1&pageSize=20&sort=created_at:desc`
   - Returns paginated snapshots for a project.
   - Query: `projectId` (required), `page`, `pageSize`, `sort` (`<field>:asc|desc`), `classification`, `primaryContributor`.
@@ -45,6 +67,10 @@ Resume Entries
 - `PATCH /resume/{id}`
   - Updates a resume entry.
   - Body: any subset of `section`, `title`, `summary`, `body`, `status`, `metadata`, `projects`, `skills`.
+- `POST /resume/{id}/edit`
+  - Alias for updating a resume entry (same payload as PATCH).
+- `DELETE /resume/{id}`
+  - Deletes a resume entry.
 
 Resume Generation
 - `POST /resume/generate`
@@ -52,6 +78,9 @@ Resume Generation
   - Body: `format` = `json|markdown|pdf`, optional filters `sections`, `keywords`, `startDate`,
     `endDate`, `includeOutdated`, `limit`, `offset`.
   - Response: `data.payload` is JSON/markdown, or base64 for PDF.
+- `POST /resume/render-pdf`
+  - Renders a resume JSON payload to PDF (base64 in response).
+  - Body: `{ "resume": { ... } }`
 
 Resume Project Wording
 - `GET /resume-projects?projectId=<id>`
@@ -73,6 +102,7 @@ Portfolio Showcase
 - `GET /portfolio/{id}`
   - Returns the saved showcase summary for a project (variant: `portfolio_showcase`).
   - If no saved summary exists, returns an auto summary from the latest snapshot.
+  - Optional: `user` to include `user_role` in response.
 - `GET /portfolio/showcase?projectId=<id>`
   - Query alias for `GET /portfolio/{id}`.
 - `POST /portfolio/generate`
@@ -83,6 +113,16 @@ Portfolio Showcase
   - Body: `summary` (string, required).
 - `POST /portfolio/showcase/edit`
   - Body: `projectId`, `summary` (string, required).
+
+Demo Portfolio (placeholder endpoints)
+- `GET /portfolio/{id}`
+  - Returns a demo portfolio object (from the prefixed router).
+- `POST /portfolio/generate`
+  - Generates a demo portfolio object.
+- `POST /portfolio/{id}/edit`
+  - Updates a demo portfolio object.
+- `GET /portfolio/{id}/export?format=json|markdown|pdf`
+  - Exports a demo portfolio.
 
 Portfolio Showcase Examples
 ```json
@@ -108,3 +148,15 @@ Status Codes
 - `401 Unauthorized`: missing/invalid bearer token.
 - `404 NotFound`: requested project/entry does not exist.
 - `422 UnprocessableEntity`: invalid content (empty/too long summary).
+
+Skills API (`src/capstone/api/routes/skills.py`)
+- `GET /projects/{project_id}/skills`
+  - Returns skills detected for a project.
+- `GET /skills`
+  - Aggregates skills across uploaded projects.
+
+Project Thumbnails
+- `POST /projects/{id}/thumbnail`
+  - Uploads an image to use as the project thumbnail.
+- `GET /projects/{id}/thumbnail`
+  - Returns the latest thumbnail image for a project.

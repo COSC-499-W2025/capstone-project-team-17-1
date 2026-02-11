@@ -169,6 +169,15 @@ async def resume_update(entry_id: str, request: Request):
     return {"data": entry.to_dict(), "error": None}
 
 
+@router.post("/resume/{entry_id}/edit")
+async def resume_update_alias(entry_id: str, request: Request):
+    """
+    Alias for PATCH /resume/{id} to satisfy API consumers expecting POST.
+    """
+    # Delegate to the main update handler
+    return await resume_update(entry_id, request)
+
+
 @router.delete("/resume/{entry_id}")
 def resume_delete(entry_id: str, request: Request):
     _check_auth(request)

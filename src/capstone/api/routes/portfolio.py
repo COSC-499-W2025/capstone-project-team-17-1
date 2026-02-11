@@ -144,6 +144,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
+from capstone.project_insight import infer_user_role
 from capstone.resume_retrieval import (
     build_resume_project_summary,
     ensure_resume_schema,
@@ -225,7 +226,7 @@ def portfolio_summary(user: str, request: Request, limit: int = 3):
 
 
 @router.get("/portfolios/latest")
-def latest(request: Request, projectId: str, view: Optional[str] = None):
+def latest(request: Request, projectId: str, view: Optional[str] = None, user: Optional[str] = None):
     _check_auth(request)
     view = _parse_view(view)
     if view == "resume":
@@ -234,14 +235,25 @@ def latest(request: Request, projectId: str, view: Optional[str] = None):
             item = get_resume_project_description(c, projectId)
         if not item:
             raise HTTPException(status_code=404, detail="No resume project found")
-        return {"data": item.to_dict(), "meta": {"projectId": projectId, "view": "resume"}, "error": None}
+        meta = {"projectId": projectId, "view": "resume"}
+    if user:
+        # Include role in response metadata
+        with _db_session(_DB_DIR) as c:
+            snap = get_latest_snapshot(c, projectId)
+        if snap:
+                meta["userRole"] = infer_user_role(snap, user)
+        return {"data": item.to_dict(), "meta": meta, "error": None}
 
     with _db_session(_DB_DIR) as c:
         ensure_indexes(c)
         data = get_latest_snapshot(c, projectId)
     if data is None:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    return {"data": data, "meta": {"projectId": projectId, "view": "portfolio"}, "error": None}
+    meta = {"projectId": projectId, "view": "portfolio"}
+    if user:
+        # Inline role in showcase payload
+        meta["userRole"] = infer_user_role(data, user)
+    return {"data": data, "meta": meta, "error": None}
 
 
 @router.get("/portfolios/evidence")
@@ -279,18 +291,26 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
 
 
 @router.get("/portfolio/{project_id}")
-def get_portfolio_showcase(project_id: str, request: Request):
+def get_portfolio_showcase(project_id: str, request: Request, user: Optional[str] = None):
     _check_auth(request)
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
         item = get_resume_project_description(c, project_id, variant_name="portfolio_showcase")
-        if item:
-            return {"data": item.to_dict(), "error": None}
         snap = get_latest_snapshot(c, project_id)
+        if item:
+            payload = item.to_dict()
+            if user and snap:
+                # Enrich saved showcase with user role
+                payload["user_role"] = infer_user_role(snap, user)
+            return {"data": payload, "error": None}
     if not snap:
         raise HTTPException(status_code=404, detail="No snapshots found")
     summary = build_resume_project_summary(project_id, snap)
-    return {"data": {"project_id": project_id, "summary": summary}, "error": None}
+    payload = {"project_id": project_id, "summary": summary}
+    if user:
+        # Enrich auto summary with role
+        payload["user_role"] = infer_user_role(snap, user)
+    return {"data": payload, "error": None}
 
 
 @router.get("/portfolio/showcase")
