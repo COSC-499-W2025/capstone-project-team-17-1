@@ -26,7 +26,8 @@ from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
-from .storage import open_db, store_analysis_snapshot
+from .storage import open_db, close_db, store_analysis_snapshot
+import sqlite3
 from . import file_store
 
 
@@ -65,12 +66,28 @@ class ZipAnalyzer:
             raise InvalidArchiveError(detail)
 
         conn = open_db(db_dir)
-        stored = file_store.ensure_file(
-            conn,
-            zip_path,
-            original_name=zip_path.name,
-            source="zip_analyzer",
-        )
+        try:
+            stored = file_store.ensure_file(
+                conn,
+                zip_path,
+                original_name=zip_path.name,
+                source="zip_analyzer",
+            )
+        except sqlite3.OperationalError as exc:
+            if "readonly" not in str(exc).lower():
+                raise
+            # Retry once with a fresh connection in case the handle is stale/readonly.
+            try:
+                close_db()
+            except Exception:
+                pass
+            conn = open_db(db_dir)
+            stored = file_store.ensure_file(
+                conn,
+                zip_path,
+                original_name=zip_path.name,
+                source="zip_analyzer",
+            )
         canonical_zip_path = Path(stored["path"])
 
         try:

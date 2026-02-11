@@ -181,7 +181,9 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "SnapshotStore") as store_mock,
             patch.object(app, "ArchiveAnalyzerService") as svc_mock,
             patch.object(app.os.path, "isfile", return_value=True),
-            patch("builtins.input", side_effect=["1", "n", "C:\\tmp\\demo.zip", "n", "13"]),
+            patch.object(app, "_record_zip_upload", return_value=None),
+            patch.object(app, "_store_subproject_summaries", return_value=None),
+            patch("builtins.input", side_effect=["1", "n", "C:\\tmp\\demo.zip", "", "n", "n", "13"]),
             redirect_stdout(out),
         ):
             svc_instance = svc_mock.return_value
