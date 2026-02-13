@@ -37,10 +37,11 @@ def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
     _TOKEN = auth_token
 
 def _check_auth(request: Request) -> None:
-    if not _TOKEN:
+    token = getattr(request.app.state, "auth_token", _TOKEN)
+    if not token:
         return
     h = request.headers.get("Authorization", "")
-    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
+    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
 async def _get_payload(request: Request) -> dict:
@@ -119,7 +120,7 @@ async def resume_insert(request: Request):
         raise HTTPException(status_code=400, detail="title is required")
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        result = insert_resume_entry(
+        entry_id = insert_resume_entry(
             c,
             section=section,
             title=title,
@@ -130,7 +131,8 @@ async def resume_insert(request: Request):
             status=payload.get("status"),
             metadata=payload.get("metadata"),
         )
-    return {"data": result.to_dict(), "error": None}
+        entry = get_resume_entry(c, entry_id)
+    return JSONResponse({"data": entry.to_dict(), "error": None}, status_code=200)
 
 
 @router.get("/resume/{entry_id}")
@@ -160,13 +162,20 @@ async def resume_update(entry_id: str, request: Request):
             projects=payload.get("projects"),
             section=payload.get("section"),
             status=payload.get("status"),
-            start_date=payload.get("start_date"),
-            end_date=payload.get("end_date"),
             metadata=payload.get("metadata"),
         )
     if not entry:
         raise HTTPException(status_code=404, detail="Resume entry not found")
     return {"data": entry.to_dict(), "error": None}
+
+
+@router.post("/resume/{entry_id}/edit")
+async def resume_update_alias(entry_id: str, request: Request):
+    """
+    Alias for PATCH /resume/{id} to satisfy API consumers expecting POST.
+    """
+    # Delegate to the main update handler
+    return await resume_update(entry_id, request)
 
 
 @router.delete("/resume/{entry_id}")
@@ -289,7 +298,7 @@ async def resume_projects_post(request: Request):
 
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        if get_latest_snapshot(c, str(project_id)) is None:
+        if fetch_latest_snapshot(c, str(project_id)) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         if metadata is None:
             metadata = {}

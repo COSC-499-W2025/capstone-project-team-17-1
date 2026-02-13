@@ -63,7 +63,35 @@ def _extract_evidence(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         if items:
             return {"type": "metrics", "items": items}
 
+    # Legacy metrics dict support
+    metrics = snapshot.get("metrics")
+    if isinstance(metrics, dict) and metrics:
+        return {
+            "type": "metrics",
+            "items": [{"label": str(k), "value": str(v)} for k, v in metrics.items()],
+        }
+
+    # Structured evidence fields
     items: List[Dict[str, str]] = []
+    for key in ("impact_metrics", "feedback", "evaluation"):
+        value = snapshot.get(key)
+        if isinstance(value, list):
+            for it in value:
+                if isinstance(it, dict):
+                    items.append(
+                        {"label": str(it.get("label", key)), "value": str(it.get("value", it))}
+                    )
+                else:
+                    items.append({"label": key, "value": str(it)})
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                items.append({"label": f"{key}:{k}", "value": str(v)})
+        elif value is not None:
+            items.append({"label": key, "value": str(value)})
+    if items:
+        return {"type": "evidence", "items": items}
+
+    items = []
     if isinstance(snapshot.get("skills"), list):
         items.append({"label": "Skills detected", "value": str(len(snapshot["skills"]))})
     if isinstance(snapshot.get("projects"), list):

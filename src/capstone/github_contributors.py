@@ -274,7 +274,8 @@ def collect_contributor_stats(
                 commits=int(entry.get("contributions", 0)),
             )
         # Enrich email (profile -> latest commit fallback)
-        email = client.get_user_email(owner, repo, login)
+        # Optional helper; some test clients don't implement it.
+        email = client.get_user_email(owner, repo, login) if hasattr(client, "get_user_email") else None
         if login in stats_by_login and email:
             stats_by_login[login].email = email
 

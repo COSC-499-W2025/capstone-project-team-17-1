@@ -244,6 +244,8 @@ def insert_resume_entry(
 ) -> str:
     ensure_resume_schema(conn)
     section = section.lower()
+    if not status:
+        status = "active"
     metadata = metadata or {}
     payload = json.dumps(metadata)
     projects = list(dict.fromkeys(projects or []))

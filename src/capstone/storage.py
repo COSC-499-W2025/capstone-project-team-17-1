@@ -508,7 +508,7 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
 
     logger.info("Opening database at %s", db_path)
     _DB_PATH = db_path
-    _DB_HANDLE = sqlite3.connect(db_path)
+    _DB_HANDLE = sqlite3.connect(db_path, check_same_thread=False)
 
     # Reasonable defaults for sqlite usage
     try:
@@ -568,16 +568,28 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     if not project_id:
         return None
 
-    cursor = conn.execute(
-        """
-        SELECT snapshot
-        FROM project_analysis
-        WHERE project_id = ?
-        ORDER BY datetime(created_at) DESC, id DESC
-        LIMIT 1
-        """,
-        (project_id,),
-    )
+    try:
+        cursor = conn.execute(
+            """
+            SELECT snapshot
+            FROM project_analysis
+            WHERE project_id = ?
+            ORDER BY datetime(created_at) DESC, id DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        )
+    except sqlite3.OperationalError:
+        cursor = conn.execute(
+            """
+            SELECT snapshot
+            FROM project_analysis
+            WHERE project_id = ?
+            ORDER BY datetime(created_at) DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        )
     row = cursor.fetchone()
     return json.loads(row[0]) if row else None
 
@@ -617,7 +629,27 @@ def fetch_project_snapshot_history(
         sql += " LIMIT ?"
         params = (project_id, int(limit))
 
-    rows = conn.execute(sql, params).fetchall()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError:
+        sql = """
+            SELECT
+                NULL AS id,
+                project_id,
+                classification,
+                primary_contributor,
+                snapshot,
+                created_at
+            FROM project_analysis
+            WHERE project_id = ?
+            ORDER BY datetime(created_at) DESC
+        """
+        if limit is not None:
+            if int(limit) <= 0:
+                return []
+            sql += " LIMIT ?"
+            params = (project_id, int(limit))
+        rows = conn.execute(sql, params).fetchall()
 
     out: list[dict] = []
     for row_id, pid, classification, contributor, snapshot_json, created_at in rows:
@@ -645,29 +677,48 @@ def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -
     if limit is not None and int(limit) <= 0:
         return []
 
-    cursor = conn.execute(
-        f"""
-        WITH latest_time AS (
-            SELECT project_id, MAX(created_at) AS created_at
-            FROM project_analysis
-            GROUP BY project_id
-        ),
-        latest_row AS (
-            SELECT pa.project_id, MAX(pa.id) AS id
-            FROM project_analysis pa
-            JOIN latest_time lt
-              ON lt.project_id = pa.project_id
-             AND lt.created_at = pa.created_at
-            GROUP BY pa.project_id
+    try:
+        cursor = conn.execute(
+            f"""
+            WITH latest_time AS (
+                SELECT project_id, MAX(created_at) AS created_at
+                FROM project_analysis
+                GROUP BY project_id
+            ),
+            latest_row AS (
+                SELECT pa.project_id, MAX(pa.id) AS id
+                FROM project_analysis pa
+                JOIN latest_time lt
+                  ON lt.project_id = pa.project_id
+                 AND lt.created_at = pa.created_at
+                GROUP BY pa.project_id
+            )
+            SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
+            FROM project_analysis a
+            JOIN latest_row lr ON lr.id = a.id
+            ORDER BY datetime(a.created_at) DESC, a.id DESC
+            {"LIMIT ?" if limit is not None else ""}
+            """,
+            (() if limit is None else (int(limit),)),
         )
-        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
-        FROM project_analysis a
-        JOIN latest_row lr ON lr.id = a.id
-        ORDER BY datetime(a.created_at) DESC, a.id DESC
-        {"LIMIT ?" if limit is not None else ""}
-        """,
-        (() if limit is None else (int(limit),)),
-    )
+    except sqlite3.OperationalError:
+        cursor = conn.execute(
+            f"""
+            WITH latest_time AS (
+                SELECT project_id, MAX(created_at) AS created_at
+                FROM project_analysis
+                GROUP BY project_id
+            )
+            SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
+            FROM project_analysis a
+            JOIN latest_time lt
+              ON lt.project_id = a.project_id
+             AND lt.created_at = a.created_at
+            ORDER BY datetime(a.created_at) DESC
+            {"LIMIT ?" if limit is not None else ""}
+            """,
+            (() if limit is None else (int(limit),)),
+        )
 
     rows = cursor.fetchall()
     payload: list[dict] = []
@@ -702,28 +753,46 @@ def fetch_latest_snapshots_for_projects(
 
     placeholders = ",".join(["?"] * len(ids))
 
-    rows = conn.execute(
-        f"""
-        WITH latest_time AS (
-            SELECT project_id, MAX(created_at) AS created_at
-            FROM project_analysis
-            WHERE project_id IN ({placeholders})
-            GROUP BY project_id
-        ),
-        latest_row AS (
-            SELECT pa.project_id, MAX(pa.id) AS id
+    try:
+        rows = conn.execute(
+            f"""
+            WITH latest_time AS (
+                SELECT project_id, MAX(created_at) AS created_at
+                FROM project_analysis
+                WHERE project_id IN ({placeholders})
+                GROUP BY project_id
+            ),
+            latest_row AS (
+                SELECT pa.project_id, MAX(pa.id) AS id
+                FROM project_analysis pa
+                JOIN latest_time lt
+                  ON lt.project_id = pa.project_id
+                 AND lt.created_at = pa.created_at
+                GROUP BY pa.project_id
+            )
+            SELECT pa.project_id, pa.snapshot
+            FROM project_analysis pa
+            JOIN latest_row lr ON lr.id = pa.id
+            """,
+            ids,
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = conn.execute(
+            f"""
+            WITH latest_time AS (
+                SELECT project_id, MAX(created_at) AS created_at
+                FROM project_analysis
+                WHERE project_id IN ({placeholders})
+                GROUP BY project_id
+            )
+            SELECT pa.project_id, pa.snapshot
             FROM project_analysis pa
             JOIN latest_time lt
               ON lt.project_id = pa.project_id
              AND lt.created_at = pa.created_at
-            GROUP BY pa.project_id
-        )
-        SELECT pa.project_id, pa.snapshot
-        FROM project_analysis pa
-        JOIN latest_row lr ON lr.id = pa.id
-        """,
-        ids,
-    ).fetchall()
+            """,
+            ids,
+        ).fetchall()
 
     out: dict[str, dict | None] = {pid: None for pid in ids}
     for pid, snap_json in rows:
