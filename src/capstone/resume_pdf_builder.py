@@ -217,11 +217,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         or "City, State"
     )
 
-    linkedin_url = (
-        _as_clean_text(links.get("linkedin"))
-        or _as_clean_text(resume.get("linkedin"))
-        or "https://www.linkedin.com/in/your-profile"
-    )
     github_url = (
         _as_clean_text(links.get("github"))
         or _as_clean_text(resume.get("github"))
@@ -291,7 +286,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "EMAIL": email,
         "PHONE": phone,
         "LOCATION": location,
-        "LINKEDIN_URL": linkedin_url,
         "GITHUB_URL": github_url,
         "PORTFOLIO_URL": portfolio_url,
         "PROFESSIONAL_SUMMARY": summary,

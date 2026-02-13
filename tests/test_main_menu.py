@@ -131,9 +131,21 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "_list_resume_users", return_value=resume_users),
             patch.object(app, "_list_user_project_ids", return_value={r[0] for r in conn.cursor_obj._project_rows}),
             patch.object(app, "_load_user_contribution_map", return_value={}),
+            patch.object(
+                app,
+                "_ensure_user_profile_for_resume",
+                return_value={
+                    "full_name": "Alice",
+                    "email": "alice@example.com",
+                    "phone_number": "123",
+                    "city": "Victoria",
+                    "state_region": "BC",
+                    "github_url": "https://github.com/alice",
+                    "portfolio_url": "https://alice.dev",
+                },
+            ),
             patch.object(app, "_build_user_resume_preview", return_value={"sections": []}),
             patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
-            patch.object(app, "_export_resume_pdf_via_api", return_value=(False, "skip")),
             patch("builtins.input", side_effect=_next_input),
             redirect_stdout(out),
         ):

@@ -42,8 +42,10 @@ from capstone.storage import (
     fetch_latest_contributor_stats,
     fetch_latest_snapshot,
     fetch_latest_snapshots,
+    get_user_profile,
     open_db,
     store_github_source,
+    update_user_profile,
 )
 from capstone.services import ArchiveAnalysisError, ArchiveAnalyzerService, SnapshotStore
 from capstone.top_project_summaries import (
@@ -1029,11 +1031,20 @@ def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
             u.id,
             u.username,
             u.email,
+            u.full_name,
+            u.phone_number,
+            u.city,
+            u.state_region,
+            u.github_url,
+            u.portfolio_url,
             COUNT(DISTINCT up.project_id) AS project_count
         FROM users u
         LEFT JOIN user_projects up ON up.user_id = u.id
         WHERE LOWER(COALESCE(u.username, '')) NOT LIKE '%[bot]%'
-        GROUP BY u.id, u.username, u.email
+        GROUP BY
+            u.id, u.username, u.email,
+            u.full_name, u.phone_number, u.city, u.state_region,
+            u.github_url, u.portfolio_url
         ORDER BY LOWER(u.username), u.id
         """
     ).fetchall()
@@ -1042,11 +1053,67 @@ def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
             "id": int(row[0]),
             "username": str(row[1]),
             "email": row[2],
-            "project_count": int(row[3] or 0),
+            "full_name": row[3],
+            "phone_number": row[4],
+            "city": row[5],
+            "state_region": row[6],
+            "github_url": row[7],
+            "portfolio_url": row[8],
+            "project_count": int(row[9] or 0),
         }
         for row in rows
         if row and row[1]
     ]
+
+
+def _is_blank(value: object) -> bool:
+    return value is None or not str(value).strip()
+
+
+def _prompt_profile_value(label: str) -> str | None:
+    value = input(f"{label}: ").strip()
+    return value if value else None
+
+
+def _ensure_user_profile_for_resume(conn: sqlite3.Connection, user_id: int) -> dict:
+    profile = get_user_profile(conn, user_id) or {}
+    missing_fields: List[tuple[str, str]] = []
+    for key, label in (
+        ("full_name", "Full name"),
+        ("phone_number", "Phone number"),
+        ("city", "City"),
+        ("state_region", "State/Region"),
+        ("github_url", "GitHub URL"),
+        ("portfolio_url", "Portfolio URL"),
+    ):
+        if _is_blank(profile.get(key)):
+            missing_fields.append((key, label))
+
+    if missing_fields:
+        print("\nPlease fill in the following fields (leave blank to keep default data):")
+        updates: dict[str, str] = {}
+        for key, label in missing_fields:
+            user_value = _prompt_profile_value(label)
+            if user_value is not None:
+                updates[key] = user_value
+        if updates:
+            update_user_profile(conn, user_id, **updates)
+            profile = get_user_profile(conn, user_id) or profile
+    return profile
+
+
+def _apply_user_profile_to_resume_preview(resume_preview: dict, profile: dict) -> None:
+    city = (profile.get("city") or "").strip()
+    state = (profile.get("state_region") or "").strip()
+    location = ", ".join([part for part in [city, state] if part]) if (city or state) else ""
+    resume_preview["fullName"] = (profile.get("full_name") or "").strip()
+    resume_preview["email"] = (profile.get("email") or "").strip()
+    resume_preview["phone"] = (profile.get("phone_number") or "").strip()
+    resume_preview["location"] = location
+    resume_preview["links"] = {
+        "github": (profile.get("github_url") or "").strip(),
+        "portfolio": (profile.get("portfolio_url") or "").strip(),
+    }
 
 
 def _list_user_project_ids(
@@ -2035,6 +2102,8 @@ def main():
                     selected_user = users[int(user_pick) - 1]
                     selected_user_id = int(selected_user["id"])
                     selected_username = str(selected_user["username"])
+                    with _open_app_db() as conn:
+                        user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
 
                     with _open_app_db() as conn:
                         user_project_ids = _list_user_project_ids(
@@ -2105,6 +2174,7 @@ def main():
                         chosen_snapshots=chosen_snapshots,
                         contribution_map=contribution_map,
                     )
+                    _apply_user_profile_to_resume_preview(resume_preview, user_profile)
                     print("\nResume Preview:\n")
                     print(_format_resume_preview(resume_preview))
                     if project_ids:
@@ -2129,6 +2199,7 @@ def main():
                                 chosen_snapshots=chosen_snapshots,
                                 contribution_map=contribution_map,
                             )
+                            _apply_user_profile_to_resume_preview(resume_preview, user_profile)
 
                             print("\nAuto-Generated Resume:\n")
                             print(_format_resume_preview(resume_preview))

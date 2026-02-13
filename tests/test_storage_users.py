@@ -15,6 +15,15 @@ def test_users_and_links_schema_and_fk():
         assert "users" in tables
         assert "user_projects" in tables
         assert "contributor_stats" in tables
+        user_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        assert "full_name" in user_columns
+        assert "phone_number" in user_columns
+        assert "city" in user_columns
+        assert "state_region" in user_columns
+        assert "github_url" in user_columns
+        assert "portfolio_url" in user_columns
 
         # Insert user and contributor stats with user_id
         user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
@@ -41,6 +50,34 @@ def test_users_and_links_schema_and_fk():
         # FK points to users
         fk = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
         assert fk and fk[0][2] == "users"
+
+        conn.close()
+
+
+def test_get_and_update_user_profile():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        storage.update_user_profile(
+            conn,
+            user_id,
+            full_name="Alice Doe",
+            phone_number="+1 111-222-3333",
+            city="Seattle",
+            state_region="WA",
+            github_url="https://github.com/alice",
+            portfolio_url="https://alice.dev",
+        )
+        profile = storage.get_user_profile(conn, user_id)
+        assert profile is not None
+        assert profile["full_name"] == "Alice Doe"
+        assert profile["phone_number"] == "+1 111-222-3333"
+        assert profile["city"] == "Seattle"
+        assert profile["state_region"] == "WA"
+        assert profile["github_url"] == "https://github.com/alice"
+        assert profile["portfolio_url"] == "https://alice.dev"
 
         conn.close()
 

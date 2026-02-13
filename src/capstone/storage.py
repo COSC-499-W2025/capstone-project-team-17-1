@@ -136,6 +136,12 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             email TEXT,
+            full_name TEXT,
+            phone_number TEXT,
+            city TEXT,
+            state_region TEXT,
+            github_url TEXT,
+            portfolio_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -257,6 +263,21 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     if "user_id" not in columns:
         conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
         conn.commit()
+
+    # Add profile columns to users when missing (backward-compatible migration).
+    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
+    user_columns = {row[1] for row in user_info}
+    for column_name, column_type in (
+        ("full_name", "TEXT"),
+        ("phone_number", "TEXT"),
+        ("city", "TEXT"),
+        ("state_region", "TEXT"),
+        ("github_url", "TEXT"),
+        ("portfolio_url", "TEXT"),
+    ):
+        if column_name not in user_columns:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
+    conn.commit()
 
     # Repair legacy FK if user_projects points to users_old.
     fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
@@ -1297,6 +1318,77 @@ def upsert_user(
     return int(cursor.lastrowid)
 
 
+def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT
+            id,
+            username,
+            email,
+            full_name,
+            phone_number,
+            city,
+            state_region,
+            github_url,
+            portfolio_url
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+        """,
+        (int(user_id),),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": int(row[0]),
+        "username": row[1],
+        "email": row[2],
+        "full_name": row[3],
+        "phone_number": row[4],
+        "city": row[5],
+        "state_region": row[6],
+        "github_url": row[7],
+        "portfolio_url": row[8],
+    }
+
+
+def update_user_profile(
+    conn: sqlite3.Connection,
+    user_id: int,
+    *,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    city: str | None = None,
+    state_region: str | None = None,
+    github_url: str | None = None,
+    portfolio_url: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        UPDATE users
+        SET
+            full_name = COALESCE(?, full_name),
+            phone_number = COALESCE(?, phone_number),
+            city = COALESCE(?, city),
+            state_region = COALESCE(?, state_region),
+            github_url = COALESCE(?, github_url),
+            portfolio_url = COALESCE(?, portfolio_url),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (
+            full_name,
+            phone_number,
+            city,
+            state_region,
+            github_url,
+            portfolio_url,
+            int(user_id),
+        ),
+    )
+    conn.commit()
+
+
 def link_user_to_project(
     conn: sqlite3.Connection,
     user_id: int,
@@ -1537,6 +1629,8 @@ __all__ = [
     "fetch_contributor_rankings",
     # users
     "upsert_user",
+    "get_user_profile",
+    "update_user_profile",
     "link_user_to_project",
     "upsert_users_from_contributors",
     # evidence
