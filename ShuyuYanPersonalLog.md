@@ -354,9 +354,7 @@ Beyond feature implementation, I discussed code-level details and design decisio
 - Make sure only use Fastapi
 
  ## Term2 week6 Personal LOG (Feb9-Feb15, 2026)
-### 1. Type of Tasks Worked On
-
-### 2. Weekly Goals Recap
+### 1. Weekly Goals Recap
 - complete [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)
 - discussed the code details with members
 - review member's PR and help them
