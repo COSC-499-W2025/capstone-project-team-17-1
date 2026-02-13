@@ -24,6 +24,22 @@ def test_users_and_links_schema_and_fk():
         assert "state_region" in user_columns
         assert "github_url" in user_columns
         assert "portfolio_url" in user_columns
+        ordered_columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        ]
+        assert ordered_columns == [
+            "id",
+            "username",
+            "email",
+            "full_name",
+            "phone_number",
+            "city",
+            "state_region",
+            "github_url",
+            "portfolio_url",
+            "created_at",
+            "updated_at",
+        ]
 
         # Insert user and contributor stats with user_id
         user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
@@ -78,6 +94,21 @@ def test_get_and_update_user_profile():
         assert profile["state_region"] == "WA"
         assert profile["github_url"] == "https://github.com/alice"
         assert profile["portfolio_url"] == "https://alice.dev"
+
+        conn.close()
+
+
+def test_upsert_user_sets_default_github_url():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        row = conn.execute(
+            "SELECT github_url FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        assert row and row[0] == "https://github.com/alice"
 
         conn.close()
 

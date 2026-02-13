@@ -54,6 +54,15 @@ def _normalize_user_email(email: str | None) -> str | None:
     return value
 
 
+def _default_github_url(username: str | None) -> str | None:
+    if username is None:
+        return None
+    token = str(username).strip()
+    if not token:
+        return None
+    return f"https://github.com/{token}"
+
+
 
 # Schema + migrations
 
@@ -279,6 +288,76 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
     conn.commit()
 
+    desired_users_order = [
+        "id",
+        "username",
+        "email",
+        "full_name",
+        "phone_number",
+        "city",
+        "state_region",
+        "github_url",
+        "portfolio_url",
+        "created_at",
+        "updated_at",
+    ]
+    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
+    current_users_order = [row[1] for row in user_info]
+    if all(col in current_users_order for col in desired_users_order) and current_users_order != desired_users_order:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE users RENAME TO users_old")
+        conn.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email TEXT,
+                full_name TEXT,
+                phone_number TEXT,
+                city TEXT,
+                state_region TEXT,
+                github_url TEXT,
+                portfolio_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO users (
+                id, username, email, full_name, phone_number, city, state_region,
+                github_url, portfolio_url, created_at, updated_at
+            )
+            SELECT
+                id,
+                username,
+                email,
+                full_name,
+                phone_number,
+                city,
+                state_region,
+                CASE
+                    WHEN github_url IS NULL OR TRIM(github_url) = ''
+                    THEN ('https://github.com/' || username)
+                    ELSE github_url
+                END,
+                portfolio_url,
+                created_at,
+                updated_at
+            FROM users_old
+            """
+        )
+        conn.execute("DROP TABLE users_old")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
+            ON users (username, COALESCE(email, ''))
+            """
+        )
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
     # Repair legacy FK if user_projects points to users_old.
     fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
     fk_targets = {row[2] for row in fk_rows if len(row) > 2}
@@ -473,8 +552,8 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
             canonical_user_id = int(row[0])
         else:
             cursor = conn.execute(
-                "INSERT INTO users (username, email) VALUES (?, NULL)",
-                (contributor,),
+                "INSERT INTO users (username, email, github_url) VALUES (?, NULL, ?)",
+                (contributor, _default_github_url(contributor)),
             )
             canonical_user_id = int(cursor.lastrowid)
 
@@ -1284,7 +1363,9 @@ def upsert_user(
 ) -> int:
     if not username:
         raise ValueError("username must be provided")
+    username = str(username).strip()
     email = _normalize_user_email(email)
+    default_github = _default_github_url(username)
 
     # Prefer matching by email when available, otherwise by username.
     row = None
@@ -1301,18 +1382,30 @@ def upsert_user(
     if row:
         user_id = int(row[0])
         conn.execute(
-            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (username, email, user_id),
+            """
+            UPDATE users
+            SET
+                username = COALESCE(?, username),
+                email = COALESCE(?, email),
+                github_url = CASE
+                    WHEN github_url IS NULL OR TRIM(github_url) = ''
+                    THEN COALESCE(?, github_url)
+                    ELSE github_url
+                END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (username, email, default_github, user_id),
         )
         conn.commit()
         return user_id
 
     cursor = conn.execute(
         """
-        INSERT INTO users (username, email)
-        VALUES (?, ?)
+        INSERT INTO users (username, email, github_url)
+        VALUES (?, ?, ?)
         """,
-        (username, email),
+        (username, email, default_github),
     )
     conn.commit()
     return int(cursor.lastrowid)
