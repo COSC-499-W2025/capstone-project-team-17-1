@@ -1319,9 +1319,9 @@ def _write_git_log(repo_path: Path) -> None:
 
     log_dir = repo_path / ".git" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / "capstone_git_log").write_text(result.stdout, encoding="utf-8")
+    (log_dir / "git_log").write_text(result.stdout, encoding="utf-8")
     # Also drop a copy at repo root so we can delete most of .git before zipping.
-    (repo_path / "capstone_git_log.txt").write_text(result.stdout, encoding="utf-8")
+    (repo_path / "git_log.txt").write_text(result.stdout, encoding="utf-8")
 
 
 def _prune_repository(repo_path: Path) -> None:

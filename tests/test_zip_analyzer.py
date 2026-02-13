@@ -48,7 +48,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
                 "2222222222222222222222222222222222222222 "
                 "Bob Example <bob@example.com> 1700000500 +0000\tcommit\n"
             )
-            zf.writestr(".git/logs/HEAD", git_log)
+            zf.writestr(".git/logs/git_log", git_log)
         return archive_path
 
     def test_analyze_archive_generates_metadata_and_summary(self) -> None:
@@ -73,7 +73,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
 
         self.assertEqual(summary["resolved_mode"], "local")
         self.assertIn("local mode", summary["mode_reason"].lower())
-        self.assertIn(summary["collaboration"]["classification"], {"collaborative", "unknown"})
+        self.assertEqual(summary["collaboration"]["classification"], "collaborative")
         self.assertIsInstance(summary["frameworks"], list)
         self.assertIn("Python", summary["languages"])
         self.assertTrue(summary["skills"])
