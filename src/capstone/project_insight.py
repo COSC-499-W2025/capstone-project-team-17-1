@@ -47,6 +47,14 @@ def _infer_user_role(snapshot: Mapping[str, object], user: Optional[str]) -> str
     return "unknown"
 
 
+def infer_user_role(snapshot: Mapping[str, object], user: Optional[str]) -> str:
+    """
+    Public wrapper for user role inference.
+    """
+    # Expose a stable helper for API
+    return _infer_user_role(snapshot, user)
+
+
 def build_project_insight_prompt(
     snapshot: Mapping[str, object],
     question: str,

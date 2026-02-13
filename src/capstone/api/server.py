@@ -7,6 +7,7 @@ from capstone.api.routes.resume import router as resume_router, configure as con
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Capstone API")
+    app.state.auth_token = auth_token
 
     @app.get("/")
     def root():

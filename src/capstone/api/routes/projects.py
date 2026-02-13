@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response
 from pathlib import Path
 import tempfile
 import shutil
@@ -35,7 +35,11 @@ async def upload_project(file: UploadFile = File(...)):
             pass
 
     project_id = stored["upload_id"]
+    message = "Upload stored successfully."
+    if stored.get("dedup"):
+        message = "Duplicate upload detected; existing file reused."
     return {
+        "message": message,
         "project_id": project_id,
         "file_id": stored["file_id"],
         "hash": stored["hash"],
@@ -151,3 +155,47 @@ def delete_project(project_id: str):
         "error": None,
     }
 
+
+@router.post("/{project_id}/thumbnail")
+async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)):
+    # Only accept images
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported")
+    filename = file.filename or "thumbnail"
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Empty image upload")
+
+    conn = storage.open_db()
+    try:
+        # Store latest thumbnail
+        stored = storage.upsert_project_thumbnail(
+            conn,
+            project_id=project_id,
+            image_bytes=image_bytes,
+            filename=filename,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {"data": stored, "error": None}
+
+
+@router.get("/{project_id}/thumbnail")
+def get_project_thumbnail(project_id: str):
+    # Return the latest thumbnail bytes
+    conn = storage.open_db()
+    meta = storage.fetch_project_thumbnail_meta(conn, project_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    image_bytes = storage.fetch_project_thumbnail_bytes(conn, project_id)
+    if not image_bytes:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return Response(
+        content=image_bytes,
+        media_type=meta.get("content_type") or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{meta.get('filename') or 'thumbnail'}\"",
+        },
+    )

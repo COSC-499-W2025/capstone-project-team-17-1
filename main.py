@@ -10,6 +10,8 @@ import urllib.request
 from datetime import datetime
 from typing import Iterable, List, Mapping
 
+import zipfile
+
 ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -62,6 +64,9 @@ from capstone.cli import pick_zip_file
 from capstone.storage import save_project_metadata
 from capstone.storage import load_project_metadata
 from capstone.storage import close_db
+from capstone.storage import store_analysis_snapshot
+from capstone.language_detection import detect_language, classify_activity
+from capstone import file_store
 def _row_to_dict(row):
     if row is None:
         return {}
@@ -313,6 +318,80 @@ def _contributor_menu(project_id: str) -> None:
 def _open_app_db():
     # Pin to repo-local data directory to avoid cwd-dependent DBs.
     return open_db(ROOT / "data")
+
+
+def _record_zip_upload(path: pathlib.Path, original_name: str | None = None) -> None:
+    """
+    Store the uploaded zip in CAS storage and print a user-facing status message.
+    """
+    try:
+        with _open_app_db() as conn:
+            stored = file_store.ensure_file(
+                conn,
+                path,
+                original_name=original_name or path.name,
+                source="cli_upload",
+                mime="application/zip",
+            )
+        if stored.get("dedup"):
+            print("Duplicate upload detected; existing file reused.")
+        else:
+            print("Upload stored successfully.")
+    except Exception as exc:
+        print(f"Upload failed: {exc}")
+
+
+def _collect_subproject_summaries(zip_path: pathlib.Path) -> dict[str, dict]:
+    """
+    Build minimal per-subproject summaries using top-level directories in the zip.
+    """
+    summaries: dict[str, dict] = {}
+    with zipfile.ZipFile(zip_path) as z:
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            parts = pathlib.PurePosixPath(info.filename).parts
+            if not parts:
+                continue
+            top = parts[0]
+            if top.startswith("__MACOSX"):
+                continue
+            summary = summaries.setdefault(
+                top,
+                {
+                    "project_id": top,
+                    "file_summary": {"file_count": 0, "total_bytes": 0},
+                    "languages": {},
+                    "source": "multi_project_zip",
+                },
+            )
+            summary["file_summary"]["file_count"] += 1
+            summary["file_summary"]["total_bytes"] += int(info.file_size or 0)
+            lang = detect_language(info.filename) or "unknown"
+            summary["languages"][lang] = summary["languages"].get(lang, 0) + 1
+    return summaries
+
+
+def _store_subproject_summaries(zip_path: pathlib.Path) -> None:
+    summaries = _collect_subproject_summaries(zip_path)
+    if len(summaries) <= 1:
+        return
+    choice = input(
+        f"Multiple top-level projects detected ({', '.join(sorted(summaries.keys()))}). "
+        "Save as separate projects? (y/n): "
+    ).strip().lower()
+    if choice != "y":
+        return
+    with _open_app_db() as conn:
+        for project_id, summary in summaries.items():
+            store_analysis_snapshot(
+                conn,
+                project_id=project_id,
+                classification="unknown",
+                primary_contributor=None,
+                snapshot=summary,
+            )
+    print("Multi-project snapshots stored.")
 
 def _merge_year_counts(target, incoming):
     for year, weight in (incoming or {}).items():
@@ -1329,11 +1408,13 @@ def main():
                     if not os.path.isfile(zip_path):
                         print("Invalid file path. Please try again.")
                         continue
+                    project_id_override = input("Enter project id (optional): ").strip()
                     archive_service = ArchiveAnalyzerService(ZipAnalyzer())
                     archive_path, payload, _code = archive_service.validate_archive(zip_path)
                     if payload:
                         print(json.dumps(payload))
                         continue
+                    _record_zip_upload(pathlib.Path(archive_path), pathlib.Path(zip_path).name)
                     consent = ensure_consent()
                     config = load_config()
                     mode = resolve_mode("local", consent)
@@ -1344,12 +1425,14 @@ def main():
                             summary_path=pathlib.Path("analysis_output/summary.json"),
                             mode=mode,
                             preferences=config.preferences,
-                            project_id=pathlib.Path(zip_path).stem,
+                            project_id=project_id_override or pathlib.Path(zip_path).stem,
                             db_dir=ROOT / "data",
                         )
                     except ArchiveAnalysisError as exc:
                         print(json.dumps(exc.payload))
                         continue
+                    if not project_id_override:
+                        _store_subproject_summaries(pathlib.Path(archive_path))
                     store = SnapshotStore(ROOT / "data")
                     try:
                         store.store_snapshot(
@@ -1455,6 +1538,7 @@ def main():
                                 if payload:
                                     print(json.dumps(payload))
                                     continue
+                                _record_zip_upload(pathlib.Path(archive_path), f"{project_id}.zip")
 
                                 consent = ensure_consent()
                                 config = load_config()

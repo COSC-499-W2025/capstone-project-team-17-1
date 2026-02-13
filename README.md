@@ -51,6 +51,26 @@ Key features:
 - Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
 - Git collaboration analysis now parses `git log --numstat` output, filters bots/shared accounts, weights commits/reviews/line changes, and stores JSON snapshots in a local SQLite db for future dashboards.
 
+## Test Data ZIPs
+The repo includes sample ZIPs for demos and validation under `test_data/`:
+
+- Same project, two snapshots (earlier/later):
+  - `test_data/test-data-code-collab-earlier.zip`
+  - `test_data/test-data-code-collab-later.zip`
+  - Structure inside each ZIP:
+    - `code_collab_proj/app/`
+    - `code_collab_proj/test/`
+    - `code_collab_proj/doc/`
+    - (later snapshot adds `code_collab_proj/infra/` and new/modified files)
+
+- Multi-project bundle (code + non-code):
+  - `test_data/test-data-multi-projects.zip`
+  - Structure inside the ZIP:
+    - `code_indiv_proj/`
+    - `code_collab_proj/`
+    - `text_indiv_proj/`
+    - `image_indiv_proj/`
+
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)
 # Milestone #1
