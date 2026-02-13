@@ -161,7 +161,7 @@ class MainMenuTests(unittest.TestCase):
         self.assertIn("Consent is required", text)
 
     def test_no_projects(self):
-        text, _ = self.run_menu(inputs=["3", "13"], rows=[])
+        text, _ = self.run_menu(inputs=["3", "14"], rows=[])
         self.assertIn("No projects found", text)
 
     def test_lists_projects(self):
@@ -174,7 +174,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["3", "2", "13"], rows=rows)
+        text, _ = self.run_menu(inputs=["3", "2", "14"], rows=rows)
 
         # Accept either name key depending on your printing logic
         self.assertTrue(("Demo" in text) or ("p1" in text))
@@ -195,7 +195,7 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app.os.path, "isfile", return_value=True),
             patch.object(app, "_record_zip_upload", return_value=None),
             patch.object(app, "_store_subproject_summaries", return_value=None),
-            patch("builtins.input", side_effect=["1", "n", "C:\\tmp\\demo.zip", "", "n", "n", "13"]),
+            patch("builtins.input", side_effect=["1", "n", "C:\\tmp\\demo.zip", "", "n", "n", "14"]),
             redirect_stdout(out),
         ):
             svc_instance = svc_mock.return_value
@@ -232,7 +232,7 @@ class MainMenuTests(unittest.TestCase):
             patch.object(app, "fetch_latest_snapshots", return_value=rows),
             patch.object(app, "generate_top_project_summaries", return_value=[{"id": "p1"}]),
             patch.object(app, "export_markdown", return_value="SUMMARY") as export_mock,
-            patch("builtins.input", side_effect=["5", "1", "1", "n", "3", "13"]),
+            patch("builtins.input", side_effect=["5", "1", "1", "n", "3", "14"]),
             redirect_stdout(out),
         ):
             try:
@@ -253,7 +253,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["5", "1", "2", "1", "3", "3", "13"], rows=rows, user_rows=[("alice",)])
+        text, _ = self.run_menu(inputs=["5", "1", "2", "1", "3", "3", "14"], rows=rows, user_rows=[("alice",)])
         self.assertIn("Portfolio Showcase Preview", text)
 
     def test_resume_preview_menu_flow(self):
@@ -266,7 +266,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["6", "1", "", "3", "13"], rows=rows)
+        text, _ = self.run_menu(inputs=["6", "1", "", "3", "14"], rows=rows)
         self.assertIn("Resume Preview", text)
 
     def test_resume_auto_generate_skip_export(self):
@@ -294,12 +294,78 @@ class MainMenuTests(unittest.TestCase):
                     "",   # all projects
                     "1",  # auto-generate
                     "4",  # skip export
-                    "13",
+                    "14",
                 ],
                 rows=rows,
             )
 
         self.assertIn("Auto-Generated Resume", text)
+
+    def test_user_profile_menu_edit_updates_db(self):
+        fields = [
+            ("username", "alice"),
+            ("email", "alice@example.com"),
+            ("full_name", ""),
+            ("phone_number", ""),
+            ("city", ""),
+            ("state_region", ""),
+            ("github_url", "https://github.com/alice"),
+            ("portfolio_url", ""),
+        ]
+
+        with (
+            patch.object(app, "_load_user_profile_fields_for_edit", return_value=fields),
+            patch.object(app, "_update_user_profile_field") as update_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "13",  # manage user profile
+                    "1",   # select user
+                    "1",   # edit
+                    "3",   # full_name
+                    "Alice Doe",
+                    "2",   # back
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+
+        update_mock.assert_called_once()
+        kwargs = update_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("column_name"), "full_name")
+        self.assertEqual(kwargs.get("value"), "Alice Doe")
+        self.assertIn("Saved successfully.", text)
+
+    def test_user_profile_menu_edit_blank_cancels_update(self):
+        fields = [
+            ("username", "alice"),
+            ("email", "alice@example.com"),
+            ("full_name", ""),
+            ("phone_number", ""),
+            ("city", ""),
+            ("state_region", ""),
+            ("github_url", "https://github.com/alice"),
+            ("portfolio_url", ""),
+        ]
+
+        with (
+            patch.object(app, "_load_user_profile_fields_for_edit", return_value=fields),
+            patch.object(app, "_update_user_profile_field") as update_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "13",  # manage user profile
+                    "1",   # select user
+                    "1",   # edit
+                    "",    # cancel field edit
+                    "2",   # back
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+
+        update_mock.assert_not_called()
+        self.assertIn("User Profile Details", text)
 
     def test_resume_customize_summary_add(self):
         rows = [
@@ -374,7 +440,7 @@ class MainMenuTests(unittest.TestCase):
                     "8",  # back from edit entry
                     "",   # cancel entry selection
                     "2",  # back to main menu
-                    "13", # exit
+                    "14", # exit
                 ],
                 rows=rows,
             )
@@ -449,7 +515,7 @@ class MainMenuTests(unittest.TestCase):
                     "8",
                     "",
                     "2",
-                    "13",
+                    "14",
                 ],
                 rows=rows,
             )
@@ -498,7 +564,7 @@ class MainMenuTests(unittest.TestCase):
                     "New highlight",
                     "5",  # back to showcase options
                     "3",  # back to portfolio menu
-                    "13",
+                    "14",
                 ],
                 rows=rows,
                 user_rows=[("alice",)],
@@ -545,7 +611,7 @@ class MainMenuTests(unittest.TestCase):
                     "2",  # delete
                     "1",  # delete all
                     "5",  # back to showcase options
-                    "3", "13",
+                    "3", "14",
                 ],
                 rows=rows,
                 user_rows=[("alice",)],
@@ -578,7 +644,7 @@ class MainMenuTests(unittest.TestCase):
                     "4",  # edit full markdown
                     "FULL MARKDOWN",
                     "5",  # back to showcase options
-                    "3", "13",
+                    "3", "14",
                 ],
                 rows=rows,
                 user_rows=[("alice",)],
@@ -648,7 +714,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # add
                     "1",  # select project
                     "3",  # back
-                    "8", "", "2", "13",
+                    "8", "", "2", "14",
                 ],
                 rows=rows,
             )
@@ -717,7 +783,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # add
                     "2026-01", "2026-02",
                     "3",  # back
-                    "8", "", "2", "13",
+                    "8", "", "2", "14",
                 ],
                 rows=rows,
             )

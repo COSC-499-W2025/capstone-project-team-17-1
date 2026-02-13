@@ -1116,6 +1116,115 @@ def _apply_user_profile_to_resume_preview(resume_preview: dict, profile: dict) -
     }
 
 
+def _load_user_profile_fields_for_edit(conn: sqlite3.Connection, user_id: int) -> list[tuple[str, str]]:
+    profile = get_user_profile(conn, user_id) or {}
+    return [
+        ("username", str(profile.get("username") or "")),
+        ("email", str(profile.get("email") or "")),
+        ("full_name", str(profile.get("full_name") or "")),
+        ("phone_number", str(profile.get("phone_number") or "")),
+        ("city", str(profile.get("city") or "")),
+        ("state_region", str(profile.get("state_region") or "")),
+        ("github_url", str(profile.get("github_url") or "")),
+        ("portfolio_url", str(profile.get("portfolio_url") or "")),
+    ]
+
+
+def _update_user_profile_field(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    column_name: str,
+    value: str | None,
+) -> None:
+    allowed = {
+        "username",
+        "email",
+        "full_name",
+        "phone_number",
+        "city",
+        "state_region",
+        "github_url",
+        "portfolio_url",
+    }
+    if column_name not in allowed:
+        raise ValueError("Unsupported user profile field")
+    conn.execute(
+        f"UPDATE users SET {column_name} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (value, int(user_id)),
+    )
+    conn.commit()
+
+
+def _manage_user_profiles_menu() -> None:
+    with _open_app_db() as conn:
+        users = _list_resume_users(conn)
+    if not users:
+        print("\nUser Profile\n------------\n")
+        print("No users found. Import from GitHub URL first.")
+        return
+
+    print("\nUsers:")
+    for idx, user_row in enumerate(users, start=1):
+        username = str(user_row.get("username") or f"User {idx}")
+        print(f"{idx}. {username}")
+
+    selected = _prompt_single_index(
+        "Select a user number (blank to cancel, b to back): ",
+        len(users),
+    )
+    if selected is None:
+        print("Cancelled.")
+        return
+    if selected == "b":
+        return
+
+    chosen = users[int(selected) - 1]
+    user_id = int(chosen["id"])
+
+    while True:
+        with _open_app_db() as conn:
+            fields = _load_user_profile_fields_for_edit(conn, user_id)
+        print("\nUser Profile Details:")
+        for idx, (column_name, value) in enumerate(fields, start=1):
+            print(f"{idx}. {column_name}: {value}")
+        print("\n1. Edit")
+        print("2. Back")
+        action = input("Select an option (1-2, b to back): ").strip().lower()
+        if action in {"2", "b"}:
+            return
+        if action != "1":
+            print("Invalid choice. Please enter 1 or 2.")
+            continue
+
+        raw_index = input("Enter field number to edit (leave blank to cancel): ").strip()
+        if not raw_index:
+            continue
+        if not raw_index.isdigit():
+            print("Invalid input, use a number.")
+            continue
+        index = int(raw_index)
+        if index <= 0 or index > len(fields):
+            print(f"Indices must be in 1–{len(fields)}.")
+            continue
+
+        column_name, current_value = fields[index - 1]
+        current_display = current_value if current_value else "Null"
+        next_value = input(f"Editing {column_name} from {current_display} to: ").strip()
+        if column_name == "username" and not next_value:
+            print("username cannot be empty.")
+            continue
+
+        with _open_app_db() as conn:
+            _update_user_profile_field(
+                conn,
+                user_id=user_id,
+                column_name=column_name,
+                value=next_value if next_value else None,
+            )
+        print("Saved successfully.")
+
+
 def _list_user_project_ids(
     conn: sqlite3.Connection,
     *,
@@ -1413,7 +1522,8 @@ def main():
                 print("10. Manage consent (LLM/external services)")
                 print("11. Contributor rankings (Quick Access)")
                 print("12. AI-based project analysis (external LLM)")
-                print("13. Exit")
+                print("13. Manage user profile")
+                print("14. Exit")
                 print()
 
                 while True:
@@ -1421,16 +1531,16 @@ def main():
                         choice = forced_choice
                         forced_choice = None
                     else:
-                        choice = input("Please select an option (1-13): ").strip()
+                        choice = input("Please select an option (1-14): ").strip()
                         import os
                         if os.environ.get("PYTEST_CURRENT_TEST"):
                             if choice == "2":
                                 choice = "3"
                             elif choice == "10":
                                 choice = "12"
-                    if choice in {str(i) for i in range(1, 14)}:
+                    if choice in {str(i) for i in range(1, 15)}:
                         break
-                    print("Invalid choice. Please enter a number between 1 and 12.")
+                    print("Invalid choice. Please enter a number between 1 and 14.")
                     print()
 
                 if choice == "1":
@@ -2843,6 +2953,8 @@ def main():
                         close_db()
 
                 elif choice == "13":
+                    _manage_user_profiles_menu()
+                elif choice == "14":
                     _exit_app()
         except _ReturnToMainMenu:
             if in_main_menu:
