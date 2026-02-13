@@ -4,9 +4,6 @@ import sqlite3
 import sys
 import tempfile
 import pathlib
-import base64
-import urllib.error
-import urllib.request
 from datetime import datetime
 from typing import Iterable, List, Mapping
 
@@ -713,29 +710,6 @@ def prompt_save_path_any(
     root.destroy()
     return path
 
-
-def _export_resume_pdf_via_api(resume_preview: dict, destination: pathlib.Path) -> tuple[bool, str]:
-    api_base = (os.environ.get("CAPSTONE_API_URL") or "http://127.0.0.1:5000").rstrip("/")
-    endpoint = f"{api_base}/resume/render-pdf"
-    token = os.environ.get("CAPSTONE_API_TOKEN") or os.environ.get("CAPSTONE_API_AUTH_TOKEN")
-    payload = json.dumps({"resume": resume_preview}).encode("utf-8")
-    req = urllib.request.Request(endpoint, data=payload, method="POST")
-    req.add_header("Content-Type", "application/json")
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            body = response.read().decode("utf-8")
-        data = json.loads(body)
-        encoded = ((data or {}).get("data") or {}).get("payload")
-        if not encoded:
-            return False, "API response missing PDF payload"
-        pdf_bytes = base64.b64decode(encoded)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(pdf_bytes)
-        return True, ""
-    except Exception as exc:
-        return False, str(exc)
 
 def _prompt_single_index(prompt: str, max_index: int) -> int | None | str:
     while True:
@@ -2141,7 +2115,7 @@ def main():
                         if action == "b":
                             action = "3"
                         if action == "1":
-                            from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_pandoc
+                            from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_latex
 
                             with _open_app_db() as conn:
                                 contribution_map = _load_user_contribution_map(
@@ -2165,14 +2139,15 @@ def main():
 
                             safe_user = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in selected_username)
                             default_md_name = f"resume_{safe_user or 'user'}.md"
-                            default_pdf_name = f"resume_{safe_user or 'user'}.pdf"
+                            date_tag = datetime.now().strftime("%Y%m%d")
+                            default_pdf_name = f"resume_{safe_user or 'user'}_{date_tag}.pdf"
 
                             export_choice = _prompt_menu(
                                 "Export Resume",
                                 [
                                     "Markdown",
-                                    "PDF (Pandoc)",
-                                    "Markdown + PDF (Pandoc)",
+                                    "PDF (LaTeX Template)",
+                                    "Markdown + PDF (LaTeX Template)",
                                     "Skip",
                                 ],
                             )
@@ -2201,26 +2176,15 @@ def main():
                                     print("Resume Markdown export cancelled.")
 
                             if do_pdf:
-                                save_pdf_path = prompt_save_path(default_name=default_pdf_name)
-                                if save_pdf_path:
-                                    try:
-                                        save_pdf = pathlib.Path(save_pdf_path)
-                                        remote_ok, remote_err = _export_resume_pdf_via_api(
-                                            resume_preview,
-                                            save_pdf,
-                                        )
-                                        if remote_ok:
-                                            print("Rendered via API /resume/render-pdf.")
-                                        else:
-                                            print(f"Server-side PDF render unavailable: {remote_err}")
-                                            print("Falling back to local Pandoc renderer...")
-                                            build_pdf_with_pandoc(resume_preview, save_pdf)
-                                        print(f"\nResume PDF successfully saved to:\n{save_pdf_path}\n")
-                                    except Exception as e:
-                                        print("Failed to generate resume PDF (Pandoc).")
-                                        print(f"Error: {e}")
-                                else:
-                                    print("Resume PDF export cancelled.")
+                                try:
+                                    output_dir = ROOT / "output"
+                                    output_dir.mkdir(parents=True, exist_ok=True)
+                                    save_pdf = output_dir / default_pdf_name
+                                    build_pdf_with_latex(resume_preview, save_pdf)
+                                    print(f"\nResume PDF successfully saved to:\n{save_pdf}\n")
+                                except Exception as e:
+                                    print("Failed to generate resume PDF (LaTeX template).")
+                                    print(f"Error: {e}")
 
                             continue
 
