@@ -47,6 +47,54 @@ class ZipAnalyzer:
     def __init__(self) -> None:
         self._logger = logger
 
+    @staticmethod
+    def _is_git_log_path(path_lower: str) -> bool:
+        return (
+            ".git/logs/git_log" in path_lower
+            or path_lower.endswith("git_log")
+            or path_lower.endswith("git_log.txt")
+        )
+
+    @staticmethod
+    def _decode_utf16_git_log(raw: bytes) -> str | None:
+        for encoding in ("utf-16", "utf-16-le", "utf-16-be"):
+            try:
+                decoded = raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+            if "commit:" in decoded or "\x00" not in decoded:
+                return decoded
+        return None
+
+    def _decode_content_text(
+        self,
+        *,
+        raw: bytes,
+        path: str,
+        is_git_log: bool,
+        warnings: List[dict[str, str]],
+    ) -> str:
+        try:
+            decoded = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            if is_git_log:
+                decoded_utf16 = self._decode_utf16_git_log(raw)
+                if decoded_utf16 is not None:
+                    return decoded_utf16
+            warnings.append(
+                {
+                    "path": path,
+                    "error": "NonUtf8",
+                    "detail": "File contains non-UTF-8 bytes",
+                }
+            )
+            return raw.decode("utf-8", errors="ignore")
+        if is_git_log and "\x00" in decoded:
+            decoded_utf16 = self._decode_utf16_git_log(raw)
+            if decoded_utf16 is not None:
+                return decoded_utf16
+        return decoded
+
     def analyze(
         self,
         zip_path: Path,
@@ -191,6 +239,7 @@ class ZipAnalyzer:
             )
 
             path_lower = info.filename.lower()
+            is_git_log = self._is_git_log_path(path_lower)
             # Lightweight content validation for common error
             suffix = PurePosixPath(path_lower).suffix
             if info.file_size == 0:
@@ -209,17 +258,12 @@ class ZipAnalyzer:
                         "detail": f"Unsupported file extension: {suffix}",
                     }
                 )
-            try:
-                content_text = raw.decode("utf-8")
-            except UnicodeDecodeError:
-                warnings.append(
-                    {
-                        "path": info.filename,
-                        "error": "NonUtf8",
-                        "detail": "File contains non-UTF-8 bytes",
-                    }
-                )
-                content_text = raw.decode("utf-8", errors="ignore")
+            content_text = self._decode_content_text(
+                raw=raw,
+                path=info.filename,
+                is_git_log=is_git_log,
+                warnings=warnings,
+            )
             if path_lower.endswith(".json"):
                 try:
                     json.loads(content_text)
@@ -241,11 +285,7 @@ class ZipAnalyzer:
                 frameworks.update(detected)
                 for fw in detected:
                     skill_events.append((fw, "framework", datetime.fromisoformat(record["modified"]), 1.0))
-            elif (
-                ".git/logs/git_log" in path_lower
-                or path_lower.endswith("git_log")
-                or path_lower.endswith("git_log.txt")
-            ):
+            elif is_git_log:
                 git_logs.extend(content_text.splitlines())
             tool_skills = self._detect_tool_skills(path_lower)
             if tool_skills:
