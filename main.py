@@ -45,6 +45,7 @@ from capstone.storage import (
     get_user_profile,
     open_db,
     store_github_source,
+    upsert_default_resume_modules,
     update_user_profile,
 )
 from capstone.services import ArchiveAnalysisError, ArchiveAnalyzerService, SnapshotStore
@@ -1225,6 +1226,56 @@ def _manage_user_profiles_menu() -> None:
         print("Saved successfully.")
 
 
+def _sync_generated_resume_modules_to_db(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    resume_preview: dict,
+    header_profile: dict,
+    chosen_snapshots: List[dict],
+) -> str:
+    city = (header_profile.get("city") or "").strip()
+    state = (header_profile.get("state_region") or "").strip()
+    location = ", ".join([part for part in [city, state] if part]) if (city or state) else ""
+    header = {
+        "full_name": (header_profile.get("full_name") or "").strip(),
+        "email": (header_profile.get("email") or "").strip(),
+        "phone": (header_profile.get("phone_number") or "").strip(),
+        "location": location,
+        "github_url": (header_profile.get("github_url") or "").strip(),
+        "portfolio_url": (header_profile.get("portfolio_url") or "").strip(),
+    }
+
+    all_skills: List[str] = []
+    for snap in chosen_snapshots:
+        snapshot_data = snap.get("snapshot") or {}
+        all_skills.extend(_extract_skill_names(snapshot_data))
+
+    projects: List[dict[str, str]] = []
+    for section in resume_preview.get("sections") or []:
+        if section.get("name") != "projects":
+            continue
+        for item in section.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            projects.append(
+                {
+                    "title": str(item.get("title") or "Project"),
+                    "content": str(item.get("excerpt") or ""),
+                    "stack": "",
+                }
+            )
+
+    return upsert_default_resume_modules(
+        conn,
+        user_id=user_id,
+        header=header,
+        core_skills=all_skills,
+        projects=projects,
+        resume_title="Generated Resume",
+    )
+
+
 def _list_user_project_ids(
     conn: sqlite3.Connection,
     *,
@@ -2307,6 +2358,14 @@ def main():
                             with _open_app_db() as conn:
                                 user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
                             _apply_user_profile_to_resume_preview(resume_preview, user_profile)
+                            with _open_app_db() as conn:
+                                _sync_generated_resume_modules_to_db(
+                                    conn,
+                                    user_id=selected_user_id,
+                                    resume_preview=resume_preview,
+                                    header_profile=user_profile,
+                                    chosen_snapshots=chosen_snapshots,
+                                )
 
                             print("\nResume Preview:\n")
                             print(_format_resume_preview(resume_preview))

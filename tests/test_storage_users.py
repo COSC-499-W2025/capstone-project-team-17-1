@@ -116,6 +116,67 @@ def test_upsert_user_sets_default_github_url():
         conn.close()
 
 
+def test_upsert_default_resume_modules_creates_default_sections_and_templates():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        resume_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python", "SQL", "Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python, FastAPI"}],
+            resume_title="Generated Resume",
+        )
+        assert resume_id
+
+        section_rows = conn.execute(
+            "SELECT key, sort_order FROM resume_sections WHERE resume_id = ? ORDER BY sort_order",
+            (resume_id,),
+        ).fetchall()
+        assert [row[0] for row in section_rows] == [
+            "header",
+            "summary",
+            "education",
+            "experience",
+            "core_skill",
+            "project",
+        ]
+
+        summary_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key = 'summary'
+            """,
+            (resume_id,),
+        ).fetchone()[0]
+        assert summary_count == 1
+
+        project_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key = 'project'
+            """,
+            (resume_id,),
+        ).fetchone()[0]
+        assert project_count == 1
+
+        conn.close()
+
+
 def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)

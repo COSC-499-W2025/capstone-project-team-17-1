@@ -17,6 +17,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -61,6 +62,10 @@ def _default_github_url(username: str | None) -> str | None:
     if not token:
         return None
     return f"https://github.com/{token}"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 
@@ -1553,6 +1558,188 @@ def update_user_profile(
     conn.commit()
 
 
+def upsert_default_resume_modules(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    header: dict[str, str],
+    core_skills: list[str],
+    projects: list[dict[str, str]],
+    resume_title: str | None = None,
+) -> str:
+    """
+    Ensure a draft modular resume exists for the user and persist default modules.
+    - header/core_skill/project are refreshed from latest generated data.
+    - summary/education/experience are ensured as empty templates (insert only when missing).
+    """
+    now = _utc_now_iso()
+    row = conn.execute(
+        """
+        SELECT id
+        FROM resumes
+        WHERE user_id = ? AND status = 'draft'
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (int(user_id),),
+    ).fetchone()
+    if row:
+        resume_id = str(row[0])
+        conn.execute(
+            "UPDATE resumes SET updated_at = ? WHERE id = ?",
+            (now, resume_id),
+        )
+    else:
+        resume_id = str(uuid.uuid4())
+        conn.execute(
+            """
+            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
+            VALUES (?, ?, ?, NULL, 'draft', ?, ?)
+            """,
+            (
+                resume_id,
+                int(user_id),
+                resume_title or "Default Resume",
+                now,
+                now,
+            ),
+        )
+
+    defaults = [
+        ("header", "Header"),
+        ("summary", "Summary"),
+        ("education", "Education"),
+        ("experience", "Experience"),
+        ("core_skill", "Core Skill"),
+        ("project", "Project"),
+    ]
+    section_ids: dict[str, str] = {}
+    for index, (key, label) in enumerate(defaults, start=1):
+        sec = conn.execute(
+            """
+            SELECT id
+            FROM resume_sections
+            WHERE resume_id = ? AND key = ?
+            LIMIT 1
+            """,
+            (resume_id, key),
+        ).fetchone()
+        if sec:
+            section_id = str(sec[0])
+            conn.execute(
+                """
+                UPDATE resume_sections
+                SET label = ?, sort_order = ?, is_enabled = 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (label, index, now, section_id),
+            )
+        else:
+            section_id = str(uuid.uuid4())
+            conn.execute(
+                """
+                INSERT INTO resume_sections (
+                    id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, 0, ?, 1, ?, ?)
+                """,
+                (section_id, resume_id, key, label, index, now, now),
+            )
+        section_ids[key] = section_id
+
+    def _replace_items(section_key: str, items: list[dict[str, object]]) -> None:
+        section_id = section_ids[section_key]
+        conn.execute("DELETE FROM resume_items WHERE section_id = ?", (section_id,))
+        for idx, item in enumerate(items, start=1):
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    section_id,
+                    item.get("title"),
+                    item.get("subtitle"),
+                    item.get("start_date"),
+                    item.get("end_date"),
+                    item.get("location"),
+                    item.get("content"),
+                    json.dumps(item.get("bullets") or []),
+                    json.dumps(item.get("metadata") or {}),
+                    idx,
+                    now,
+                    now,
+                ),
+            )
+
+    header_item = {
+        "title": "Header",
+        "content": header.get("full_name") or "",
+        "metadata": {
+            "full_name": header.get("full_name") or "",
+            "email": header.get("email") or "",
+            "phone": header.get("phone") or "",
+            "location": header.get("location") or "",
+            "github_url": header.get("github_url") or "",
+            "portfolio_url": header.get("portfolio_url") or "",
+        },
+    }
+    _replace_items("header", [header_item])
+
+    skill_tokens = [str(token).strip() for token in (core_skills or []) if str(token).strip()]
+    deduped_skills: list[str] = []
+    seen: set[str] = set()
+    for token in skill_tokens:
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_skills.append(token)
+    core_skill_item = {
+        "title": "Core Skill",
+        "content": ", ".join(deduped_skills),
+        "bullets": deduped_skills,
+    }
+    _replace_items("core_skill", [core_skill_item])
+
+    project_items: list[dict[str, object]] = []
+    for project in projects or []:
+        project_items.append(
+            {
+                "title": project.get("title") or "Project",
+                "subtitle": project.get("stack") or "",
+                "content": project.get("content") or "",
+            }
+        )
+    _replace_items("project", project_items)
+
+    # Ensure empty templates for summary/education/experience (insert only if missing).
+    for key, label in (("summary", "Summary"), ("education", "Education"), ("experience", "Experience")):
+        section_id = section_ids[key]
+        existing = conn.execute(
+            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
+            (section_id,),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                )
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1, ?, ?)
+                """,
+                (str(uuid.uuid4()), section_id, label, now, now),
+            )
+
+    conn.commit()
+    return resume_id
+
+
 def link_user_to_project(
     conn: sqlite3.Connection,
     user_id: int,
@@ -1795,6 +1982,7 @@ __all__ = [
     "upsert_user",
     "get_user_profile",
     "update_user_profile",
+    "upsert_default_resume_modules",
     "link_user_to_project",
     "upsert_users_from_contributors",
     # evidence
