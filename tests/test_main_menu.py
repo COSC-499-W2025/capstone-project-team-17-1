@@ -266,7 +266,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["6", "1", "", "3", "14"], rows=rows)
+        text, _ = self.run_menu(inputs=["6", "1", "1", "", "3", "14"], rows=rows)
         self.assertIn("Preview Options", text)
 
     def test_resume_auto_generate_skip_export(self):
@@ -290,6 +290,7 @@ class MainMenuTests(unittest.TestCase):
             text, _ = self.run_menu(
                 inputs=[
                     "6",  # resume
+                    "1",  # generate new resume
                     "1",  # user
                     "",   # all projects
                     "1",  # auto-generate
@@ -428,7 +429,8 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6",  # resume preview
+                    "6",  # resume
+                    "1",  # generate new resume
                     "1",  # pick user
                     "1",  # select project
                     "2",  # customize
@@ -503,7 +505,8 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6",  # resume preview
+                    "6",  # resume
+                    "1",  # generate new resume
                     "1",  # user
                     "1",  # project
                     "2",  # customize
@@ -708,7 +711,7 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6", "1", "1", "2",  # resume, user, project, customize
+                    "6", "1", "1", "1", "2",  # resume, generate, user, project, customize
                     "1",  # entry
                     "4",  # linked projects
                     "1",  # add
@@ -777,7 +780,7 @@ class MainMenuTests(unittest.TestCase):
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6", "1", "1", "2",  # resume, user, project, customize
+                    "6", "1", "1", "1", "2",  # resume, generate, user, project, customize
                     "1",  # entry
                     "7",  # metadata
                     "1",  # add

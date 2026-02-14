@@ -1067,6 +1067,37 @@ def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
     ]
 
 
+def _list_existing_resumes(conn: sqlite3.Connection, *, user_id: int | None = None) -> List[dict]:
+    sql = """
+        SELECT
+            r.id,
+            r.user_id,
+            r.title,
+            r.status,
+            r.updated_at,
+            u.username
+        FROM resumes r
+        LEFT JOIN users u ON u.id = r.user_id
+    """
+    params: tuple = ()
+    if user_id is not None:
+        sql += " WHERE r.user_id = ?"
+        params = (int(user_id),)
+    sql += " ORDER BY datetime(r.updated_at) DESC, r.id DESC"
+    rows = conn.execute(sql, params).fetchall()
+    return [
+        {
+            "id": str(row[0]),
+            "user_id": int(row[1]),
+            "title": row[2] or "Default Resume",
+            "status": row[3] or "draft",
+            "updated_at": row[4] or "",
+            "username": row[5] or f"user-{row[1]}",
+        }
+        for row in rows
+    ]
+
+
 def _is_blank(value: object) -> bool:
     return value is None or not str(value).strip()
 
@@ -1566,7 +1597,7 @@ def main():
                 print("3.  View all projects")
                 print("4.  View project details")
                 print("5.  Generate portfolio summary")
-                print("6.  Generate resume preview")
+                print("6.  Resume")
                 print("7.  View chronological project timeline")
                 print("8.  View chronological skills timeline")
                 print("9.  Delete project insights")
@@ -2230,6 +2261,46 @@ def main():
                                             print("Failed to save portfolio PDF.")
                                             print(f"Error: {exc}")
                 elif choice == "6":
+                    resume_choice = _prompt_menu(
+                        "Resume",
+                        [
+                            "Generate new resume",
+                            "Customize existed resume",
+                            "Back",
+                        ],
+                    )
+                    if resume_choice == "b":
+                        resume_choice = "3"
+                    if resume_choice == "3":
+                        continue
+                    if resume_choice == "2":
+                        with _open_app_db() as conn:
+                            existing_resumes = _list_existing_resumes(conn)
+                        if not existing_resumes:
+                            print("No existing resumes found.")
+                            continue
+                        print("\nExisting resumes:")
+                        for idx, item in enumerate(existing_resumes, start=1):
+                            print(
+                                f"{idx}. {item['title']} - {item['username']} "
+                                f"(status: {item['status']}, updated: {item['updated_at']})"
+                            )
+                        pick = _prompt_single_index(
+                            "Select a resume number (blank to cancel, b to back): ",
+                            len(existing_resumes),
+                        )
+                        if pick is None:
+                            print("Cancelled.")
+                            continue
+                        if pick == "b":
+                            continue
+                        selected_resume = existing_resumes[int(pick) - 1]
+                        print(
+                            f"Selected resume: {selected_resume['title']} ({selected_resume['id']}). "
+                            "Customize existing resume flow is not implemented yet."
+                        )
+                        continue
+
                     with _open_app_db() as conn:
                         users = _list_resume_users(conn)
                         snapshots = fetch_latest_snapshots(conn)
