@@ -43,6 +43,15 @@ def test_users_and_links_schema_and_fk():
             "created_at",
             "updated_at",
         ]
+        for table_name in ("resumes", "resume_sections", "resume_items"):
+            info = {
+                row[1]: row
+                for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            assert info["created_at"][2] == "TIMESTAMP"
+            assert info["updated_at"][2] == "TIMESTAMP"
+            assert (info["created_at"][4] or "").upper() == "CURRENT_TIMESTAMP"
+            assert (info["updated_at"][4] or "").upper() == "CURRENT_TIMESTAMP"
 
         # Insert user and contributor stats with user_id
         user_id = storage.upsert_user(conn, "alice", email="alice@example.com")

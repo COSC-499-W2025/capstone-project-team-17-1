@@ -267,7 +267,7 @@ class MainMenuTests(unittest.TestCase):
         ]
 
         text, _ = self.run_menu(inputs=["6", "1", "1", "", "3", "14"], rows=rows)
-        self.assertIn("Preview Options", text)
+        self.assertIn("Resume Preview", text)
 
     def test_resume_auto_generate_skip_export(self):
         rows = [
@@ -293,9 +293,9 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # generate new resume
                     "1",  # user
                     "",   # all projects
-                    "1",  # auto-generate
                     "4",  # skip export
-                    "14",
+                    "3",  # back to main menu from resume submenu
+                    "14", # exit
                 ],
                 rows=rows,
             )
@@ -414,162 +414,37 @@ class MainMenuTests(unittest.TestCase):
         update_mock.assert_not_called()
         self.assertIn("User Profile Details", text)
 
-    def test_resume_customize_summary_add(self):
-        rows = [
+    def test_resume_customize_existing_add_section_action(self):
+        existing = [
             {
-                "id": 1,
-                "project_id": "p1",
-                "snapshot": {"project_id": "p1", "project_name": "Demo"},
-                "created_at": "2026-01-11T00:00:00Z",
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
             }
         ]
-
-        entry = types.SimpleNamespace(
-            id="e1",
-            section="projects",
-            title="Demo",
-            summary="",
-            body="",
-            status="active",
-            metadata={},
-            project_ids=["p1"],
-            skills=[],
-        )
-
-        def _update_resume_entry(_conn, **kwargs):
-            if "summary" in kwargs and kwargs.get("_summary_provided"):
-                entry.summary = kwargs.get("summary")
-            return entry
-
-        preview = {
-            "sections": [
-                {
-                    "name": "projects",
-                    "items": [
-                        {
-                            "id": "e1",
-                            "section": "projects",
-                            "title": "Demo",
-                            "excerpt": "",
-                            "entrySummary": "",
-                            "entryBody": "",
-                            "status": "active",
-                            "projectIds": ["p1"],
-                            "skills": [],
-                        }
-                    ],
-                }
-            ],
-            "projectContext": {},
-            "warnings": [],
-        }
-
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+            {"id": "s2", "key": "project", "label": "Project", "sort_order": 2, "is_enabled": 1},
+        ]
         with (
-            patch.object(app, "fetch_latest_snapshots", return_value=rows),
-            patch.object(app, "generate_resume_project_descriptions", return_value=None),
-            patch.object(app, "query_resume_entries", return_value=types.SimpleNamespace(entries=[entry], warnings=[], missing_sections=[], schema_state=None)),
-            patch.object(app, "build_resume_preview", return_value=preview),
-            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
-            patch.object(app, "get_resume_entry", return_value=entry),
-            patch.object(app, "update_resume_entry", side_effect=_update_resume_entry),
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6",  # resume
-                    "1",  # generate new resume
-                    "1",  # pick user
-                    "1",  # select project
-                    "2",  # customize
-                    "1",  # entry 1
-                    "1",  # summary
-                    "1",  # add
-                    "Hello summary",  # text
-                    "3",  # back from summary
-                    "8",  # back from edit entry
-                    "",   # cancel entry selection
-                    "2",  # back to main menu
-                    "14", # exit
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "2",   # add section
+                    "1",   # section number
+                    "14",  # exit
                 ],
-                rows=rows,
+                rows=[],
             )
-
-        self.assertIn("Saved successfully.", text)
-
-    def test_resume_customize_skills_add(self):
-        rows = [
-            {
-                "id": 1,
-                "project_id": "p1",
-                "snapshot": {"project_id": "p1", "project_name": "Demo"},
-                "created_at": "2026-01-11T00:00:00Z",
-            }
-        ]
-
-        entry = types.SimpleNamespace(
-            id="e1",
-            section="projects",
-            title="Demo",
-            summary="",
-            body="",
-            status="active",
-            metadata={},
-            project_ids=["p1"],
-            skills=[],
-        )
-
-        preview = {
-            "sections": [
-                {
-                    "name": "projects",
-                    "items": [
-                        {
-                            "id": "e1",
-                            "section": "projects",
-                            "title": "Demo",
-                            "excerpt": "",
-                            "entrySummary": "",
-                            "entryBody": "",
-                            "status": "active",
-                            "projectIds": ["p1"],
-                            "skills": [],
-                        }
-                    ],
-                }
-            ],
-            "projectContext": {},
-            "warnings": [],
-        }
-
-        with (
-            patch.object(app, "fetch_latest_snapshots", return_value=rows),
-            patch.object(app, "generate_resume_project_descriptions", return_value=None),
-            patch.object(app, "query_resume_entries", return_value=types.SimpleNamespace(entries=[entry], warnings=[], missing_sections=[], schema_state=None)),
-            patch.object(app, "build_resume_preview", return_value=preview),
-            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
-            patch.object(app, "get_resume_entry", return_value=entry),
-            patch.object(app, "update_resume_entry", return_value=entry),
-        ):
-            text, _ = self.run_menu(
-                inputs=[
-                    "6",  # resume
-                    "1",  # generate new resume
-                    "1",  # user
-                    "1",  # project
-                    "2",  # customize
-                    "1",  # entry
-                    "3",  # skills
-                    "1",  # add
-                    "Python",
-                    "3",  # back from skills
-                    "8",
-                    "",
-                    "2",
-                    "14",
-                ],
-                rows=rows,
-            )
-
-        self.assertIn("Saved successfully.", text)
+        self.assertIn("Section action flow is not implemented yet.", text)
 
     def test_portfolio_showcase_customize_highlights(self):
         rows = [
@@ -701,143 +576,37 @@ class MainMenuTests(unittest.TestCase):
 
         self.assertIn("Showcase content updated successfully.", text)
 
-    def test_resume_customize_linked_projects_add(self):
-        rows = [
+    def test_resume_customize_existing_delete_section_action(self):
+        existing = [
             {
-                "id": 1,
-                "project_id": "p1",
-                "snapshot": {"project_id": "p1", "project_name": "Demo"},
-                "created_at": "2026-01-11T00:00:00Z",
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
             }
         ]
-
-        entry = types.SimpleNamespace(
-            id="e1",
-            section="projects",
-            title="Demo",
-            summary="",
-            body="",
-            status="active",
-            metadata={},
-            project_ids=[],
-            skills=[],
-        )
-
-        preview = {
-            "sections": [
-                {
-                    "name": "projects",
-                    "items": [
-                        {
-                            "id": "e1",
-                            "section": "projects",
-                            "title": "Demo",
-                            "excerpt": "",
-                            "entrySummary": "",
-                            "entryBody": "",
-                            "status": "active",
-                            "projectIds": [],
-                            "skills": [],
-                        }
-                    ],
-                }
-            ],
-            "projectContext": {},
-            "warnings": [],
-        }
-
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+            {"id": "s2", "key": "project", "label": "Project", "sort_order": 2, "is_enabled": 1},
+        ]
         with (
-            patch.object(app, "fetch_latest_snapshots", return_value=rows),
-            patch.object(app, "generate_resume_project_descriptions", return_value=None),
-            patch.object(app, "query_resume_entries", return_value=types.SimpleNamespace(entries=[entry], warnings=[], missing_sections=[], schema_state=None)),
-            patch.object(app, "build_resume_preview", return_value=preview),
-            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
-            patch.object(app, "get_resume_entry", return_value=entry),
-            patch.object(app, "update_resume_entry", return_value=entry),
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
         ):
             text, _ = self.run_menu(
                 inputs=[
-                    "6", "1", "1", "1", "2",  # resume, generate, user, project, customize
-                    "1",  # entry
-                    "4",  # linked projects
-                    "1",  # add
-                    "1",  # select project
-                    "3",  # back
-                    "8", "", "2", "14",
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "3",   # delete section
+                    "1",   # section number
+                    "14",  # exit
                 ],
-                rows=rows,
+                rows=[],
             )
-
-        self.assertIn("Saved successfully.", text)
-
-    def test_resume_customize_metadata_add(self):
-        rows = [
-            {
-                "id": 1,
-                "project_id": "p1",
-                "snapshot": {"project_id": "p1", "project_name": "Demo"},
-                "created_at": "2026-01-11T00:00:00Z",
-            }
-        ]
-
-        entry = types.SimpleNamespace(
-            id="e1",
-            section="projects",
-            title="Demo",
-            summary="",
-            body="",
-            status="active",
-            metadata={},
-            project_ids=["p1"],
-            skills=[],
-        )
-
-        preview = {
-            "sections": [
-                {
-                    "name": "projects",
-                    "items": [
-                        {
-                            "id": "e1",
-                            "section": "projects",
-                            "title": "Demo",
-                            "excerpt": "",
-                            "entrySummary": "",
-                            "entryBody": "",
-                            "status": "active",
-                            "projectIds": ["p1"],
-                            "skills": [],
-                        }
-                    ],
-                }
-            ],
-            "projectContext": {},
-            "warnings": [],
-        }
-
-        with (
-            patch.object(app, "fetch_latest_snapshots", return_value=rows),
-            patch.object(app, "generate_resume_project_descriptions", return_value=None),
-            patch.object(app, "query_resume_entries", return_value=types.SimpleNamespace(entries=[entry], warnings=[], missing_sections=[], schema_state=None)),
-            patch.object(app, "build_resume_preview", return_value=preview),
-            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
-            patch.object(app, "get_resume_entry", return_value=entry),
-            patch.object(app, "update_resume_entry", return_value=entry),
-        ):
-            text, _ = self.run_menu(
-                inputs=[
-                    "6", "1", "1", "1", "2",  # resume, generate, user, project, customize
-                    "1",  # entry
-                    "7",  # metadata
-                    "1",  # add
-                    "2026-01", "2026-02",
-                    "3",  # back
-                    "8", "", "2", "14",
-                ],
-                rows=rows,
-            )
-
-        self.assertIn("Saved successfully.", text)
+        self.assertIn("Section action flow is not implemented yet.", text)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1611,24 +1611,25 @@ def main():
             forced_choice = None
             while True:
                 in_main_menu = True
-                print("\n" + "=" * 40)
-                print("Main Menu")
-                print("=" * 40)
-                print("1.  Analyze new project archive (ZIP)")
-                print("2.  Import from GitHub URL")
-                print("3.  View all projects")
-                print("4.  View project details")
-                print("5.  Generate portfolio summary")
-                print("6.  Resume")
-                print("7.  View chronological project timeline")
-                print("8.  View chronological skills timeline")
-                print("9.  Delete project insights")
-                print("10. Manage consent (LLM/external services)")
-                print("11. Contributor rankings (Quick Access)")
-                print("12. AI-based project analysis (external LLM)")
-                print("13. Manage user profile")
-                print("14. Exit")
-                print()
+                if not forced_choice:
+                    print("\n" + "=" * 40)
+                    print("Main Menu")
+                    print("=" * 40)
+                    print("1.  Analyze new project archive (ZIP)")
+                    print("2.  Import from GitHub URL")
+                    print("3.  View all projects")
+                    print("4.  View project details")
+                    print("5.  Generate portfolio summary")
+                    print("6.  Resume")
+                    print("7.  View chronological project timeline")
+                    print("8.  View chronological skills timeline")
+                    print("9.  Delete project insights")
+                    print("10. Manage consent (LLM/external services)")
+                    print("11. Contributor rankings (Quick Access)")
+                    print("12. AI-based project analysis (external LLM)")
+                    print("13. Manage user profile")
+                    print("14. Exit")
+                    print()
 
                 while True:
                     if forced_choice:
@@ -2326,7 +2327,9 @@ def main():
                                 print("No sections found for this resume. Press Enter to continue")
                                 input("")
                                 continue
-                            print(f"\nSections for {selected_resume['title']}:")
+                            print(
+                                f"\nSections for [{selected_resume['title']} - {selected_resume['username']}]:"
+                            )
                             for idx, section in enumerate(sections, start=1):
                                 print(f"{idx}. {section['label']}")
 
@@ -2350,6 +2353,8 @@ def main():
                                 f"Selected section: {chosen_section['label']} ({chosen_section['key']}). "
                                 "Section action flow is not implemented yet."
                             )
+                            forced_choice = "6"
+                            forced_choice = "6"
                             continue
                         run_generate_new = True
                         break
@@ -2440,6 +2445,12 @@ def main():
                         for snap in chosen_snapshots
                         if snap.get("project_id")
                     ]
+                    if not project_ids:
+                        print("No valid projects selected.")
+                        continue
+
+                    from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_latex
+
                     with _open_app_db() as conn:
                         contribution_map = _load_user_contribution_map(
                             conn,
@@ -2447,508 +2458,81 @@ def main():
                             username=selected_username,
                             project_ids=project_ids,
                         )
-                    selected_snapshot_skills: List[str] = []
-                    for snap in chosen_snapshots:
-                        snap_skills = (snap.get("snapshot") or {}).get("skills") or []
-                        if isinstance(snap_skills, list):
-                            selected_snapshot_skills.extend([_format_skill_list([s]) for s in snap_skills])
-                    selected_snapshot_skills = [
-                        s for i, s in enumerate(selected_snapshot_skills) if s and s not in selected_snapshot_skills[:i]
-                    ]
                     resume_preview = _build_user_resume_preview(
                         selected_username=selected_username,
                         chosen_snapshots=chosen_snapshots,
                         contribution_map=contribution_map,
                     )
-                    if project_ids:
-                        action = _prompt_menu(
-                            "Preview Options",
-                            ["Auto-generate resume", "Customize", "Back to main menu"],
+                    with _open_app_db() as conn:
+                        user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
+                    _apply_user_profile_to_resume_preview(resume_preview, user_profile)
+                    with _open_app_db() as conn:
+                        _sync_generated_resume_modules_to_db(
+                            conn,
+                            user_id=selected_user_id,
+                            resume_preview=resume_preview,
+                            header_profile=user_profile,
+                            chosen_snapshots=chosen_snapshots,
                         )
-                        if action == "b":
-                            action = "3"
-                        if action == "1":
-                            from capstone.resume_pdf_builder import build_markdown_from_resume, build_pdf_with_latex
 
-                            with _open_app_db() as conn:
-                                contribution_map = _load_user_contribution_map(
-                                    conn,
-                                    user_id=selected_user_id,
-                                    username=selected_username,
-                                    project_ids=project_ids,
-                                )
-                            resume_preview = _build_user_resume_preview(
-                                selected_username=selected_username,
-                                chosen_snapshots=chosen_snapshots,
-                                contribution_map=contribution_map,
-                            )
-                            with _open_app_db() as conn:
-                                user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
-                            _apply_user_profile_to_resume_preview(resume_preview, user_profile)
-                            with _open_app_db() as conn:
-                                _sync_generated_resume_modules_to_db(
-                                    conn,
-                                    user_id=selected_user_id,
-                                    resume_preview=resume_preview,
-                                    header_profile=user_profile,
-                                    chosen_snapshots=chosen_snapshots,
-                                )
+                    print("\nResume Preview:\n")
+                    print(_format_resume_preview(resume_preview))
 
-                            print("\nResume Preview:\n")
-                            print(_format_resume_preview(resume_preview))
+                    if not (resume_preview.get("sections") or []):
+                        print("No resume sections generated for the selected projects.")
+                        continue
 
-                            if not (resume_preview.get("sections") or []):
-                                print("No resume sections generated for the selected projects.")
-                                continue
+                    safe_user = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in selected_username)
+                    default_md_name = f"resume_{safe_user or 'user'}.md"
+                    date_tag = datetime.now().strftime("%Y%m%d")
+                    default_pdf_name = f"resume_{safe_user or 'user'}_{date_tag}.pdf"
 
-                            safe_user = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in selected_username)
-                            default_md_name = f"resume_{safe_user or 'user'}.md"
-                            date_tag = datetime.now().strftime("%Y%m%d")
-                            default_pdf_name = f"resume_{safe_user or 'user'}_{date_tag}.pdf"
+                    export_choice = _prompt_menu(
+                        "Export Resume",
+                        [
+                            "Markdown",
+                            "PDF (LaTeX Template)",
+                            "Markdown + PDF (LaTeX Template)",
+                            "Skip",
+                        ],
+                    )
+                    if export_choice == "b":
+                        export_choice = "4"
 
-                            export_choice = _prompt_menu(
-                                "Export Resume",
-                                [
-                                    "Markdown",
-                                    "PDF (LaTeX Template)",
-                                    "Markdown + PDF (LaTeX Template)",
-                                    "Skip",
-                                ],
-                            )
-                            if export_choice == "b":
-                                export_choice = "4"
+                    do_md = export_choice in {"1", "3"}
+                    do_pdf = export_choice in {"2", "3"}
 
-                            do_md = export_choice in {"1", "3"}
-                            do_pdf = export_choice in {"2", "3"}
+                    if do_md:
+                        save_md_path = prompt_save_path_any(
+                            title="Save Resume Markdown As",
+                            default_name=default_md_name,
+                            default_extension=".md",
+                            filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+                        )
+                        if save_md_path:
+                            try:
+                                markdown_text = build_markdown_from_resume(resume_preview)
+                                pathlib.Path(save_md_path).write_text(markdown_text, encoding="utf-8")
+                                print(f"\nResume Markdown successfully saved to:\n{save_md_path}\n")
+                            except Exception as e:
+                                print("Failed to generate resume Markdown.")
+                                print(f"Error: {e}")
+                        else:
+                            print("Resume Markdown export cancelled.")
 
-                            if do_md:
-                                save_md_path = prompt_save_path_any(
-                                    title="Save Resume Markdown As",
-                                    default_name=default_md_name,
-                                    default_extension=".md",
-                                    filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
-                                )
-                                if save_md_path:
-                                    try:
-                                        markdown_text = build_markdown_from_resume(resume_preview)
-                                        pathlib.Path(save_md_path).write_text(markdown_text, encoding="utf-8")
-                                        print(f"\nResume Markdown successfully saved to:\n{save_md_path}\n")
-                                    except Exception as e:
-                                        print("Failed to generate resume Markdown.")
-                                        print(f"Error: {e}")
-                                else:
-                                    print("Resume Markdown export cancelled.")
+                    if do_pdf:
+                        try:
+                            output_dir = ROOT / "output"
+                            output_dir.mkdir(parents=True, exist_ok=True)
+                            save_pdf = output_dir / default_pdf_name
+                            build_pdf_with_latex(resume_preview, save_pdf)
+                            print(f"\nResume PDF successfully saved to:\n{save_pdf}\n")
+                        except Exception as e:
+                            print("Failed to generate resume PDF (LaTeX template).")
+                            print(f"Error: {e}")
 
-                            if do_pdf:
-                                try:
-                                    output_dir = ROOT / "output"
-                                    output_dir.mkdir(parents=True, exist_ok=True)
-                                    save_pdf = output_dir / default_pdf_name
-                                    build_pdf_with_latex(resume_preview, save_pdf)
-                                    print(f"\nResume PDF successfully saved to:\n{save_pdf}\n")
-                                except Exception as e:
-                                    print("Failed to generate resume PDF (LaTeX template).")
-                                    print(f"Error: {e}")
-
-                            continue
-
-                        if action == "2":
-                            with _open_app_db() as conn:
-                                generate_resume_project_descriptions(
-                                    conn,
-                                    project_ids=project_ids,
-                                    overwrite=False,
-                                )
-                                refreshed = query_resume_entries(conn)
-                                filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
-                                resume_preview = build_resume_preview(filtered, conn=conn)
-                            while True:
-                                entry_map = _build_entry_target_map(resume_preview)
-                                if not entry_map:
-                                    print("No resume entries available to edit.")
-                                    break
-                                entry_items = list(entry_map.items())
-                                print("Available entries:")
-                                for idx, (_entry_id, label) in enumerate(entry_items, start=1):
-                                    print(f"{idx}. {label}")
-                                selection = input(
-                                    "Select an entry number (blank to cancel, b to back, m for main menu): "
-                                ).strip().lower()
-                                if not selection:
-                                    break
-                                if selection == "m":
-                                    raise _ReturnToMainMenu()
-                                if selection == "b":
-                                    break
-                                if not selection.isdigit() or not (1 <= int(selection) <= len(entry_items)):
-                                    print("Invalid selection.")
-                                    continue
-                                entry_id = entry_items[int(selection) - 1][0]
-                                with _open_app_db() as conn:
-                                    entry = get_resume_entry(conn, entry_id)
-                                if not entry:
-                                    print("Invalid entry id.")
-                                    continue
-                                while True:
-                                    edit_action = _prompt_menu(
-                                        "Edit Entry",
-                                        [
-                                            "Summary",
-                                            "Body",
-                                            "Skills",
-                                            "Linked projects",
-                                            "Section",
-                                            "Status",
-                                            "Metadata (dates)",
-                                            "Back",
-                                        ],
-                                    )
-                                    if edit_action in {"8", "b"}:
-                                        break
-                                    if edit_action == "1":
-                                        while True:
-                                            display_summary = entry.summary or ""
-                                            if not display_summary and entry.project_ids:
-                                                with _open_app_db() as conn:
-                                                    snap = fetch_latest_snapshot(conn, entry.project_ids[0])
-                                                if snap:
-                                                    display_summary = build_resume_project_summary(
-                                                        entry.project_ids[0], snap
-                                                    )
-                                            print(f"\nCurrent summary:\n{display_summary}")
-                                            sub = _prompt_menu(
-                                                "Summary",
-                                                ["Add", "Delete", "Back"],
-                                            )
-                                            if sub in {"3", "b"}:
-                                                break
-                                            if sub == "1":
-                                                addition = input("Text to add (blank to cancel): ").strip()
-                                                if not addition:
-                                                    continue
-                                                existing = (entry.summary or "").strip()
-                                                new_summary = (existing + "\n" + addition).strip() if existing else addition
-                                            elif sub == "2":
-                                                del_mode = _prompt_menu(
-                                                    "Delete Summary",
-                                                    ["Delete all", "Delete matching text", "Back"],
-                                                )
-                                                if del_mode in {"3", "b"}:
-                                                    continue
-                                                if del_mode == "1":
-                                                    new_summary = ""
-                                                else:
-                                                    target = input("Text to delete (blank to cancel): ").strip()
-                                                    if not target:
-                                                        continue
-                                                    current = entry.summary or ""
-                                                    if target not in current:
-                                                        print("Text not found in summary.")
-                                                        continue
-                                                    new_summary = current.replace(target, "").strip()
-                                            with _open_app_db() as conn:
-                                                try:
-                                                    entry = update_resume_entry(
-                                                        conn,
-                                                        entry_id=entry_id,
-                                                        summary=new_summary or None,
-                                                        _summary_provided=True,
-                                                    ) or entry
-                                                    print("Saved successfully.")
-                                                except Exception as exc:
-                                                    print(f"Save failed: {exc}")
-                                    elif edit_action == "2":
-                                        while True:
-                                            print(f"\nCurrent body:\n{entry.body or ''}")
-                                            sub = _prompt_menu(
-                                                "Body",
-                                                ["Add", "Delete", "Back"],
-                                            )
-                                            if sub in {"3", "b"}:
-                                                break
-                                            if sub == "1":
-                                                addition = input("Text to add (blank to cancel): ").strip()
-                                                if not addition:
-                                                    continue
-                                                existing = (entry.body or "").strip()
-                                                new_body = (existing + "\n" + addition).strip() if existing else addition
-                                            else:
-                                                del_mode = _prompt_menu(
-                                                    "Delete Body",
-                                                    ["Delete all", "Delete matching text", "Back"],
-                                                )
-                                                if del_mode in {"3", "b"}:
-                                                    continue
-                                                if del_mode == "1":
-                                                    new_body = ""
-                                                else:
-                                                    target = input("Text to delete (blank to cancel): ").strip()
-                                                    if not target:
-                                                        continue
-                                                    current = entry.body or ""
-                                                    if target not in current:
-                                                        print("Text not found in body.")
-                                                        continue
-                                                    new_body = current.replace(target, "").strip()
-                                            with _open_app_db() as conn:
-                                                try:
-                                                    entry = update_resume_entry(
-                                                        conn,
-                                                        entry_id=entry_id,
-                                                        body=new_body or None,
-                                                    ) or entry
-                                                    print("Saved successfully.")
-                                                except Exception as exc:
-                                                    print(f"Save failed: {exc}")
-                                    elif edit_action == "3":
-                                            while True:
-                                                raw_skills = entry.skills
-                                                if raw_skills and not isinstance(raw_skills, (list, tuple)):
-                                                    raw_skills = [raw_skills]
-                                                current_skills = _format_skill_list(raw_skills or []) if raw_skills else ""
-                                                if not current_skills and entry.project_ids:
-                                                    inferred: List[str] = []
-                                                    for pid in entry.project_ids:
-                                                        with _open_app_db() as conn:
-                                                            snap = fetch_latest_snapshot(conn, pid)
-                                                    skills = (snap or {}).get("skills") or []
-                                                    if isinstance(skills, list):
-                                                        inferred.extend([_format_skill_list([s]) for s in skills])
-                                                    inferred = [s for i, s in enumerate(inferred) if s and s not in inferred[:i]]
-                                                    current_skills = ", ".join(inferred)
-                                                if not current_skills and selected_snapshot_skills:
-                                                    current_skills = ", ".join(selected_snapshot_skills)
-                                                print(f"\nCurrent skills: {current_skills}")
-                                                sub = _prompt_menu(
-                                                    "Skills",
-                                                    ["Add", "Delete", "Back"],
-                                                )
-                                                if sub in {"3", "b"}:
-                                                    break
-                                                if sub == "1":
-                                                    skill_input = input(
-                                                        "Skills to add (comma-separated, blank to cancel): "
-                                                    ).strip()
-                                                    if not skill_input:
-                                                        continue
-                                                    additions = [s.strip() for s in skill_input.split(",") if s.strip()]
-                                                    skills = list(raw_skills) if raw_skills else []
-                                                    skills.extend(additions)
-                                                    skills = [s for i, s in enumerate(skills) if s and s not in skills[:i]]
-                                                else:
-                                                    del_mode = _prompt_menu(
-                                                        "Delete Skills",
-                                                        ["Delete all", "Delete matching text", "Back"],
-                                                    )
-                                                    if del_mode in {"3", "b"}:
-                                                        continue
-                                                    if del_mode == "1":
-                                                        skills = []
-                                                    else:
-                                                        target = input("Text to delete (blank to cancel): ").strip()
-                                                        if not target:
-                                                            continue
-                                                        skills = [s for s in (raw_skills or []) if target not in str(s)]
-                                                with _open_app_db() as conn:
-                                                    try:
-                                                        entry = update_resume_entry(
-                                                            conn,
-                                                            entry_id=entry_id,
-                                                            skills=skills or None,
-                                                            _skills_provided=True,
-                                                        ) or entry
-                                                        print("Saved successfully.")
-                                                        print(f"Current skills: {_format_skill_list(skills or [])}")
-                                                    except Exception as exc:
-                                                        print(f"Save failed: {exc}")
-                                    elif edit_action == "4":
-                                            while True:
-                                                current_projects = ", ".join(entry.project_ids) if entry.project_ids else ""
-                                                if not current_projects:
-                                                    print("\nNo linked projects yet.")
-                                                else:
-                                                    print(f"\nCurrent linked projects: {current_projects}")
-                                                sub = _prompt_menu(
-                                                    "Linked projects",
-                                                    ["Add", "Delete", "Back"],
-                                                )
-                                                if sub in {"3", "b"}:
-                                                    break
-                                                if sub == "2" and not entry.project_ids:
-                                                    print("No linked projects to delete.")
-                                                    continue
-                                                with _open_app_db() as conn:
-                                                    snapshots = fetch_latest_snapshots(conn)
-                                                if not snapshots:
-                                                    print("No projects found.")
-                                                    continue
-                                                if sub == "2":
-                                                    available = [
-                                                        snap for snap in snapshots
-                                                        if str(snap.get("project_id")) in set(entry.project_ids or [])
-                                                    ]
-                                                else:
-                                                    available = snapshots
-                                                if not available:
-                                                    print("No projects available for this action.")
-                                                    continue
-                                                print("\nAvailable projects:")
-                                                for idx, snap in enumerate(available, start=1):
-                                                    snapshot_data = snap.get("snapshot") or {}
-                                                    project_label = snapshot_data.get("project_name") or snap.get("project_id")
-                                                    print(f"{idx}. {project_label} (ID: {snap.get('project_id')})")
-                                                selection = _prompt_indices(
-                                                    "Select project numbers (space-separated, blank to cancel, b to back): ",
-                                                    len(available),
-                                                )
-                                                if selection is None or selection == "b":
-                                                    continue
-                                                chosen = [
-                                                    str(available[int(n) - 1].get("project_id"))
-                                                    for n in selection
-                                                ]
-                                                if sub == "1":
-                                                    projects = list(entry.project_ids) if entry.project_ids else []
-                                                    projects.extend(chosen)
-                                                    projects = [p for i, p in enumerate(projects) if p and p not in projects[:i]]
-                                                else:
-                                                    projects = [p for p in (entry.project_ids or []) if p not in set(chosen)]
-                                                with _open_app_db() as conn:
-                                                    try:
-                                                        entry = update_resume_entry(
-                                                            conn,
-                                                            entry_id=entry_id,
-                                                            projects=projects or None,
-                                                            _projects_provided=True,
-                                                        ) or entry
-                                                        print("Saved successfully.")
-                                                    except Exception as exc:
-                                                        print(f"Save failed: {exc}")
-                                    elif edit_action == "5":
-                                            while True:
-                                                print(f"\nCurrent section: {entry.section}")
-                                                sub = _prompt_menu(
-                                                    "Section",
-                                                    ["Add", "Delete", "Back"],
-                                                )
-                                                if sub in {"3", "b"}:
-                                                    break
-                                                if sub == "1":
-                                                    section = input("Enter section (blank to cancel): ").strip()
-                                                    if not section:
-                                                        continue
-                                                    new_section = section
-                                                else:
-                                                    del_mode = _prompt_menu(
-                                                        "Delete Section",
-                                                        ["Delete all", "Back"],
-                                                    )
-                                                    if del_mode in {"2", "b"}:
-                                                        continue
-                                                    new_section = ""
-                                                with _open_app_db() as conn:
-                                                    try:
-                                                        entry = update_resume_entry(
-                                                            conn,
-                                                            entry_id=entry_id,
-                                                            section=new_section or None,
-                                                        ) or entry
-                                                        print("Saved successfully.")
-                                                    except Exception as exc:
-                                                        print(f"Save failed: {exc}")
-                                    elif edit_action == "6":
-                                            while True:
-                                                print(f"\nCurrent status: {entry.status or ''}")
-                                                sub = _prompt_menu(
-                                                    "Status",
-                                                    ["Add", "Delete", "Back"],
-                                                )
-                                                if sub in {"3", "b"}:
-                                                    break
-                                                if sub == "1":
-                                                    status = input("Enter status (blank to cancel): ").strip()
-                                                    if not status:
-                                                        continue
-                                                    new_status = status
-                                                else:
-                                                    del_mode = _prompt_menu(
-                                                        "Delete Status",
-                                                        ["Delete all", "Back"],
-                                                    )
-                                                    if del_mode in {"2", "b"}:
-                                                        continue
-                                                    new_status = ""
-                                                with _open_app_db() as conn:
-                                                    try:
-                                                        entry = update_resume_entry(
-                                                            conn,
-                                                            entry_id=entry_id,
-                                                            status=new_status or None,
-                                                        ) or entry
-                                                        print("Saved successfully.")
-                                                    except Exception as exc:
-                                                        print(f"Save failed: {exc}")
-                                    elif edit_action == "7":
-                                            while True:
-                                                metadata = entry.metadata or {}
-                                                current_start = metadata.get("start_date") or ""
-                                                current_end = metadata.get("end_date") or ""
-                                                print(f"\nCurrent dates: {current_start or '-'} to {current_end or '-'}")
-                                                sub = _prompt_menu(
-                                                    "Metadata (dates)",
-                                                    ["Add", "Delete", "Back"],
-                                                )
-                                                if sub in {"3", "b"}:
-                                                    break
-                                                if sub == "1":
-                                                    start_date = input(
-                                                        "Start date (YYYY-MM or YYYY-MM-DD, blank to cancel): "
-                                                    ).strip()
-                                                    end_date = input(
-                                                        "End date (YYYY-MM or YYYY-MM-DD, blank to cancel): "
-                                                    ).strip()
-                                                    if not start_date and not end_date:
-                                                        continue
-                                                    metadata["start_date"] = start_date or None
-                                                    metadata["end_date"] = end_date or None
-                                                else:
-                                                    del_mode = _prompt_menu(
-                                                        "Delete Dates",
-                                                        ["Delete all", "Back"],
-                                                    )
-                                                    if del_mode in {"2", "b"}:
-                                                        continue
-                                                    metadata["start_date"] = None
-                                                    metadata["end_date"] = None
-                                                with _open_app_db() as conn:
-                                                    try:
-                                                        entry = update_resume_entry(
-                                                            conn,
-                                                            entry_id=entry_id,
-                                                            metadata=metadata,
-                                                            _metadata_provided=True,
-                                                        ) or entry
-                                                        print("Saved successfully.")
-                                                    except Exception as exc:
-                                                        print(f"Save failed: {exc}")
-                                with _open_app_db() as conn:
-                                    refreshed = query_resume_entries(conn)
-                                    filtered = _filter_resume_result_by_project_ids(refreshed, project_ids)
-                                    resume_preview = build_resume_preview(filtered, conn=conn)
-                                print("\nUpdated Resume Preview:\n")
-                                print(_format_resume_preview(resume_preview))
-                        if action == "3":
-                            continue
-                    while True:
-                        print("\n1. View another resume preview")
-                        print("2. Back to main menu")
-                        follow = input("Select an option (1-2, b to back): ").strip().lower()
-                        if follow == "1":
-                            forced_choice = "6"
-                            break
-                        if follow in {"2", "b"}:
-                            break
-                        print("Invalid choice. Please enter 1 or 2.")
+                    forced_choice = "6"
+                    continue
                 elif choice == "7":
 
                     with _open_app_db() as conn:

@@ -17,7 +17,6 @@ import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -62,11 +61,6 @@ def _default_github_url(username: str | None) -> str | None:
     if not token:
         return None
     return f"https://github.com/{token}"
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
 
 
 # Schema + migrations
@@ -197,8 +191,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             title TEXT NOT NULL DEFAULT 'Default Resume',
             target_role TEXT,
             status TEXT NOT NULL DEFAULT 'draft',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
         """
@@ -213,8 +207,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             is_custom INTEGER NOT NULL DEFAULT 0,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_enabled INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
         )
         """
@@ -234,8 +228,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             metadata_json TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_enabled INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
         )
         """
@@ -466,6 +460,141 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             """
         )
         conn.execute("DROP TABLE user_projects_old")
+        conn.commit()
+
+    # Align resume timestamp columns with users (UTC CURRENT_TIMESTAMP defaults).
+    resume_ts_specs = {
+        "resumes": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+        "resume_sections": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+        "resume_items": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+    }
+    needs_resume_ts_migration = False
+    for table_name, expected in resume_ts_specs.items():
+        table_info = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        column_map = {row[1]: row for row in table_info}
+        for column_name, expected_default in expected.items():
+            row = column_map.get(column_name)
+            if not row:
+                needs_resume_ts_migration = True
+                break
+            col_type = str(row[2] or "").upper()
+            default_value = str(row[4] or "").upper()
+            if col_type != "TIMESTAMP" or default_value != expected_default:
+                needs_resume_ts_migration = True
+                break
+        if needs_resume_ts_migration:
+            break
+
+    if needs_resume_ts_migration:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+        conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
+        conn.execute(
+            """
+            CREATE TABLE resumes (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT 'Default Resume',
+                target_role TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
+            SELECT id, user_id, title, target_role, status, created_at, updated_at
+            FROM resumes_old
+            """
+        )
+        conn.execute("DROP TABLE resumes_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resumes_user
+            ON resumes (user_id, updated_at)
+            """
+        )
+
+        conn.execute("ALTER TABLE resume_sections RENAME TO resume_sections_old")
+        conn.execute(
+            """
+            CREATE TABLE resume_sections (
+                id TEXT PRIMARY KEY,
+                resume_id TEXT NOT NULL,
+                key TEXT NOT NULL,
+                label TEXT NOT NULL,
+                is_custom INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resume_sections (
+                id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+            )
+            SELECT id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+            FROM resume_sections_old
+            """
+        )
+        conn.execute("DROP TABLE resume_sections_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
+            ON resume_sections (resume_id, sort_order)
+            """
+        )
+
+        conn.execute("ALTER TABLE resume_items RENAME TO resume_items_old")
+        conn.execute(
+            """
+            CREATE TABLE resume_items (
+                id TEXT PRIMARY KEY,
+                section_id TEXT NOT NULL,
+                title TEXT,
+                subtitle TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                location TEXT,
+                content TEXT,
+                bullets_json TEXT,
+                metadata_json TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resume_items (
+                id, section_id, title, subtitle, start_date, end_date, location, content,
+                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+            )
+            SELECT
+                id, section_id, title, subtitle, start_date, end_date, location, content,
+                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+            FROM resume_items_old
+            """
+        )
+        conn.execute("DROP TABLE resume_items_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resume_items_section
+            ON resume_items (section_id, sort_order)
+            """
+        )
+
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
     # 2) project_analysis legacy columns backfill / add columns if missing
@@ -1572,13 +1701,12 @@ def upsert_default_resume_modules(
     - header/core_skill/project are refreshed from latest generated data.
     - summary/education/experience are ensured as empty templates (insert only when missing).
     """
-    now = _utc_now_iso()
     row = conn.execute(
         """
         SELECT id
         FROM resumes
         WHERE user_id = ? AND status = 'draft'
-        ORDER BY updated_at DESC
+        ORDER BY datetime(updated_at) DESC, id DESC
         LIMIT 1
         """,
         (int(user_id),),
@@ -1586,22 +1714,20 @@ def upsert_default_resume_modules(
     if row:
         resume_id = str(row[0])
         conn.execute(
-            "UPDATE resumes SET updated_at = ? WHERE id = ?",
-            (now, resume_id),
+            "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (resume_id,),
         )
     else:
         resume_id = str(uuid.uuid4())
         conn.execute(
             """
-            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
-            VALUES (?, ?, ?, NULL, 'draft', ?, ?)
+            INSERT INTO resumes (id, user_id, title, target_role, status)
+            VALUES (?, ?, ?, NULL, 'draft')
             """,
             (
                 resume_id,
                 int(user_id),
                 resume_title or "Default Resume",
-                now,
-                now,
             ),
         )
 
@@ -1629,21 +1755,21 @@ def upsert_default_resume_modules(
             conn.execute(
                 """
                 UPDATE resume_sections
-                SET label = ?, sort_order = ?, is_enabled = 1, updated_at = ?
+                SET label = ?, sort_order = ?, is_enabled = 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (label, index, now, section_id),
+                (label, index, section_id),
             )
         else:
             section_id = str(uuid.uuid4())
             conn.execute(
                 """
                 INSERT INTO resume_sections (
-                    id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+                    id, resume_id, key, label, is_custom, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, ?, 0, ?, 1, ?, ?)
+                VALUES (?, ?, ?, ?, 0, ?, 1)
                 """,
-                (section_id, resume_id, key, label, index, now, now),
+                (section_id, resume_id, key, label, index),
             )
         section_ids[key] = section_id
 
@@ -1655,9 +1781,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                    bullets_json, metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 (
                     str(uuid.uuid4()),
@@ -1671,8 +1797,6 @@ def upsert_default_resume_modules(
                     json.dumps(item.get("bullets") or []),
                     json.dumps(item.get("metadata") or {}),
                     idx,
-                    now,
-                    now,
                 ),
             )
 
@@ -1729,11 +1853,11 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                    bullets_json, metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1, ?, ?)
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
                 """,
-                (str(uuid.uuid4()), section_id, label, now, now),
+                (str(uuid.uuid4()), section_id, label),
             )
 
     conn.commit()
