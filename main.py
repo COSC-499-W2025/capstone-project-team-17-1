@@ -1147,6 +1147,15 @@ def _list_resume_section_items(conn: sqlite3.Connection, section_id: str) -> Lis
     ]
 
 
+def _normalize_section_key(value: str) -> str:
+    lowered = str(value or "").strip().lower()
+    cleaned = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in lowered)
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    cleaned = cleaned.strip("_")
+    return cleaned or "custom_section"
+
+
 def _parse_json_object(raw: object) -> dict:
     if isinstance(raw, dict):
         return dict(raw)
@@ -1326,6 +1335,43 @@ def _build_resume_preview_from_modular_resume(
             "coursework": str(row[5] or "").strip(),
         },
     )
+    built_in_section_keys = {
+        "header",
+        "summary",
+        "education",
+        "experience",
+        "core_skill",
+        "project",
+    }
+    for section in sections:
+        raw_key = str(section.get("key") or "").strip()
+        if not raw_key or raw_key in built_in_section_keys:
+            continue
+        custom_items = _list_resume_section_items(conn, str(section["id"]))
+        mapped_items: list[dict] = []
+        for item in custom_items:
+            if int(item.get("is_enabled") or 0) == 0:
+                continue
+            mapped_items.append(
+                {
+                    "title": str(item.get("title") or section.get("label") or "Section Item").strip(),
+                    "subtitle": str(item.get("subtitle") or "").strip(),
+                    "dateRange": _compose_date_range(
+                        str(item.get("start_date") or ""),
+                        str(item.get("end_date") or ""),
+                    ),
+                    "location": str(item.get("location") or "").strip(),
+                    "entrySummary": str(item.get("content") or "").strip(),
+                }
+            )
+        if mapped_items:
+            resume_payload["sections"].append(
+                {
+                    "name": f"custom::{raw_key}",
+                    "label": str(section.get("label") or raw_key),
+                    "items": mapped_items,
+                }
+            )
     return resume_payload
 
 
@@ -1347,6 +1393,19 @@ def _rebuild_current_resume_pdf(selected_resume: dict) -> pathlib.Path:
         )
     build_pdf_with_latex(resume_payload, save_pdf)
     return save_pdf
+
+
+def _prompt_rebuild_resume_pdf(selected_resume: dict) -> None:
+    rebuild_prompt = input("Rebuild Resume PDF? (y/n, default y): ").strip().lower()
+    do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
+    if not do_rebuild:
+        return
+    try:
+        pdf_path = _rebuild_current_resume_pdf(selected_resume)
+        print(f"Resume PDF successfully saved to:\n{pdf_path}")
+    except Exception as exc:
+        print("Failed to rebuild resume PDF (LaTeX template).")
+        print(f"Error: {exc}")
 
 
 def _is_blank(value: object) -> bool:
@@ -1655,6 +1714,84 @@ def _delete_resume_item(conn: sqlite3.Connection, *, item_id: str) -> bool:
     )
     conn.commit()
     return True
+
+
+def _add_resume_section(
+    conn: sqlite3.Connection,
+    *,
+    resume_id: str,
+    label: str,
+    section_key: str | None = None,
+    is_enabled: int = 1,
+    insert_after_sort: int | None = None,
+) -> dict:
+    normalized_label = str(label or "").strip()
+    if not normalized_label:
+        raise ValueError("label is required")
+
+    base_key = _normalize_section_key(section_key or normalized_label)
+    existing_keys = {
+        str(row[0]).strip().lower()
+        for row in conn.execute(
+            "SELECT key FROM resume_sections WHERE resume_id = ?",
+            (resume_id,),
+        ).fetchall()
+        if row and row[0]
+    }
+    final_key = base_key
+    suffix = 2
+    while final_key.lower() in existing_keys:
+        final_key = f"{base_key}_{suffix}"
+        suffix += 1
+
+    if insert_after_sort is not None:
+        new_sort = int(insert_after_sort) + 1
+        conn.execute(
+            """
+            UPDATE resume_sections
+            SET sort_order = sort_order + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE resume_id = ? AND sort_order >= ?
+            """,
+            (resume_id, new_sort),
+        )
+    else:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM resume_sections WHERE resume_id = ?",
+            (resume_id,),
+        ).fetchone()
+        new_sort = int(row[0] or 0) + 1
+
+    section_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO resume_sections (id, resume_id, key, label, is_custom, sort_order, is_enabled)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+        """,
+        (section_id, resume_id, final_key, normalized_label, new_sort, 1 if int(is_enabled) else 0),
+    )
+    conn.execute(
+        """
+        INSERT INTO resume_items (
+            id, section_id, title, subtitle, start_date, end_date, location, content,
+            bullets_json, metadata_json, sort_order, is_enabled
+        )
+        VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+        """,
+        (str(uuid.uuid4()), section_id, normalized_label),
+    )
+    conn.execute(
+        "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (resume_id,),
+    )
+    conn.commit()
+    return {
+        "id": section_id,
+        "resume_id": resume_id,
+        "key": final_key,
+        "label": normalized_label,
+        "sort_order": int(new_sort),
+        "is_enabled": 1 if int(is_enabled) else 0,
+    }
 
 
 def _manage_user_profiles_menu() -> None:
@@ -2774,15 +2911,14 @@ def main():
                             selected_resume = existing_resumes[int(pick) - 1]
                             with _open_app_db() as conn:
                                 sections = _list_resume_sections(conn, selected_resume["id"])
-                            if not sections:
-                                print("No sections found for this resume. Press Enter to continue")
-                                input("")
-                                continue
                             print(
                                 f"\nSections for [{selected_resume['title']} - {selected_resume['username']}]:"
                             )
-                            for idx, section in enumerate(sections, start=1):
-                                print(f"{idx}. {section['label']}")
+                            if not sections:
+                                print("(No sections)")
+                            else:
+                                for idx, section in enumerate(sections, start=1):
+                                    print(f"{idx}. {section['label']}")
 
                             print("\n----------------------------------------")
                             print("1. Edit section")
@@ -2794,13 +2930,74 @@ def main():
                             if section_action not in {"1", "2", "3"}:
                                 print("Invalid choice. Please enter 1, 2, or 3.")
                                 continue
-                            section_pick = input("Enter section number (leave blank to cancel): ").strip()
-                            if not section_pick:
-                                continue
-                            if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
-                                print(f"Indices must be in 1–{len(sections)}.")
-                                continue
-                            chosen_section = sections[int(section_pick) - 1]
+                            chosen_section = None
+                            if section_action == "2":
+                                section_label = input("Section label (required): ").strip()
+                                if not section_label:
+                                    print("Section label is required.")
+                                    continue
+                                section_key = input(
+                                    "Section key (optional, letters/numbers/_): "
+                                ).strip()
+                                insert_after_sort = None
+                                if sections:
+                                    raw_after = input(
+                                        "Enter section number to insert after (blank to append): "
+                                    ).strip()
+                                    if raw_after:
+                                        if not raw_after.isdigit() or not (1 <= int(raw_after) <= len(sections)):
+                                            print(f"Indices must be in 1–{len(sections)}.")
+                                            continue
+                                        insert_after_sort = int(sections[int(raw_after) - 1]["sort_order"])
+                                raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
+                                if not raw_enabled:
+                                    enabled = 1
+                                elif raw_enabled in {"y", "yes", "1"}:
+                                    enabled = 1
+                                elif raw_enabled in {"n", "no", "0"}:
+                                    enabled = 0
+                                else:
+                                    print("Invalid input. Please enter y or n.")
+                                    continue
+                                with _open_app_db() as conn:
+                                    created_section = _add_resume_section(
+                                        conn,
+                                        resume_id=str(selected_resume["id"]),
+                                        label=section_label,
+                                        section_key=section_key or None,
+                                        is_enabled=enabled,
+                                        insert_after_sort=insert_after_sort,
+                                    )
+                                print(
+                                    "Section added successfully: "
+                                    f"[{created_section['label']}] "
+                                    f"(key: {created_section['key']}, order: {created_section['sort_order']})"
+                                )
+                                rebuild_prompt = input(
+                                    "Rebuild Resume PDF? (y/n, default y): "
+                                ).strip().lower()
+                                do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
+                                if do_rebuild:
+                                    try:
+                                        pdf_path = _rebuild_current_resume_pdf(selected_resume)
+                                        print(f"Resume PDF successfully saved to:\n{pdf_path}")
+                                    except Exception as exc:
+                                        print("Failed to rebuild resume PDF (LaTeX template).")
+                                        print(f"Error: {exc}")
+                                edit_now = input("Edit this section now? (y/n, default y): ").strip().lower()
+                                if edit_now in {"", "y", "yes", "1"}:
+                                    section_action = "1"
+                                    chosen_section = created_section
+                                else:
+                                    continue
+                            if chosen_section is None:
+                                section_pick = input("Enter section number (leave blank to cancel): ").strip()
+                                if not section_pick:
+                                    continue
+                                if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
+                                    print(f"Indices must be in 1–{len(sections)}.")
+                                    continue
+                                chosen_section = sections[int(section_pick) - 1]
                             if section_action == "1":
                                 while True:
                                     status = "enabled" if int(chosen_section.get("is_enabled") or 0) else "disabled"
@@ -2829,6 +3026,7 @@ def main():
                                             )
                                         chosen_section["label"] = new_label
                                         print("Section updated successfully.")
+                                        _prompt_rebuild_resume_pdf(selected_resume)
                                         continue
                                     if edit_choice == "2":
                                         raw_order = input("New sort order (positive integer): ").strip()
@@ -2844,6 +3042,7 @@ def main():
                                             )
                                         chosen_section["sort_order"] = new_order
                                         print("Section updated successfully.")
+                                        _prompt_rebuild_resume_pdf(selected_resume)
                                         continue
                                     if edit_choice == "3":
                                         raw_toggle = input("Enable this section? (y/n): ").strip().lower()
@@ -2862,6 +3061,7 @@ def main():
                                             )
                                         chosen_section["is_enabled"] = enabled
                                         print("Section updated successfully.")
+                                        _prompt_rebuild_resume_pdf(selected_resume)
                                         continue
                                     if edit_choice == "4":
                                         while True:
@@ -2895,12 +3095,7 @@ def main():
                                                 print("Invalid choice. Please enter 1, 2, 3, or 4.")
                                                 continue
                                             if item_action == "4":
-                                                try:
-                                                    pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                                    print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                                except Exception as exc:
-                                                    print("Failed to rebuild resume PDF (LaTeX template).")
-                                                    print(f"Error: {exc}")
+                                                _prompt_rebuild_resume_pdf(selected_resume)
                                                 continue
 
                                             picked_item = None
@@ -2973,17 +3168,7 @@ def main():
                                                         is_enabled=enabled,
                                                     )
                                                 print("Item added successfully.")
-                                                rebuild_prompt = input(
-                                                    "Rebuild Resume PDF? (y/n, default y): "
-                                                ).strip().lower()
-                                                do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
-                                                if do_rebuild:
-                                                    try:
-                                                        pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                                        print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                                    except Exception as exc:
-                                                        print("Failed to rebuild resume PDF (LaTeX template).")
-                                                        print(f"Error: {exc}")
+                                                _prompt_rebuild_resume_pdf(selected_resume)
                                                 continue
                                             if item_action == "3":
                                                 item_label = picked_item.get("title") or picked_item.get("id")
@@ -2997,17 +3182,7 @@ def main():
                                                     deleted = _delete_resume_item(conn, item_id=str(picked_item["id"]))
                                                 if deleted:
                                                     print("Item deleted successfully.")
-                                                    rebuild_prompt = input(
-                                                        "Rebuild Resume PDF? (y/n, default y): "
-                                                    ).strip().lower()
-                                                    do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
-                                                    if do_rebuild:
-                                                        try:
-                                                            pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                                            print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                                        except Exception as exc:
-                                                            print("Failed to rebuild resume PDF (LaTeX template).")
-                                                            print(f"Error: {exc}")
+                                                    _prompt_rebuild_resume_pdf(selected_resume)
                                                 else:
                                                     print("Item not found.")
                                                 continue
@@ -3144,17 +3319,7 @@ def main():
 
                                                 if updated_any:
                                                     print("Item updated successfully.")
-                                                    rebuild_prompt = input(
-                                                        "Rebuild Resume PDF? (y/n, default y): "
-                                                    ).strip().lower()
-                                                    do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
-                                                    if do_rebuild:
-                                                        try:
-                                                            pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                                            print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                                        except Exception as exc:
-                                                            print("Failed to rebuild resume PDF (LaTeX template).")
-                                                            print(f"Error: {exc}")
+                                                    _prompt_rebuild_resume_pdf(selected_resume)
                                         continue
                                     print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
                                 continue

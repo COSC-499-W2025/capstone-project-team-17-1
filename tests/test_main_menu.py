@@ -698,6 +698,18 @@ class MainMenuTests(unittest.TestCase):
         with (
             patch.object(app, "_list_existing_resumes", return_value=existing),
             patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(
+                app,
+                "_add_resume_section",
+                return_value={
+                    "id": "s3",
+                    "resume_id": "r1",
+                    "key": "publication",
+                    "label": "Publication",
+                    "sort_order": 3,
+                    "is_enabled": 1,
+                },
+            ) as add_section_mock,
         ):
             text, _ = self.run_menu(
                 inputs=[
@@ -705,12 +717,19 @@ class MainMenuTests(unittest.TestCase):
                     "2",   # customize existed resume
                     "1",   # select resume
                     "2",   # add section
-                    "1",   # section number
+                    "Publication", # section label
+                    "",    # section key (optional)
+                    "",    # append
+                    "",    # enabled default y
+                    "n",   # rebuild resume pdf
+                    "n",   # edit this section now
+                    "4",   # back resume menu
                     "14",  # exit
                 ],
                 rows=[],
             )
-        self.assertIn("Section action flow is not implemented yet.", text)
+        self.assertIn("Section added successfully", text)
+        add_section_mock.assert_called_once()
 
     def test_portfolio_showcase_customize_highlights(self):
         rows = [

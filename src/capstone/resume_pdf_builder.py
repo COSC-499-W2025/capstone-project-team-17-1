@@ -394,6 +394,36 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
             )
         )
 
+    custom_section_blocks: list[str] = []
+    for section in resume.get("sections", []) or []:
+        if not isinstance(section, dict):
+            continue
+        section_name = str(section.get("name") or "").strip()
+        if not section_name.startswith("custom::"):
+            continue
+        label = _as_clean_text(section.get("label")) or section_name.split("custom::", 1)[1].replace("_", " ").title()
+        items = [entry for entry in (section.get("items") or []) if isinstance(entry, dict)]
+        entry_blocks: list[str] = []
+        for entry in items:
+            entry_blocks.append(
+                _render_resume_entry_block(
+                    title=_entry_field(entry, "title", fallback=label),
+                    date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                    subtitle=_entry_field(entry, "subtitle", "stack", "company", "organization", fallback=""),
+                    location=_entry_field(entry, "location", fallback=""),
+                    bullets=_pick_bullets(entry, ""),
+                )
+            )
+        if entry_blocks:
+            custom_section_blocks.append(
+                "\n".join(
+                    [
+                        rf"\section*{{{_safe_text(label)}}}",
+                        "\n\n".join(entry_blocks),
+                    ]
+                )
+            )
+
     cert_entries = _extract_resume_entries(resume, "certifications") or _extract_resume_entries(resume, "awards")
     cert1 = cert_entries[0] if len(cert_entries) > 0 else {}
     cert2 = cert_entries[1] if len(cert_entries) > 1 else {}
@@ -411,6 +441,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "EXPERIENCE_BLOCK": "\n\n".join(experience_blocks),
         "PROJECT_BLOCK": "\n\n".join(project_blocks),
         "EDUCATION_BLOCK": "\n\n".join(education_blocks),
+        "CUSTOM_SECTION_BLOCK": "\n\n".join(custom_section_blocks),
         # Backward-compatible placeholders for custom templates using old tokens.
         "PROFESSIONAL_SUMMARY": _safe_text(summary),
         "SKILL_CORE": _safe_text(_join_or_dash(all_skills)),
