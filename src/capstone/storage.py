@@ -183,6 +183,77 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
     )
 
+    # Modular resume schema (MVP).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resumes (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT 'Default Resume',
+            target_role TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resume_sections (
+            id TEXT PRIMARY KEY,
+            resume_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            is_custom INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resume_items (
+            id TEXT PRIMARY KEY,
+            section_id TEXT NOT NULL,
+            title TEXT,
+            subtitle TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            location TEXT,
+            content TEXT,
+            bullets_json TEXT,
+            metadata_json TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resumes_user
+        ON resumes (user_id, updated_at)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
+        ON resume_sections (resume_id, sort_order)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resume_items_section
+        ON resume_items (section_id, sort_order)
+        """
+    )
+
     # Evidence of success (metrics/feedback/evaluations), append-only
     conn.execute(
         """

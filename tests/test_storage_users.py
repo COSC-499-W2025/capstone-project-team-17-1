@@ -15,6 +15,9 @@ def test_users_and_links_schema_and_fk():
         assert "users" in tables
         assert "user_projects" in tables
         assert "contributor_stats" in tables
+        assert "resumes" in tables
+        assert "resume_sections" in tables
+        assert "resume_items" in tables
         user_columns = {
             row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
         }
