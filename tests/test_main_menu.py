@@ -267,7 +267,7 @@ class MainMenuTests(unittest.TestCase):
         ]
 
         text, _ = self.run_menu(inputs=["6", "1", "", "3", "14"], rows=rows)
-        self.assertIn("Resume Preview", text)
+        self.assertIn("Preview Options", text)
 
     def test_resume_auto_generate_skip_export(self):
         rows = [
@@ -299,7 +299,7 @@ class MainMenuTests(unittest.TestCase):
                 rows=rows,
             )
 
-        self.assertIn("Auto-Generated Resume", text)
+        self.assertIn("Resume Preview", text)
 
     def test_user_profile_menu_edit_updates_db(self):
         fields = [

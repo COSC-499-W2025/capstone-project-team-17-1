@@ -4,7 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import pathlib
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Iterable, List, Mapping
 
 import zipfile
@@ -1433,7 +1433,7 @@ def _build_user_resume_preview(
             "title": f"{selected_username} - Professional Summary",
             "excerpt": " ".join(summary_lines).strip(),
             "source": "instant",
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "metadata": {},
             "status": "active",
             "projectIds": [],
@@ -1449,7 +1449,7 @@ def _build_user_resume_preview(
                 "title": "Core Skills",
                 "excerpt": ", ".join(deduped_skills),
                 "source": "instant",
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
                 "metadata": {},
                 "status": "active",
                 "projectIds": [],
@@ -1471,7 +1471,7 @@ def _build_user_resume_preview(
         "schema": None,
         "projectContext": project_context,
         "resumeProjectDescriptions": {},
-        "lastUpdated": datetime.utcnow().isoformat(),
+        "lastUpdated": datetime.now(UTC).isoformat(),
     }
 
 def main():
@@ -2212,8 +2212,6 @@ def main():
                     selected_user = users[int(user_pick) - 1]
                     selected_user_id = int(selected_user["id"])
                     selected_username = str(selected_user["username"])
-                    with _open_app_db() as conn:
-                        user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
 
                     with _open_app_db() as conn:
                         user_project_ids = _list_user_project_ids(
@@ -2284,9 +2282,6 @@ def main():
                         chosen_snapshots=chosen_snapshots,
                         contribution_map=contribution_map,
                     )
-                    _apply_user_profile_to_resume_preview(resume_preview, user_profile)
-                    print("\nResume Preview:\n")
-                    print(_format_resume_preview(resume_preview))
                     if project_ids:
                         action = _prompt_menu(
                             "Preview Options",
@@ -2309,9 +2304,11 @@ def main():
                                 chosen_snapshots=chosen_snapshots,
                                 contribution_map=contribution_map,
                             )
+                            with _open_app_db() as conn:
+                                user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
                             _apply_user_profile_to_resume_preview(resume_preview, user_profile)
 
-                            print("\nAuto-Generated Resume:\n")
+                            print("\nResume Preview:\n")
                             print(_format_resume_preview(resume_preview))
 
                             if not (resume_preview.get("sections") or []):
