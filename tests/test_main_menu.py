@@ -302,6 +302,52 @@ class MainMenuTests(unittest.TestCase):
 
         self.assertIn("Resume Preview", text)
 
+    def test_resume_customize_existing_no_resumes(self):
+        with patch.object(app, "_list_existing_resumes", return_value=[]):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "",    # press enter to continue
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("No existing resumes found. Press Enter to continue", text)
+
+    def test_resume_customize_existing_select_section_action(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+            {"id": "s2", "key": "project", "label": "Project", "sort_order": 2, "is_enabled": 1},
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Sections for Default Resume", text)
+        self.assertIn("Section action flow is not implemented yet.", text)
+
     def test_user_profile_menu_edit_updates_db(self):
         fields = [
             ("username", "alice"),

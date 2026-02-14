@@ -1098,6 +1098,28 @@ def _list_existing_resumes(conn: sqlite3.Connection, *, user_id: int | None = No
     ]
 
 
+def _list_resume_sections(conn: sqlite3.Connection, resume_id: str) -> List[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, key, label, sort_order, is_enabled
+        FROM resume_sections
+        WHERE resume_id = ?
+        ORDER BY sort_order, id
+        """,
+        (resume_id,),
+    ).fetchall()
+    return [
+        {
+            "id": str(row[0]),
+            "key": str(row[1] or ""),
+            "label": str(row[2] or row[1] or ""),
+            "sort_order": int(row[3] or 0),
+            "is_enabled": int(row[4] or 0),
+        }
+        for row in rows
+    ]
+
+
 def _is_blank(value: object) -> bool:
     return value is None or not str(value).strip()
 
@@ -2261,44 +2283,78 @@ def main():
                                             print("Failed to save portfolio PDF.")
                                             print(f"Error: {exc}")
                 elif choice == "6":
-                    resume_choice = _prompt_menu(
-                        "Resume",
-                        [
-                            "Generate new resume",
-                            "Customize existed resume",
-                            "Back",
-                        ],
-                    )
-                    if resume_choice == "b":
-                        resume_choice = "3"
-                    if resume_choice == "3":
-                        continue
-                    if resume_choice == "2":
-                        with _open_app_db() as conn:
-                            existing_resumes = _list_existing_resumes(conn)
-                        if not existing_resumes:
-                            print("No existing resumes found.")
-                            continue
-                        print("\nExisting resumes:")
-                        for idx, item in enumerate(existing_resumes, start=1):
-                            print(
-                                f"{idx}. {item['title']} - {item['username']} "
-                                f"(status: {item['status']}, updated: {item['updated_at']})"
+                    run_generate_new = False
+                    while True:
+                        resume_choice = _prompt_menu(
+                            "Resume",
+                            [
+                                "Generate new resume",
+                                "Customize existed resume",
+                                "Back",
+                            ],
+                        )
+                        if resume_choice == "b":
+                            resume_choice = "3"
+                        if resume_choice == "3":
+                            break
+                        if resume_choice == "2":
+                            with _open_app_db() as conn:
+                                existing_resumes = _list_existing_resumes(conn)
+                            if not existing_resumes:
+                                print("No existing resumes found. Press Enter to continue")
+                                input("")
+                                continue
+                            print("\nExisting resumes:")
+                            for idx, item in enumerate(existing_resumes, start=1):
+                                print(
+                                    f"{idx}. {item['title']} - {item['username']} "
+                                    f"(status: {item['status']}, updated: {item['updated_at']})"
+                                )
+                            pick = _prompt_single_index(
+                                "Select a resume number (blank to cancel, b to back): ",
+                                len(existing_resumes),
                             )
-                        pick = _prompt_single_index(
-                            "Select a resume number (blank to cancel, b to back): ",
-                            len(existing_resumes),
-                        )
-                        if pick is None:
-                            print("Cancelled.")
+                            if pick is None:
+                                print("Cancelled.")
+                                continue
+                            if pick == "b":
+                                continue
+                            selected_resume = existing_resumes[int(pick) - 1]
+                            with _open_app_db() as conn:
+                                sections = _list_resume_sections(conn, selected_resume["id"])
+                            if not sections:
+                                print("No sections found for this resume. Press Enter to continue")
+                                input("")
+                                continue
+                            print(f"\nSections for {selected_resume['title']}:")
+                            for idx, section in enumerate(sections, start=1):
+                                print(f"{idx}. {section['label']}")
+
+                            print("\n1. Edit section")
+                            print("2. Add section")
+                            print("3. Delete section")
+                            section_action = input("Select an option (1-3, b to back): ").strip().lower()
+                            if section_action == "b":
+                                continue
+                            if section_action not in {"1", "2", "3"}:
+                                print("Invalid choice. Please enter 1, 2, or 3.")
+                                continue
+                            section_pick = input("Enter section number (leave blank to cancel): ").strip()
+                            if not section_pick:
+                                continue
+                            if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
+                                print(f"Indices must be in 1–{len(sections)}.")
+                                continue
+                            chosen_section = sections[int(section_pick) - 1]
+                            print(
+                                f"Selected section: {chosen_section['label']} ({chosen_section['key']}). "
+                                "Section action flow is not implemented yet."
+                            )
                             continue
-                        if pick == "b":
-                            continue
-                        selected_resume = existing_resumes[int(pick) - 1]
-                        print(
-                            f"Selected resume: {selected_resume['title']} ({selected_resume['id']}). "
-                            "Customize existing resume flow is not implemented yet."
-                        )
+                        run_generate_new = True
+                        break
+
+                    if not run_generate_new:
                         continue
 
                     with _open_app_db() as conn:
