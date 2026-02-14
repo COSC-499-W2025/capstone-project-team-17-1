@@ -266,7 +266,7 @@ class MainMenuTests(unittest.TestCase):
             }
         ]
 
-        text, _ = self.run_menu(inputs=["6", "1", "1", "", "3", "14"], rows=rows)
+        text, _ = self.run_menu(inputs=["6", "1", "1", "", "3", "4", "14"], rows=rows)
         self.assertIn("Resume Preview", text)
 
     def test_resume_auto_generate_skip_export(self):
@@ -294,7 +294,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # user
                     "",   # all projects
                     "4",  # skip export
-                    "3",  # back to main menu from resume submenu
+                    "4",  # back to main menu from resume submenu
                     "14", # exit
                 ],
                 rows=rows,
@@ -333,6 +333,7 @@ class MainMenuTests(unittest.TestCase):
         with (
             patch.object(app, "_list_existing_resumes", return_value=existing),
             patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_update_resume_section_fields") as update_mock,
         ):
             text, _ = self.run_menu(
                 inputs=[
@@ -341,12 +342,274 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # select resume
                     "1",   # edit section
                     "1",   # section number
+                    "1",   # edit label
+                    "Professional Summary",
+                    "5",   # back
+                    "4",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
             )
-        self.assertIn("Sections for Default Resume", text)
-        self.assertIn("Section action flow is not implemented yet.", text)
+        self.assertIn("Sections for [Default Resume - alice]:", text)
+        self.assertIn("----------------------------------------", text)
+        self.assertIn("Editing section [Summary]", text)
+        self.assertIn("Section updated successfully.", text)
+        update_mock.assert_called_once()
+        kwargs = update_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("section_id"), "s1")
+        self.assertEqual(kwargs.get("label"), "Professional Summary")
+
+    def test_resume_customize_existing_edit_section_item_content(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+        ]
+        items = [
+            {
+                "id": "i1",
+                "title": "Summary",
+                "subtitle": "",
+                "start_date": "",
+                "end_date": "",
+                "location": "",
+                "content": "Old text",
+                "sort_order": 1,
+                "is_enabled": 1,
+            },
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_list_resume_section_items", return_value=items),
+            patch.object(app, "_update_resume_item_fields") as update_item_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "4",   # edit item content
+                    "1",   # item action: edit
+                    "1",   # choose item
+                    "6",   # choose content field(s)
+                    "Updated summary content",
+                    "n",   # skip rebuild
+                    "",    # back from selected-item field menu
+                    "b",   # back from item submenu
+                    "5",   # back from section edit menu
+                    "4",   # back from resume submenu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Items in section [Summary]:", text)
+        self.assertIn("1. Edit Item", text)
+        self.assertIn("Subtitle: NULL", text)
+        self.assertIn("Item updated successfully.", text)
+        self.assertGreaterEqual(text.count("Selected item:"), 2)
+        update_item_mock.assert_called_once()
+        kwargs = update_item_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("item_id"), "i1")
+        self.assertEqual(kwargs.get("content"), "Updated summary content")
+
+    def test_resume_customize_existing_rebuild_pdf_from_selected_item(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "education", "label": "Education", "sort_order": 1, "is_enabled": 1},
+        ]
+        items = [
+            {
+                "id": "i1",
+                "title": "UBCO",
+                "subtitle": "B.Sc",
+                "start_date": "Jan 2022",
+                "end_date": "Current",
+                "location": "Kelowna, BC",
+                "content": "nice good great",
+                "sort_order": 1,
+                "is_enabled": 1,
+            },
+        ]
+        fake_path = Path("output/resume_alice_20260214010101.pdf")
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_list_resume_section_items", return_value=items),
+            patch.object(app, "_update_resume_item_fields") as update_item_mock,
+            patch.object(app, "_rebuild_current_resume_pdf", return_value=fake_path) as rebuild_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "4",   # edit item
+                    "1",   # item action: edit
+                    "1",   # choose item
+                    "6",   # choose content field(s)
+                    "updated content",  # new content
+                    "",    # rebuild resume pdf (default yes)
+                    "",    # back from selected-item field menu
+                    "b",   # back from item submenu
+                    "5",   # back from section edit menu
+                    "4",   # back from resume submenu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Resume PDF successfully saved to:", text)
+        update_item_mock.assert_called_once()
+        rebuild_mock.assert_called_once()
+        called_resume = rebuild_mock.call_args.args[0]
+        self.assertEqual(called_resume.get("id"), "r1")
+
+    def test_resume_customize_existing_add_item_action(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "education", "label": "Education", "sort_order": 1, "is_enabled": 1},
+        ]
+        items = [
+            {
+                "id": "i1",
+                "title": "UBCO",
+                "subtitle": "B.Sc",
+                "start_date": "Jan 2022",
+                "end_date": "Current",
+                "location": "Kelowna, BC",
+                "content": "nice good great",
+                "sort_order": 1,
+                "is_enabled": 1,
+            },
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_list_resume_section_items", return_value=items),
+            patch.object(app, "_add_resume_item", return_value="i2") as add_item_mock,
+            patch.object(app, "_rebuild_current_resume_pdf", return_value=Path("output/resume_alice_20260214010101.pdf")),
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "4",   # edit item
+                    "2",   # add item
+                    "",    # insert after (append)
+                    "New Education Item",
+                    "M.Sc",
+                    "Feb 2026",
+                    "Current",
+                    "Vancouver, BC",
+                    "New content",
+                    "",    # default sort order
+                    "",    # default enabled
+                    "",    # rebuild resume pdf (default yes)
+                    "b",   # back from item submenu
+                    "5",   # back from section edit menu
+                    "4",   # back resume menu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Item added successfully.", text)
+        self.assertIn("Resume PDF successfully saved to:", text)
+        add_item_mock.assert_called_once()
+        kwargs = add_item_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("section_id"), "s1")
+        self.assertEqual(kwargs.get("title"), "New Education Item")
+
+    def test_resume_customize_existing_delete_item_action(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "education", "label": "Education", "sort_order": 1, "is_enabled": 1},
+        ]
+        items = [
+            {
+                "id": "i1",
+                "title": "UBCO",
+                "subtitle": "B.Sc",
+                "start_date": "Jan 2022",
+                "end_date": "Current",
+                "location": "Kelowna, BC",
+                "content": "nice good great",
+                "sort_order": 1,
+                "is_enabled": 1,
+            },
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_list_resume_section_items", return_value=items),
+            patch.object(app, "_delete_resume_item", return_value=True) as delete_item_mock,
+            patch.object(app, "_rebuild_current_resume_pdf", return_value=Path("output/resume_alice_20260214010101.pdf")),
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "4",   # edit item
+                    "3",   # delete item
+                    "1",   # choose item
+                    "y",   # confirm
+                    "",    # rebuild resume pdf (default yes)
+                    "b",   # back from item submenu
+                    "5",   # back from section edit menu
+                    "4",   # back resume menu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Item deleted successfully.", text)
+        self.assertIn("Resume PDF successfully saved to:", text)
+        delete_item_mock.assert_called_once()
+        kwargs = delete_item_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("item_id"), "i1")
 
     def test_user_profile_menu_edit_updates_db(self):
         fields = [

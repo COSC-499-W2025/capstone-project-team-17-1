@@ -66,7 +66,7 @@
 % Example placeholders:
 % __FULL_NAME__, __EMAIL__, __PHONE__, __LOCATION__
 % __GITHUB_URL__, __PORTFOLIO_URL__
-% __PROFESSIONAL_SUMMARY__, __SKILL_CORE__, __SKILL_TOOLS__, __SKILL_LANGUAGES__
+% __SUMMARY_BLOCK__, __CORE_SKILL_BLOCK__
 % =============================
 
 \ResumeHeader{__FULL_NAME__}{__LOCATION__}{\href{mailto:__EMAIL__}{__EMAIL__}}{__PHONE__}
@@ -76,43 +76,18 @@
 }
 
 \section*{Summary}
-{\small __PROFESSIONAL_SUMMARY__}
+__SUMMARY_BLOCK__
 
 \section*{Education}
-\ResumeEntry{__EDU_SCHOOL_1__}{__EDU_DATE_1__}{__EDU_DEGREE_1__}{__EDU_LOCATION_1__}
-{\small \textit{Relevant Coursework:} __EDU_COURSEWORK_1__}\par
+__EDUCATION_BLOCK__
 
 \section*{Experience}
-\ResumeEntry{__EXP_ROLE_1__}{__EXP_DATE_1__}{__EXP_COMPANY_1__}{__EXP_LOCATION_1__}
-\begin{itemize}
-  \item __EXP_BULLET_1_1__
-  \item __EXP_BULLET_1_2__
-  \item __EXP_BULLET_1_3__
-\end{itemize}
-
-\ResumeEntry{__EXP_ROLE_2__}{__EXP_DATE_2__}{__EXP_COMPANY_2__}{__EXP_LOCATION_2__}
-\begin{itemize}
-  \item __EXP_BULLET_2_1__
-  \item __EXP_BULLET_2_2__
-  \item __EXP_BULLET_2_3__
-\end{itemize}
+__EXPERIENCE_BLOCK__
 
 \section*{Core Skill}
-\SkillRow{Core}{__SKILL_CORE__}
-\SkillRow{Tools}{__SKILL_TOOLS__}
-\SkillRow{Languages}{__SKILL_LANGUAGES__}
+__CORE_SKILL_BLOCK__
 
 \section*{Project}
-\ResumeEntry{__PROJ_NAME_1__}{__PROJ_DATE_1__}{__PROJ_STACK_1__}{}
-\begin{itemize}
-  \item __PROJ_BULLET_1_1__
-  \item __PROJ_BULLET_1_2__
-\end{itemize}
-
-\ResumeEntry{__PROJ_NAME_2__}{__PROJ_DATE_2__}{__PROJ_STACK_2__}{}
-\begin{itemize}
-  \item __PROJ_BULLET_2_1__
-  \item __PROJ_BULLET_2_2__
-\end{itemize}
+__PROJECT_BLOCK__
 
 \end{document}

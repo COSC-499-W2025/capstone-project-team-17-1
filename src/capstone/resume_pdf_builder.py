@@ -190,6 +190,34 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
     return [summary] if summary else []
 
 
+def _entry_field(entry: Dict[str, Any], *keys: str, fallback: str = "") -> str:
+    for key in keys:
+        value = _as_clean_text(entry.get(key))
+        if value:
+            return value
+    return fallback
+
+
+def _render_itemize_block(bullets: list[str]) -> str:
+    if not bullets:
+        return ""
+    lines = [r"\begin{itemize}"]
+    for bullet in bullets:
+        lines.append(rf"  \item {_safe_text(bullet)}")
+    lines.append(r"\end{itemize}")
+    return "\n".join(lines)
+
+
+def _render_resume_entry_block(title: str, date_text: str, subtitle: str, location: str, bullets: list[str]) -> str:
+    lines = [
+        rf"\ResumeEntry{{{_safe_text(title)}}}{{{_safe_text(date_text)}}}{{{_safe_text(subtitle)}}}{{{_safe_text(location)}}}"
+    ]
+    itemize = _render_itemize_block(bullets)
+    if itemize:
+        lines.append(itemize)
+    return "\n".join(lines)
+
+
 def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     links = resume.get("links") if isinstance(resume.get("links"), dict) else {}
     contact = resume.get("contact") if isinstance(resume.get("contact"), dict) else {}
@@ -233,6 +261,18 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         or _as_clean_text(resume.get("summary"))
         or "Engineer focused on shipping reliable products with measurable business impact."
     )
+    summary_entries = _extract_resume_entries(resume, "summary")
+    summary_lines: list[str] = []
+    if summary_entries:
+        for entry in summary_entries:
+            text = (
+                _entry_field(entry, "content", "entrySummary", "summary", "entryBody", "body", "excerpt")
+                or _entry_field(entry, "title")
+            )
+            if text:
+                summary_lines.append(r"{\small " + _safe_text(text) + r"}\par")
+    if not summary_lines:
+        summary_lines.append(r"{\small " + _safe_text(summary) + r"}")
 
     all_skills = _flatten_str_list(resume.get("skills"))
     if not all_skills:
@@ -242,11 +282,51 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 continue
             all_skills.extend(_flatten_str_list(project.get("skills")))
     all_skills = sorted(set(all_skills))
-
     languages = _flatten_str_list(resume.get("languages"))
     tools = _flatten_str_list(resume.get("tools"))
 
+    core_skill_entries = _extract_resume_entries(resume, "core_skill")
+    core_skill_lines: list[str] = []
+    if core_skill_entries:
+        for entry in core_skill_entries:
+            label = _entry_field(entry, "title", fallback="Core")
+            content = _entry_field(entry, "content")
+            if not content:
+                bullets = _pick_bullets(entry, "")
+                content = ", ".join([token for token in bullets if token.strip()])
+            if content:
+                core_skill_lines.append(rf"\SkillRow{{{_safe_text(label)}}}{{{_safe_text(content)}}}")
+    if not core_skill_lines:
+        core_skill_lines = [
+            rf"\SkillRow{{Core}}{{{_safe_text(_join_or_dash(all_skills))}}}",
+            rf"\SkillRow{{Tools}}{{{_safe_text(_join_or_dash(tools))}}}",
+            rf"\SkillRow{{Languages}}{{{_safe_text(_join_or_dash(languages))}}}",
+        ]
+
     experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
+    experience_blocks: list[str] = []
+    for entry in experience_entries:
+        bullets = _pick_bullets(entry, "Delivered meaningful project outcomes.")[:3]
+        experience_blocks.append(
+            _render_resume_entry_block(
+                title=_entry_field(entry, "title", fallback="Experience"),
+                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
+                subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback="Company"),
+                location=_entry_field(entry, "location", fallback="Location"),
+                bullets=bullets,
+            )
+        )
+    if not experience_blocks:
+        experience_blocks.append(
+            _render_resume_entry_block(
+                title="Experience",
+                date_text="Date",
+                subtitle="Company",
+                location="Location",
+                bullets=["Delivered measurable outcomes."],
+            )
+        )
+
     project_entries = list(_iter_project_items(resume))
     if not project_entries and isinstance(resume.get("projects"), list):
         for p in resume.get("projects") or []:
@@ -262,71 +342,78 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                         ),
                     }
                 )
+    project_blocks: list[str] = []
+    for entry in project_entries:
+        bullets = _pick_bullets(entry, "Implemented core features and improvements.")[:2]
+        project_blocks.append(
+            _render_resume_entry_block(
+                title=_entry_field(entry, "title", fallback="Project"),
+                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
+                subtitle=_entry_field(entry, "stack", "subtitle", fallback="Tech Stack"),
+                location="",
+                bullets=bullets,
+            )
+        )
+    if not project_blocks:
+        project_blocks.append(
+            _render_resume_entry_block(
+                title="Project",
+                date_text="Date",
+                subtitle="Tech Stack",
+                location="",
+                bullets=["Implemented core features and improvements."],
+            )
+        )
 
     education_entries = _extract_resume_entries(resume, "education")
+    education_blocks: list[str] = []
+    for entry in education_entries:
+        coursework = _entry_field(entry, "coursework", "content", "entrySummary", "summary", "entryBody", "body")
+        lines = [
+            rf"\ResumeEntry{{{_safe_text(_entry_field(entry, 'school', 'title', fallback='University Name'))}}}"
+            rf"{{{_safe_text(_entry_field(entry, 'dateRange', 'date', fallback='Date'))}}}"
+            rf"{{{_safe_text(_entry_field(entry, 'degree', 'summary', 'subtitle', fallback='Degree Program'))}}}"
+            rf"{{{_safe_text(_entry_field(entry, 'location', fallback='Location'))}}}"
+        ]
+        if coursework:
+            lines.append(r"{\small \textit{" + _safe_text(coursework) + r"}}\par")
+        education_blocks.append("\n".join(lines))
+    if not education_blocks:
+        education_blocks.append(
+            "\n".join(
+                [
+                    r"\ResumeEntry{University Name}{Date}{Degree Program}{Location}",
+                    r"{\small \textit{N/A}}\par",
+                ]
+            )
+        )
+
     cert_entries = _extract_resume_entries(resume, "certifications") or _extract_resume_entries(resume, "awards")
-
-    exp1 = experience_entries[0] if len(experience_entries) > 0 else {}
-    exp2 = experience_entries[1] if len(experience_entries) > 1 else {}
-    exp1_bullets = _pick_bullets(exp1, "Delivered meaningful project outcomes.")[:3]
-    exp2_bullets = _pick_bullets(exp2, "Collaborated across teams to ship product improvements.")[:3]
-
-    proj1 = project_entries[0] if len(project_entries) > 0 else {}
-    proj2 = project_entries[1] if len(project_entries) > 1 else {}
-    proj1_bullets = _pick_bullets(proj1, "Built and improved key project capabilities.")[:2]
-    proj2_bullets = _pick_bullets(proj2, "Implemented features and strengthened system quality.")[:2]
-
-    edu1 = education_entries[0] if len(education_entries) > 0 else {}
     cert1 = cert_entries[0] if len(cert_entries) > 0 else {}
     cert2 = cert_entries[1] if len(cert_entries) > 1 else {}
     award1 = cert_entries[2] if len(cert_entries) > 2 else {}
 
-    values = {
-        "FULL_NAME": full_name,
-        "EMAIL": email,
-        "PHONE": phone,
-        "LOCATION": location,
-        "GITHUB_URL": github_url,
-        "PORTFOLIO_URL": portfolio_url,
-        "PROFESSIONAL_SUMMARY": summary,
-        "SKILL_CORE": _join_or_dash(all_skills),
-        "SKILL_TOOLS": _join_or_dash(tools),
-        "SKILL_LANGUAGES": _join_or_dash(languages),
-        "EXP_ROLE_1": _as_clean_text(exp1.get("title"), "Experience"),
-        "EXP_DATE_1": _as_clean_text(exp1.get("dateRange") or exp1.get("date"), "Date"),
-        "EXP_COMPANY_1": _as_clean_text(exp1.get("company") or exp1.get("organization"), "Company"),
-        "EXP_LOCATION_1": _as_clean_text(exp1.get("location"), "Location"),
-        "EXP_BULLET_1_1": _as_clean_text(exp1_bullets[0] if len(exp1_bullets) > 0 else "Delivered measurable outcomes."),
-        "EXP_BULLET_1_2": _as_clean_text(exp1_bullets[1] if len(exp1_bullets) > 1 else "Improved reliability, quality, and performance."),
-        "EXP_BULLET_1_3": _as_clean_text(exp1_bullets[2] if len(exp1_bullets) > 2 else "Worked closely with stakeholders to meet goals."),
-        "EXP_ROLE_2": _as_clean_text(exp2.get("title"), "Experience"),
-        "EXP_DATE_2": _as_clean_text(exp2.get("dateRange") or exp2.get("date"), "Date"),
-        "EXP_COMPANY_2": _as_clean_text(exp2.get("company") or exp2.get("organization"), "Company"),
-        "EXP_LOCATION_2": _as_clean_text(exp2.get("location"), "Location"),
-        "EXP_BULLET_2_1": _as_clean_text(exp2_bullets[0] if len(exp2_bullets) > 0 else "Contributed to end-to-end delivery."),
-        "EXP_BULLET_2_2": _as_clean_text(exp2_bullets[1] if len(exp2_bullets) > 1 else "Strengthened team productivity and code quality."),
-        "EXP_BULLET_2_3": _as_clean_text(exp2_bullets[2] if len(exp2_bullets) > 2 else "Helped maintain stable production operations."),
-        "PROJ_NAME_1": _as_clean_text(proj1.get("title"), "Project"),
-        "PROJ_DATE_1": _as_clean_text(proj1.get("dateRange") or proj1.get("date"), "Date"),
-        "PROJ_STACK_1": _as_clean_text(proj1.get("stack"), "Tech Stack"),
-        "PROJ_BULLET_1_1": _as_clean_text(proj1_bullets[0] if len(proj1_bullets) > 0 else "Implemented core features and improvements."),
-        "PROJ_BULLET_1_2": _as_clean_text(proj1_bullets[1] if len(proj1_bullets) > 1 else "Validated impact through testing and metrics."),
-        "PROJ_NAME_2": _as_clean_text(proj2.get("title"), "Project"),
-        "PROJ_DATE_2": _as_clean_text(proj2.get("dateRange") or proj2.get("date"), "Date"),
-        "PROJ_STACK_2": _as_clean_text(proj2.get("stack"), "Tech Stack"),
-        "PROJ_BULLET_2_1": _as_clean_text(proj2_bullets[0] if len(proj2_bullets) > 0 else "Designed and shipped user-focused functionality."),
-        "PROJ_BULLET_2_2": _as_clean_text(proj2_bullets[1] if len(proj2_bullets) > 1 else "Improved maintainability with cleaner architecture."),
-        "EDU_SCHOOL_1": _as_clean_text(edu1.get("school") or edu1.get("title"), "University Name"),
-        "EDU_DATE_1": _as_clean_text(edu1.get("dateRange") or edu1.get("date"), "Date"),
-        "EDU_DEGREE_1": _as_clean_text(edu1.get("degree") or edu1.get("summary"), "Degree Program"),
-        "EDU_LOCATION_1": _as_clean_text(edu1.get("location"), "Location"),
-        "EDU_COURSEWORK_1": _as_clean_text(edu1.get("coursework"), "Algorithms, Distributed Systems, Databases"),
-        "CERT_1": _as_clean_text(cert1.get("title") if isinstance(cert1, dict) else cert1, "Certification Name"),
-        "CERT_2": _as_clean_text(cert2.get("title") if isinstance(cert2, dict) else cert2, "Certification Name"),
-        "AWARD_1": _as_clean_text(award1.get("title") if isinstance(award1, dict) else award1, "Award Name"),
+    return {
+        "FULL_NAME": _safe_text(full_name),
+        "EMAIL": _safe_text(email),
+        "PHONE": _safe_text(phone),
+        "LOCATION": _safe_text(location),
+        "GITHUB_URL": _safe_text(github_url),
+        "PORTFOLIO_URL": _safe_text(portfolio_url),
+        "SUMMARY_BLOCK": "\n".join(summary_lines),
+        "CORE_SKILL_BLOCK": "\n".join(core_skill_lines),
+        "EXPERIENCE_BLOCK": "\n\n".join(experience_blocks),
+        "PROJECT_BLOCK": "\n\n".join(project_blocks),
+        "EDUCATION_BLOCK": "\n\n".join(education_blocks),
+        # Backward-compatible placeholders for custom templates using old tokens.
+        "PROFESSIONAL_SUMMARY": _safe_text(summary),
+        "SKILL_CORE": _safe_text(_join_or_dash(all_skills)),
+        "SKILL_TOOLS": _safe_text(_join_or_dash(tools)),
+        "SKILL_LANGUAGES": _safe_text(_join_or_dash(languages)),
+        "CERT_1": _safe_text(_as_clean_text(cert1.get("title") if isinstance(cert1, dict) else cert1, "Certification Name")),
+        "CERT_2": _safe_text(_as_clean_text(cert2.get("title") if isinstance(cert2, dict) else cert2, "Certification Name")),
+        "AWARD_1": _safe_text(_as_clean_text(award1.get("title") if isinstance(award1, dict) else award1, "Award Name")),
     }
-
-    return {k: _safe_text(v) for k, v in values.items()}
 
 
 def render_latex_from_template(
