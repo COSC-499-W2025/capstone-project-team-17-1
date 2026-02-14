@@ -1357,6 +1357,28 @@ def _display_nullable(value: object) -> str:
     return "NULL" if _is_blank(value) else str(value)
 
 
+def _print_field_value(prefix: str, label: str, value: object) -> None:
+    text = _display_nullable(value)
+    lines = text.splitlines() or [text]
+    print(f"{prefix}{label}: {lines[0]}")
+    continuation = " " * len(f"{prefix}{label}: ")
+    for line in lines[1:]:
+        print(f"{continuation}{line}")
+
+
+def _prompt_multiline_input(label: str, *, allow_empty: bool = False) -> str | None:
+    print(f"{label} (multi-line, type END on a new line to finish):")
+    lines: list[str] = []
+    while True:
+        line = input()
+        if line.strip() == "END":
+            break
+        lines.append(line)
+    if not lines:
+        return "" if allow_empty else None
+    return "\n".join(lines).strip()
+
+
 def _prompt_profile_value(label: str) -> str | None:
     value = input(f"{label}: ").strip()
     return value if value else None
@@ -2851,12 +2873,12 @@ def main():
                                             else:
                                                 for item_idx, item in enumerate(items, start=1):
                                                     print(f"{item_idx}.")
-                                                    print(f"   Title: {_display_nullable(item.get('title'))}")
-                                                    print(f"   Subtitle: {_display_nullable(item.get('subtitle'))}")
-                                                    print(f"   Start Date: {_display_nullable(item.get('start_date'))}")
-                                                    print(f"   End Date: {_display_nullable(item.get('end_date'))}")
-                                                    print(f"   Location: {_display_nullable(item.get('location'))}")
-                                                    print(f"   Content: {_display_nullable(item.get('content'))}")
+                                                    _print_field_value("   ", "Title", item.get("title"))
+                                                    _print_field_value("   ", "Subtitle", item.get("subtitle"))
+                                                    _print_field_value("   ", "Start Date", item.get("start_date"))
+                                                    _print_field_value("   ", "End Date", item.get("end_date"))
+                                                    _print_field_value("   ", "Location", item.get("location"))
+                                                    _print_field_value("   ", "Content", item.get("content"))
                                                     print(f"   Sort Order: {item.get('sort_order')}")
                                                     print(f"   Is Enabled: {item.get('is_enabled')}")
                                             print("\n----------------------------------------")
@@ -2912,7 +2934,11 @@ def main():
                                                 start_date = input("Start Date (optional): ").strip() or None
                                                 end_date = input("End Date (optional): ").strip() or None
                                                 location = input("Location (optional): ").strip() or None
-                                                content = input("Content (optional): ").strip() or None
+                                                raw_content = _prompt_multiline_input(
+                                                    "Content (optional)",
+                                                    allow_empty=True,
+                                                )
+                                                content = raw_content.strip() or None if raw_content is not None else None
                                                 raw_sort = input(
                                                     f"Sort Order (positive integer, default {reference_sort + 1}): "
                                                 ).strip()
@@ -3006,9 +3032,13 @@ def main():
                                                 for field_idx, (field_key, field_label) in enumerate(field_items, start=1):
                                                     if field_key in {"sort_order", "is_enabled"}:
                                                         value_display = str(picked_item.get(field_key))
+                                                        print(f"{field_idx}. {field_label}: {value_display}")
                                                     else:
-                                                        value_display = _display_nullable(picked_item.get(field_key))
-                                                    print(f"{field_idx}. {field_label}: {value_display}")
+                                                        _print_field_value(
+                                                            f"{field_idx}. ",
+                                                            field_label,
+                                                            picked_item.get(field_key),
+                                                        )
                                                 raw_field_pick = input(
                                                     "Select field number(s) to edit (space-separated, blank to cancel): "
                                                 ).strip()
@@ -3081,12 +3111,21 @@ def main():
                                                             )
                                                         updated_any = True
                                                     else:
-                                                        raw_value = input(
-                                                            f"Edit {field_label} from {old_display} to: "
-                                                        ).strip()
-                                                        if not raw_value:
-                                                            print("Cancelled.")
-                                                            continue
+                                                        if field_key == "content":
+                                                            raw_value = _prompt_multiline_input(
+                                                                f"Edit {field_label} from {old_display} to",
+                                                                allow_empty=False,
+                                                            )
+                                                            if raw_value is None:
+                                                                print("Cancelled.")
+                                                                continue
+                                                        else:
+                                                            raw_value = input(
+                                                                f"Edit {field_label} from {old_display} to: "
+                                                            ).strip()
+                                                            if not raw_value:
+                                                                print("Cancelled.")
+                                                                continue
                                                         with _open_app_db() as conn:
                                                             _update_resume_item_fields(
                                                                 conn,

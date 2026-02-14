@@ -187,7 +187,13 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
         or _as_clean_text(entry.get("excerpt"))
         or fallback
     )
-    return [summary] if summary else []
+    if not summary:
+        return []
+    # Preserve multi-line CLI input as multiple bullets.
+    lines = [line.strip() for line in str(summary).splitlines() if line.strip()]
+    if lines:
+        return lines
+    return [summary]
 
 
 def _entry_field(entry: Dict[str, Any], *keys: str, fallback: str = "") -> str:

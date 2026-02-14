@@ -404,6 +404,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # choose item
                     "6",   # choose content field(s)
                     "Updated summary content",
+                    "END", # end multiline content
                     "n",   # skip rebuild
                     "",    # back from selected-item field menu
                     "b",   # back from item submenu
@@ -470,6 +471,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # choose item
                     "6",   # choose content field(s)
                     "updated content",  # new content
+                    "END", # end multiline content
                     "",    # rebuild resume pdf (default yes)
                     "",    # back from selected-item field menu
                     "b",   # back from item submenu
@@ -535,6 +537,7 @@ class MainMenuTests(unittest.TestCase):
                     "Current",
                     "Vancouver, BC",
                     "New content",
+                    "END", # end multiline content
                     "",    # default sort order
                     "",    # default enabled
                     "",    # rebuild resume pdf (default yes)
