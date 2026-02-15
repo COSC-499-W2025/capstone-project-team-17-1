@@ -2220,8 +2220,16 @@ def main():
                         choice = forced_choice
                         forced_choice = None
                     else:
-                        choice = input("Please select an option (1-14): ").strip()
-                        import os
+                        raw_choice = input("Please select an option (1-14): ")
+                        choice = raw_choice.strip().lower()
+                        if not choice:
+                            print("Invalid choice. Please enter a number between 1 and 14.")
+                            print()
+                            continue
+                        if choice == "m":
+                            # Already at main menu; just redraw menu.
+                            forced_choice = None
+                            break
                         if os.environ.get("PYTEST_CURRENT_TEST"):
                             if choice == "2":
                                 choice = "3"
@@ -2231,6 +2239,8 @@ def main():
                         break
                     print("Invalid choice. Please enter a number between 1 and 14.")
                     print()
+                if choice == "m":
+                    continue
 
                 if choice == "1":
                     print("Select a ZIP file to analyze...")
@@ -2909,425 +2919,440 @@ def main():
                             if pick == "b":
                                 continue
                             selected_resume = existing_resumes[int(pick) - 1]
-                            with _open_app_db() as conn:
-                                sections = _list_resume_sections(conn, selected_resume["id"])
-                            print(
-                                f"\nSections for [{selected_resume['title']} - {selected_resume['username']}]:"
-                            )
-                            if not sections:
-                                print("(No sections)")
-                            else:
-                                for idx, section in enumerate(sections, start=1):
-                                    print(f"{idx}. {section['label']}")
-
-                            print("\n----------------------------------------")
-                            print("1. Edit section")
-                            print("2. Add section")
-                            print("3. Delete section")
-                            section_action = input("Select an option (1-3, b to back): ").strip().lower()
-                            if section_action == "b":
-                                continue
-                            if section_action not in {"1", "2", "3"}:
-                                print("Invalid choice. Please enter 1, 2, or 3.")
-                                continue
-                            chosen_section = None
-                            if section_action == "2":
-                                section_label = input("Section label (required): ").strip()
-                                if not section_label:
-                                    print("Section label is required.")
-                                    continue
-                                section_key = input(
-                                    "Section key (optional, letters/numbers/_): "
-                                ).strip()
-                                insert_after_sort = None
-                                if sections:
-                                    raw_after = input(
-                                        "Enter section number to insert after (blank to append): "
-                                    ).strip()
-                                    if raw_after:
-                                        if not raw_after.isdigit() or not (1 <= int(raw_after) <= len(sections)):
-                                            print(f"Indices must be in 1–{len(sections)}.")
-                                            continue
-                                        insert_after_sort = int(sections[int(raw_after) - 1]["sort_order"])
-                                raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
-                                if not raw_enabled:
-                                    enabled = 1
-                                elif raw_enabled in {"y", "yes", "1"}:
-                                    enabled = 1
-                                elif raw_enabled in {"n", "no", "0"}:
-                                    enabled = 0
-                                else:
-                                    print("Invalid input. Please enter y or n.")
-                                    continue
+                            back_to_main_menu = False
+                            while True:
                                 with _open_app_db() as conn:
-                                    created_section = _add_resume_section(
-                                        conn,
-                                        resume_id=str(selected_resume["id"]),
-                                        label=section_label,
-                                        section_key=section_key or None,
-                                        is_enabled=enabled,
-                                        insert_after_sort=insert_after_sort,
-                                    )
+                                    sections = _list_resume_sections(conn, selected_resume["id"])
                                 print(
-                                    "Section added successfully: "
-                                    f"[{created_section['label']}] "
-                                    f"(key: {created_section['key']}, order: {created_section['sort_order']})"
+                                    f"\nSections for [{selected_resume['title']} - {selected_resume['username']}]:"
                                 )
-                                rebuild_prompt = input(
-                                    "Rebuild Resume PDF? (y/n, default y): "
-                                ).strip().lower()
-                                do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
-                                if do_rebuild:
-                                    try:
-                                        pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                        print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                    except Exception as exc:
-                                        print("Failed to rebuild resume PDF (LaTeX template).")
-                                        print(f"Error: {exc}")
-                                edit_now = input("Edit this section now? (y/n, default y): ").strip().lower()
-                                if edit_now in {"", "y", "yes", "1"}:
-                                    section_action = "1"
-                                    chosen_section = created_section
+                                if not sections:
+                                    print("(No sections)")
                                 else:
-                                    continue
-                            if chosen_section is None:
-                                section_pick = input("Enter section number (leave blank to cancel): ").strip()
-                                if not section_pick:
-                                    continue
-                                if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
-                                    print(f"Indices must be in 1–{len(sections)}.")
-                                    continue
-                                chosen_section = sections[int(section_pick) - 1]
-                            if section_action == "1":
-                                while True:
-                                    status = "enabled" if int(chosen_section.get("is_enabled") or 0) else "disabled"
-                                    print(
-                                        f"\nEditing section [{chosen_section['label']}] "
-                                        f"(key: {chosen_section['key']}, order: {chosen_section['sort_order']}, {status})"
-                                    )
-                                    print("1. Edit label")
-                                    print("2. Edit sort order")
-                                    print("3. Toggle enable/disable")
-                                    print("4. Edit item")
-                                    print("5. Back")
-                                    edit_choice = input("Select an option (1-5, b to back): ").strip().lower()
-                                    if edit_choice in {"5", "b"}:
-                                        break
-                                    if edit_choice == "1":
-                                        new_label = input("New section label: ").strip()
-                                        if not new_label:
-                                            print("Section label cannot be empty.")
-                                            continue
-                                        with _open_app_db() as conn:
-                                            _update_resume_section_fields(
-                                                conn,
-                                                section_id=chosen_section["id"],
-                                                label=new_label,
-                                            )
-                                        chosen_section["label"] = new_label
-                                        print("Section updated successfully.")
-                                        _prompt_rebuild_resume_pdf(selected_resume)
-                                        continue
-                                    if edit_choice == "2":
-                                        raw_order = input("New sort order (positive integer): ").strip()
-                                        if not raw_order.isdigit() or int(raw_order) <= 0:
-                                            print("Sort order must be a positive integer.")
-                                            continue
-                                        new_order = int(raw_order)
-                                        with _open_app_db() as conn:
-                                            _update_resume_section_fields(
-                                                conn,
-                                                section_id=chosen_section["id"],
-                                                sort_order=new_order,
-                                            )
-                                        chosen_section["sort_order"] = new_order
-                                        print("Section updated successfully.")
-                                        _prompt_rebuild_resume_pdf(selected_resume)
-                                        continue
-                                    if edit_choice == "3":
-                                        raw_toggle = input("Enable this section? (y/n): ").strip().lower()
-                                        if raw_toggle in {"y", "yes", "1"}:
-                                            enabled = 1
-                                        elif raw_toggle in {"n", "no", "0"}:
-                                            enabled = 0
-                                        else:
-                                            print("Invalid input. Please enter y or n.")
-                                            continue
-                                        with _open_app_db() as conn:
-                                            _update_resume_section_fields(
-                                                conn,
-                                                section_id=chosen_section["id"],
-                                                is_enabled=enabled,
-                                            )
-                                        chosen_section["is_enabled"] = enabled
-                                        print("Section updated successfully.")
-                                        _prompt_rebuild_resume_pdf(selected_resume)
-                                        continue
-                                    if edit_choice == "4":
-                                        while True:
-                                            with _open_app_db() as conn:
-                                                items = _list_resume_section_items(conn, chosen_section["id"])
-                                            print(f"\nItems in section [{chosen_section['label']}]:")
-                                            if not items:
-                                                print("(No items)")
-                                            else:
-                                                for item_idx, item in enumerate(items, start=1):
-                                                    print(f"{item_idx}.")
-                                                    _print_field_value("   ", "Title", item.get("title"))
-                                                    _print_field_value("   ", "Subtitle", item.get("subtitle"))
-                                                    _print_field_value("   ", "Start Date", item.get("start_date"))
-                                                    _print_field_value("   ", "End Date", item.get("end_date"))
-                                                    _print_field_value("   ", "Location", item.get("location"))
-                                                    _print_field_value("   ", "Content", item.get("content"))
-                                                    print(f"   Sort Order: {item.get('sort_order')}")
-                                                    print(f"   Is Enabled: {item.get('is_enabled')}")
-                                            print("\n----------------------------------------")
-                                            print("1. Edit Item")
-                                            print("2. Add Item")
-                                            print("3. Delete Item")
-                                            print("4. Rebuild Resume PDF")
-                                            item_action = input(
-                                                "Select an option (1-4, b to back): "
-                                            ).strip().lower()
-                                            if item_action == "b":
-                                                break
-                                            if item_action not in {"1", "2", "3", "4"}:
-                                                print("Invalid choice. Please enter 1, 2, 3, or 4.")
-                                                continue
-                                            if item_action == "4":
-                                                _prompt_rebuild_resume_pdf(selected_resume)
-                                                continue
+                                    for idx, section in enumerate(sections, start=1):
+                                        print(f"{idx}. {section['label']}")
 
-                                            picked_item = None
-                                            if item_action in {"1", "3"}:
-                                                if not items:
-                                                    print("No items available for this action.")
-                                                    continue
-                                                raw_item_pick = input("Enter item number (leave blank to cancel): ").strip()
-                                                if not raw_item_pick:
-                                                    continue
-                                                if not raw_item_pick.isdigit() or not (1 <= int(raw_item_pick) <= len(items)):
-                                                    print(f"Indices must be in 1–{len(items)}.")
-                                                    continue
-                                                picked_item = items[int(raw_item_pick) - 1]
-                                            if item_action == "2":
-                                                reference_sort = int(items[-1]["sort_order"]) if items else 0
-                                                if items:
-                                                    raw_ref = input(
-                                                        "Enter item number to insert after (blank to append): "
-                                                    ).strip()
-                                                    if raw_ref:
-                                                        if not raw_ref.isdigit() or not (1 <= int(raw_ref) <= len(items)):
-                                                            print(f"Indices must be in 1–{len(items)}.")
-                                                            continue
-                                                        reference_sort = int(items[int(raw_ref) - 1]["sort_order"])
-                                                title = input("Title (required): ").strip()
-                                                if not title:
-                                                    print("Title is required.")
-                                                    continue
-                                                subtitle = input("Subtitle (optional): ").strip() or None
-                                                start_date = input("Start Date (optional): ").strip() or None
-                                                end_date = input("End Date (optional): ").strip() or None
-                                                location = input("Location (optional): ").strip() or None
-                                                raw_content = _prompt_multiline_input(
-                                                    "Content (optional)",
-                                                    allow_empty=True,
+                                print("\n----------------------------------------")
+                                print("1. Edit section")
+                                print("2. Add section")
+                                print("3. Delete section")
+                                section_action = input("Select an option (1-3, leave blank to cancel): ").strip().lower()
+                                if not section_action:
+                                    continue
+                                if section_action == "b":
+                                    break
+                                if section_action not in {"1", "2", "3"}:
+                                    print("Invalid choice. Please enter 1, 2, or 3.")
+                                    continue
+                                chosen_section = None
+                                if section_action == "2":
+                                    section_label = input("Section label (required): ").strip()
+                                    if not section_label:
+                                        print("Section label is required.")
+                                        continue
+                                    section_key = input(
+                                        "Section key (optional, letters/numbers/_): "
+                                    ).strip()
+                                    insert_after_sort = None
+                                    if sections:
+                                        raw_after = input(
+                                            "Enter section number to insert after (blank to append): "
+                                        ).strip()
+                                        if raw_after:
+                                            if not raw_after.isdigit() or not (1 <= int(raw_after) <= len(sections)):
+                                                print(f"Indices must be in 1–{len(sections)}.")
+                                                continue
+                                            insert_after_sort = int(sections[int(raw_after) - 1]["sort_order"])
+                                    raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
+                                    if not raw_enabled:
+                                        enabled = 1
+                                    elif raw_enabled in {"y", "yes", "1"}:
+                                        enabled = 1
+                                    elif raw_enabled in {"n", "no", "0"}:
+                                        enabled = 0
+                                    else:
+                                        print("Invalid input. Please enter y or n.")
+                                        continue
+                                    with _open_app_db() as conn:
+                                        created_section = _add_resume_section(
+                                            conn,
+                                            resume_id=str(selected_resume["id"]),
+                                            label=section_label,
+                                            section_key=section_key or None,
+                                            is_enabled=enabled,
+                                            insert_after_sort=insert_after_sort,
+                                        )
+                                    print(
+                                        "Section added successfully: "
+                                        f"[{created_section['label']}] "
+                                        f"(key: {created_section['key']}, order: {created_section['sort_order']})"
+                                    )
+                                    rebuild_prompt = input(
+                                        "Rebuild Resume PDF? (y/n, default y): "
+                                    ).strip().lower()
+                                    do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
+                                    if do_rebuild:
+                                        try:
+                                            pdf_path = _rebuild_current_resume_pdf(selected_resume)
+                                            print(f"Resume PDF successfully saved to:\n{pdf_path}")
+                                        except Exception as exc:
+                                            print("Failed to rebuild resume PDF (LaTeX template).")
+                                            print(f"Error: {exc}")
+                                    edit_now = input("Edit this section now? (y/n, default y): ").strip().lower()
+                                    if edit_now in {"", "y", "yes", "1"}:
+                                        section_action = "1"
+                                        chosen_section = created_section
+                                    else:
+                                        continue
+                                if chosen_section is None:
+                                    section_pick = input("Enter section number (leave blank to cancel): ").strip()
+                                    if not section_pick:
+                                        continue
+                                    if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
+                                        print(f"Indices must be in 1–{len(sections)}.")
+                                        continue
+                                    chosen_section = sections[int(section_pick) - 1]
+                                if section_action == "1":
+                                    while True:
+                                        status = "enabled" if int(chosen_section.get("is_enabled") or 0) else "disabled"
+                                        print(
+                                            f"\nEditing section [{chosen_section['label']}] "
+                                            f"(key: {chosen_section['key']}, order: {chosen_section['sort_order']}, {status})"
+                                        )
+                                        print("1. Edit label")
+                                        print("2. Edit sort order")
+                                        print("3. Toggle enable/disable")
+                                        print("4. Edit item")
+                                        print("5. Back")
+                                        print("6. Back to Main Menu")
+                                        edit_choice = input("Select an option (1-6, leave blank to cancel): ").strip().lower()
+                                        if not edit_choice:
+                                            continue
+                                        if edit_choice in {"5", "b"}:
+                                            break
+                                        if edit_choice == "6":
+                                            back_to_main_menu = True
+                                            break
+                                        if edit_choice == "1":
+                                            new_label = input("New section label: ").strip()
+                                            if not new_label:
+                                                print("Section label cannot be empty.")
+                                                continue
+                                            with _open_app_db() as conn:
+                                                _update_resume_section_fields(
+                                                    conn,
+                                                    section_id=chosen_section["id"],
+                                                    label=new_label,
                                                 )
-                                                content = raw_content.strip() or None if raw_content is not None else None
-                                                raw_sort = input(
-                                                    f"Sort Order (positive integer, default {reference_sort + 1}): "
-                                                ).strip()
-                                                if raw_sort:
-                                                    if not raw_sort.isdigit() or int(raw_sort) <= 0:
-                                                        print("Sort order must be a positive integer.")
-                                                        continue
-                                                    sort_order = int(raw_sort)
-                                                else:
-                                                    sort_order = reference_sort + 1
-                                                raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
-                                                if not raw_enabled:
-                                                    enabled = 1
-                                                elif raw_enabled in {"y", "yes", "1"}:
-                                                    enabled = 1
-                                                elif raw_enabled in {"n", "no", "0"}:
-                                                    enabled = 0
-                                                else:
-                                                    print("Invalid input. Please enter y or n.")
-                                                    continue
-                                                with _open_app_db() as conn:
-                                                    _add_resume_item(
-                                                        conn,
-                                                        section_id=chosen_section["id"],
-                                                        title=title,
-                                                        subtitle=subtitle,
-                                                        start_date=start_date,
-                                                        end_date=end_date,
-                                                        location=location,
-                                                        content=content,
-                                                        sort_order=sort_order,
-                                                        is_enabled=enabled,
-                                                    )
-                                                print("Item added successfully.")
-                                                _prompt_rebuild_resume_pdf(selected_resume)
+                                            chosen_section["label"] = new_label
+                                            print("Section updated successfully.")
+                                            _prompt_rebuild_resume_pdf(selected_resume)
+                                            continue
+                                        if edit_choice == "2":
+                                            raw_order = input("New sort order (positive integer): ").strip()
+                                            if not raw_order.isdigit() or int(raw_order) <= 0:
+                                                print("Sort order must be a positive integer.")
                                                 continue
-                                            if item_action == "3":
-                                                item_label = picked_item.get("title") or picked_item.get("id")
-                                                confirm = input(
-                                                    f"Delete item [{item_label}]? This cannot be undone (y/n): "
-                                                ).strip().lower()
-                                                if confirm not in {"y", "yes"}:
-                                                    print("Cancelled.")
-                                                    continue
-                                                with _open_app_db() as conn:
-                                                    deleted = _delete_resume_item(conn, item_id=str(picked_item["id"]))
-                                                if deleted:
-                                                    print("Item deleted successfully.")
-                                                    _prompt_rebuild_resume_pdf(selected_resume)
-                                                else:
-                                                    print("Item not found.")
+                                            new_order = int(raw_order)
+                                            with _open_app_db() as conn:
+                                                _update_resume_section_fields(
+                                                    conn,
+                                                    section_id=chosen_section["id"],
+                                                    sort_order=new_order,
+                                                )
+                                            chosen_section["sort_order"] = new_order
+                                            print("Section updated successfully.")
+                                            _prompt_rebuild_resume_pdf(selected_resume)
+                                            continue
+                                        if edit_choice == "3":
+                                            raw_toggle = input("Enable this section? (y/n): ").strip().lower()
+                                            if raw_toggle in {"y", "yes", "1"}:
+                                                enabled = 1
+                                            elif raw_toggle in {"n", "no", "0"}:
+                                                enabled = 0
+                                            else:
+                                                print("Invalid input. Please enter y or n.")
                                                 continue
-                                            field_items = [
-                                                ("title", "Title"),
-                                                ("subtitle", "Subtitle"),
-                                                ("start_date", "Start Date"),
-                                                ("end_date", "End Date"),
-                                                ("location", "Location"),
-                                                ("content", "Content"),
-                                                ("sort_order", "Sort Order"),
-                                                ("is_enabled", "Is Enabled"),
-                                            ]
+                                            with _open_app_db() as conn:
+                                                _update_resume_section_fields(
+                                                    conn,
+                                                    section_id=chosen_section["id"],
+                                                    is_enabled=enabled,
+                                                )
+                                            chosen_section["is_enabled"] = enabled
+                                            print("Section updated successfully.")
+                                            _prompt_rebuild_resume_pdf(selected_resume)
+                                            continue
+                                        if edit_choice == "4":
                                             while True:
                                                 with _open_app_db() as conn:
-                                                    current_items = _list_resume_section_items(conn, chosen_section["id"])
-                                                for item in current_items:
-                                                    if item.get("id") == picked_item.get("id"):
-                                                        picked_item = item
-                                                        break
-                                                print("\nSelected item:")
-                                                for field_idx, (field_key, field_label) in enumerate(field_items, start=1):
-                                                    if field_key in {"sort_order", "is_enabled"}:
-                                                        value_display = str(picked_item.get(field_key))
-                                                        print(f"{field_idx}. {field_label}: {value_display}")
-                                                    else:
-                                                        _print_field_value(
-                                                            f"{field_idx}. ",
-                                                            field_label,
-                                                            picked_item.get(field_key),
-                                                        )
-                                                raw_field_pick = input(
-                                                    "Select field number(s) to edit (space-separated, blank to cancel): "
-                                                ).strip()
-                                                if not raw_field_pick:
-                                                    break
-                                                tokens = [tok for tok in raw_field_pick.split() if tok]
-                                                selected_indices: list[int] = []
-                                                seen_indices: set[int] = set()
-                                                invalid = False
-                                                for tok in tokens:
-                                                    if not tok.isdigit():
-                                                        invalid = True
-                                                        break
-                                                    idx = int(tok)
-                                                    if idx < 1 or idx > len(field_items):
-                                                        invalid = True
-                                                        break
-                                                    if idx not in seen_indices:
-                                                        seen_indices.add(idx)
-                                                        selected_indices.append(idx)
-                                                if invalid or not selected_indices:
-                                                    print(f"Indices must be in 1–{len(field_items)}, separated by spaces.")
+                                                    items = _list_resume_section_items(conn, chosen_section["id"])
+                                                print(f"\nItems in section [{chosen_section['label']}]:")
+                                                if not items:
+                                                    print("(No items)")
+                                                else:
+                                                    for item_idx, item in enumerate(items, start=1):
+                                                        print(f"{item_idx}.")
+                                                        _print_field_value("   ", "Title", item.get("title"))
+                                                        _print_field_value("   ", "Subtitle", item.get("subtitle"))
+                                                        _print_field_value("   ", "Start Date", item.get("start_date"))
+                                                        _print_field_value("   ", "End Date", item.get("end_date"))
+                                                        _print_field_value("   ", "Location", item.get("location"))
+                                                        _print_field_value("   ", "Content", item.get("content"))
+                                                        print(f"   Sort Order: {item.get('sort_order')}")
+                                                        print(f"   Is Enabled: {item.get('is_enabled')}")
+                                                print("\n----------------------------------------")
+                                                print("1. Edit Item")
+                                                print("2. Add Item")
+                                                print("3. Delete Item")
+                                                print("4. Rebuild Resume PDF")
+                                                item_action = input(
+                                                    "Select an option (1-4, leave blank to cancel): "
+                                                ).strip().lower()
+                                                if not item_action:
                                                     continue
-
-                                                updated_any = False
-                                                for selected_idx in selected_indices:
-                                                    field_key, field_label = field_items[selected_idx - 1]
-                                                    old_display = (
-                                                        str(picked_item.get(field_key))
-                                                        if field_key in {"sort_order", "is_enabled"}
-                                                        else _display_nullable(picked_item.get(field_key))
-                                                    )
-
-                                                    if field_key == "sort_order":
-                                                        raw_value = input(
-                                                            f"Edit {field_label} from {old_display} to: "
+                                                if item_action == "b":
+                                                    break
+                                                if item_action not in {"1", "2", "3", "4"}:
+                                                    print("Invalid choice. Please enter 1, 2, 3, or 4.")
+                                                    continue
+                                                if item_action == "4":
+                                                    _prompt_rebuild_resume_pdf(selected_resume)
+                                                    continue
+    
+                                                picked_item = None
+                                                if item_action in {"1", "3"}:
+                                                    if not items:
+                                                        print("No items available for this action.")
+                                                        continue
+                                                    raw_item_pick = input("Enter item number (leave blank to cancel): ").strip()
+                                                    if not raw_item_pick:
+                                                        continue
+                                                    if not raw_item_pick.isdigit() or not (1 <= int(raw_item_pick) <= len(items)):
+                                                        print(f"Indices must be in 1–{len(items)}.")
+                                                        continue
+                                                    picked_item = items[int(raw_item_pick) - 1]
+                                                if item_action == "2":
+                                                    reference_sort = int(items[-1]["sort_order"]) if items else 0
+                                                    if items:
+                                                        raw_ref = input(
+                                                            "Enter item number to insert after (blank to append): "
                                                         ).strip()
-                                                        if not raw_value:
-                                                            print("Cancelled.")
-                                                            continue
-                                                        if not raw_value.isdigit() or int(raw_value) <= 0:
+                                                        if raw_ref:
+                                                            if not raw_ref.isdigit() or not (1 <= int(raw_ref) <= len(items)):
+                                                                print(f"Indices must be in 1–{len(items)}.")
+                                                                continue
+                                                            reference_sort = int(items[int(raw_ref) - 1]["sort_order"])
+                                                    title = input("Title (required): ").strip()
+                                                    if not title:
+                                                        print("Title is required.")
+                                                        continue
+                                                    subtitle = input("Subtitle (optional): ").strip() or None
+                                                    start_date = input("Start Date (optional): ").strip() or None
+                                                    end_date = input("End Date (optional): ").strip() or None
+                                                    location = input("Location (optional): ").strip() or None
+                                                    raw_content = _prompt_multiline_input(
+                                                        "Content (optional)",
+                                                        allow_empty=True,
+                                                    )
+                                                    content = raw_content.strip() or None if raw_content is not None else None
+                                                    raw_sort = input(
+                                                        f"Sort Order (positive integer, default {reference_sort + 1}): "
+                                                    ).strip()
+                                                    if raw_sort:
+                                                        if not raw_sort.isdigit() or int(raw_sort) <= 0:
                                                             print("Sort order must be a positive integer.")
                                                             continue
-                                                        with _open_app_db() as conn:
-                                                            _update_resume_item_fields(
-                                                                conn,
-                                                                item_id=picked_item["id"],
-                                                                sort_order=int(raw_value),
-                                                            )
-                                                        updated_any = True
-                                                    elif field_key == "is_enabled":
-                                                        raw_toggle = input(
-                                                            f"Edit {field_label} from {old_display} to (y/n): "
-                                                        ).strip().lower()
-                                                        if not raw_toggle:
-                                                            print("Cancelled.")
-                                                            continue
-                                                        if raw_toggle in {"y", "yes", "1"}:
-                                                            enabled = 1
-                                                        elif raw_toggle in {"n", "no", "0"}:
-                                                            enabled = 0
-                                                        else:
-                                                            print("Invalid input. Please enter y or n.")
-                                                            continue
-                                                        with _open_app_db() as conn:
-                                                            _update_resume_item_fields(
-                                                                conn,
-                                                                item_id=picked_item["id"],
-                                                                is_enabled=enabled,
-                                                            )
-                                                        updated_any = True
+                                                        sort_order = int(raw_sort)
                                                     else:
-                                                        if field_key == "content":
-                                                            raw_value = _prompt_multiline_input(
-                                                                f"Edit {field_label} from {old_display} to",
-                                                                allow_empty=False,
-                                                            )
-                                                            if raw_value is None:
-                                                                print("Cancelled.")
-                                                                continue
+                                                        sort_order = reference_sort + 1
+                                                    raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
+                                                    if not raw_enabled:
+                                                        enabled = 1
+                                                    elif raw_enabled in {"y", "yes", "1"}:
+                                                        enabled = 1
+                                                    elif raw_enabled in {"n", "no", "0"}:
+                                                        enabled = 0
+                                                    else:
+                                                        print("Invalid input. Please enter y or n.")
+                                                        continue
+                                                    with _open_app_db() as conn:
+                                                        _add_resume_item(
+                                                            conn,
+                                                            section_id=chosen_section["id"],
+                                                            title=title,
+                                                            subtitle=subtitle,
+                                                            start_date=start_date,
+                                                            end_date=end_date,
+                                                            location=location,
+                                                            content=content,
+                                                            sort_order=sort_order,
+                                                            is_enabled=enabled,
+                                                        )
+                                                    print("Item added successfully.")
+                                                    _prompt_rebuild_resume_pdf(selected_resume)
+                                                    continue
+                                                if item_action == "3":
+                                                    item_label = picked_item.get("title") or picked_item.get("id")
+                                                    confirm = input(
+                                                        f"Delete item [{item_label}]? This cannot be undone (y/n): "
+                                                    ).strip().lower()
+                                                    if confirm not in {"y", "yes"}:
+                                                        print("Cancelled.")
+                                                        continue
+                                                    with _open_app_db() as conn:
+                                                        deleted = _delete_resume_item(conn, item_id=str(picked_item["id"]))
+                                                    if deleted:
+                                                        print("Item deleted successfully.")
+                                                        _prompt_rebuild_resume_pdf(selected_resume)
+                                                    else:
+                                                        print("Item not found.")
+                                                    continue
+                                                field_items = [
+                                                    ("title", "Title"),
+                                                    ("subtitle", "Subtitle"),
+                                                    ("start_date", "Start Date"),
+                                                    ("end_date", "End Date"),
+                                                    ("location", "Location"),
+                                                    ("content", "Content"),
+                                                    ("sort_order", "Sort Order"),
+                                                    ("is_enabled", "Is Enabled"),
+                                                ]
+                                                while True:
+                                                    with _open_app_db() as conn:
+                                                        current_items = _list_resume_section_items(conn, chosen_section["id"])
+                                                    for item in current_items:
+                                                        if item.get("id") == picked_item.get("id"):
+                                                            picked_item = item
+                                                            break
+                                                    print("\nSelected item:")
+                                                    for field_idx, (field_key, field_label) in enumerate(field_items, start=1):
+                                                        if field_key in {"sort_order", "is_enabled"}:
+                                                            value_display = str(picked_item.get(field_key))
+                                                            print(f"{field_idx}. {field_label}: {value_display}")
                                                         else:
+                                                            _print_field_value(
+                                                                f"{field_idx}. ",
+                                                                field_label,
+                                                                picked_item.get(field_key),
+                                                            )
+                                                    raw_field_pick = input(
+                                                        "Select field number(s) to edit (space-separated, blank to cancel): "
+                                                    ).strip()
+                                                    if not raw_field_pick:
+                                                        break
+                                                    tokens = [tok for tok in raw_field_pick.split() if tok]
+                                                    selected_indices: list[int] = []
+                                                    seen_indices: set[int] = set()
+                                                    invalid = False
+                                                    for tok in tokens:
+                                                        if not tok.isdigit():
+                                                            invalid = True
+                                                            break
+                                                        idx = int(tok)
+                                                        if idx < 1 or idx > len(field_items):
+                                                            invalid = True
+                                                            break
+                                                        if idx not in seen_indices:
+                                                            seen_indices.add(idx)
+                                                            selected_indices.append(idx)
+                                                    if invalid or not selected_indices:
+                                                        print(f"Indices must be in 1–{len(field_items)}, separated by spaces.")
+                                                        continue
+    
+                                                    updated_any = False
+                                                    for selected_idx in selected_indices:
+                                                        field_key, field_label = field_items[selected_idx - 1]
+                                                        old_display = (
+                                                            str(picked_item.get(field_key))
+                                                            if field_key in {"sort_order", "is_enabled"}
+                                                            else _display_nullable(picked_item.get(field_key))
+                                                        )
+    
+                                                        if field_key == "sort_order":
                                                             raw_value = input(
                                                                 f"Edit {field_label} from {old_display} to: "
                                                             ).strip()
                                                             if not raw_value:
                                                                 print("Cancelled.")
                                                                 continue
-                                                        with _open_app_db() as conn:
-                                                            _update_resume_item_fields(
-                                                                conn,
-                                                                item_id=picked_item["id"],
-                                                                **{field_key: raw_value},
-                                                            )
-                                                        updated_any = True
-
+                                                            if not raw_value.isdigit() or int(raw_value) <= 0:
+                                                                print("Sort order must be a positive integer.")
+                                                                continue
+                                                            with _open_app_db() as conn:
+                                                                _update_resume_item_fields(
+                                                                    conn,
+                                                                    item_id=picked_item["id"],
+                                                                    sort_order=int(raw_value),
+                                                                )
+                                                            updated_any = True
+                                                        elif field_key == "is_enabled":
+                                                            raw_toggle = input(
+                                                                f"Edit {field_label} from {old_display} to (y/n): "
+                                                            ).strip().lower()
+                                                            if not raw_toggle:
+                                                                print("Cancelled.")
+                                                                continue
+                                                            if raw_toggle in {"y", "yes", "1"}:
+                                                                enabled = 1
+                                                            elif raw_toggle in {"n", "no", "0"}:
+                                                                enabled = 0
+                                                            else:
+                                                                print("Invalid input. Please enter y or n.")
+                                                                continue
+                                                            with _open_app_db() as conn:
+                                                                _update_resume_item_fields(
+                                                                    conn,
+                                                                    item_id=picked_item["id"],
+                                                                    is_enabled=enabled,
+                                                                )
+                                                            updated_any = True
+                                                        else:
+                                                            if field_key == "content":
+                                                                raw_value = _prompt_multiline_input(
+                                                                    f"Edit {field_label} from {old_display} to",
+                                                                    allow_empty=False,
+                                                                )
+                                                                if raw_value is None:
+                                                                    print("Cancelled.")
+                                                                    continue
+                                                            else:
+                                                                raw_value = input(
+                                                                    f"Edit {field_label} from {old_display} to: "
+                                                                ).strip()
+                                                                if not raw_value:
+                                                                    print("Cancelled.")
+                                                                    continue
+                                                            with _open_app_db() as conn:
+                                                                _update_resume_item_fields(
+                                                                    conn,
+                                                                    item_id=picked_item["id"],
+                                                                    **{field_key: raw_value},
+                                                                )
+                                                            updated_any = True
+    
+                                                        if updated_any:
+                                                            with _open_app_db() as conn:
+                                                                refreshed = _list_resume_section_items(conn, chosen_section["id"])
+                                                            for item in refreshed:
+                                                                if item.get("id") == picked_item.get("id"):
+                                                                    picked_item = item
+                                                                    break
+    
                                                     if updated_any:
-                                                        with _open_app_db() as conn:
-                                                            refreshed = _list_resume_section_items(conn, chosen_section["id"])
-                                                        for item in refreshed:
-                                                            if item.get("id") == picked_item.get("id"):
-                                                                picked_item = item
-                                                                break
-
-                                                if updated_any:
-                                                    print("Item updated successfully.")
-                                                    _prompt_rebuild_resume_pdf(selected_resume)
-                                        continue
-                                    print("Invalid choice. Please enter 1, 2, 3, 4, or 5.")
+                                                        print("Item updated successfully.")
+                                                        _prompt_rebuild_resume_pdf(selected_resume)
+                                            continue
+                                        print("Invalid choice. Please enter 1, 2, 3, 4, 5, or 6.")
+                                if back_to_main_menu:
+                                    break
                                 continue
-                            print(
-                                f"Selected section: {chosen_section['label']} ({chosen_section['key']}). "
-                                "Section action flow is not implemented yet."
-                            )
+                            if back_to_main_menu:
+                                break
                             continue
+                        if back_to_main_menu:
+                            break
+                        continue
                         run_generate_new = True
                         break
 
