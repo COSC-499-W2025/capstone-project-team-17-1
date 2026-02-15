@@ -1713,10 +1713,16 @@ def upsert_default_resume_modules(
     ).fetchone()
     if row:
         resume_id = str(row[0])
-        conn.execute(
-            "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (resume_id,),
-        )
+        if resume_title is not None:
+            conn.execute(
+                "UPDATE resumes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (resume_title, resume_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (resume_id,),
+            )
     else:
         resume_id = str(uuid.uuid4())
         conn.execute(

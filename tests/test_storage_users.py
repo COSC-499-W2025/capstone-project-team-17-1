@@ -186,6 +186,50 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
         conn.close()
 
 
+def test_upsert_default_resume_modules_updates_existing_draft_title():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        first_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020305",
+        )
+        second_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020406",
+        )
+
+        assert first_id == second_id
+        row = conn.execute("SELECT title FROM resumes WHERE id = ?", (first_id,)).fetchone()
+        assert row and row[0] == "Alice Doe_20260215020406"
+
+        conn.close()
+
+
 def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)

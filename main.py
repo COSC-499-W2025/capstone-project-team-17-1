@@ -5,7 +5,7 @@ import sys
 import tempfile
 import pathlib
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Iterable, List, Mapping
 
 import zipfile
@@ -1089,6 +1089,22 @@ def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
 
 
 def _list_existing_resumes(conn: sqlite3.Connection, *, user_id: int | None = None) -> List[dict]:
+    def _to_utc_minus_8(value: object) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        try:
+            if raw.endswith("Z"):
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            else:
+                dt = datetime.fromisoformat(raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+            shifted = dt.astimezone(timezone(timedelta(hours=-8)))
+            return shifted.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return raw
+
     sql = """
         SELECT
             r.id,
@@ -1112,7 +1128,7 @@ def _list_existing_resumes(conn: sqlite3.Connection, *, user_id: int | None = No
             "user_id": int(row[1]),
             "title": row[2] or "Default Resume",
             "status": row[3] or "draft",
-            "updated_at": row[4] or "",
+            "updated_at": _to_utc_minus_8(row[4]),
             "username": row[5] or f"user-{row[1]}",
         }
         for row in rows
@@ -2169,13 +2185,17 @@ def _sync_generated_resume_modules_to_db(
                 }
             )
 
+    full_name = (header_profile.get("full_name") or "").strip()
+    base_title = full_name or "Resume"
+    resume_title = f"{base_title}_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+
     return upsert_default_resume_modules(
         conn,
         user_id=user_id,
         header=header,
         core_skills=all_skills,
         projects=projects,
-        resume_title="Generated Resume",
+        resume_title=resume_title,
     )
 
 
@@ -3176,8 +3196,8 @@ def main():
                             print("\nExisting resumes:")
                             for idx, item in enumerate(existing_resumes, start=1):
                                 print(
-                                    f"{idx}. {item['title']} - {item['username']} "
-                                    f"(status: {item['status']}, updated: {item['updated_at']})"
+                                    f"{idx}. {item['title']} "
+                                    f"(updated: {item['updated_at']})"
                                 )
                             pick = _prompt_single_index(
                                 "\nSelect a resume number ([b]Back, [m]Main Menu, [blank]Cancel): ",
@@ -3307,74 +3327,121 @@ def main():
                                     continue
                                 if section_action == "1":
                                     while True:
-                                        status = "enabled" if int(chosen_section.get("is_enabled") or 0) else "disabled"
-                                        print(
-                                            f"\nEditing section [{chosen_section['label']}] "
-                                            f"(key: {chosen_section['key']}, order: {chosen_section['sort_order']}, {status})"
-                                        )
-                                        print("1. Edit label")
-                                        print("2. Edit sort order")
-                                        print("3. Toggle enable/disable")
-                                        print("4. Edit item")
-                                        edit_choice = _prompt_resume_menu_choice(
-                                            "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
-                                            {"1", "2", "3", "4"},
-                                        )
-                                        if edit_choice is None:
+                                        with _open_app_db() as conn:
+                                            refreshed_sections = _list_resume_sections(conn, selected_resume["id"])
+                                        for sec in refreshed_sections:
+                                            if str(sec.get("id")) == str(chosen_section.get("id")):
+                                                chosen_section = sec
+                                                break
+                                        with _open_app_db() as conn:
+                                            section_items = _list_resume_section_items(conn, chosen_section["id"])
+
+                                        print(f"\nEditing section [{chosen_section['label']}]")
+                                        print(f"1. Label: {chosen_section['label']}")
+                                        print(f"2. Sort Order: {chosen_section['sort_order']}")
+                                        print(f"3. Is Enabled: {chosen_section['is_enabled']}")
+                                        titles = [
+                                            str(item.get("title") or "NULL")
+                                            for item in section_items
+                                        ]
+                                        if titles:
+                                            print(f"4. Item(s): {titles[0]}")
+                                            continuation = " " * len("4. Item(s): ")
+                                            for title in titles[1:]:
+                                                print(f"{continuation}{title}")
+                                        else:
+                                            print("4. Item(s): (No items)")
+
+                                        raw_edit_pick = input(
+                                            "\nSelect option(s) (space-separated, [b]Back, [m]Main Menu, [blank]Cancel): "
+                                        ).strip().lower()
+                                        if not raw_edit_pick:
                                             continue
-                                        if edit_choice == "b":
+                                        if raw_edit_pick == "b":
                                             break
-                                        if edit_choice == "1":
-                                            new_label = input("New section label: ").strip()
-                                            if not new_label:
-                                                print("Section label cannot be empty.")
+                                        if raw_edit_pick == "m":
+                                            raise _ReturnToMainMenu()
+
+                                        tokens = [tok for tok in raw_edit_pick.split() if tok]
+                                        selected_options: list[int] = []
+                                        seen: set[int] = set()
+                                        invalid = False
+                                        for tok in tokens:
+                                            if not tok.isdigit():
+                                                invalid = True
+                                                break
+                                            idx = int(tok)
+                                            if idx < 1 or idx > 4:
+                                                invalid = True
+                                                break
+                                            if idx not in seen:
+                                                seen.add(idx)
+                                                selected_options.append(idx)
+                                        if invalid or not selected_options:
+                                            print("Indices must be in 1–4, separated by spaces.")
+                                            continue
+
+                                        section_updated = False
+                                        open_item_editor = False
+                                        for selected_opt in selected_options:
+                                            if selected_opt == 1:
+                                                new_label = input("New section label: ").strip()
+                                                if not new_label:
+                                                    print("Section label cannot be empty.")
+                                                    continue
+                                                with _open_app_db() as conn:
+                                                    _update_resume_section_fields(
+                                                        conn,
+                                                        section_id=chosen_section["id"],
+                                                        label=new_label,
+                                                    )
+                                                chosen_section["label"] = new_label
+                                                section_updated = True
                                                 continue
-                                            with _open_app_db() as conn:
-                                                _update_resume_section_fields(
-                                                    conn,
-                                                    section_id=chosen_section["id"],
-                                                    label=new_label,
-                                                )
-                                            chosen_section["label"] = new_label
+
+                                            if selected_opt == 2:
+                                                raw_order = input("New sort order (positive integer): ").strip()
+                                                if not raw_order.isdigit() or int(raw_order) <= 0:
+                                                    print("Sort order must be a positive integer.")
+                                                    continue
+                                                new_order = int(raw_order)
+                                                with _open_app_db() as conn:
+                                                    _update_resume_section_fields(
+                                                        conn,
+                                                        section_id=chosen_section["id"],
+                                                        sort_order=new_order,
+                                                    )
+                                                chosen_section["sort_order"] = new_order
+                                                section_updated = True
+                                                continue
+
+                                            if selected_opt == 3:
+                                                old_enabled = int(chosen_section.get("is_enabled") or 0)
+                                                raw_toggle = input(
+                                                    f"Edit Is Enabled from {old_enabled} ([0]Disable [1]Enable) to: "
+                                                ).strip()
+                                                enabled = _parse_enabled_value(raw_toggle)
+                                                if enabled is None:
+                                                    print("Invalid input. Please enter 0 or 1.")
+                                                    continue
+                                                with _open_app_db() as conn:
+                                                    _update_resume_section_fields(
+                                                        conn,
+                                                        section_id=chosen_section["id"],
+                                                        is_enabled=enabled,
+                                                    )
+                                                chosen_section["is_enabled"] = enabled
+                                                section_updated = True
+                                                continue
+
+                                            if selected_opt == 4:
+                                                open_item_editor = True
+
+                                        if section_updated:
                                             print("Section updated successfully.")
                                             _prompt_rebuild_resume_pdf(selected_resume)
-                                            continue
-                                        if edit_choice == "2":
-                                            raw_order = input("New sort order (positive integer): ").strip()
-                                            if not raw_order.isdigit() or int(raw_order) <= 0:
-                                                print("Sort order must be a positive integer.")
-                                                continue
-                                            new_order = int(raw_order)
-                                            with _open_app_db() as conn:
-                                                _update_resume_section_fields(
-                                                    conn,
-                                                    section_id=chosen_section["id"],
-                                                    sort_order=new_order,
-                                                )
-                                            chosen_section["sort_order"] = new_order
-                                            print("Section updated successfully.")
-                                            _prompt_rebuild_resume_pdf(selected_resume)
-                                            continue
-                                        if edit_choice == "3":
-                                            old_enabled = int(chosen_section.get("is_enabled") or 0)
-                                            raw_toggle = input(
-                                                f"Edit Is Enabled from {old_enabled} ([0]Disable [1]Enable) to: "
-                                            ).strip()
-                                            enabled = _parse_enabled_value(raw_toggle)
-                                            if enabled is None:
-                                                print("Invalid input. Please enter 0 or 1.")
-                                                continue
-                                            with _open_app_db() as conn:
-                                                _update_resume_section_fields(
-                                                    conn,
-                                                    section_id=chosen_section["id"],
-                                                    is_enabled=enabled,
-                                                )
-                                            chosen_section["is_enabled"] = enabled
-                                            print("Section updated successfully.")
-                                            _prompt_rebuild_resume_pdf(selected_resume)
-                                            continue
-                                        if edit_choice == "4":
+
+                                        if open_item_editor:
                                             while True:
                                                 with _open_app_db() as conn:
                                                     items = _list_resume_section_items(conn, chosen_section["id"])
@@ -3582,7 +3649,6 @@ def main():
                                                         print("Item updated successfully.")
                                                         _prompt_rebuild_resume_pdf(selected_resume)
                                             continue
-                                        print("Invalid choice. Please enter 1, 2, 3, or 4.")
                                 continue
                             continue
                         continue

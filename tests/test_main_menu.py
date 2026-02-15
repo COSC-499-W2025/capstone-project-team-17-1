@@ -342,7 +342,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # select resume
                     "1",   # edit section
                     "1",   # section number
-                    "1",   # edit label
+                    "1",   # select label field
                     "Professional Summary",
                     "b",   # back
                     "b",   # back from resume submenu
@@ -351,13 +351,67 @@ class MainMenuTests(unittest.TestCase):
                 rows=[],
             )
         self.assertIn("Sections for [Default Resume - alice]:", text)
+        self.assertIn("1. Default Resume (updated: 2026-02-14T00:00:00+00:00)", text)
+        self.assertNotIn("status:", text)
         self.assertIn("----------------------------------------", text)
         self.assertIn("Editing section [Summary]", text)
+        self.assertIn("1. Label: Summary", text)
+        self.assertIn("2. Sort Order: 1", text)
+        self.assertIn("3. Is Enabled: 1", text)
+        self.assertIn("4. Item(s): (No items)", text)
         self.assertIn("Section updated successfully.", text)
         update_mock.assert_called_once()
         kwargs = update_mock.call_args.kwargs
         self.assertEqual(kwargs.get("section_id"), "s1")
         self.assertEqual(kwargs.get("label"), "Professional Summary")
+
+    def test_resume_customize_existing_edit_section_multi_select(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_list_resume_section_items", return_value=[]),
+            patch.object(app, "_update_resume_section_fields") as update_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "1",   # edit section
+                    "1",   # section number
+                    "1 3", # multi-select label + enabled
+                    "Professional Summary",
+                    "0",
+                    "n",   # skip rebuild
+                    "b",   # back section editor
+                    "b",   # back resume menu
+                    "b",   # back to main menu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+
+        self.assertIn("Section updated successfully.", text)
+        self.assertEqual(update_mock.call_count, 2)
+        first_kwargs = update_mock.call_args_list[0].kwargs
+        second_kwargs = update_mock.call_args_list[1].kwargs
+        self.assertEqual(first_kwargs.get("section_id"), "s1")
+        self.assertEqual(first_kwargs.get("label"), "Professional Summary")
+        self.assertEqual(second_kwargs.get("section_id"), "s1")
+        self.assertEqual(second_kwargs.get("is_enabled"), 0)
 
     def test_resume_customize_existing_edit_section_item_content(self):
         existing = [

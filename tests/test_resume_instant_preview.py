@@ -1,6 +1,7 @@
 # tests/test_resume_instant_preview.py
 import sys
 import types
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -171,3 +172,36 @@ def test_build_resume_preview_filters_disabled_sections_and_items():
     experience_section = next(sec for sec in payload["sections"] if sec.get("name") == "experience")
     assert len(experience_section.get("items", [])) == 1
     assert experience_section["items"][0]["title"] == "Role A"
+
+
+def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
+    with patch.object(app, "upsert_default_resume_modules", return_value="resume-id") as upsert_mock:
+        resume_id = app._sync_generated_resume_modules_to_db(
+            conn=None,  # forwarded to mocked upsert; no DB access here
+            user_id=1,
+            resume_preview={
+                "sections": [
+                    {
+                        "name": "projects",
+                        "items": [
+                            {"title": "Proj A", "excerpt": "Built APIs"},
+                        ],
+                    }
+                ]
+            },
+            header_profile={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone_number": "123",
+                "city": "Victoria",
+                "state_region": "BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            chosen_snapshots=[],
+        )
+
+    assert resume_id == "resume-id"
+    kwargs = upsert_mock.call_args.kwargs
+    title = kwargs.get("resume_title") or ""
+    assert re.fullmatch(r"Alice Doe_\d{14}", title)
