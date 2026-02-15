@@ -15,7 +15,9 @@ def build_deep_review_prompt(
 
     header = [
         "You are a senior engineer doing a code review and bug investigation.",
-        "Return JSON only with keys: summary, bugs, improvements, patch, tests, git_issue.",
+        "Write a clear plain text report with sections:",
+        "Summary, Bugs, Improvements, Suggested Patch, Tests, GitHub Issue Draft.",
+        "Use bullet points where helpful. If you include a patch, use a unified diff block.",
         "",
         "Project context derived from metadata.",
         f"File count: {file_summary.get('file_count')}",

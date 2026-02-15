@@ -17,6 +17,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from capstone.consent import ensure_external_permission
+from capstone.llm_client import LLMClient, build_default_llm
+from capstone.code_bundle import bundle_code_from_zip
+from capstone.deep_review_prompt import build_deep_review_prompt
 from capstone.storage import fetch_latest_snapshots
 from capstone.cli import main
 from capstone.config import load_config
@@ -593,6 +597,34 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+def _run_deep_code_review(
+    *,
+    snapshot: dict,
+    question: str,
+    zip_path: str,
+    selected_paths: list[str],
+) -> str:
+    ensure_external_permission(
+        service="capstone.external.deep_review",
+        data_types=["selected source code files"],
+        purpose="Generate deep code review and suggested fixes",
+        destination="OpenAI API",
+        privacy="Selected source files are sent for analysis",
+        source="main-menu",
+    )
+
+    bundle = bundle_code_from_zip(zip_path, include_paths=selected_paths)
+
+    # deep_review_prompt.py signature is: (snapshot, question, files)
+    prompt = build_deep_review_prompt(snapshot, question, bundle)
+
+    llm = build_default_llm()
+    if not llm:
+        raise RuntimeError("LLM not configured. Set OPENAI_API_KEY and ensure the openai package is installed.")
+
+    return llm.generate_summary(prompt)
+
+
 def run_ai_project_analysis(conn, snapshot_map):
     from capstone.llm_client import build_default_llm
     from capstone.consent import ensure_external_permission
@@ -601,7 +633,6 @@ def run_ai_project_analysis(conn, snapshot_map):
         print("No analyzed projects available.")
         return
 
-    # List projects
     project_ids = sorted(snapshot_map.keys())
     print("\nSelect a project for AI analysis:\n")
     for idx, pid in enumerate(project_ids, start=1):
@@ -620,7 +651,6 @@ def run_ai_project_analysis(conn, snapshot_map):
 
     latest_snapshot = snapshots[-1]
 
-    # External consent check
     ensure_external_permission(
         service="capstone.external.analysis",
         data_types=["derived project metadata"],
@@ -635,18 +665,89 @@ def run_ai_project_analysis(conn, snapshot_map):
         print("LLM not configured. Set OPENAI_API_KEY.")
         return
 
-
-
     answer = ask_project_question(
-        project_id= project_id,
-        question="What are the strengths of this project and what could be improved?"
+        project_id=project_id,
+        question="What are the strengths of this project and what could be improved?",
     )
 
     print("\nRunning AI analysis...\n")
-
     print("=== AI Project Insights ===\n")
     print(answer)
     print("\n===========================\n")
+
+    deep = input("Do you want a deep code review on selected files (sends code to LLM) (y/n): ").strip().lower()
+    if deep != "y":
+        return
+
+    zip_path = pick_zip_file()
+    if not zip_path:
+        print("Cancelled.")
+        return
+    print(f"Selected ZIP: {zip_path}")
+
+    if not zip_path:
+        print("Cancelled.")
+        return
+    if not os.path.isfile(zip_path):
+        print("Invalid zip path.")
+        return
+
+    import zipfile
+    text_exts = {
+        ".py", ".js", ".ts", ".tsx", ".java", ".cs", ".cpp", ".c", ".h", ".hpp",
+        ".go", ".rs", ".kt", ".swift", ".php", ".rb", ".scala", ".sql", ".html", ".css",
+        ".json", ".yml", ".yaml", ".md", ".txt"
+    }
+
+    candidates: list[str] = []
+    with zipfile.ZipFile(zip_path) as z:
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            name = info.filename
+            ext = pathlib.PurePosixPath(name).suffix.lower()
+            if ext in text_exts:
+                candidates.append(name)
+
+    if not candidates:
+        print("No reviewable code files found in that zip.")
+        return
+
+    candidates.sort()
+    print("\nSelect files to include in deep review:\n")
+    for idx, name in enumerate(candidates, start=1):
+        print(f"{idx}. {name}")
+
+    selection = _prompt_indices(
+        "Select file numbers (space-separated, blank to cancel, b to back): ",
+        len(candidates),
+    )
+    if selection is None or selection == "b":
+        print("Cancelled.")
+        return
+
+    selected_paths = [candidates[i - 1] for i in selection]
+
+    print("\nRunning deep code review...\n")
+    try:
+        deep_question = input("What do you want to ask about the selected code: ").strip()
+        if not deep_question:
+            deep_question = "Review these files for bugs, improvements, and provide suggested fixes."
+        deep_answer = _run_deep_code_review(
+        snapshot=latest_snapshot,   # or whatever variable holds the selected project snapshot
+        question=deep_question,
+        zip_path=zip_path,
+        selected_paths=selected_paths,
+)
+        
+    except Exception as exc:
+        print(f"Deep review failed: {exc}")
+        return
+
+    print("=== Deep Code Review ===\n")
+    print(deep_answer)
+    print("\n========================\n")
+
 
 def _prompt_indices(prompt: str, max_index: int) -> list[int] | None | str:
     while True:
