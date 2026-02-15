@@ -594,6 +594,25 @@ def _prompt_menu(title: str, options: List[str]) -> str:
         print(f"{idx}. {label}")
     return _prompt_choice("Select an option: ", [str(i) for i in range(1, len(options) + 1)])
 
+
+def _prompt_resume_menu_choice(prompt: str, valid_choices: Iterable[str]) -> str | None:
+    allowed = {str(x).strip().lower() for x in valid_choices}
+    while True:
+        raw = input(prompt).strip().lower()
+        if raw == "":
+            return None
+        if raw == "m":
+            raise _ReturnToMainMenu()
+        if raw == "b":
+            return "b"
+        if raw in allowed:
+            return raw
+        if allowed:
+            display = ", ".join(sorted(allowed))
+            print(f"Invalid choice. Please enter one of: {display}.")
+        else:
+            print("Invalid choice.")
+
 def run_ai_project_analysis(conn, snapshot_map):
     from capstone.llm_client import build_default_llm
     from capstone.consent import ensure_external_permission
@@ -3068,18 +3087,25 @@ def main():
                 elif choice == "6":
                     run_generate_new = False
                     while True:
-                        resume_choice = _prompt_menu(
-                            "Resume",
-                            [
-                                "Generate New Resume",
-                                "Customize Existed Resume",
-                                "Delete Existed Resume",
-                                "Back",
-                            ],
+                        print("\n" + "=" * 40)
+                        print("Resume")
+                        print("=" * 40)
+                        print("1. Generate New Resume")
+                        print("2. Customize Existed Resume")
+                        print("3. Delete Existed Resume")
+                        print("4. Back")
+                        resume_choice = _prompt_resume_menu_choice(
+                            "Select an option (1-4, b to back, m to main menu, leave blank to cancel): ",
+                            {"1", "2", "3", "4"},
                         )
+                        if resume_choice is None:
+                            continue
                         if resume_choice == "b":
                             resume_choice = "4"
                         if resume_choice == "4":
+                            break
+                        if resume_choice == "1":
+                            run_generate_new = True
                             break
                         if resume_choice == "3":
                             print("Delete existed resume flow is not implemented yet.")
@@ -3124,14 +3150,14 @@ def main():
                                 print("1. Edit section")
                                 print("2. Add section")
                                 print("3. Delete section")
-                                section_action = input("Select an option (1-3, leave blank to cancel): ").strip().lower()
-                                if not section_action:
+                                section_action = _prompt_resume_menu_choice(
+                                    "Select an option (1-3, b to back, m to main menu, leave blank to cancel): ",
+                                    {"1", "2", "3"},
+                                )
+                                if section_action is None:
                                     continue
                                 if section_action == "b":
                                     break
-                                if section_action not in {"1", "2", "3"}:
-                                    print("Invalid choice. Please enter 1, 2, or 3.")
-                                    continue
                                 if section_action in {"1", "3"} and not sections:
                                     print("No sections available for this action.")
                                     continue
@@ -3196,11 +3222,13 @@ def main():
                                     else:
                                         continue
                                 if chosen_section is None:
-                                    section_pick = input("Enter section number (leave blank to cancel): ").strip()
-                                    if not section_pick:
+                                    section_pick = _prompt_single_index(
+                                        "Enter section number (leave blank to cancel, b to back, m to main menu): ",
+                                        len(sections),
+                                    )
+                                    if section_pick is None:
                                         continue
-                                    if not section_pick.isdigit() or not (1 <= int(section_pick) <= len(sections)):
-                                        print(f"Indices must be in 1–{len(sections)}.")
+                                    if section_pick == "b":
                                         continue
                                     chosen_section = sections[int(section_pick) - 1]
                                 if section_action == "3":
@@ -3232,8 +3260,11 @@ def main():
                                         print("4. Edit item")
                                         print("5. Back")
                                         print("6. Back to Main Menu")
-                                        edit_choice = input("Select an option (1-6, leave blank to cancel): ").strip().lower()
-                                        if not edit_choice:
+                                        edit_choice = _prompt_resume_menu_choice(
+                                            "Select an option (1-6, b to back, m to main menu, leave blank to cancel): ",
+                                            {"1", "2", "3", "4", "5", "6"},
+                                        )
+                                        if edit_choice is None:
                                             continue
                                         if edit_choice in {"5", "b"}:
                                             break
@@ -3313,16 +3344,14 @@ def main():
                                                 print("2. Add Item")
                                                 print("3. Delete Item")
                                                 print("4. Rebuild Resume PDF")
-                                                item_action = input(
-                                                    "Select an option (1-4, leave blank to cancel): "
-                                                ).strip().lower()
-                                                if not item_action:
+                                                item_action = _prompt_resume_menu_choice(
+                                                    "Select an option (1-4, b to back, m to main menu, leave blank to cancel): ",
+                                                    {"1", "2", "3", "4"},
+                                                )
+                                                if item_action is None:
                                                     continue
                                                 if item_action == "b":
                                                     break
-                                                if item_action not in {"1", "2", "3", "4"}:
-                                                    print("Invalid choice. Please enter 1, 2, 3, or 4.")
-                                                    continue
                                                 if item_action == "4":
                                                     _prompt_rebuild_resume_pdf(selected_resume)
                                                     continue
@@ -3332,11 +3361,13 @@ def main():
                                                     if not items:
                                                         print("No items available for this action.")
                                                         continue
-                                                    raw_item_pick = input("Enter item number (leave blank to cancel): ").strip()
-                                                    if not raw_item_pick:
+                                                    raw_item_pick = _prompt_single_index(
+                                                        "Enter item number (leave blank to cancel, b to back, m to main menu): ",
+                                                        len(items),
+                                                    )
+                                                    if raw_item_pick is None:
                                                         continue
-                                                    if not raw_item_pick.isdigit() or not (1 <= int(raw_item_pick) <= len(items)):
-                                                        print(f"Indices must be in 1–{len(items)}.")
+                                                    if raw_item_pick == "b":
                                                         continue
                                                     picked_item = items[int(raw_item_pick) - 1]
                                                 if item_action == "2":
@@ -3444,10 +3475,14 @@ def main():
                                                                 picked_item.get(field_key),
                                                             )
                                                     raw_field_pick = input(
-                                                        "Select field number(s) to edit (space-separated, blank to cancel): "
+                                                        "Select field number(s) to edit (space-separated, b to back, m to main menu, leave blank to cancel): "
                                                     ).strip()
                                                     if not raw_field_pick:
+                                                        continue
+                                                    if raw_field_pick.lower() == "b":
                                                         break
+                                                    if raw_field_pick.lower() == "m":
+                                                        raise _ReturnToMainMenu()
                                                     tokens = [tok for tok in raw_field_pick.split() if tok]
                                                     selected_indices: list[int] = []
                                                     seen_indices: set[int] = set()
@@ -3554,11 +3589,7 @@ def main():
                             if back_to_main_menu:
                                 break
                             continue
-                        if back_to_main_menu:
-                            break
                         continue
-                        run_generate_new = True
-                        break
 
                     if not run_generate_new:
                         continue
