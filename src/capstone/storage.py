@@ -1695,22 +1695,25 @@ def upsert_default_resume_modules(
     core_skills: list[str],
     projects: list[dict[str, str]],
     resume_title: str | None = None,
+    create_new: bool = False,
 ) -> str:
     """
     Ensure a draft modular resume exists for the user and persist default modules.
     - header/core_skill/project are refreshed from latest generated data.
     - summary/education/experience are ensured as empty templates (insert only when missing).
     """
-    row = conn.execute(
-        """
-        SELECT id
-        FROM resumes
-        WHERE user_id = ? AND status = 'draft'
-        ORDER BY datetime(updated_at) DESC, id DESC
-        LIMIT 1
-        """,
-        (int(user_id),),
-    ).fetchone()
+    row = None
+    if not create_new:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM resumes
+            WHERE user_id = ? AND status = 'draft'
+            ORDER BY datetime(updated_at) DESC, id DESC
+            LIMIT 1
+            """,
+            (int(user_id),),
+        ).fetchone()
     if row:
         resume_id = str(row[0])
         if resume_title is not None:

@@ -2207,6 +2207,7 @@ def _sync_generated_resume_modules_to_db(
         core_skills=all_skills,
         projects=projects,
         resume_title=resume_title,
+        create_new=True,
     )
 
 

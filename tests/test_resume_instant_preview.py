@@ -205,3 +205,4 @@ def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
     kwargs = upsert_mock.call_args.kwargs
     title = kwargs.get("resume_title") or ""
     assert re.fullmatch(r"Alice Doe_\d{14}", title)
+    assert kwargs.get("create_new") is True

@@ -230,6 +230,55 @@ def test_upsert_default_resume_modules_updates_existing_draft_title():
         conn.close()
 
 
+def test_upsert_default_resume_modules_create_new_for_same_user():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        first_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020507",
+            create_new=True,
+        )
+        second_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj B", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020608",
+            create_new=True,
+        )
+
+        assert first_id != second_id
+        count = conn.execute(
+            "SELECT COUNT(*) FROM resumes WHERE user_id = ? AND status = 'draft'",
+            (user_id,),
+        ).fetchone()[0]
+        assert int(count) == 2
+
+        conn.close()
+
+
 def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
