@@ -1098,3 +1098,79 @@ To conclude the work, I prepared the changes for review and integration.
 
 This week focused on turning an already functional API into a complete and defensible system. By auditing the existing endpoints, filling small but important gaps, and validating the design of the AI integration, the backend now cleanly supports the full consent to upload to generate workflow. Using Postman for external testing also strengthens the project’s credibility by demonstrating that the API behaves correctly outside of the built in Swagger interface. Overall, this work improved the completeness, clarity, and polish of the system without introducing unnecessary complexity.
 
+---
+
+## Week 6 Personal Log [Feb 9 – Feb 15, 2026]
+
+This week I focused on extending the capstone CLI AI workflow by adding an optional deeper code review feature. The main goal was to let users upload a project archive, select specific source files, and request targeted AI feedback on bugs, improvements, and suggested fixes while keeping the consent model explicit and safe. A significant portion of the work also involved rebuilding my local environment after a hard reset, restoring Python tooling, and validating the feature with repeatable `unittest` coverage.
+
+---
+
+### Environment recovery and tooling setup
+
+A prerequisite for completing the work was restoring my development environment after a hard reset.
+
+* Reinstalled Python and verified interpreter availability from PowerShell.
+* Recreated the project virtual environment and reinstalled required dependencies.
+* Reconfigured the `OPENAI_API_KEY` environment variable and validated visibility inside the activated venv.
+* Diagnosed configuration issues where the key was set but the OpenAI client dependency was missing, and ensured the LLM integration could initialize correctly.
+
+---
+
+### Deep AI code review feature design
+
+I designed a deeper AI analysis path that builds on the existing AI insights feature without breaking the current workflow.
+
+* Kept the existing AI insights flow intact and added an optional deep review step after the normal project insights output.
+* Implemented a bounded “code bundle” approach to avoid sending entire archives to the LLM and to keep requests small and predictable.
+* Ensured the deep review route uses explicit external permission gating with clear messaging that selected source files will be shared.
+* Structured the prompt to include snapshot context (languages, file summary, collaboration context) alongside the selected code files for better quality suggestions.
+
+---
+
+### Code selection and bundling logic
+
+To support selective deep analysis, I implemented a small pipeline for selecting files and packaging them for the prompt.
+
+* Added ZIP scanning to enumerate reviewable source files based on a controlled set of textual extensions.
+* Implemented a file selection experience where users choose files by index rather than typing file names.
+* Added bundling safeguards including maximum file count, maximum total size, and per file truncation to prevent oversized prompts.
+* Added basic redaction behavior for obvious secret looking lines before sending content to the LLM.
+
+---
+
+### Prompt construction and output formatting
+
+I focused on making deep review output usable directly in the CLI.
+
+* Built a dedicated deep review prompt builder that formats selected files with clear boundaries and includes metadata context.
+* Adjusted prompt instructions so the returned output is readable in the console instead of rigid JSON only responses.
+* Validated the integration end to end by selecting a real ZIP, picking specific files such as SQL migrations and Python entrypoints, granting consent, and confirming the response is printed correctly.
+
+---
+
+### Testing and validation using unittest
+
+To lock in the behavior and prevent regressions, I added targeted unit tests.
+
+* Wrote `unittest` coverage for the code bundler to verify inclusion filtering, extension rules, truncation behavior, total size limits, and redaction behavior.
+* Wrote `unittest` coverage for the deep review prompt builder to ensure snapshot context, question text, and file blocks are correctly included and robust to missing snapshot fields.
+* Ran the tests locally and confirmed they pass consistently after environment rebuild.
+
+---
+
+### Debugging and integration fixes
+
+Several small issues surfaced during integration, and I fixed them systematically.
+
+* Resolved import mismatches caused by function naming differences between the bundler implementation and the call site.
+* Fixed a prompt builder call signature mismatch that caused runtime errors during deep review execution.
+* Fixed a CLI bug where the deep question variable was referenced before definition and corrected a parenthesis error that broke the try block.
+* Verified the final flow works end to end through the main menu without adding new CLI arguments.
+
+---
+
+### Reflection
+
+This week focused on adding a practical and user friendly “deep review” feature while keeping our consent and privacy posture explicit. The feature now supports a realistic workflow where users can choose exactly which files to send for analysis instead of dumping an entire project, and the new unit tests provide confidence that bundling and prompt formatting behavior will remain stable. The extra time spent recovering my local environment also helped me ensure that the setup and dependency assumptions are clear and reproducible for future development and peer testing.
+
