@@ -54,6 +54,14 @@ def _normalize_user_email(email: str | None) -> str | None:
     return value
 
 
+def _default_github_url(username: str | None) -> str | None:
+    if username is None:
+        return None
+    token = str(username).strip()
+    if not token:
+        return None
+    return f"https://github.com/{token}"
+
 
 # Schema + migrations
 
@@ -136,6 +144,12 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             email TEXT,
+            full_name TEXT,
+            phone_number TEXT,
+            city TEXT,
+            state_region TEXT,
+            github_url TEXT,
+            portfolio_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -165,6 +179,77 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_user_projects_project
         ON user_projects (project_id)
+        """
+    )
+
+    # Modular resume schema (MVP).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resumes (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT 'Default Resume',
+            target_role TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resume_sections (
+            id TEXT PRIMARY KEY,
+            resume_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            is_custom INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resume_items (
+            id TEXT PRIMARY KEY,
+            section_id TEXT NOT NULL,
+            title TEXT,
+            subtitle TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            location TEXT,
+            content TEXT,
+            bullets_json TEXT,
+            metadata_json TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resumes_user
+        ON resumes (user_id, updated_at)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
+        ON resume_sections (resume_id, sort_order)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_resume_items_section
+        ON resume_items (section_id, sort_order)
         """
     )
 
@@ -258,6 +343,91 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
         conn.commit()
 
+    # Add profile columns to users when missing (backward-compatible migration).
+    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
+    user_columns = {row[1] for row in user_info}
+    for column_name, column_type in (
+        ("full_name", "TEXT"),
+        ("phone_number", "TEXT"),
+        ("city", "TEXT"),
+        ("state_region", "TEXT"),
+        ("github_url", "TEXT"),
+        ("portfolio_url", "TEXT"),
+    ):
+        if column_name not in user_columns:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
+    conn.commit()
+
+    desired_users_order = [
+        "id",
+        "username",
+        "email",
+        "full_name",
+        "phone_number",
+        "city",
+        "state_region",
+        "github_url",
+        "portfolio_url",
+        "created_at",
+        "updated_at",
+    ]
+    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
+    current_users_order = [row[1] for row in user_info]
+    if all(col in current_users_order for col in desired_users_order) and current_users_order != desired_users_order:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE users RENAME TO users_old")
+        conn.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email TEXT,
+                full_name TEXT,
+                phone_number TEXT,
+                city TEXT,
+                state_region TEXT,
+                github_url TEXT,
+                portfolio_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO users (
+                id, username, email, full_name, phone_number, city, state_region,
+                github_url, portfolio_url, created_at, updated_at
+            )
+            SELECT
+                id,
+                username,
+                email,
+                full_name,
+                phone_number,
+                city,
+                state_region,
+                CASE
+                    WHEN github_url IS NULL OR TRIM(github_url) = ''
+                    THEN ('https://github.com/' || username)
+                    ELSE github_url
+                END,
+                portfolio_url,
+                created_at,
+                updated_at
+            FROM users_old
+            """
+        )
+        conn.execute("DROP TABLE users_old")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
+            ON users (username, COALESCE(email, ''))
+            """
+        )
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
     # Repair legacy FK if user_projects points to users_old.
     fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
     fk_targets = {row[2] for row in fk_rows if len(row) > 2}
@@ -290,6 +460,141 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             """
         )
         conn.execute("DROP TABLE user_projects_old")
+        conn.commit()
+
+    # Align resume timestamp columns with users (UTC CURRENT_TIMESTAMP defaults).
+    resume_ts_specs = {
+        "resumes": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+        "resume_sections": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+        "resume_items": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
+    }
+    needs_resume_ts_migration = False
+    for table_name, expected in resume_ts_specs.items():
+        table_info = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        column_map = {row[1]: row for row in table_info}
+        for column_name, expected_default in expected.items():
+            row = column_map.get(column_name)
+            if not row:
+                needs_resume_ts_migration = True
+                break
+            col_type = str(row[2] or "").upper()
+            default_value = str(row[4] or "").upper()
+            if col_type != "TIMESTAMP" or default_value != expected_default:
+                needs_resume_ts_migration = True
+                break
+        if needs_resume_ts_migration:
+            break
+
+    if needs_resume_ts_migration:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+        conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
+        conn.execute(
+            """
+            CREATE TABLE resumes (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT 'Default Resume',
+                target_role TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
+            SELECT id, user_id, title, target_role, status, created_at, updated_at
+            FROM resumes_old
+            """
+        )
+        conn.execute("DROP TABLE resumes_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resumes_user
+            ON resumes (user_id, updated_at)
+            """
+        )
+
+        conn.execute("ALTER TABLE resume_sections RENAME TO resume_sections_old")
+        conn.execute(
+            """
+            CREATE TABLE resume_sections (
+                id TEXT PRIMARY KEY,
+                resume_id TEXT NOT NULL,
+                key TEXT NOT NULL,
+                label TEXT NOT NULL,
+                is_custom INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resume_sections (
+                id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+            )
+            SELECT id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+            FROM resume_sections_old
+            """
+        )
+        conn.execute("DROP TABLE resume_sections_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
+            ON resume_sections (resume_id, sort_order)
+            """
+        )
+
+        conn.execute("ALTER TABLE resume_items RENAME TO resume_items_old")
+        conn.execute(
+            """
+            CREATE TABLE resume_items (
+                id TEXT PRIMARY KEY,
+                section_id TEXT NOT NULL,
+                title TEXT,
+                subtitle TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                location TEXT,
+                content TEXT,
+                bullets_json TEXT,
+                metadata_json TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO resume_items (
+                id, section_id, title, subtitle, start_date, end_date, location, content,
+                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+            )
+            SELECT
+                id, section_id, title, subtitle, start_date, end_date, location, content,
+                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+            FROM resume_items_old
+            """
+        )
+        conn.execute("DROP TABLE resume_items_old")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_resume_items_section
+            ON resume_items (section_id, sort_order)
+            """
+        )
+
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
     # 2) project_analysis legacy columns backfill / add columns if missing
@@ -452,8 +757,8 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
             canonical_user_id = int(row[0])
         else:
             cursor = conn.execute(
-                "INSERT INTO users (username, email) VALUES (?, NULL)",
-                (contributor,),
+                "INSERT INTO users (username, email, github_url) VALUES (?, NULL, ?)",
+                (contributor, _default_github_url(contributor)),
             )
             canonical_user_id = int(cursor.lastrowid)
 
@@ -1263,7 +1568,9 @@ def upsert_user(
 ) -> int:
     if not username:
         raise ValueError("username must be provided")
+    username = str(username).strip()
     email = _normalize_user_email(email)
+    default_github = _default_github_url(username)
 
     # Prefer matching by email when available, otherwise by username.
     row = None
@@ -1280,21 +1587,296 @@ def upsert_user(
     if row:
         user_id = int(row[0])
         conn.execute(
-            "UPDATE users SET username = COALESCE(?, username), email = COALESCE(?, email), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (username, email, user_id),
+            """
+            UPDATE users
+            SET
+                username = COALESCE(?, username),
+                email = COALESCE(?, email),
+                github_url = CASE
+                    WHEN github_url IS NULL OR TRIM(github_url) = ''
+                    THEN COALESCE(?, github_url)
+                    ELSE github_url
+                END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (username, email, default_github, user_id),
         )
         conn.commit()
         return user_id
 
     cursor = conn.execute(
         """
-        INSERT INTO users (username, email)
-        VALUES (?, ?)
+        INSERT INTO users (username, email, github_url)
+        VALUES (?, ?, ?)
         """,
-        (username, email),
+        (username, email, default_github),
     )
     conn.commit()
     return int(cursor.lastrowid)
+
+
+def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT
+            id,
+            username,
+            email,
+            full_name,
+            phone_number,
+            city,
+            state_region,
+            github_url,
+            portfolio_url
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+        """,
+        (int(user_id),),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": int(row[0]),
+        "username": row[1],
+        "email": row[2],
+        "full_name": row[3],
+        "phone_number": row[4],
+        "city": row[5],
+        "state_region": row[6],
+        "github_url": row[7],
+        "portfolio_url": row[8],
+    }
+
+
+def update_user_profile(
+    conn: sqlite3.Connection,
+    user_id: int,
+    *,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    city: str | None = None,
+    state_region: str | None = None,
+    github_url: str | None = None,
+    portfolio_url: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        UPDATE users
+        SET
+            full_name = COALESCE(?, full_name),
+            phone_number = COALESCE(?, phone_number),
+            city = COALESCE(?, city),
+            state_region = COALESCE(?, state_region),
+            github_url = COALESCE(?, github_url),
+            portfolio_url = COALESCE(?, portfolio_url),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (
+            full_name,
+            phone_number,
+            city,
+            state_region,
+            github_url,
+            portfolio_url,
+            int(user_id),
+        ),
+    )
+    conn.commit()
+
+
+def upsert_default_resume_modules(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    header: dict[str, str],
+    core_skills: list[str],
+    projects: list[dict[str, str]],
+    resume_title: str | None = None,
+    create_new: bool = False,
+) -> str:
+    """
+    Ensure a draft modular resume exists for the user and persist default modules.
+    - header/core_skill/project are refreshed from latest generated data.
+    - summary/education/experience are ensured as empty templates (insert only when missing).
+    """
+    row = None
+    if not create_new:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM resumes
+            WHERE user_id = ? AND status = 'draft'
+            ORDER BY datetime(updated_at) DESC, id DESC
+            LIMIT 1
+            """,
+            (int(user_id),),
+        ).fetchone()
+    if row:
+        resume_id = str(row[0])
+        if resume_title is not None:
+            conn.execute(
+                "UPDATE resumes SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (resume_title, resume_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (resume_id,),
+            )
+    else:
+        resume_id = str(uuid.uuid4())
+        conn.execute(
+            """
+            INSERT INTO resumes (id, user_id, title, target_role, status)
+            VALUES (?, ?, ?, NULL, 'draft')
+            """,
+            (
+                resume_id,
+                int(user_id),
+                resume_title or "Default Resume",
+            ),
+        )
+
+    defaults = [
+        ("header", "Header"),
+        ("summary", "Summary"),
+        ("education", "Education"),
+        ("experience", "Experience"),
+        ("core_skill", "Core Skill"),
+        ("project", "Project"),
+    ]
+    section_ids: dict[str, str] = {}
+    for index, (key, label) in enumerate(defaults, start=1):
+        sec = conn.execute(
+            """
+            SELECT id
+            FROM resume_sections
+            WHERE resume_id = ? AND key = ?
+            LIMIT 1
+            """,
+            (resume_id, key),
+        ).fetchone()
+        if sec:
+            section_id = str(sec[0])
+            conn.execute(
+                """
+                UPDATE resume_sections
+                SET label = ?, sort_order = ?, is_enabled = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (label, index, section_id),
+            )
+        else:
+            section_id = str(uuid.uuid4())
+            conn.execute(
+                """
+                INSERT INTO resume_sections (
+                    id, resume_id, key, label, is_custom, sort_order, is_enabled
+                )
+                VALUES (?, ?, ?, ?, 0, ?, 1)
+                """,
+                (section_id, resume_id, key, label, index),
+            )
+        section_ids[key] = section_id
+
+    def _replace_items(section_key: str, items: list[dict[str, object]]) -> None:
+        section_id = section_ids[section_key]
+        conn.execute("DELETE FROM resume_items WHERE section_id = ?", (section_id,))
+        for idx, item in enumerate(items, start=1):
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    section_id,
+                    item.get("title"),
+                    item.get("subtitle"),
+                    item.get("start_date"),
+                    item.get("end_date"),
+                    item.get("location"),
+                    item.get("content"),
+                    json.dumps(item.get("bullets") or []),
+                    json.dumps(item.get("metadata") or {}),
+                    idx,
+                ),
+            )
+
+    header_item = {
+        "title": "Header",
+        "content": header.get("full_name") or "",
+        "metadata": {
+            "full_name": header.get("full_name") or "",
+            "email": header.get("email") or "",
+            "phone": header.get("phone") or "",
+            "location": header.get("location") or "",
+            "github_url": header.get("github_url") or "",
+            "portfolio_url": header.get("portfolio_url") or "",
+        },
+    }
+    _replace_items("header", [header_item])
+
+    skill_tokens = [str(token).strip() for token in (core_skills or []) if str(token).strip()]
+    deduped_skills: list[str] = []
+    seen: set[str] = set()
+    for token in skill_tokens:
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_skills.append(token)
+    core_skill_item = {
+        "title": "Core Skill",
+        "content": ", ".join(deduped_skills),
+        "bullets": deduped_skills,
+    }
+    _replace_items("core_skill", [core_skill_item])
+
+    project_items: list[dict[str, object]] = []
+    for project in projects or []:
+        project_items.append(
+            {
+                "title": project.get("title") or "Project",
+                "subtitle": project.get("stack") or "",
+                "content": project.get("content") or "",
+            }
+        )
+    _replace_items("project", project_items)
+
+    # Ensure empty templates for summary/education/experience (insert only if missing).
+    # Education/Experience placeholders use entry-title defaults expected by PDF rendering.
+    template_titles = {
+        "summary": "Summary",
+        "education": "University",
+        "experience": "Event",
+    }
+    for key, label in (("summary", "Summary"), ("education", "Education"), ("experience", "Experience")):
+        section_id = section_ids[key]
+        existing = conn.execute(
+            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
+            (section_id,),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled
+                )
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                """,
+                (str(uuid.uuid4()), section_id, template_titles[key]),
+            )
+
+    conn.commit()
+    return resume_id
 
 
 def link_user_to_project(
@@ -1537,6 +2119,9 @@ __all__ = [
     "fetch_contributor_rankings",
     # users
     "upsert_user",
+    "get_user_profile",
+    "update_user_profile",
+    "upsert_default_resume_modules",
     "link_user_to_project",
     "upsert_users_from_contributors",
     # evidence

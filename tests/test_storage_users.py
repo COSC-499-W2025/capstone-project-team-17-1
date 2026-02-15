@@ -15,6 +15,43 @@ def test_users_and_links_schema_and_fk():
         assert "users" in tables
         assert "user_projects" in tables
         assert "contributor_stats" in tables
+        assert "resumes" in tables
+        assert "resume_sections" in tables
+        assert "resume_items" in tables
+        user_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        assert "full_name" in user_columns
+        assert "phone_number" in user_columns
+        assert "city" in user_columns
+        assert "state_region" in user_columns
+        assert "github_url" in user_columns
+        assert "portfolio_url" in user_columns
+        ordered_columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        ]
+        assert ordered_columns == [
+            "id",
+            "username",
+            "email",
+            "full_name",
+            "phone_number",
+            "city",
+            "state_region",
+            "github_url",
+            "portfolio_url",
+            "created_at",
+            "updated_at",
+        ]
+        for table_name in ("resumes", "resume_sections", "resume_items"):
+            info = {
+                row[1]: row
+                for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            assert info["created_at"][2] == "TIMESTAMP"
+            assert info["updated_at"][2] == "TIMESTAMP"
+            assert (info["created_at"][4] or "").upper() == "CURRENT_TIMESTAMP"
+            assert (info["updated_at"][4] or "").upper() == "CURRENT_TIMESTAMP"
 
         # Insert user and contributor stats with user_id
         user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
@@ -41,6 +78,215 @@ def test_users_and_links_schema_and_fk():
         # FK points to users
         fk = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
         assert fk and fk[0][2] == "users"
+
+        conn.close()
+
+
+def test_get_and_update_user_profile():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        storage.update_user_profile(
+            conn,
+            user_id,
+            full_name="Alice Doe",
+            phone_number="+1 111-222-3333",
+            city="Seattle",
+            state_region="WA",
+            github_url="https://github.com/alice",
+            portfolio_url="https://alice.dev",
+        )
+        profile = storage.get_user_profile(conn, user_id)
+        assert profile is not None
+        assert profile["full_name"] == "Alice Doe"
+        assert profile["phone_number"] == "+1 111-222-3333"
+        assert profile["city"] == "Seattle"
+        assert profile["state_region"] == "WA"
+        assert profile["github_url"] == "https://github.com/alice"
+        assert profile["portfolio_url"] == "https://alice.dev"
+
+        conn.close()
+
+
+def test_upsert_user_sets_default_github_url():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        row = conn.execute(
+            "SELECT github_url FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        assert row and row[0] == "https://github.com/alice"
+
+        conn.close()
+
+
+def test_upsert_default_resume_modules_creates_default_sections_and_templates():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        resume_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python", "SQL", "Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python, FastAPI"}],
+            resume_title="Generated Resume",
+        )
+        assert resume_id
+
+        section_rows = conn.execute(
+            "SELECT key, sort_order FROM resume_sections WHERE resume_id = ? ORDER BY sort_order",
+            (resume_id,),
+        ).fetchall()
+        assert [row[0] for row in section_rows] == [
+            "header",
+            "summary",
+            "education",
+            "experience",
+            "core_skill",
+            "project",
+        ]
+
+        summary_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key = 'summary'
+            """,
+            (resume_id,),
+        ).fetchone()[0]
+        assert summary_count == 1
+
+        project_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key = 'project'
+            """,
+            (resume_id,),
+        ).fetchone()[0]
+        assert project_count == 1
+
+        placeholder_rows = conn.execute(
+            """
+            SELECT s.key, i.title
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key IN ('education', 'experience')
+            ORDER BY s.sort_order
+            """,
+            (resume_id,),
+        ).fetchall()
+        assert placeholder_rows == [("education", "University"), ("experience", "Event")]
+
+        conn.close()
+
+
+def test_upsert_default_resume_modules_updates_existing_draft_title():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        first_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020305",
+        )
+        second_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020406",
+        )
+
+        assert first_id == second_id
+        row = conn.execute("SELECT title FROM resumes WHERE id = ?", (first_id,)).fetchone()
+        assert row and row[0] == "Alice Doe_20260215020406"
+
+        conn.close()
+
+
+def test_upsert_default_resume_modules_create_new_for_same_user():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        conn = storage.open_db(db_dir)
+
+        user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+        first_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020507",
+            create_new=True,
+        )
+        second_id = storage.upsert_default_resume_modules(
+            conn,
+            user_id=user_id,
+            header={
+                "full_name": "Alice Doe",
+                "email": "alice@example.com",
+                "phone": "123",
+                "location": "Victoria, BC",
+                "github_url": "https://github.com/alice",
+                "portfolio_url": "https://alice.dev",
+            },
+            core_skills=["Python"],
+            projects=[{"title": "Proj B", "content": "Built APIs", "stack": "Python"}],
+            resume_title="Alice Doe_20260215020608",
+            create_new=True,
+        )
+
+        assert first_id != second_id
+        count = conn.execute(
+            "SELECT COUNT(*) FROM resumes WHERE user_id = ? AND status = 'draft'",
+            (user_id,),
+        ).fetchone()[0]
+        assert int(count) == 2
 
         conn.close()
 
