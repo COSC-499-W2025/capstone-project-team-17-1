@@ -1,34 +1,60 @@
-from fastapi import APIRouter, HTTPException, Response
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, Response, Request
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional, Any
 from datetime import datetime, UTC
 from enum import Enum
 
+from capstone.portfolio_retrieval import _db_session
+from capstone.storage import fetch_latest_snapshot
+
+# main router for all portfolio endpoints
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
+# global variables
+_DB_DIR: Optional[str] = None   # SQLite db path
+_TOKEN: Optional[str] = None   # optional auth token to protect endpoints
+
+# for server startup
+def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
+    global _DB_DIR, _TOKEN
+    _DB_DIR = db_dir
+    _TOKEN = auth_token
+
+# token check for if auth is required
+def _check_auth(request: Request) -> None:
+    # skip auth
+    if not _TOKEN:
+        return
+    # auth header check
+    h = request.headers.get("Authorization", "")
+    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+# project entry
 class PortfolioProject(BaseModel):
     project_id: str
     title: str
     summary: Optional[str] = None
-    technologies: List[str] = Field(default_factory=list)
-    highlights: List[str] = Field(default_factory=list)
+    technologies: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
     
 class Portfolio(BaseModel):
     id: str
     owner: Optional[str] = None
-    projects: List[PortfolioProject]
+    projects: list[PortfolioProject]
     created_at: datetime
     updated_at: datetime
-    
+
+# request payload
 class GeneratePortfolioRequest(BaseModel):
-    project_ids: List[str] = Field(..., min_length=1)
+    project_ids: list[str] = Field(..., min_length=1)
     owner: Optional[str] = None
-    style: Optional[str] = "default"
     
 class EditPortfolioRequest(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    projects: Optional[List[PortfolioProject]] = None
+    owner: Optional[str] = None
+    projects: Optional[list[PortfolioProject]] = None
     
 class PortfolioResponse(BaseModel):
     portfolio: Portfolio
@@ -38,11 +64,97 @@ class ExportFormat(str, Enum):
     markdown = "markdown"
     pdf = "pdf"
     
-def require_demo_portfolio(portfolio_id: str):
-    if portfolio_id != "demo":
-        raise HTTPException(status_code=404, detail="Portfolio not found")
+def _now_utc() -> datetime:
+    return datetime.now(UTC)
+
+# normalizes unknown fields into list
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+# convert to valid strings
+def _dedupe_strings(items: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        s = str(item).strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        result.append(s)
+    return result
+
+# helper for snapshot parsing -> pick first valid string from list of possib                                  le keys
+def _pick_first_str(d: dict[str, Any], keys: list[str]) -> Optional[str]:
+    for key in keys:
+        value = d.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+# normalizes snapshot for frontend 
+def _extract_technologies(snapshot: dict[str, Any]) -> list[str]:
+    tech: list[Any] = []
     
-def build_portfolio(portfolio_id: str, owner: Optional[str], projects: List[PortfolioProject]) -> Portfolio:
+    langs = snapshot.get("languages")
+    if isinstance(langs, dict):
+        tech.extend(list(langs.keys()))
+    elif isinstance(langs, list):
+        tech.extend(langs)
+        
+    skills = snapshot.get("skills")
+    if isinstance(skills, dict):
+        tech.extend(skills.get("technical", []))
+        tech.extend(skills.get("tools", []))
+        tech.extend(skills.get("frameworks", []))
+    else:
+        tech.extend(_as_list(skills))
+        
+    tech.extend(_as_list(snapshot.get("tech_stack")))
+    tech.extend(_as_list(snapshot.get("technologies")))
+    return _dedupe_strings(tech)
+
+def _extract_highlights(snapshot: dict[str, Any]) -> list[str]:
+    highlights: list[Any] = []
+    highlights.extend(_as_list(snapshot.get("highlights")))
+    highlights.extend(_as_list(snapshot.get("key_features")))
+    highlights.extend(_as_list(snapshot.get("notable_points")))
+    return _dedupe_strings(highlights)[:6]
+
+def _extract_summary(snapshot: dict[str, Any]) -> Optional[str]:
+    return _pick_first_str(
+        snapshot, 
+        [
+            "summary", "description", "overview", "abstract"
+            ]
+        )
+    
+def _extract_title(project_id: str, snapshot: dict[str, Any]) -> str:
+    title = _pick_first_str(
+        snapshot,
+        [
+            "title", "project_name", "name", "repo_name", "repository"
+        ]
+    )
+    return title or project_id
+
+def _project_from_snapshot(project_id: str, snapshot: dict[str, Any]) -> PortfolioProject:
+    return PortfolioProject(
+        project_id=project_id,
+        title=_extract_title(project_id, snapshot),
+        summary=_extract_summary(snapshot),
+        technologies=_extract_technologies(snapshot),
+        highlights=_extract_highlights(snapshot)
+    )
+    
+def build_portfolio(portfolio_id: str, owner: Optional[str], projects: list[PortfolioProject]) -> Portfolio:
     now = datetime.now(UTC)
     
     return Portfolio(
@@ -55,70 +167,68 @@ def build_portfolio(portfolio_id: str, owner: Optional[str], projects: List[Port
     
 # Endpoints    
 
-# GET /portfolio/{id} for fetching existing portfolio
-@router.get("/{portfolio_id}", response_model=PortfolioResponse)
-def get_portfolio(portfolio_id: str):
-    require_demo_portfolio(portfolio_id)
-    
-    portfolio = build_portfolio(
-        portfolio_id = portfolio_id,
-        owner = "user123",
-        projects = []
-    )
-    
-    return {"portfolio": portfolio}
-
 # POST /portfolio/generate to create portfolio from newly analyzed projects
 # pulls project snapshots from db
 # ranks and generates project summaries
 @router.post("/generate", response_model=PortfolioResponse)
-def generate_portfolio(payload: GeneratePortfolioRequest):
-        projects=[
-            PortfolioProject(
-                project_id=pid, 
-                title=f"Project_{pid}"
-            ) 
-            for pid in payload.project_ids
-        ]
-        
-        portfolio = build_portfolio(
-            portfolio_id = "portfolio_001",
-            owner = payload.owner,
-            projects = projects
-        )
+def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
+    _check_auth(request)
     
-        return {"portfolio": portfolio}
+    if not _DB_DIR:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    
+    projects: list[PortfolioProject] = []
+    
+    with _db_session(_DB_DIR) as c:
+        for pid in payload.project_ids:
+            snap = fetch_latest_snapshot(c, str(pid))
+            if not snap:
+                raise HTTPException(status_code=404, detail=f"No snapshot found for project ID {pid}")
+            if not isinstance(snap, dict):
+                raise HTTPException(status_code=500, detail=f"Invalid snapshot format for project ID {pid}")
+            project = _project_from_snapshot(str(pid), snap)
+            projects.append(project)
+            
+    portfolio = build_portfolio(
+        portfolio_id="latest",
+        owner=payload.owner,
+        projects=projects
+    )
+    
+    return {"portfolio": portfolio}
 
 # POST /portfolio/{id}/edit to modify existing portfolio contents
 @router.post("/{portfolio_id}/edit", response_model=PortfolioResponse)
-def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest):
-    require_demo_portfolio(portfolio_id)
+def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
+    _check_auth(request)
     
+    projects = payload.projects or []
     portfolio = build_portfolio(
-        portfolio_id = portfolio_id,
-        owner = "user123",
-        projects = payload.projects or []
+        portfolio_id=portfolio_id,
+        owner=payload.owner,
+        projects=projects
     )
     
     return {"portfolio": portfolio}
 
 # GET /portfolio/{id}/export to return exportable portfolio
 @router.get("/{portfolio_id}/export")
-def export_portfolio(portfolio_id: str, format: ExportFormat = ExportFormat.json):
-    require_demo_portfolio(portfolio_id)
+def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
+    _check_auth(request)
     
-    if format == "json":
+    if format == ExportFormat.json:
         return {
             "portfolio_id": portfolio_id,
-            "exported_at": datetime.now(UTC).isoformat()
+            "exported_at": _now_utc().isoformat()
         }
     
-    if format == "markdown":
+    if format == ExportFormat.markdown:
+        content = f"# Portfolio {portfolio_id}\n\nExport generated at {_now_utc().isoformat()}\n"
         return {
-            "content": "# Portfolio\n\nGenerated portfolio content here"
+            "content": content
         }
         
-    if format == "pdf":
+    if format == ExportFormat.pdf:
         pdf_bytes = (
             b"%PDF-1.4\n"
             b"1 0 obj<<>>\n"
@@ -135,220 +245,3 @@ def export_portfolio(portfolio_id: str, format: ExportFormat = ExportFormat.json
         )
         
     raise HTTPException(status_code=400, detail="Unsupported format")
-from __future__ import annotations
-
-import json
-from typing import List, Optional
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
-
-from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
-from capstone.resume_retrieval import (
-    build_resume_project_summary,
-    ensure_resume_schema,
-    get_resume_project_description,
-    upsert_resume_project_description,
-)
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
-from capstone.top_project_summaries import generate_top_project_summaries, export_markdown
-
-from capstone.api.portfolio_helpers import ensure_indexes, list_snapshots
-
-
-router = APIRouter(tags=["portfolio", "resume", "users"])
-
-# align naming used in handlers
-get_latest_snapshot = fetch_latest_snapshot
-
-_DB_DIR: Optional[str] = None
-_TOKEN: Optional[str] = None
-
-
-def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
-    global _DB_DIR, _TOKEN
-    _DB_DIR = db_dir
-    _TOKEN = auth_token
-
-
-def _check_auth(request: Request) -> None:
-    if not _TOKEN:
-        return
-    h = request.headers.get("Authorization", "")
-    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
-
-
-async def _get_payload(request: Request) -> dict:
-    try:
-        return await request.json()
-    except Exception:
-        return {}
-
-
-@router.get("/users")
-def list_users(request: Request):
-    _check_auth(request)
-    with _db_session(_DB_DIR) as c:
-        rows = c.execute(
-            "SELECT DISTINCT contributor FROM contributor_stats ORDER BY LOWER(contributor)"
-        ).fetchall()
-    users = [r[0] for r in rows if r and r[0] and "[bot]" not in r[0].lower()]
-    return {"data": users, "error": None}
-
-
-@router.get("/users/{user}/projects")
-def list_user_projects(user: str, request: Request):
-    _check_auth(request)
-    with _db_session(_DB_DIR) as c:
-        rows = c.execute(
-            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? ORDER BY project_id",
-            (user,),
-        ).fetchall()
-    projects = [r[0] for r in rows if r and r[0]]
-    return {"data": projects, "error": None}
-
-
-@router.get("/portfolio/summary")
-def portfolio_summary(user: str, request: Request, limit: int = 3):
-    _check_auth(request)
-    with _db_session(_DB_DIR) as c:
-        snapshots = fetch_latest_snapshots(c)
-    snapshot_map = {
-        str(item.get("project_id")): (item.get("snapshot") or {})
-        for item in snapshots
-        if item.get("project_id")
-    }
-    summaries = generate_top_project_summaries(snapshot_map, limit=limit, user=user)
-    payload = [export_markdown(item) for item in summaries]
-    return {"data": payload, "meta": {"user": user, "limit": limit}, "error": None}
-
-
-@router.get("/portfolios/latest")
-def latest(request: Request, projectId: str, view: Optional[str] = None):
-    _check_auth(request)
-    view = _parse_view(view)
-    if view == "resume":
-        with _db_session(_DB_DIR) as c:
-            ensure_resume_schema(c)
-            item = get_resume_project_description(c, projectId)
-        if not item:
-            raise HTTPException(status_code=404, detail="No resume project found")
-        return {"data": item.to_dict(), "meta": {"projectId": projectId, "view": "resume"}, "error": None}
-
-    with _db_session(_DB_DIR) as c:
-        ensure_indexes(c)
-        data = get_latest_snapshot(c, projectId)
-    if data is None:
-        raise HTTPException(status_code=404, detail="No snapshots found")
-    return {"data": data, "meta": {"projectId": projectId, "view": "portfolio"}, "error": None}
-
-
-@router.get("/portfolios/evidence")
-def evidence_latest(request: Request, projectId: str):
-    _check_auth(request)
-    with _db_session(_DB_DIR) as c:
-        ensure_indexes(c)
-        snap = get_latest_snapshot(c, projectId)
-    if snap is None:
-        raise HTTPException(status_code=404, detail="No snapshots found")
-    evidence = _extract_evidence(snap)
-    return {"data": {"projectId": projectId, "evidence": evidence}, "error": None}
-
-
-@router.get("/portfolios")
-def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, sort: str = "created_at:desc"):
-    _check_auth(request)
-    sort_field, _, sort_dir = sort.partition(":")
-    with _db_session(_DB_DIR) as c:
-        ensure_indexes(c)
-        items, total = list_snapshots(
-            c,
-            project_id=projectId,
-            page=int(page),
-            page_size=int(pageSize),
-            sort_field=sort_field or "created_at",
-            sort_dir=sort_dir or "desc",
-        )
-    payload = [s.snapshot for s in items]
-    return {
-        "data": payload,
-        "meta": {"projectId": projectId, "page": int(page), "pageSize": int(pageSize), "total": total},
-        "error": None,
-    }
-
-
-@router.get("/portfolio/{project_id}")
-def get_portfolio_showcase(project_id: str, request: Request):
-    _check_auth(request)
-    with _db_session(_DB_DIR) as c:
-        ensure_resume_schema(c)
-        item = get_resume_project_description(c, project_id, variant_name="portfolio_showcase")
-        if item:
-            return {"data": item.to_dict(), "error": None}
-        snap = get_latest_snapshot(c, project_id)
-    if not snap:
-        raise HTTPException(status_code=404, detail="No snapshots found")
-    summary = build_resume_project_summary(project_id, snap)
-    return {"data": {"project_id": project_id, "summary": summary}, "error": None}
-
-
-@router.get("/portfolio/showcase")
-def get_portfolio_showcase_query(request: Request, projectId: str):
-    return get_portfolio_showcase(projectId, request)
-
-
-@router.post("/portfolio/generate")
-async def generate_portfolio_showcase(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_ids = payload.get("projectIds") or []
-    if not project_ids or not isinstance(project_ids, list):
-        raise HTTPException(status_code=400, detail="projectIds must be a list")
-    results = []
-    with _db_session(_DB_DIR) as c:
-        ensure_resume_schema(c)
-        for pid in project_ids:
-            snap = get_latest_snapshot(c, str(pid))
-            if not snap:
-                continue
-            summary = build_resume_project_summary(str(pid), snap)
-            item = upsert_resume_project_description(
-                c,
-                project_id=str(pid),
-                summary=summary,
-                variant_name="portfolio_showcase",
-                metadata={"source": "auto"},
-            )
-            results.append(item.to_dict())
-    return {"data": results, "error": None}
-
-
-@router.post("/portfolio/showcase/edit")
-async def edit_portfolio_showcase_query(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_id = (payload.get("projectId") or "").strip()
-    summary = (payload.get("summary") or "").strip()
-    if not project_id or not summary:
-        raise HTTPException(status_code=400, detail="projectId and summary are required")
-    return await edit_portfolio_showcase(project_id, request)
-
-
-@router.post("/portfolio/{project_id}/edit")
-async def edit_portfolio_showcase(project_id: str, request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    summary = (payload.get("summary") or "").strip()
-    if not summary:
-        raise HTTPException(status_code=400, detail="summary is required")
-    with _db_session(_DB_DIR) as c:
-        ensure_resume_schema(c)
-        item = upsert_resume_project_description(
-            c,
-            project_id=project_id,
-            summary=summary,
-            variant_name="portfolio_showcase",
-            metadata={"source": "custom"},
-        )
-    return {"data": item.to_dict(), "error": None}
