@@ -1545,14 +1545,70 @@ def _update_resume_section_fields(
     sort_order: int | None = None,
     is_enabled: int | None = None,
 ) -> None:
+    def _normalize_section_sort_orders(resume_id: str) -> None:
+        rows = conn.execute(
+            """
+            SELECT id
+            FROM resume_sections
+            WHERE resume_id = ?
+            ORDER BY sort_order, id
+            """,
+            (resume_id,),
+        ).fetchall()
+        for idx, row in enumerate(rows, start=1):
+            conn.execute(
+                "UPDATE resume_sections SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (idx, str(row[0])),
+            )
+
+    row = conn.execute(
+        "SELECT resume_id, sort_order FROM resume_sections WHERE id = ?",
+        (section_id,),
+    ).fetchone()
+    if not row:
+        return
+    resume_id = str(row[0])
+    _normalize_section_sort_orders(resume_id)
+    row = conn.execute(
+        "SELECT sort_order FROM resume_sections WHERE id = ?",
+        (section_id,),
+    ).fetchone()
+    if not row:
+        return
+    old_sort_order = int(row[0] or 1)
+
     assignments: list[str] = []
     params: list[object] = []
     if label is not None:
         assignments.append("label = ?")
         params.append(label)
     if sort_order is not None:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM resume_sections WHERE resume_id = ?",
+            (resume_id,),
+        ).fetchone()
+        max_order = int(row[0] or 1)
+        new_order = max(1, min(int(sort_order), max_order))
+        if new_order < old_sort_order:
+            conn.execute(
+                """
+                UPDATE resume_sections
+                SET sort_order = sort_order + 1, updated_at = CURRENT_TIMESTAMP
+                WHERE resume_id = ? AND sort_order >= ? AND sort_order < ? AND id <> ?
+                """,
+                (resume_id, new_order, old_sort_order, section_id),
+            )
+        elif new_order > old_sort_order:
+            conn.execute(
+                """
+                UPDATE resume_sections
+                SET sort_order = sort_order - 1, updated_at = CURRENT_TIMESTAMP
+                WHERE resume_id = ? AND sort_order <= ? AND sort_order > ? AND id <> ?
+                """,
+                (resume_id, new_order, old_sort_order, section_id),
+            )
         assignments.append("sort_order = ?")
-        params.append(int(sort_order))
+        params.append(new_order)
     if is_enabled is not None:
         assignments.append("is_enabled = ?")
         params.append(1 if int(is_enabled) else 0)
@@ -1565,14 +1621,7 @@ def _update_resume_section_fields(
         f"UPDATE resume_sections SET {', '.join(assignments)} WHERE id = ?",
         tuple(params),
     )
-    conn.execute(
-        """
-        UPDATE resumes
-        SET updated_at = CURRENT_TIMESTAMP
-        WHERE id = (SELECT resume_id FROM resume_sections WHERE id = ?)
-        """,
-        (section_id,),
-    )
+    conn.execute("UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (resume_id,))
     conn.commit()
 
 
@@ -1589,6 +1638,38 @@ def _update_resume_item_fields(
     sort_order: int | None = None,
     is_enabled: int | None = None,
 ) -> None:
+    def _normalize_item_sort_orders(section_id: str) -> None:
+        rows = conn.execute(
+            """
+            SELECT id
+            FROM resume_items
+            WHERE section_id = ?
+            ORDER BY sort_order, id
+            """,
+            (section_id,),
+        ).fetchall()
+        for idx, row in enumerate(rows, start=1):
+            conn.execute(
+                "UPDATE resume_items SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (idx, str(row[0])),
+            )
+
+    row = conn.execute(
+        "SELECT section_id, sort_order FROM resume_items WHERE id = ?",
+        (item_id,),
+    ).fetchone()
+    if not row:
+        return
+    section_id = str(row[0])
+    _normalize_item_sort_orders(section_id)
+    row = conn.execute(
+        "SELECT sort_order FROM resume_items WHERE id = ?",
+        (item_id,),
+    ).fetchone()
+    if not row:
+        return
+    old_sort_order = int(row[0] or 1)
+
     assignments: list[str] = []
     params: list[object] = []
     if title is not None:
@@ -1610,8 +1691,32 @@ def _update_resume_item_fields(
         assignments.append("content = ?")
         params.append(content)
     if sort_order is not None:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM resume_items WHERE section_id = ?",
+            (section_id,),
+        ).fetchone()
+        max_order = int(row[0] or 1)
+        new_order = max(1, min(int(sort_order), max_order))
+        if new_order < old_sort_order:
+            conn.execute(
+                """
+                UPDATE resume_items
+                SET sort_order = sort_order + 1, updated_at = CURRENT_TIMESTAMP
+                WHERE section_id = ? AND sort_order >= ? AND sort_order < ? AND id <> ?
+                """,
+                (section_id, new_order, old_sort_order, item_id),
+            )
+        elif new_order > old_sort_order:
+            conn.execute(
+                """
+                UPDATE resume_items
+                SET sort_order = sort_order - 1, updated_at = CURRENT_TIMESTAMP
+                WHERE section_id = ? AND sort_order <= ? AND sort_order > ? AND id <> ?
+                """,
+                (section_id, new_order, old_sort_order, item_id),
+            )
         assignments.append("sort_order = ?")
-        params.append(int(sort_order))
+        params.append(new_order)
     if is_enabled is not None:
         assignments.append("is_enabled = ?")
         params.append(1 if int(is_enabled) else 0)
@@ -1628,9 +1733,9 @@ def _update_resume_item_fields(
         """
         UPDATE resume_sections
         SET updated_at = CURRENT_TIMESTAMP
-        WHERE id = (SELECT section_id FROM resume_items WHERE id = ?)
+        WHERE id = ?
         """,
-        (item_id,),
+        (section_id,),
     )
     conn.execute(
         """
@@ -1639,10 +1744,10 @@ def _update_resume_item_fields(
         WHERE id = (
             SELECT resume_id
             FROM resume_sections
-            WHERE id = (SELECT section_id FROM resume_items WHERE id = ?)
+            WHERE id = ?
         )
         """,
-        (item_id,),
+        (section_id,),
     )
     conn.commit()
 
@@ -1660,12 +1765,37 @@ def _add_resume_item(
     sort_order: int | None = None,
     is_enabled: int = 1,
 ) -> str:
+    rows = conn.execute(
+        """
+        SELECT id
+        FROM resume_items
+        WHERE section_id = ?
+        ORDER BY sort_order, id
+        """,
+        (section_id,),
+    ).fetchall()
+    for idx, row in enumerate(rows, start=1):
+        conn.execute(
+            "UPDATE resume_items SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (idx, str(row[0])),
+        )
     row = conn.execute(
         "SELECT COALESCE(MAX(sort_order), 0) FROM resume_items WHERE section_id = ?",
         (section_id,),
     ).fetchone()
     next_sort = int(row[0] or 0) + 1
-    final_sort = int(sort_order) if sort_order and int(sort_order) > 0 else next_sort
+    if sort_order and int(sort_order) > 0:
+        final_sort = max(1, min(int(sort_order), next_sort))
+    else:
+        final_sort = next_sort
+    conn.execute(
+        """
+        UPDATE resume_items
+        SET sort_order = sort_order + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE section_id = ? AND sort_order >= ?
+        """,
+        (section_id, final_sort),
+    )
     item_id = str(uuid.uuid4())
     conn.execute(
         """
@@ -1706,13 +1836,22 @@ def _add_resume_item(
 
 def _delete_resume_item(conn: sqlite3.Connection, *, item_id: str) -> bool:
     row = conn.execute(
-        "SELECT section_id FROM resume_items WHERE id = ?",
+        "SELECT section_id, sort_order FROM resume_items WHERE id = ?",
         (item_id,),
     ).fetchone()
     if not row:
         return False
     section_id = str(row[0])
+    old_sort_order = int(row[1] or 1)
     conn.execute("DELETE FROM resume_items WHERE id = ?", (item_id,))
+    conn.execute(
+        """
+        UPDATE resume_items
+        SET sort_order = sort_order - 1, updated_at = CURRENT_TIMESTAMP
+        WHERE section_id = ? AND sort_order > ?
+        """,
+        (section_id, old_sort_order),
+    )
     conn.execute(
         "UPDATE resume_sections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (section_id,),
@@ -1731,18 +1870,27 @@ def _delete_resume_item(conn: sqlite3.Connection, *, item_id: str) -> bool:
 
 def _delete_resume_section(conn: sqlite3.Connection, *, section_id: str) -> bool:
     row = conn.execute(
-        "SELECT resume_id FROM resume_sections WHERE id = ?",
+        "SELECT resume_id, sort_order FROM resume_sections WHERE id = ?",
         (section_id,),
     ).fetchone()
     if not row:
         return False
     resume_id = str(row[0])
+    old_sort_order = int(row[1] or 1)
     deleted = conn.execute(
         "DELETE FROM resume_sections WHERE id = ?",
         (section_id,),
     ).rowcount
     if deleted <= 0:
         return False
+    conn.execute(
+        """
+        UPDATE resume_sections
+        SET sort_order = sort_order - 1, updated_at = CURRENT_TIMESTAMP
+        WHERE resume_id = ? AND sort_order > ?
+        """,
+        (resume_id, old_sort_order),
+    )
     conn.execute(
         "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (resume_id,),
@@ -1780,7 +1928,12 @@ def _add_resume_section(
         suffix += 1
 
     if insert_after_sort is not None:
-        new_sort = int(insert_after_sort) + 1
+        row = conn.execute(
+            "SELECT COUNT(*) FROM resume_sections WHERE resume_id = ?",
+            (resume_id,),
+        ).fetchone()
+        max_order = int(row[0] or 0)
+        new_sort = max(1, min(int(insert_after_sort) + 1, max_order + 1))
         conn.execute(
             """
             UPDATE resume_sections
