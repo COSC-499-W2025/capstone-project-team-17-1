@@ -2000,7 +2000,7 @@ def _interactive_add_item_to_section(
     reference_sort = int(items[-1]["sort_order"]) if items else 0
     if items:
         raw_ref = input(
-            "\nEnter item number to insert after (blank to append): "
+            "Enter item number to insert after (blank to append): "
         ).strip()
         if raw_ref:
             if not raw_ref.isdigit() or not (1 <= int(raw_ref) <= len(items)):
@@ -2008,21 +2008,21 @@ def _interactive_add_item_to_section(
                 return False
             reference_sort = int(items[int(raw_ref) - 1]["sort_order"])
 
-    title = input("\nTitle (required): ").strip()
+    title = input("Title (required): ").strip()
     if not title:
         print("Title is required.")
         return False
-    subtitle = input("\nSubtitle (optional): ").strip() or None
-    start_date = input("\nStart Date (optional): ").strip() or None
-    end_date = input("\nEnd Date (optional): ").strip() or None
-    location = input("\nLocation (optional): ").strip() or None
+    subtitle = input("Subtitle (optional): ").strip() or None
+    start_date = input("Start Date (optional): ").strip() or None
+    end_date = input("End Date (optional): ").strip() or None
+    location = input("Location (optional): ").strip() or None
     raw_content = _prompt_multiline_input(
         "Content (optional)",
         allow_empty=True,
     )
     content = raw_content.strip() or None if raw_content is not None else None
     raw_sort = input(
-        f"\nSort Order (positive integer, default {reference_sort + 1}): "
+        f"Sort Order (positive integer, default {reference_sort + 1}): "
     ).strip()
     if raw_sort:
         if not raw_sort.isdigit() or int(raw_sort) <= 0:
@@ -2031,7 +2031,7 @@ def _interactive_add_item_to_section(
         sort_order = int(raw_sort)
     else:
         sort_order = reference_sort + 1
-    raw_enabled = input("\nIs Enabled? (y/n, default y): ").strip().lower()
+    raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
     if not raw_enabled:
         enabled = 1
     elif raw_enabled in {"y", "yes", "1"}:
@@ -3218,6 +3218,7 @@ def main():
                                     continue
                                 chosen_section = None
                                 if section_action == "2":
+                                    print()
                                     section_label = input("Section label (required): ").strip()
                                     if not section_label:
                                         print("Section label is required.")
@@ -3263,6 +3264,7 @@ def main():
                                         "\nAdd item to this section now? (y/n, default y): "
                                     ).strip().lower()
                                     if add_item_now in {"", "y", "yes", "1"}:
+                                        print()
                                         _interactive_add_item_to_section(
                                             selected_resume,
                                             created_section,
