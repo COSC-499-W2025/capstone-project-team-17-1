@@ -100,6 +100,7 @@ class MainMenuTests(unittest.TestCase):
         consent_status="granted_existing",
         user_rows=None,
         resume_users=None,
+        generated_resume_preview=None,
     ):
         out = io.StringIO()
         conn = _FakeConn()
@@ -114,6 +115,8 @@ class MainMenuTests(unittest.TestCase):
             rows = []
         if resume_users is None:
             resume_users = [{"id": 1, "username": "alice", "project_count": 1, "email": None}]
+        if generated_resume_preview is None:
+            generated_resume_preview = {"sections": []}
 
         input_iter = iter(list(inputs))
         def _next_input(_prompt=""):
@@ -144,7 +147,7 @@ class MainMenuTests(unittest.TestCase):
                     "portfolio_url": "https://alice.dev",
                 },
             ),
-            patch.object(app, "_build_user_resume_preview", return_value={"sections": []}),
+            patch.object(app, "_build_user_resume_preview", return_value=generated_resume_preview),
             patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
             patch("builtins.input", side_effect=_next_input),
             redirect_stdout(out),
@@ -301,6 +304,49 @@ class MainMenuTests(unittest.TestCase):
             )
 
         self.assertIn("Resume Preview", text)
+
+    def test_resume_auto_generate_pdf_uses_modular_payload(self):
+        rows = [
+            {
+                "id": 1,
+                "project_id": "p1",
+                "snapshot": {"project_id": "p1", "project_name": "Demo"},
+                "created_at": "2026-01-11T00:00:00Z",
+            }
+        ]
+        instant_preview = {"sections": [{"name": "summary", "items": [{"excerpt": "ok"}]}]}
+        modular_payload = {
+            "sections": [
+                {"name": "education", "items": [{"school": "UBCO"}]},
+                {"name": "experience", "items": [{"title": "Volunteer"}]},
+            ]
+        }
+
+        with (
+            patch.object(app, "_format_resume_preview", return_value="PREVIEW"),
+            patch.object(app, "fetch_latest_snapshots", return_value=rows),
+            patch.object(app, "_sync_generated_resume_modules_to_db", return_value="resume-1"),
+            patch.object(app, "_build_resume_preview_from_modular_resume", return_value=modular_payload),
+            patch("capstone.resume_pdf_builder.build_pdf_with_latex") as build_pdf_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",  # resume
+                    "1",  # generate new resume
+                    "1",  # user
+                    "",   # all projects
+                    "2",  # export pdf
+                    "b",  # back from resume submenu
+                    "14", # exit
+                ],
+                rows=rows,
+                generated_resume_preview=instant_preview,
+            )
+
+        self.assertIn("Resume PDF successfully saved to:", text)
+        build_pdf_mock.assert_called_once()
+        called_payload = build_pdf_mock.call_args.args[0]
+        self.assertEqual(called_payload, modular_payload)
 
     def test_resume_customize_existing_no_resumes(self):
         with patch.object(app, "_list_existing_resumes", return_value=[]):
@@ -1060,6 +1106,54 @@ class MainMenuTests(unittest.TestCase):
 
         self.assertIn("Cancelled.", text)
         delete_resume_mock.assert_not_called()
+
+    def test_resume_delete_existed_resume_multi_select(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Resume A",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            },
+            {
+                "id": "r2",
+                "user_id": 1,
+                "title": "Resume B",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:01:00+00:00",
+                "username": "alice",
+            },
+            {
+                "id": "r3",
+                "user_id": 1,
+                "title": "Resume C",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:02:00+00:00",
+                "username": "alice",
+            },
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_delete_resume_record", return_value=True) as delete_resume_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",     # resume
+                    "3",     # delete existed resume
+                    "1 3 3", # choose multiple (with duplicate)
+                    "y",     # confirm deletion
+                    "b",     # back resume menu
+                    "14",    # exit
+                ],
+                rows=[],
+            )
+
+        self.assertIn("Resumes deleted successfully (2/2).", text)
+        self.assertEqual(delete_resume_mock.call_count, 2)
+        deleted_ids = [call.kwargs.get("resume_id") for call in delete_resume_mock.call_args_list]
+        self.assertEqual(deleted_ids, ["r1", "r3"])
 
 if __name__ == "__main__":
     unittest.main()

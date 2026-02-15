@@ -1222,6 +1222,12 @@ def _build_resume_preview_from_modular_resume(
     resume_id: str,
     user_id: int,
 ) -> dict:
+    def _normalize_title(raw_value: object, *, legacy_default: str, preferred_default: str) -> str:
+        text = str(raw_value or "").strip()
+        if not text or text.lower() == legacy_default.lower():
+            return preferred_default
+        return text
+
     profile = get_user_profile(conn, user_id) or {}
     sections = _list_resume_sections(conn, resume_id)
     section_by_key = {str(section.get("key") or ""): section for section in sections}
@@ -1355,7 +1361,7 @@ def _build_resume_preview_from_modular_resume(
         "experience",
         "experience",
         lambda row: {
-            "title": str(row[0] or "Experience"),
+            "title": _normalize_title(row[0], legacy_default="Experience", preferred_default="Event"),
             "company": str(row[1] or "").strip(),
             "dateRange": _compose_date_range(str(row[2] or ""), str(row[3] or "")),
             "location": str(row[4] or "").strip(),
@@ -1366,7 +1372,7 @@ def _build_resume_preview_from_modular_resume(
         "education",
         "education",
         lambda row: {
-            "school": str(row[0] or "Education"),
+            "school": _normalize_title(row[0], legacy_default="Education", preferred_default="University"),
             "degree": str(row[1] or "").strip(),
             "dateRange": _compose_date_range(str(row[2] or ""), str(row[3] or "")),
             "location": str(row[4] or "").strip(),
@@ -3204,28 +3210,45 @@ def main():
                             print("\nExisting resumes:")
                             for idx, item in enumerate(existing_resumes, start=1):
                                 print(f"{idx}. {item['title']} (updated: {item['updated_at']})")
-                            resume_pick = _prompt_single_index(
-                                "\nSelect a resume number ([b]Back, [m]Main Menu, [blank]Cancel): ",
+                            resume_picks = _prompt_indices(
+                                "\nSelect resume number(s) (space-separated, [b]Back, [m]Main Menu, [blank]Cancel): ",
                                 len(existing_resumes),
                             )
-                            if resume_pick is None:
+                            if resume_picks is None:
                                 print("Cancelled.")
                                 continue
-                            if resume_pick == "b":
+                            if resume_picks == "b":
                                 continue
-                            picked_resume = existing_resumes[int(resume_pick) - 1]
+                            unique_indices: list[int] = []
+                            seen: set[int] = set()
+                            for idx in resume_picks:
+                                if idx not in seen:
+                                    seen.add(idx)
+                                    unique_indices.append(idx)
+                            picked_resumes = [existing_resumes[idx - 1] for idx in unique_indices]
+                            if len(picked_resumes) == 1:
+                                target_msg = f"[{picked_resumes[0]['title']}]"
+                            else:
+                                target_msg = ", ".join(f"[{item['title']}]" for item in picked_resumes)
                             confirm_delete = input(
-                                f"\nDelete resume [{picked_resume['title']}]? This cannot be undone (y/n): "
+                                f"\nDelete resume(s) {target_msg}? This cannot be undone (y/n): "
                             ).strip().lower()
                             if confirm_delete not in {"y", "yes"}:
                                 print("Cancelled.")
                                 continue
-                            with _open_app_db() as conn:
-                                deleted = _delete_resume_record(conn, resume_id=str(picked_resume["id"]))
-                            if not deleted:
+                            deleted_count = 0
+                            for picked_resume in picked_resumes:
+                                with _open_app_db() as conn:
+                                    deleted = _delete_resume_record(conn, resume_id=str(picked_resume["id"]))
+                                if deleted:
+                                    deleted_count += 1
+                            if deleted_count == 0:
                                 print("Resume not found.")
                                 continue
-                            print("Resume deleted successfully.")
+                            if len(picked_resumes) == 1:
+                                print("Resume deleted successfully.")
+                            else:
+                                print(f"Resumes deleted successfully ({deleted_count}/{len(picked_resumes)}).")
                             continue
                         if resume_choice == "2":
                             with _open_app_db() as conn:
@@ -3803,7 +3826,7 @@ def main():
                         user_profile = _ensure_user_profile_for_resume(conn, selected_user_id)
                     _apply_user_profile_to_resume_preview(resume_preview, user_profile)
                     with _open_app_db() as conn:
-                        _sync_generated_resume_modules_to_db(
+                        generated_resume_id = _sync_generated_resume_modules_to_db(
                             conn,
                             user_id=selected_user_id,
                             resume_preview=resume_preview,
@@ -3865,7 +3888,13 @@ def main():
                             output_dir = ROOT / "output"
                             output_dir.mkdir(parents=True, exist_ok=True)
                             save_pdf = output_dir / default_pdf_name
-                            build_pdf_with_latex(resume_preview, save_pdf)
+                            with _open_app_db() as conn:
+                                pdf_payload = _build_resume_preview_from_modular_resume(
+                                    conn,
+                                    resume_id=str(generated_resume_id),
+                                    user_id=selected_user_id,
+                                )
+                            build_pdf_with_latex(pdf_payload, save_pdf)
                             print(f"\nResume PDF successfully saved to:\n{save_pdf}\n")
                         except Exception as e:
                             print("Failed to generate resume PDF (LaTeX template).")

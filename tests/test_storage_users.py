@@ -183,6 +183,18 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
         ).fetchone()[0]
         assert project_count == 1
 
+        placeholder_rows = conn.execute(
+            """
+            SELECT s.key, i.title
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key IN ('education', 'experience')
+            ORDER BY s.sort_order
+            """,
+            (resume_id,),
+        ).fetchall()
+        assert placeholder_rows == [("education", "University"), ("experience", "Event")]
+
         conn.close()
 
 

@@ -1851,6 +1851,12 @@ def upsert_default_resume_modules(
     _replace_items("project", project_items)
 
     # Ensure empty templates for summary/education/experience (insert only if missing).
+    # Education/Experience placeholders use entry-title defaults expected by PDF rendering.
+    template_titles = {
+        "summary": "Summary",
+        "education": "University",
+        "experience": "Event",
+    }
     for key, label in (("summary", "Summary"), ("education", "Education"), ("experience", "Experience")):
         section_id = section_ids[key]
         existing = conn.execute(
@@ -1866,7 +1872,7 @@ def upsert_default_resume_modules(
                 )
                 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
                 """,
-                (str(uuid.uuid4()), section_id, label),
+                (str(uuid.uuid4()), section_id, template_titles[key]),
             )
 
     conn.commit()

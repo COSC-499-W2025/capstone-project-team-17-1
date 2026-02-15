@@ -174,6 +174,33 @@ def test_build_resume_preview_filters_disabled_sections_and_items():
     assert experience_section["items"][0]["title"] == "Role A"
 
 
+def test_build_resume_preview_normalizes_legacy_education_experience_titles():
+    sections = [
+        {"id": "sec_education", "key": "education", "label": "Education", "sort_order": 1, "is_enabled": 1},
+        {"id": "sec_experience", "key": "experience", "label": "Experience", "sort_order": 2, "is_enabled": 1},
+    ]
+    item_rows_by_section = {
+        "sec_education": [("Education", "", "", "", "", "", 1)],
+        "sec_experience": [("Experience", "", "", "", "", "", 1)],
+    }
+    conn = _MiniConn(item_rows_by_section)
+
+    with (
+        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "_list_resume_sections", return_value=sections),
+    ):
+        payload = app._build_resume_preview_from_modular_resume(
+            conn,
+            resume_id="r1",
+            user_id=1,
+        )
+
+    education_section = next(sec for sec in payload["sections"] if sec.get("name") == "education")
+    experience_section = next(sec for sec in payload["sections"] if sec.get("name") == "experience")
+    assert education_section["items"][0]["school"] == "University"
+    assert experience_section["items"][0]["title"] == "Event"
+
+
 def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
     with patch.object(app, "upsert_default_resume_modules", return_value="resume-id") as upsert_mock:
         resume_id = app._sync_generated_resume_modules_to_db(

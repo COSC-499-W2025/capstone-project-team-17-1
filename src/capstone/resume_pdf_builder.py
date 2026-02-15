@@ -308,10 +308,10 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
     experience_blocks: list[str] = []
     for entry in experience_entries:
-        bullets = _pick_bullets(entry, "Delivered meaningful project outcomes.")[:3]
+        bullets = _pick_bullets(entry, "Content...")[:3]
         experience_blocks.append(
             _render_resume_entry_block(
-                title=_entry_field(entry, "title", fallback="Experience"),
+                title=_entry_field(entry, "title", fallback="Event"),
                 date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
                 subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback="Company"),
                 location=_entry_field(entry, "location", fallback="Location"),
@@ -352,7 +352,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     for entry in education_entries:
         coursework = _entry_field(entry, "coursework", "content", "entrySummary", "summary", "entryBody", "body")
         lines = [
-            rf"\ResumeEntry{{{_safe_text(_entry_field(entry, 'school', 'title', fallback='University Name'))}}}"
+            rf"\ResumeEntry{{{_safe_text(_entry_field(entry, 'school', 'title', fallback='University'))}}}"
             rf"{{{_safe_text(_entry_field(entry, 'dateRange', 'date', fallback='Date'))}}}"
             rf"{{{_safe_text(_entry_field(entry, 'degree', 'summary', 'subtitle', fallback='Degree Program'))}}}"
             rf"{{{_safe_text(_entry_field(entry, 'location', fallback='Location'))}}}"
