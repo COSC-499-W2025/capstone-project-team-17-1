@@ -449,9 +449,23 @@ def render_latex_from_template(
     else:
         tex_source = template.read_text(encoding="utf-8")
         replacements = _extract_template_fields(resume)
-        for key, value in replacements.items():
-            tex_source = tex_source.replace(f"__{key}__", value)
-        tex_source = re.sub(r"__[A-Z0-9_]+__", "N/A", tex_source)
+        lines = tex_source.splitlines(keepends=True)
+        rendered_lines: list[str] = []
+        placeholder_pattern = re.compile(r"__([A-Z0-9_]+)__")
+
+        for line in lines:
+            if line.lstrip().startswith("%"):
+                rendered_lines.append(line)
+                continue
+
+            def _replace(match: re.Match[str]) -> str:
+                key = match.group(1)
+                value = replacements.get(key)
+                return value if value is not None else "N/A"
+
+            rendered_lines.append(placeholder_pattern.sub(_replace, line))
+
+        tex_source = "".join(rendered_lines)
 
     if tex_output_path:
         target = Path(tex_output_path)
