@@ -1716,6 +1716,28 @@ def _delete_resume_item(conn: sqlite3.Connection, *, item_id: str) -> bool:
     return True
 
 
+def _delete_resume_section(conn: sqlite3.Connection, *, section_id: str) -> bool:
+    row = conn.execute(
+        "SELECT resume_id FROM resume_sections WHERE id = ?",
+        (section_id,),
+    ).fetchone()
+    if not row:
+        return False
+    resume_id = str(row[0])
+    deleted = conn.execute(
+        "DELETE FROM resume_sections WHERE id = ?",
+        (section_id,),
+    ).rowcount
+    if deleted <= 0:
+        return False
+    conn.execute(
+        "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (resume_id,),
+    )
+    conn.commit()
+    return True
+
+
 def _add_resume_section(
     conn: sqlite3.Connection,
     *,
@@ -2944,6 +2966,9 @@ def main():
                                 if section_action not in {"1", "2", "3"}:
                                     print("Invalid choice. Please enter 1, 2, or 3.")
                                     continue
+                                if section_action in {"1", "3"} and not sections:
+                                    print("No sections available for this action.")
+                                    continue
                                 chosen_section = None
                                 if section_action == "2":
                                     section_label = input("Section label (required): ").strip()
@@ -3012,6 +3037,22 @@ def main():
                                         print(f"Indices must be in 1–{len(sections)}.")
                                         continue
                                     chosen_section = sections[int(section_pick) - 1]
+                                if section_action == "3":
+                                    section_label = chosen_section.get("label") or chosen_section.get("key")
+                                    confirm = input(
+                                        f"Delete section [{section_label}]? This cannot be undone (y/n): "
+                                    ).strip().lower()
+                                    if confirm not in {"y", "yes"}:
+                                        print("Cancelled.")
+                                        continue
+                                    with _open_app_db() as conn:
+                                        deleted = _delete_resume_section(conn, section_id=str(chosen_section["id"]))
+                                    if not deleted:
+                                        print("Section not found.")
+                                        continue
+                                    print("Section deleted successfully.")
+                                    _prompt_rebuild_resume_pdf(selected_resume)
+                                    continue
                                 if section_action == "1":
                                     while True:
                                         status = "enabled" if int(chosen_section.get("is_enabled") or 0) else "disabled"

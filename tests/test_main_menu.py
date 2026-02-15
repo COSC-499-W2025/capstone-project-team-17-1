@@ -879,6 +879,12 @@ class MainMenuTests(unittest.TestCase):
         with (
             patch.object(app, "_list_existing_resumes", return_value=existing),
             patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_delete_resume_section", return_value=True) as delete_section_mock,
+            patch.object(
+                app,
+                "_rebuild_current_resume_pdf",
+                return_value=Path("output/resume_alice_20260214010101.pdf"),
+            ) as rebuild_mock,
         ):
             text, _ = self.run_menu(
                 inputs=[
@@ -887,11 +893,56 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # select resume
                     "3",   # delete section
                     "1",   # section number
+                    "y",   # confirm deletion
+                    "",    # rebuild resume pdf (default yes)
+                    "4",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
             )
-        self.assertIn("Section action flow is not implemented yet.", text)
+        self.assertIn("Section deleted successfully.", text)
+        self.assertIn("Resume PDF successfully saved to:", text)
+        delete_section_mock.assert_called_once()
+        kwargs = delete_section_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("section_id"), "s1")
+        rebuild_mock.assert_called_once()
+
+    def test_resume_customize_existing_delete_section_cancelled(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Default Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        sections = [
+            {"id": "s1", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 1},
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_list_resume_sections", return_value=sections),
+            patch.object(app, "_delete_resume_section", return_value=True) as delete_section_mock,
+            patch.object(app, "_rebuild_current_resume_pdf") as rebuild_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "2",   # customize existed resume
+                    "1",   # select resume
+                    "3",   # delete section
+                    "1",   # section number
+                    "n",   # cancel deletion
+                    "4",   # back from resume submenu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+        self.assertIn("Cancelled.", text)
+        delete_section_mock.assert_not_called()
+        rebuild_mock.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
