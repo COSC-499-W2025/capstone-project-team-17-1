@@ -2,6 +2,7 @@
 import sys
 import types
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -75,3 +76,98 @@ def test_build_user_resume_preview_includes_sections_and_contrib():
         section for section in preview.get("sections", []) if section.get("name") == "skills"
     ]
     assert skills_section and "python" in skills_section[0].get("items", [])[0].get("excerpt", "")
+
+
+class _MiniCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _MiniConn:
+    def __init__(self, item_rows_by_section):
+        self.item_rows_by_section = item_rows_by_section
+
+    def execute(self, sql, params=()):
+        normalized = " ".join(sql.split()).lower()
+        if "select metadata_json from resume_items" in normalized:
+            return _MiniCursor([])
+        if "select title, subtitle, start_date, end_date, location, content, is_enabled from resume_items" in normalized:
+            section_id = params[0]
+            return _MiniCursor(self.item_rows_by_section.get(section_id, []))
+        raise AssertionError(f"Unexpected SQL in test double: {sql}")
+
+
+def test_build_resume_preview_filters_disabled_sections_and_items():
+    sections = [
+        {"id": "sec_summary", "key": "summary", "label": "Summary", "sort_order": 1, "is_enabled": 0},
+        {"id": "sec_experience", "key": "experience", "label": "Experience", "sort_order": 2, "is_enabled": 1},
+        {"id": "sec_custom_on", "key": "custom_on", "label": "Custom On", "sort_order": 3, "is_enabled": 1},
+        {"id": "sec_custom_off", "key": "custom_off", "label": "Custom Off", "sort_order": 4, "is_enabled": 0},
+    ]
+    item_rows_by_section = {
+        "sec_summary": [("Summary", "", "", "", "", "should-not-render", 1)],
+        "sec_experience": [
+            ("Role A", "Company A", "2024", "2025", "Vancouver", "keep", 1),
+            ("Role B", "Company B", "2023", "2024", "Kelowna", "drop", 0),
+        ],
+    }
+    custom_items_by_section = {
+        "sec_custom_on": [
+            {
+                "id": "i1",
+                "title": "Enabled Custom Item",
+                "subtitle": "",
+                "start_date": "",
+                "end_date": "",
+                "location": "",
+                "content": "visible",
+                "sort_order": 1,
+                "is_enabled": 1,
+            }
+        ],
+        "sec_custom_off": [
+            {
+                "id": "i2",
+                "title": "Disabled Custom Item",
+                "subtitle": "",
+                "start_date": "",
+                "end_date": "",
+                "location": "",
+                "content": "hidden",
+                "sort_order": 1,
+                "is_enabled": 1,
+            }
+        ],
+    }
+    conn = _MiniConn(item_rows_by_section)
+
+    with (
+        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "_list_resume_sections", return_value=sections),
+        patch.object(
+            app,
+            "_list_resume_section_items",
+            side_effect=lambda _conn, section_id: custom_items_by_section.get(section_id, []),
+        ),
+    ):
+        payload = app._build_resume_preview_from_modular_resume(
+            conn,
+            resume_id="r1",
+            user_id=1,
+        )
+
+    names = [sec.get("name") for sec in payload.get("sections", [])]
+    assert "summary" not in names
+    assert "experience" in names
+    assert "custom::custom_on" in names
+    assert "custom::custom_off" not in names
+
+    experience_section = next(sec for sec in payload["sections"] if sec.get("name") == "experience")
+    assert len(experience_section.get("items", [])) == 1
+    assert experience_section["items"][0]["title"] == "Role A"

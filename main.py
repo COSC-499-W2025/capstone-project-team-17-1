@@ -1226,6 +1226,8 @@ def _build_resume_preview_from_modular_resume(
         sec = section_by_key.get(section_key)
         if not sec:
             return
+        if int(sec.get("is_enabled") or 0) == 0:
+            return
         rows = conn.execute(
             """
             SELECT title, subtitle, start_date, end_date, location, content, is_enabled
@@ -1347,6 +1349,8 @@ def _build_resume_preview_from_modular_resume(
         raw_key = str(section.get("key") or "").strip()
         if not raw_key or raw_key in built_in_section_keys:
             continue
+        if int(section.get("is_enabled") or 0) == 0:
+            continue
         custom_items = _list_resume_section_items(conn, str(section["id"]))
         mapped_items: list[dict] = []
         for item in custom_items:
@@ -1406,6 +1410,15 @@ def _prompt_rebuild_resume_pdf(selected_resume: dict) -> None:
     except Exception as exc:
         print("Failed to rebuild resume PDF (LaTeX template).")
         print(f"Error: {exc}")
+
+
+def _parse_enabled_value(raw: str) -> int | None:
+    value = str(raw or "").strip().lower()
+    if value in {"1", "y", "yes"}:
+        return 1
+    if value in {"0", "n", "no"}:
+        return 0
+    return None
 
 
 def _is_blank(value: object) -> bool:
@@ -3106,13 +3119,13 @@ def main():
                                             _prompt_rebuild_resume_pdf(selected_resume)
                                             continue
                                         if edit_choice == "3":
-                                            raw_toggle = input("Enable this section? (y/n): ").strip().lower()
-                                            if raw_toggle in {"y", "yes", "1"}:
-                                                enabled = 1
-                                            elif raw_toggle in {"n", "no", "0"}:
-                                                enabled = 0
-                                            else:
-                                                print("Invalid input. Please enter y or n.")
+                                            old_enabled = int(chosen_section.get("is_enabled") or 0)
+                                            raw_toggle = input(
+                                                f"Edit Is Enabled from {old_enabled} ([0]Disable [1]Enable) to: "
+                                            ).strip()
+                                            enabled = _parse_enabled_value(raw_toggle)
+                                            if enabled is None:
+                                                print("Invalid input. Please enter 0 or 1.")
                                                 continue
                                             with _open_app_db() as conn:
                                                 _update_resume_section_fields(
@@ -3329,17 +3342,14 @@ def main():
                                                             updated_any = True
                                                         elif field_key == "is_enabled":
                                                             raw_toggle = input(
-                                                                f"Edit {field_label} from {old_display} to (y/n): "
-                                                            ).strip().lower()
+                                                                f"Edit {field_label} from {old_display} ([0]Disable [1]Enable) to: "
+                                                            ).strip()
                                                             if not raw_toggle:
                                                                 print("Cancelled.")
                                                                 continue
-                                                            if raw_toggle in {"y", "yes", "1"}:
-                                                                enabled = 1
-                                                            elif raw_toggle in {"n", "no", "0"}:
-                                                                enabled = 0
-                                                            else:
-                                                                print("Invalid input. Please enter y or n.")
+                                                            enabled = _parse_enabled_value(raw_toggle)
+                                                            if enabled is None:
+                                                                print("Invalid input. Please enter 0 or 1.")
                                                                 continue
                                                             with _open_app_db() as conn:
                                                                 _update_resume_item_fields(

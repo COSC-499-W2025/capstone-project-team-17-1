@@ -262,11 +262,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         or "https://your-portfolio.example.com"
     )
 
-    summary = (
-        _as_clean_text(resume.get("professionalSummary"))
-        or _as_clean_text(resume.get("summary"))
-        or "Engineer focused on shipping reliable products with measurable business impact."
-    )
+    summary = _as_clean_text(resume.get("professionalSummary")) or _as_clean_text(resume.get("summary"))
     summary_entries = _extract_resume_entries(resume, "summary")
     summary_lines: list[str] = []
     if summary_entries:
@@ -277,7 +273,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
             )
             if text:
                 summary_lines.append(r"{\small " + _safe_text(text) + r"}\par")
-    if not summary_lines:
+    if not summary_lines and summary:
         summary_lines.append(r"{\small " + _safe_text(summary) + r"}")
 
     all_skills = _flatten_str_list(resume.get("skills"))
@@ -302,7 +298,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 content = ", ".join([token for token in bullets if token.strip()])
             if content:
                 core_skill_lines.append(rf"\SkillRow{{{_safe_text(label)}}}{{{_safe_text(content)}}}")
-    if not core_skill_lines:
+    if not core_skill_lines and (all_skills or tools or languages):
         core_skill_lines = [
             rf"\SkillRow{{Core}}{{{_safe_text(_join_or_dash(all_skills))}}}",
             rf"\SkillRow{{Tools}}{{{_safe_text(_join_or_dash(tools))}}}",
@@ -320,16 +316,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback="Company"),
                 location=_entry_field(entry, "location", fallback="Location"),
                 bullets=bullets,
-            )
-        )
-    if not experience_blocks:
-        experience_blocks.append(
-            _render_resume_entry_block(
-                title="Experience",
-                date_text="Date",
-                subtitle="Company",
-                location="Location",
-                bullets=["Delivered measurable outcomes."],
             )
         )
 
@@ -360,16 +346,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 bullets=bullets,
             )
         )
-    if not project_blocks:
-        project_blocks.append(
-            _render_resume_entry_block(
-                title="Project",
-                date_text="Date",
-                subtitle="Tech Stack",
-                location="",
-                bullets=["Implemented core features and improvements."],
-            )
-        )
 
     education_entries = _extract_resume_entries(resume, "education")
     education_blocks: list[str] = []
@@ -384,15 +360,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         if coursework:
             lines.append(r"{\small \textit{" + _safe_text(coursework) + r"}}\par")
         education_blocks.append("\n".join(lines))
-    if not education_blocks:
-        education_blocks.append(
-            "\n".join(
-                [
-                    r"\ResumeEntry{University Name}{Date}{Degree Program}{Location}",
-                    r"{\small \textit{N/A}}\par",
-                ]
-            )
-        )
 
     custom_section_blocks: list[str] = []
     for section in resume.get("sections", []) or []:
@@ -429,6 +396,19 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     cert2 = cert_entries[1] if len(cert_entries) > 1 else {}
     award1 = cert_entries[2] if len(cert_entries) > 2 else {}
 
+    summary_block = "\n".join(summary_lines)
+    education_block = "\n\n".join(education_blocks)
+    experience_block = "\n\n".join(experience_blocks)
+    core_skill_block = "\n".join(core_skill_lines)
+    project_block = "\n\n".join(project_blocks)
+    custom_block = "\n\n".join(custom_section_blocks)
+
+    def _wrap_section(title: str, body: str) -> str:
+        clean_body = str(body or "").strip()
+        if not clean_body:
+            return ""
+        return "\n".join([rf"\section*{{{_safe_text(title)}}}", clean_body])
+
     return {
         "FULL_NAME": _safe_text(full_name),
         "EMAIL": _safe_text(email),
@@ -436,12 +416,17 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "LOCATION": _safe_text(location),
         "GITHUB_URL": _safe_text(github_url),
         "PORTFOLIO_URL": _safe_text(portfolio_url),
-        "SUMMARY_BLOCK": "\n".join(summary_lines),
-        "CORE_SKILL_BLOCK": "\n".join(core_skill_lines),
-        "EXPERIENCE_BLOCK": "\n\n".join(experience_blocks),
-        "PROJECT_BLOCK": "\n\n".join(project_blocks),
-        "EDUCATION_BLOCK": "\n\n".join(education_blocks),
-        "CUSTOM_SECTION_BLOCK": "\n\n".join(custom_section_blocks),
+        "SUMMARY_BLOCK": summary_block,
+        "CORE_SKILL_BLOCK": core_skill_block,
+        "EXPERIENCE_BLOCK": experience_block,
+        "PROJECT_BLOCK": project_block,
+        "EDUCATION_BLOCK": education_block,
+        "CUSTOM_SECTION_BLOCK": custom_block,
+        "SUMMARY_SECTION": _wrap_section("Summary", summary_block),
+        "EDUCATION_SECTION": _wrap_section("Education", education_block),
+        "EXPERIENCE_SECTION": _wrap_section("Experience", experience_block),
+        "CORE_SKILL_SECTION": _wrap_section("Core Skill", core_skill_block),
+        "PROJECT_SECTION": _wrap_section("Project", project_block),
         # Backward-compatible placeholders for custom templates using old tokens.
         "PROFESSIONAL_SUMMARY": _safe_text(summary),
         "SKILL_CORE": _safe_text(_join_or_dash(all_skills)),
