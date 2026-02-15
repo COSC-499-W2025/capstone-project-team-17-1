@@ -598,7 +598,8 @@ def _prompt_menu(title: str, options: List[str]) -> str:
 def _prompt_resume_menu_choice(prompt: str, valid_choices: Iterable[str]) -> str | None:
     allowed = {str(x).strip().lower() for x in valid_choices}
     while True:
-        raw = input(prompt).strip().lower()
+        resolved_prompt = prompt if str(prompt).startswith("\n") else f"\n{prompt}"
+        raw = input(resolved_prompt).strip().lower()
         if raw == "":
             return None
         if raw == "m":
@@ -3093,16 +3094,13 @@ def main():
                         print("1. Generate New Resume")
                         print("2. Customize Existed Resume")
                         print("3. Delete Existed Resume")
-                        print("4. Back")
                         resume_choice = _prompt_resume_menu_choice(
-                            "Select an option (1-4, b to back, m to main menu, leave blank to cancel): ",
-                            {"1", "2", "3", "4"},
+                            "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
+                            {"1", "2", "3"},
                         )
                         if resume_choice is None:
                             continue
                         if resume_choice == "b":
-                            resume_choice = "4"
-                        if resume_choice == "4":
                             break
                         if resume_choice == "1":
                             run_generate_new = True
@@ -3124,7 +3122,7 @@ def main():
                                     f"(status: {item['status']}, updated: {item['updated_at']})"
                                 )
                             pick = _prompt_single_index(
-                                "Select a resume number (blank to cancel, b to back): ",
+                                "\nSelect a resume number ([b]Back, [m]Main Menu, [blank]Cancel): ",
                                 len(existing_resumes),
                             )
                             if pick is None:
@@ -3133,7 +3131,6 @@ def main():
                             if pick == "b":
                                 continue
                             selected_resume = existing_resumes[int(pick) - 1]
-                            back_to_main_menu = False
                             while True:
                                 with _open_app_db() as conn:
                                     sections = _list_resume_sections(conn, selected_resume["id"])
@@ -3151,7 +3148,7 @@ def main():
                                 print("2. Add section")
                                 print("3. Delete section")
                                 section_action = _prompt_resume_menu_choice(
-                                    "Select an option (1-3, b to back, m to main menu, leave blank to cancel): ",
+                                    "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
                                     {"1", "2", "3"},
                                 )
                                 if section_action is None:
@@ -3223,7 +3220,7 @@ def main():
                                         continue
                                 if chosen_section is None:
                                     section_pick = _prompt_single_index(
-                                        "Enter section number (leave blank to cancel, b to back, m to main menu): ",
+                                        "\nEnter section number ([b]Back, [m]Main Menu, [blank]Cancel): ",
                                         len(sections),
                                     )
                                     if section_pick is None:
@@ -3258,18 +3255,13 @@ def main():
                                         print("2. Edit sort order")
                                         print("3. Toggle enable/disable")
                                         print("4. Edit item")
-                                        print("5. Back")
-                                        print("6. Back to Main Menu")
                                         edit_choice = _prompt_resume_menu_choice(
-                                            "Select an option (1-6, b to back, m to main menu, leave blank to cancel): ",
-                                            {"1", "2", "3", "4", "5", "6"},
+                                            "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
+                                            {"1", "2", "3", "4"},
                                         )
                                         if edit_choice is None:
                                             continue
-                                        if edit_choice in {"5", "b"}:
-                                            break
-                                        if edit_choice == "6":
-                                            back_to_main_menu = True
+                                        if edit_choice == "b":
                                             break
                                         if edit_choice == "1":
                                             new_label = input("New section label: ").strip()
@@ -3345,7 +3337,7 @@ def main():
                                                 print("3. Delete Item")
                                                 print("4. Rebuild Resume PDF")
                                                 item_action = _prompt_resume_menu_choice(
-                                                    "Select an option (1-4, b to back, m to main menu, leave blank to cancel): ",
+                                                    "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
                                                     {"1", "2", "3", "4"},
                                                 )
                                                 if item_action is None:
@@ -3362,7 +3354,7 @@ def main():
                                                         print("No items available for this action.")
                                                         continue
                                                     raw_item_pick = _prompt_single_index(
-                                                        "Enter item number (leave blank to cancel, b to back, m to main menu): ",
+                                                        "\nEnter item number ([b]Back, [m]Main Menu, [blank]Cancel): ",
                                                         len(items),
                                                     )
                                                     if raw_item_pick is None:
@@ -3475,7 +3467,7 @@ def main():
                                                                 picked_item.get(field_key),
                                                             )
                                                     raw_field_pick = input(
-                                                        "Select field number(s) to edit (space-separated, b to back, m to main menu, leave blank to cancel): "
+                                                        "\nSelect field number(s) (space-separated, [b]Back, [m]Main Menu, [blank]Cancel): "
                                                     ).strip()
                                                     if not raw_field_pick:
                                                         continue
@@ -3582,12 +3574,8 @@ def main():
                                                         print("Item updated successfully.")
                                                         _prompt_rebuild_resume_pdf(selected_resume)
                                             continue
-                                        print("Invalid choice. Please enter 1, 2, 3, 4, 5, or 6.")
-                                if back_to_main_menu:
-                                    break
+                                        print("Invalid choice. Please enter 1, 2, 3, or 4.")
                                 continue
-                            if back_to_main_menu:
-                                break
                             continue
                         continue
 
@@ -3616,12 +3604,13 @@ def main():
                         print(f"{idx}. {username}{suffix} - {project_count} project(s)")
 
                     user_pick = _prompt_single_index(
-                        "Select a user number (blank to cancel, b to back): ",
+                        "\nSelect a user number ([b]Back, [m]Main Menu, [blank]Cancel): ",
                         len(users),
                     )
                     if user_pick is None or user_pick == "b":
                         if user_pick is None:
                             print("Cancelled.")
+                        forced_choice = "6"
                         continue
 
                     selected_user = users[int(user_pick) - 1]
@@ -3663,7 +3652,7 @@ def main():
                         print(f"{idx}. {label} (ID: {snap.get('project_id')})")
 
                     selection = _prompt_indices(
-                        "Select projects by number (space-separated, blank = all, b to back): ",
+                        "\nSelect projects by number (space-separated, [blank]Choose All, [b]Back, [m]Main Menu): ",
                         len(sorted_projects),
                     )
                     if selection == "b":
@@ -3719,15 +3708,19 @@ def main():
                     timestamp_tag = datetime.now().strftime("%Y%m%d%H%M%S")
                     default_pdf_name = f"resume_{safe_user or 'user'}_{timestamp_tag}.pdf"
 
-                    export_choice = _prompt_menu(
-                        "Export Resume",
-                        [
-                            "Markdown",
-                            "PDF (LaTeX Template)",
-                            "Markdown + PDF (LaTeX Template)",
-                            "Skip",
-                        ],
+                    print("\n" + "=" * 40)
+                    print("Export Resume")
+                    print("=" * 40)
+                    print("1. Markdown")
+                    print("2. PDF (LaTeX Template)")
+                    print("3. Markdown + PDF (LaTeX Template)")
+                    print("4. Skip")
+                    export_choice = _prompt_resume_menu_choice(
+                        "Select an option ([b]Back, [m]Main Menu, [blank]Cancel): ",
+                        {"1", "2", "3", "4"},
                     )
+                    if export_choice is None:
+                        continue
                     if export_choice == "b":
                         export_choice = "4"
 

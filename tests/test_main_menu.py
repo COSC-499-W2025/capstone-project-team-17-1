@@ -294,7 +294,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",  # user
                     "",   # all projects
                     "4",  # skip export
-                    "4",  # back to main menu from resume submenu
+                    "b",  # back to main menu from resume submenu
                     "14", # exit
                 ],
                 rows=rows,
@@ -344,8 +344,8 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # section number
                     "1",   # edit label
                     "Professional Summary",
-                    "5",   # back
-                    "4",   # back from resume submenu
+                    "b",   # back
+                    "b",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
@@ -408,8 +408,8 @@ class MainMenuTests(unittest.TestCase):
                     "n",   # skip rebuild
                     "",    # back from selected-item field menu
                     "b",   # back from item submenu
-                    "5",   # back from section edit menu
-                    "4",   # back from resume submenu
+                    "b",   # back from section edit menu
+                    "b",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
@@ -475,8 +475,8 @@ class MainMenuTests(unittest.TestCase):
                     "",    # rebuild resume pdf (default yes)
                     "",    # back from selected-item field menu
                     "b",   # back from item submenu
-                    "5",   # back from section edit menu
-                    "4",   # back from resume submenu
+                    "b",   # back from section edit menu
+                    "b",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
@@ -542,8 +542,8 @@ class MainMenuTests(unittest.TestCase):
                     "",    # default enabled
                     "",    # rebuild resume pdf (default yes)
                     "b",   # back from item submenu
-                    "5",   # back from section edit menu
-                    "4",   # back resume menu
+                    "b",   # back from section edit menu
+                    "b",   # back resume menu
                     "14",  # exit
                 ],
                 rows=[],
@@ -602,8 +602,8 @@ class MainMenuTests(unittest.TestCase):
                     "y",   # confirm
                     "",    # rebuild resume pdf (default yes)
                     "b",   # back from item submenu
-                    "5",   # back from section edit menu
-                    "4",   # back resume menu
+                    "b",   # back from section edit menu
+                    "b",   # back resume menu
                     "14",  # exit
                 ],
                 rows=[],
@@ -723,7 +723,7 @@ class MainMenuTests(unittest.TestCase):
                     "",    # enabled default y
                     "n",   # rebuild resume pdf
                     "n",   # edit this section now
-                    "4",   # back resume menu
+                    "b",   # back resume menu
                     "14",  # exit
                 ],
                 rows=[],
@@ -895,7 +895,7 @@ class MainMenuTests(unittest.TestCase):
                     "1",   # section number
                     "y",   # confirm deletion
                     "",    # rebuild resume pdf (default yes)
-                    "4",   # back from resume submenu
+                    "b",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
@@ -935,7 +935,7 @@ class MainMenuTests(unittest.TestCase):
                     "3",   # delete section
                     "1",   # section number
                     "n",   # cancel deletion
-                    "4",   # back from resume submenu
+                    "b",   # back from resume submenu
                     "14",  # exit
                 ],
                 rows=[],
