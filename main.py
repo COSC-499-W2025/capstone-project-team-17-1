@@ -1935,6 +1935,17 @@ def _delete_resume_section(conn: sqlite3.Connection, *, section_id: str) -> bool
     return True
 
 
+def _delete_resume_record(conn: sqlite3.Connection, *, resume_id: str) -> bool:
+    deleted = conn.execute(
+        "DELETE FROM resumes WHERE id = ?",
+        (resume_id,),
+    ).rowcount
+    if deleted <= 0:
+        return False
+    conn.commit()
+    return True
+
+
 def _add_resume_section(
     conn: sqlite3.Connection,
     *,
@@ -3184,7 +3195,36 @@ def main():
                             run_generate_new = True
                             break
                         if resume_choice == "3":
-                            print("Delete existed resume flow is not implemented yet.")
+                            with _open_app_db() as conn:
+                                existing_resumes = _list_existing_resumes(conn)
+                            if not existing_resumes:
+                                print("No existing resumes found.")
+                                continue
+                            print("\nExisting resumes:")
+                            for idx, item in enumerate(existing_resumes, start=1):
+                                print(f"{idx}. {item['title']} (updated: {item['updated_at']})")
+                            resume_pick = _prompt_single_index(
+                                "\nSelect a resume number ([b]Back, [m]Main Menu, [blank]Cancel): ",
+                                len(existing_resumes),
+                            )
+                            if resume_pick is None:
+                                print("Cancelled.")
+                                continue
+                            if resume_pick == "b":
+                                continue
+                            picked_resume = existing_resumes[int(resume_pick) - 1]
+                            confirm_delete = input(
+                                f"\nDelete resume [{picked_resume['title']}]? This cannot be undone (y/n): "
+                            ).strip().lower()
+                            if confirm_delete not in {"y", "yes"}:
+                                print("Cancelled.")
+                                continue
+                            with _open_app_db() as conn:
+                                deleted = _delete_resume_record(conn, resume_id=str(picked_resume["id"]))
+                            if not deleted:
+                                print("Resume not found.")
+                                continue
+                            print("Resume deleted successfully.")
                             continue
                         if resume_choice == "2":
                             with _open_app_db() as conn:

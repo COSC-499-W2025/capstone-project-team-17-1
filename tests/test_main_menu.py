@@ -999,5 +999,67 @@ class MainMenuTests(unittest.TestCase):
         delete_section_mock.assert_not_called()
         rebuild_mock.assert_not_called()
 
+    def test_resume_delete_existed_resume_action(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Alice Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_delete_resume_record", return_value=True) as delete_resume_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "3",   # delete existed resume
+                    "1",   # choose resume
+                    "y",   # confirm deletion
+                    "b",   # back resume menu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+
+        self.assertIn("Resume deleted successfully.", text)
+        delete_resume_mock.assert_called_once()
+        kwargs = delete_resume_mock.call_args.kwargs
+        self.assertEqual(kwargs.get("resume_id"), "r1")
+
+    def test_resume_delete_existed_resume_cancelled(self):
+        existing = [
+            {
+                "id": "r1",
+                "user_id": 1,
+                "title": "Alice Resume",
+                "status": "draft",
+                "updated_at": "2026-02-14T00:00:00+00:00",
+                "username": "alice",
+            }
+        ]
+        with (
+            patch.object(app, "_list_existing_resumes", return_value=existing),
+            patch.object(app, "_delete_resume_record", return_value=True) as delete_resume_mock,
+        ):
+            text, _ = self.run_menu(
+                inputs=[
+                    "6",   # resume
+                    "3",   # delete existed resume
+                    "1",   # choose resume
+                    "n",   # cancel deletion
+                    "b",   # back resume menu
+                    "14",  # exit
+                ],
+                rows=[],
+            )
+
+        self.assertIn("Cancelled.", text)
+        delete_resume_mock.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
