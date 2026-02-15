@@ -721,6 +721,7 @@ class MainMenuTests(unittest.TestCase):
                     "",    # section key (optional)
                     "",    # append
                     "",    # enabled default y
+                    "n",   # add item now
                     "n",   # rebuild resume pdf
                     "n",   # edit this section now
                     "b",   # back resume menu

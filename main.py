@@ -1978,16 +1978,6 @@ def _add_resume_section(
         (section_id, resume_id, final_key, normalized_label, new_sort, 1 if int(is_enabled) else 0),
     )
     conn.execute(
-        """
-        INSERT INTO resume_items (
-            id, section_id, title, subtitle, start_date, end_date, location, content,
-            bullets_json, metadata_json, sort_order, is_enabled
-        )
-        VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
-        """,
-        (str(uuid.uuid4()), section_id, normalized_label),
-    )
-    conn.execute(
         "UPDATE resumes SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (resume_id,),
     )
@@ -2000,6 +1990,74 @@ def _add_resume_section(
         "sort_order": int(new_sort),
         "is_enabled": 1 if int(is_enabled) else 0,
     }
+
+
+def _interactive_add_item_to_section(
+    selected_resume: dict,
+    chosen_section: dict,
+    items: list[dict],
+) -> bool:
+    reference_sort = int(items[-1]["sort_order"]) if items else 0
+    if items:
+        raw_ref = input(
+            "\nEnter item number to insert after (blank to append): "
+        ).strip()
+        if raw_ref:
+            if not raw_ref.isdigit() or not (1 <= int(raw_ref) <= len(items)):
+                print(f"Indices must be in 1–{len(items)}.")
+                return False
+            reference_sort = int(items[int(raw_ref) - 1]["sort_order"])
+
+    title = input("\nTitle (required): ").strip()
+    if not title:
+        print("Title is required.")
+        return False
+    subtitle = input("\nSubtitle (optional): ").strip() or None
+    start_date = input("\nStart Date (optional): ").strip() or None
+    end_date = input("\nEnd Date (optional): ").strip() or None
+    location = input("\nLocation (optional): ").strip() or None
+    raw_content = _prompt_multiline_input(
+        "Content (optional)",
+        allow_empty=True,
+    )
+    content = raw_content.strip() or None if raw_content is not None else None
+    raw_sort = input(
+        f"\nSort Order (positive integer, default {reference_sort + 1}): "
+    ).strip()
+    if raw_sort:
+        if not raw_sort.isdigit() or int(raw_sort) <= 0:
+            print("Sort order must be a positive integer.")
+            return False
+        sort_order = int(raw_sort)
+    else:
+        sort_order = reference_sort + 1
+    raw_enabled = input("\nIs Enabled? (y/n, default y): ").strip().lower()
+    if not raw_enabled:
+        enabled = 1
+    elif raw_enabled in {"y", "yes", "1"}:
+        enabled = 1
+    elif raw_enabled in {"n", "no", "0"}:
+        enabled = 0
+    else:
+        print("Invalid input. Please enter y or n.")
+        return False
+
+    with _open_app_db() as conn:
+        _add_resume_item(
+            conn,
+            section_id=chosen_section["id"],
+            title=title,
+            subtitle=subtitle,
+            start_date=start_date,
+            end_date=end_date,
+            location=location,
+            content=content,
+            sort_order=sort_order,
+            is_enabled=enabled,
+        )
+    print("Item added successfully.")
+    _prompt_rebuild_resume_pdf(selected_resume)
+    return True
 
 
 def _manage_user_profiles_menu() -> None:
@@ -3201,19 +3259,20 @@ def main():
                                         f"[{created_section['label']}] "
                                         f"(key: {created_section['key']}, order: {created_section['sort_order']})"
                                     )
-                                    rebuild_prompt = input(
-                                        "Rebuild Resume PDF? (y/n, default y): "
+                                    add_item_now = input(
+                                        "\nAdd item to this section now? (y/n, default y): "
                                     ).strip().lower()
-                                    do_rebuild = rebuild_prompt in {"", "y", "yes", "1"}
-                                    if do_rebuild:
-                                        try:
-                                            pdf_path = _rebuild_current_resume_pdf(selected_resume)
-                                            print(f"Resume PDF successfully saved to:\n{pdf_path}")
-                                        except Exception as exc:
-                                            print("Failed to rebuild resume PDF (LaTeX template).")
-                                            print(f"Error: {exc}")
-                                    edit_now = input("Edit this section now? (y/n, default y): ").strip().lower()
-                                    if edit_now in {"", "y", "yes", "1"}:
+                                    if add_item_now in {"", "y", "yes", "1"}:
+                                        _interactive_add_item_to_section(
+                                            selected_resume,
+                                            created_section,
+                                            [],
+                                        )
+                                        continue
+
+                                    _prompt_rebuild_resume_pdf(selected_resume)
+                                    edit_now = input("\nEdit this section now? (y/n): ").strip().lower()
+                                    if edit_now in {"y", "yes", "1"}:
                                         section_action = "1"
                                         chosen_section = created_section
                                     else:
@@ -3363,64 +3422,11 @@ def main():
                                                         continue
                                                     picked_item = items[int(raw_item_pick) - 1]
                                                 if item_action == "2":
-                                                    reference_sort = int(items[-1]["sort_order"]) if items else 0
-                                                    if items:
-                                                        raw_ref = input(
-                                                            "Enter item number to insert after (blank to append): "
-                                                        ).strip()
-                                                        if raw_ref:
-                                                            if not raw_ref.isdigit() or not (1 <= int(raw_ref) <= len(items)):
-                                                                print(f"Indices must be in 1–{len(items)}.")
-                                                                continue
-                                                            reference_sort = int(items[int(raw_ref) - 1]["sort_order"])
-                                                    title = input("Title (required): ").strip()
-                                                    if not title:
-                                                        print("Title is required.")
-                                                        continue
-                                                    subtitle = input("Subtitle (optional): ").strip() or None
-                                                    start_date = input("Start Date (optional): ").strip() or None
-                                                    end_date = input("End Date (optional): ").strip() or None
-                                                    location = input("Location (optional): ").strip() or None
-                                                    raw_content = _prompt_multiline_input(
-                                                        "Content (optional)",
-                                                        allow_empty=True,
+                                                    _interactive_add_item_to_section(
+                                                        selected_resume,
+                                                        chosen_section,
+                                                        items,
                                                     )
-                                                    content = raw_content.strip() or None if raw_content is not None else None
-                                                    raw_sort = input(
-                                                        f"Sort Order (positive integer, default {reference_sort + 1}): "
-                                                    ).strip()
-                                                    if raw_sort:
-                                                        if not raw_sort.isdigit() or int(raw_sort) <= 0:
-                                                            print("Sort order must be a positive integer.")
-                                                            continue
-                                                        sort_order = int(raw_sort)
-                                                    else:
-                                                        sort_order = reference_sort + 1
-                                                    raw_enabled = input("Is Enabled? (y/n, default y): ").strip().lower()
-                                                    if not raw_enabled:
-                                                        enabled = 1
-                                                    elif raw_enabled in {"y", "yes", "1"}:
-                                                        enabled = 1
-                                                    elif raw_enabled in {"n", "no", "0"}:
-                                                        enabled = 0
-                                                    else:
-                                                        print("Invalid input. Please enter y or n.")
-                                                        continue
-                                                    with _open_app_db() as conn:
-                                                        _add_resume_item(
-                                                            conn,
-                                                            section_id=chosen_section["id"],
-                                                            title=title,
-                                                            subtitle=subtitle,
-                                                            start_date=start_date,
-                                                            end_date=end_date,
-                                                            location=location,
-                                                            content=content,
-                                                            sort_order=sort_order,
-                                                            is_enabled=enabled,
-                                                        )
-                                                    print("Item added successfully.")
-                                                    _prompt_rebuild_resume_pdf(selected_resume)
                                                     continue
                                                 if item_action == "3":
                                                     item_label = picked_item.get("title") or picked_item.get("id")
