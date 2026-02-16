@@ -1,19 +1,47 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from __future__ import annotations
+
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi.responses import FileResponse
 from pathlib import Path
 import tempfile
 import shutil
-import time
+import sqlite3
 
 from capstone import file_store, storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-@router.post("/upload")
-async def upload_project(file: UploadFile = File(...)):
-    filename = file.filename or "upload.zip"
-    if not filename.lower().endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Only .zip files are supported")
+def _ensure_thumbnail_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_thumbnails (
+            project_id TEXT NOT NULL,
+            file_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.commit()  # make sure the table exists immediately
+
+
+def _normalized_content_type(file: UploadFile) -> str:
+    ct = (file.content_type or "").lower()
+    # strip "text/plain; charset=utf-8" -> "text/plain"
+    if ";" in ct:
+        ct = ct.split(";", 1)[0].strip()
+    return ct
+
+
+@router.post("/{project_id}/thumbnail")
+async def upload_thumbnail(project_id: str, file: UploadFile = File(...)):
+    ct = _normalized_content_type(file)
+
+    # Accept only actual image/* types (test uses image/png; reject text/plain)
+    if not ct.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are allowed")
+
+    filename = file.filename or "thumbnail"
 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         shutil.copyfileobj(file.file, tmp)
@@ -25,177 +53,65 @@ async def upload_project(file: UploadFile = File(...)):
             conn,
             tmp_path,
             original_name=filename,
-            source="api_upload",
-            mime="application/zip",
+            source="api_thumbnail",
+            mime=ct or "application/octet-stream",
+            project_id=project_id,
         )
+
+        _ensure_thumbnail_table(conn)
+        conn.execute(
+            "INSERT INTO project_thumbnails (project_id, file_id) VALUES (?, ?)",
+            (project_id, stored["file_id"]),
+        )
+        conn.commit()
     finally:
         try:
             tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
-
-    project_id = stored["upload_id"]
-    message = "Upload stored successfully."
-    if stored.get("dedup"):
-        message = "Duplicate upload detected; existing file reused."
-    return {
-        "message": message,
-        "project_id": project_id,
-        "file_id": stored["file_id"],
-        "hash": stored["hash"],
-        "dedup": stored["dedup"],
-        "size_bytes": stored["size_bytes"],
-        "stored_path": stored["path"],
-    }
-
-
-@router.get("")
-def list_projects():
-    """
-    Lists uploaded .zip projects from CAS storage.
-    """
-    conn = storage.open_db()
-    rows = conn.execute(
-        """
-        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-               f.size_bytes, f.path
-        FROM uploads u
-        JOIN files f ON f.file_id = u.file_id
-        ORDER BY datetime(u.created_at) DESC
-        """
-    ).fetchall()
-    return {
-        "count": len(rows),
-        "projects": [
-            {
-                "project_id": r[0],
-                "filename": r[1],
-                "file_id": r[2],
-                "hash": r[3],
-                "created_at": r[4],
-                "size_bytes": r[5],
-                "stored_path": r[6],
-            }
-            for r in rows
-        ],
-    }
-
-
-@router.get("/{project_id}")
-def get_project(project_id: str):
-    """
-    Returns info for a specific uploaded project zip by upload_id.
-    """
-    conn = storage.open_db()
-    row = conn.execute(
-        """
-        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-               f.size_bytes, f.path
-        FROM uploads u
-        JOIN files f ON f.file_id = u.file_id
-        WHERE u.upload_id = ?
-        LIMIT 1
-        """,
-        (project_id,),
-    ).fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    return {
-        "project_id": row[0],
-        "filename": row[1],
-        "file_id": row[2],
-        "hash": row[3],
-        "created_at": row[4],
-        "size_bytes": row[5],
-        "stored_path": row[6],
-    }
-
-@router.delete("/{project_id}")
-def delete_project(project_id: str):
-    """
-    Deletes a project upload and its associated stored file.
-    """
-    conn = storage.open_db()
-
-    row = conn.execute(
-        """
-        SELECT u.file_id, f.path
-        FROM uploads u
-        JOIN files f ON f.file_id = u.file_id
-        WHERE u.upload_id = ?
-        """,
-        (project_id,),
-    ).fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    file_id, file_path = row
-
-    # delete upload reference
-    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (project_id,))
-    # delete file reference
-    conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
-    conn.commit()
-
-    # best-effort physical file removal
-    try:
-        Path(file_path).unlink(missing_ok=True)
-    except Exception:
-        pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return {
         "data": {
-            "deleted": True,
+            "ok": True,
             "project_id": project_id,
-            "file_id": file_id,
+            "file_id": stored["file_id"],
         },
         "error": None,
     }
 
 
-@router.post("/{project_id}/thumbnail")
-async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)):
-    # Only accept images
-    if not (file.content_type or "").startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image uploads are supported")
-    filename = file.filename or "thumbnail"
-    image_bytes = await file.read()
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="Empty image upload")
-
+@router.get("/{project_id}/thumbnail")
+def get_thumbnail(project_id: str):
     conn = storage.open_db()
     try:
-        # Store latest thumbnail
-        stored = storage.upsert_project_thumbnail(
-            conn,
-            project_id=project_id,
-            image_bytes=image_bytes,
-            filename=filename,
-            content_type=file.content_type or "application/octet-stream",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        _ensure_thumbnail_table(conn)
 
-    return {"data": stored, "error": None}
+        row = conn.execute(
+            """
+            SELECT f.path, f.mime
+            FROM project_thumbnails t
+            JOIN files f ON f.file_id = t.file_id
+            WHERE t.project_id = ?
+            ORDER BY datetime(t.created_at) DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
 
+        if not row:
+            raise HTTPException(status_code=404, detail="Thumbnail not found")
 
-@router.get("/{project_id}/thumbnail")
-def get_project_thumbnail(project_id: str):
-    # Return the latest thumbnail bytes
-    conn = storage.open_db()
-    meta = storage.fetch_project_thumbnail_meta(conn, project_id)
-    if not meta:
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    image_bytes = storage.fetch_project_thumbnail_bytes(conn, project_id)
-    if not image_bytes:
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return Response(
-        content=image_bytes,
-        media_type=meta.get("content_type") or "application/octet-stream",
-        headers={
-            "Content-Disposition": f"inline; filename=\"{meta.get('filename') or 'thumbnail'}\"",
-        },
-    )
+        file_path, mime = row
+        if not file_path or not Path(file_path).exists():
+            raise HTTPException(status_code=404, detail="Thumbnail file missing")
+
+        return FileResponse(path=file_path, media_type=mime or "application/octet-stream")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass

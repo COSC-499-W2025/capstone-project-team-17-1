@@ -7,6 +7,8 @@ import pathlib
 import uuid
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Iterable, List, Mapping
+import urllib
+import urllib.request
 
 import zipfile
 
@@ -1070,22 +1072,39 @@ def _list_resume_users(conn: sqlite3.Connection) -> List[dict]:
         ORDER BY LOWER(u.username), u.id
         """
     ).fetchall()
-    return [
-        {
-            "id": int(row[0]),
-            "username": str(row[1]),
-            "email": row[2],
-            "full_name": row[3],
-            "phone_number": row[4],
-            "city": row[5],
-            "state_region": row[6],
-            "github_url": row[7],
-            "portfolio_url": row[8],
-            "project_count": int(row[9] or 0),
-        }
-        for row in rows
-        if row and row[1]
-    ]
+
+    def g(row, i, default=None):
+        return row[i] if row is not None and len(row) > i else default
+
+    out = []
+    for row in rows:
+        username = g(row, 1)
+        if not username:
+            continue
+        out.append(
+            {
+                "id": int(g(row, 0, 0) or 0),
+                "username": str(username),
+                "email": g(row, 2),
+                "full_name": g(row, 3),
+                "phone_number": g(row, 4),
+                "city": g(row, 5),
+                "state_region": g(row, 6),
+                "github_url": g(row, 7),
+                "portfolio_url": g(row, 8),
+                "project_count": int(g(row, 9, 0) or 0),
+            }
+        )
+    return out
+
+def _has_any_users(conn: object) -> bool:
+    """Return True if DB seems to have at least one user. Must never raise."""
+    try:
+        cur = conn.execute("SELECT 1 FROM users LIMIT 1")
+        return bool(cur.fetchone())
+    except Exception:
+        return False
+
 
 
 def _list_existing_resumes(conn: sqlite3.Connection, *, user_id: int | None = None) -> List[dict]:

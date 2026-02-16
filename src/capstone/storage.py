@@ -676,6 +676,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS uploads (
             upload_id TEXT PRIMARY KEY,
+            project_id TEXT,
             original_name TEXT,
             uploader TEXT,
             source TEXT,
@@ -690,6 +691,13 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_files_hash
         ON files (hash)
         """
+    )
+    conn.execute(
+        """ 
+        CREATE INDEX IF NOT EXISTS idx_uploads_project_id 
+        ON uploads (project_id);
+        """
+
     )
     conn.execute(
         """

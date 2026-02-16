@@ -46,6 +46,7 @@ def ensure_file(
     uploader: str | None = None,
     source: str | None = None,
     files_root: Path | None = None,
+    project_id: str | None = None,  # added new type
 ) -> dict:
     """Ingest a file with deduplication. Returns metadata dict."""
     root = files_root or DEFAULT_FILES_ROOT
@@ -85,10 +86,14 @@ def ensure_file(
                 "UPDATE files SET ref_count = ref_count + 1 WHERE file_id = ?",
                 (existing_id,),
             )
+
         upload_id = str(uuid.uuid4())
+        effective_project_id = project_id or upload_id  # added new type
+
         _record_upload(
             conn,
             upload_id=upload_id,
+            project_id=effective_project_id,  # ✅ NEW
             original_name=original_name,
             uploader=uploader,
             source=source,
@@ -102,6 +107,7 @@ def ensure_file(
             "size_bytes": size_bytes,
             "dedup": True,
             "upload_id": upload_id,
+            "project_id": effective_project_id,  # added new type
         }
 
     dest_path = _storage_path(root, file_hash)
@@ -119,10 +125,14 @@ def ensure_file(
         """,
         (file_id, file_hash, size_bytes, mime, str(dest_path)),
     )
+
     upload_id = str(uuid.uuid4())
+    effective_project_id = project_id or upload_id  # added new type
+
     _record_upload(
         conn,
         upload_id=upload_id,
+        project_id=effective_project_id,  # added new type
         original_name=original_name,
         uploader=uploader,
         source=source,
@@ -137,6 +147,7 @@ def ensure_file(
         "size_bytes": size_bytes,
         "dedup": False,
         "upload_id": upload_id,
+        "project_id": effective_project_id,  #  added new type
     }
 
 
@@ -144,6 +155,7 @@ def _record_upload(
     conn: sqlite3.Connection,
     *,
     upload_id: str,
+    project_id: str,  # ✅ NEW
     original_name: str | None,
     uploader: str | None,
     source: str | None,
@@ -153,10 +165,10 @@ def _record_upload(
     """Insert an upload record (non-destructive)."""
     conn.execute(
         """
-        INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO uploads (upload_id, project_id, original_name, uploader, source, hash, file_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (upload_id, original_name, uploader, source, file_hash, file_id),
+        (upload_id, project_id, original_name, uploader, source, file_hash, file_id),
     )
 
 
