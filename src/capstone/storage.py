@@ -82,6 +82,21 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         """
 
     )
+        # Human-in-the-loop edits / overrides for portfolio + resume output
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_overrides (
+            project_id TEXT PRIMARY KEY,
+            key_role TEXT,
+            evidence TEXT,
+            portfolio_blurb TEXT,
+            resume_bullets_json TEXT,
+            selected INTEGER,
+            rank INTEGER,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
 
     # Contributor stats history (append-only; we fetch latest per contributor)
     conn.execute("""
@@ -822,6 +837,7 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
         pass
 
     _initialize_schema(_DB_HANDLE)
+    _migrate_uploads_table(_DB_HANDLE)
     return _DB_HANDLE
 
 
@@ -837,7 +853,49 @@ def close_db() -> None:
             _DB_HANDLE = None
             _DB_PATH = None
 
+# --- migration: allow multiple uploads per upload_id (incremental snapshots)
+def _migrate_uploads_table(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='uploads'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
 
+    sql = row[0].lower()
+    # If upload_id is a primary key/unique, we need to migrate
+    if "upload_id" in sql and ("primary key" in sql or "unique" in sql):
+        conn.execute("ALTER TABLE uploads RENAME TO uploads_old")
+
+        # New schema: autoincrement primary key, upload_id is NOT unique
+        conn.execute(
+            """
+            CREATE TABLE uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                upload_id TEXT NOT NULL,
+                original_name TEXT,
+                uploader TEXT,
+                source TEXT,
+                hash TEXT,
+                file_id TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(file_id) REFERENCES files(file_id)
+            )
+            """
+        )
+
+        # Copy old rows over (id will be auto-generated)
+        conn.execute(
+            """
+            INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id, created_at)
+            SELECT upload_id, original_name, uploader, source, hash, file_id, created_at
+            FROM uploads_old
+            """
+        )
+
+        conn.execute("DROP TABLE uploads_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_upload_id ON uploads(upload_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
+        conn.commit()
 
 # Snapshots
 
@@ -1556,6 +1614,85 @@ def update_contributor_score(
     conn.commit()
 
 
+def upsert_project_overrides(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    key_role: str | None = None,
+    evidence: str | None = None,
+    portfolio_blurb: str | None = None,
+    resume_bullets: list[str] | None = None,
+    selected: bool | None = None,
+    rank: int | None = None,
+) -> dict:
+    if not project_id:
+        raise ValueError("project_id must be provided")
+
+    payload = {
+        "project_id": project_id,
+        "key_role": key_role,
+        "evidence": evidence,
+        "portfolio_blurb": portfolio_blurb,
+        "resume_bullets_json": json.dumps(resume_bullets) if resume_bullets is not None else None,
+        "selected": (1 if selected else 0) if selected is not None else None,
+        "rank": rank,
+    }
+
+    conn.execute(
+        """
+        INSERT INTO project_overrides
+            (project_id, key_role, evidence, portfolio_blurb, resume_bullets_json, selected, rank, updated_at)
+        VALUES
+            (:project_id, :key_role, :evidence, :portfolio_blurb, :resume_bullets_json, :selected, :rank, CURRENT_TIMESTAMP)
+        ON CONFLICT(project_id) DO UPDATE SET
+            key_role = COALESCE(excluded.key_role, project_overrides.key_role),
+            evidence = COALESCE(excluded.evidence, project_overrides.evidence),
+            portfolio_blurb = COALESCE(excluded.portfolio_blurb, project_overrides.portfolio_blurb),
+            resume_bullets_json = COALESCE(excluded.resume_bullets_json, project_overrides.resume_bullets_json),
+            selected = COALESCE(excluded.selected, project_overrides.selected),
+            rank = COALESCE(excluded.rank, project_overrides.rank),
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        payload,
+    )
+    conn.commit()
+    return fetch_project_overrides(conn, project_id) or {"project_id": project_id}
+
+
+def fetch_project_overrides(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    if not project_id:
+        return None
+
+    row = conn.execute(
+        """
+        SELECT project_id, key_role, evidence, portfolio_blurb, resume_bullets_json, selected, rank, updated_at
+        FROM project_overrides
+        WHERE project_id = ?
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+
+    if not row:
+        return None
+
+    bullets = None
+    if row[4]:
+        try:
+            bullets = json.loads(row[4])
+        except Exception:
+            bullets = None
+
+    return {
+        "project_id": row[0],
+        "key_role": row[1],
+        "evidence": row[2],
+        "portfolio_blurb": row[3],
+        "resume_bullets": bullets,
+        "selected": bool(row[5]) if row[5] is not None else None,
+        "rank": row[6],
+        "updated_at": row[7],
+    }
 # -----------------------------
 # Users and user-project links
 # -----------------------------
@@ -2051,9 +2188,9 @@ def fetch_project_evidence(
     return out
 
 
-# -----------------------------
+
 # Backup / export
-# -----------------------------
+
 def backup_database(conn: sqlite3.Connection, destination: Path) -> Path:
     """Create a SQLite backup at the provided destination path."""
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -2136,4 +2273,7 @@ __all__ = [
     "upsert_project_thumbnail",
     "fetch_project_thumbnail_meta",
     "fetch_project_thumbnail_bytes",
+    "upsert_project_overrides",
+    "fetch_project_overrides",
+
 ]
