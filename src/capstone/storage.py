@@ -822,6 +822,7 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
         pass
 
     _initialize_schema(_DB_HANDLE)
+    _migrate_uploads_table(_DB_HANDLE)
     return _DB_HANDLE
 
 
@@ -837,7 +838,49 @@ def close_db() -> None:
             _DB_HANDLE = None
             _DB_PATH = None
 
+# --- migration: allow multiple uploads per upload_id (incremental snapshots)
+def _migrate_uploads_table(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='uploads'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
 
+    sql = row[0].lower()
+    # If upload_id is a primary key/unique, we need to migrate
+    if "upload_id" in sql and ("primary key" in sql or "unique" in sql):
+        conn.execute("ALTER TABLE uploads RENAME TO uploads_old")
+
+        # New schema: autoincrement primary key, upload_id is NOT unique
+        conn.execute(
+            """
+            CREATE TABLE uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                upload_id TEXT NOT NULL,
+                original_name TEXT,
+                uploader TEXT,
+                source TEXT,
+                hash TEXT,
+                file_id TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(file_id) REFERENCES files(file_id)
+            )
+            """
+        )
+
+        # Copy old rows over (id will be auto-generated)
+        conn.execute(
+            """
+            INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id, created_at)
+            SELECT upload_id, original_name, uploader, source, hash, file_id, created_at
+            FROM uploads_old
+            """
+        )
+
+        conn.execute("DROP TABLE uploads_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_upload_id ON uploads(upload_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
+        conn.commit()
 
 # Snapshots
 
