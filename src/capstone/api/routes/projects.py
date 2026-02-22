@@ -10,7 +10,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post("/upload")
-async def upload_project(file: UploadFile = File(...)):
+async def upload_project(file: UploadFile = File(...), project_id: str | None = None):
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -27,6 +27,7 @@ async def upload_project(file: UploadFile = File(...)):
             original_name=filename,
             source="api_upload",
             mime="application/zip",
+            upload_id=project_id,  #this is for uploading project id 
         )
     finally:
         try:
