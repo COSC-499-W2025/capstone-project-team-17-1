@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, HTTPException, Response
 from pathlib import Path
 import tempfile
@@ -5,6 +7,13 @@ import shutil
 import time
 
 from capstone import file_store, storage
+class ProjectEdit(BaseModel):
+    key_role: Optional[str] = None
+    evidence: Optional[str] = None
+    portfolio_blurb: Optional[str] = None
+    resume_bullets: Optional[List[str]] = None
+    selected: Optional[bool] = None
+    rank: Optional[int] = None
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -232,3 +241,33 @@ def list_project_uploads(project_id: str):
             for r in rows
         ],
     }
+@router.patch("/{project_id}")
+def edit_project(project_id: str, payload: ProjectEdit):
+    conn = storage.open_db()
+    exists = conn.execute(
+        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    updated = storage.upsert_project_overrides(
+        conn,
+        project_id=project_id,
+        key_role=payload.key_role,
+        evidence=payload.evidence,
+        portfolio_blurb=payload.portfolio_blurb,
+        resume_bullets=payload.resume_bullets,
+        selected=payload.selected,
+        rank=payload.rank,
+    )
+    return {"data": updated, "error": None}
+
+
+@router.get("/{project_id}/overrides")
+def get_project_overrides(project_id: str):
+    conn = storage.open_db()
+    data = storage.fetch_project_overrides(conn, project_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="No overrides found")
+    return {"data": data, "error": None}
