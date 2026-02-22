@@ -28,4 +28,8 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     
     return app
 
+# no functional change, just clarity for tests
+def get_app_for_tests(tmp_db_dir: str) -> FastAPI:
+    return create_app(db_dir=tmp_db_dir, auth_token=None)
+
 app = create_app()

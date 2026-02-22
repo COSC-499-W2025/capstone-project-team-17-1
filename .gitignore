@@ -21,3 +21,4 @@ config/user_config.json
 # databases
 demo_db/*
 data/files
+PATH_HERE
