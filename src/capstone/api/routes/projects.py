@@ -200,3 +200,35 @@ def get_project_thumbnail(project_id: str):
             "Content-Disposition": f"inline; filename=\"{meta.get('filename') or 'thumbnail'}\"",
         },
     )
+
+@router.get("/{project_id}/uploads")
+def list_project_uploads(project_id: str):
+    conn = storage.open_db()
+    rows = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        ORDER BY datetime(u.created_at) ASC
+        """,
+        (project_id,),
+    ).fetchall()
+
+    return {
+        "project_id": project_id,
+        "count": len(rows),
+        "uploads": [
+            {
+                "project_id": r[0],
+                "filename": r[1],
+                "file_id": r[2],
+                "hash": r[3],
+                "created_at": r[4],
+                "size_bytes": r[5],
+                "stored_path": r[6],
+            }
+            for r in rows
+        ],
+    }
