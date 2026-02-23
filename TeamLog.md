@@ -528,3 +528,37 @@ Finally, foundational storage improvements were implemented by introducing dedup
 
 Overall, this week strengthened the system’s usability, test stability, and backend foundations while pushing Milestone 2 features—timelines, insights, portfolio/résumé workflows, and APIs—closer to a complete and review-ready state.
 
+## WEEK 6 TEAM LOG (Term2)
+(Jan09 - Jan15, 2026)
+
+### Recap of Milestone Goal - Week 6
+
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart Week 6
+<img width="1039" height="616" alt="Screenshot 2026-02-23 at 3 14 21 PM" src="https://github.com/user-attachments/assets/7b82e4d7-5be6-4b85-b354-7aeed83f9395" />
+### Completed Tasks Week 6
+<img width="1216" height="643" alt="Screenshot 2026-02-23 at 3 14 56 PM" src="https://github.com/user-attachments/assets/61c3d89c-6bd2-433d-a3ce-1bc946e8adeb" />
+
+### In Progress Tasks Week 6
+<img width="1258" height="334" alt="Screenshot 2026-02-23 at 3 15 10 PM" src="https://github.com/user-attachments/assets/e194bed4-2f13-436a-899d-768d5aba929f" />
+
+### Test Report Week 6
+This week, the team focused on strengthening API completeness, improving portfolio workflows, and expanding test coverage to ensure Milestone 2 stability. Several key features were finalized and merged, reinforcing both backend reliability and end-to-end integration across the CLI and FastAPI layers.
+
+Portfolio-related functionality saw substantial progress. The API surface for portfolio generation and showcase display was expanded and refined, ensuring consistent endpoints for structured portfolio retrieval and UI rendering. Enhancements to duplicate file recognition improved upload reliability and reduced redundant data storage, while snapshot history helpers were introduced to make project analysis more traceable and testable. These changes collectively improve the determinism and robustness of the portfolio pipeline. [API Endpoints for Portfolio (#205)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/205)  [Improving Duplicate file recognition (#203)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/203)  [Add snapshot history helper + test (#202)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/202)
+
+Resume and job-alignment workflows were also strengthened. Updates to the resume module improved customization and structural consistency, while the job description matching feature was integrated with analyzed project data to provide clearer skill alignment insights. These improvements enhance the system’s ability to translate project evidence into resume-ready and job-targeted outputs. [Updates and changes to the resume module (#209)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/209)  [Job Description With Analyzed Projects (#207)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/207)
+
+In addition, the team improved overall development workflow and validation quality. Test data and API coverage were expanded to better reflect realistic usage scenarios, and missing API endpoints were completed to reduce integration gaps. Documentation and weekly logs were updated to maintain project traceability and milestone alignment. [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)  [added some missing api endpoints (#201)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/201)
+
+Overall, this week’s work strengthened the structural integrity of the portfolio and resume pipelines, improved API completeness, and reinforced testing and documentation foundations as the project moves toward final milestone consolidation.
