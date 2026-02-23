@@ -34,7 +34,13 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
 
-    def _make_archive(self, name: str = "sample.zip") -> Path:
+    def _make_archive(
+        self,
+        name: str = "sample.zip",
+        *,
+        git_log_path: str = ".git/logs/git_log",
+        git_log_encoding: str = "utf-8",
+    ) -> Path:
         archive_path = self.tmp_path / name
         with ZipFile(archive_path, "w") as zf:
             zf.writestr("src/app.py", "print('hello world')\n")
@@ -48,7 +54,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
                 "2222222222222222222222222222222222222222 "
                 "Bob Example <bob@example.com> 1700000500 +0000\tcommit\n"
             )
-            zf.writestr(".git/logs/HEAD", git_log)
+            zf.writestr(git_log_path, git_log.encode(git_log_encoding))
         return archive_path
 
     def test_analyze_archive_generates_metadata_and_summary(self) -> None:
@@ -73,7 +79,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
 
         self.assertEqual(summary["resolved_mode"], "local")
         self.assertIn("local mode", summary["mode_reason"].lower())
-        self.assertIn(summary["collaboration"]["classification"], {"collaborative", "unknown"})
+        self.assertEqual(summary["collaboration"]["classification"], "collaborative")
         self.assertIsInstance(summary["frameworks"], list)
         self.assertIn("Python", summary["languages"])
         self.assertTrue(summary["skills"])
@@ -119,6 +125,38 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
 
         self.assertEqual(ctx.exception.payload["error"], "InvalidInput")
         self.assertIn("Expected a .zip", ctx.exception.payload["detail"])
+
+    def test_analyze_archive_supports_utf16_git_log(self) -> None:
+        archive_path = self._make_archive(
+            name="utf16.zip",
+            git_log_path="git_log.txt",
+            git_log_encoding="utf-16",
+        )
+        metadata_path = self.tmp_path / "out" / "metadata_utf16.jsonl"
+        summary_path = self.tmp_path / "out" / "summary_utf16.json"
+
+        grant_consent()
+        mode = resolve_mode("auto", load_config().consent)
+        analyzer = ZipAnalyzer()
+
+        summary = analyzer.analyze(
+            zip_path=archive_path,
+            metadata_path=metadata_path,
+            summary_path=summary_path,
+            mode=mode,
+            preferences=load_config().preferences,
+            project_id="sample_utf16",
+            db_dir=self.tmp_path / "db",
+        )
+
+        self.assertEqual(summary["collaboration"]["classification"], "collaborative")
+        self.assertIn("primary_contributor", summary["collaboration"])
+        self.assertFalse(
+            any(
+                warning.get("error") == "NonUtf8" and warning.get("path", "").endswith("git_log.txt")
+                for warning in summary.get("warnings", [])
+            )
+        )
 
     def test_duplicate_archive_is_deduplicated(self) -> None:
         archive_path = self._make_archive()

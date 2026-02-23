@@ -91,7 +91,7 @@ def _dedupe_strings(items: list[Any]) -> list[str]:
         result.append(s)
     return result
 
-# helper for snapshot parsing -> pick first valid string from list of possib                                  le keys
+# helper for snapshot parsing -> pick first valid string from list of possible keys
 def _pick_first_str(d: dict[str, Any], keys: list[str]) -> Optional[str]:
     for key in keys:
         value = d.get(key)

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import base64
 import json
+import tempfile
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from capstone.portfolio_retrieval import _db_session
+from capstone.resume_pdf_builder import build_pdf_with_latex
 from capstone.resume_retrieval import (
     build_resume_preview,
     ensure_resume_schema,
@@ -33,10 +37,11 @@ def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
     _TOKEN = auth_token
 
 def _check_auth(request: Request) -> None:
-    if not _TOKEN:
+    token = getattr(request.app.state, "auth_token", _TOKEN)
+    if not token:
         return
     h = request.headers.get("Authorization", "")
-    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
+    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
 async def _get_payload(request: Request) -> dict:
@@ -44,6 +49,24 @@ async def _get_payload(request: Request) -> dict:
         return await request.json()
     except Exception:
         return {}
+
+
+@router.post("/resume/render-pdf")
+async def resume_render_pdf(request: Request):
+    _check_auth(request)
+    payload = await _get_payload(request)
+    resume_payload = payload.get("resume")
+    if not isinstance(resume_payload, dict):
+        raise HTTPException(status_code=400, detail="resume object is required")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "resume.pdf"
+        try:
+            build_pdf_with_latex(resume_payload, out_path)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
+        encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")
+    return {"data": {"format": "pdf", "payload": encoded}, "error": None}
 
 @router.get("/resume")
 def resume_list(
@@ -97,7 +120,7 @@ async def resume_insert(request: Request):
         raise HTTPException(status_code=400, detail="title is required")
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        result = insert_resume_entry(
+        entry_id = insert_resume_entry(
             c,
             section=section,
             title=title,
@@ -108,7 +131,8 @@ async def resume_insert(request: Request):
             status=payload.get("status"),
             metadata=payload.get("metadata"),
         )
-    return {"data": result.to_dict(), "error": None}
+        entry = get_resume_entry(c, entry_id)
+    return JSONResponse({"data": entry.to_dict(), "error": None}, status_code=200)
 
 
 @router.get("/resume/{entry_id}")
@@ -138,13 +162,20 @@ async def resume_update(entry_id: str, request: Request):
             projects=payload.get("projects"),
             section=payload.get("section"),
             status=payload.get("status"),
-            start_date=payload.get("start_date"),
-            end_date=payload.get("end_date"),
             metadata=payload.get("metadata"),
         )
     if not entry:
         raise HTTPException(status_code=404, detail="Resume entry not found")
     return {"data": entry.to_dict(), "error": None}
+
+
+@router.post("/resume/{entry_id}/edit")
+async def resume_update_alias(entry_id: str, request: Request):
+    """
+    Alias for PATCH /resume/{id} to satisfy API consumers expecting POST.
+    """
+    # Delegate to the main update handler
+    return await resume_update(entry_id, request)
 
 
 @router.delete("/resume/{entry_id}")
@@ -267,7 +298,7 @@ async def resume_projects_post(request: Request):
 
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        if get_latest_snapshot(c, str(project_id)) is None:
+        if fetch_latest_snapshot(c, str(project_id)) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         if metadata is None:
             metadata = {}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -55,6 +56,7 @@ from .resume_retrieval import (
 )
 from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
+from .resume_pdf_builder import build_pdf_with_latex
 from .storage import fetch_latest_snapshot as get_portfolio_latest
 from .api.portfolio_helpers import ensure_indexes as ensure_portfolio_indexes
 from .api.portfolio_helpers import list_snapshots as list_portfolio_snapshots
@@ -65,6 +67,12 @@ logger = get_logger(__name__)
 
 def _print(obj):
     print(json.dumps(obj, indent=2))
+
+
+def _safe_slug(text: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", (text or "").strip())
+    cleaned = cleaned.strip("_")
+    return cleaned or "resume"
 
 # ----------------------------- Parsers ---------------------------------
 def build_parser() -> argparse.ArgumentParser:
@@ -340,6 +348,23 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Optional path to write a one-page resume PDF",
+    )
+    resume_parser.add_argument(
+        "--latex-template",
+        action="store_true",
+        help="Render PDF from templates/resume_template.tex with placeholder replacement",
+    )
+    resume_parser.add_argument(
+        "--template-path",
+        type=Path,
+        default=None,
+        help="Optional custom LaTeX template path (used with --latex-template)",
+    )
+    resume_parser.add_argument(
+        "--tex-output",
+        type=Path,
+        default=None,
+        help="Optional path to write the rendered .tex file (used with --latex-template)",
     )
 
     job_parser = subparsers.add_parser(
@@ -1319,9 +1344,9 @@ def _write_git_log(repo_path: Path) -> None:
 
     log_dir = repo_path / ".git" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    (log_dir / "capstone_git_log").write_text(result.stdout, encoding="utf-8")
+    (log_dir / "git_log").write_text(result.stdout, encoding="utf-8")
     # Also drop a copy at repo root so we can delete most of .git before zipping.
-    (repo_path / "capstone_git_log.txt").write_text(result.stdout, encoding="utf-8")
+    (repo_path / "git_log.txt").write_text(result.stdout, encoding="utf-8")
 
 
 def _prune_repository(repo_path: Path) -> None:
@@ -1636,8 +1661,21 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
         print(json.dumps(resume_json, indent=2))
 
     # 6) Optional PDF output
-    if args.pdf_output:
-        resume_to_pdf(resume, args.pdf_output)       
+    if args.latex_template:
+        pdf_target = args.pdf_output
+        if not pdf_target:
+            pdf_target = Path("Output") / f"resume_{_safe_slug(args.company)}.pdf"
+        build_pdf_with_latex(
+            resume.to_dict(),
+            pdf_target,
+            template_path=args.template_path,
+            tex_output_path=args.tex_output,
+        )
+        print(f"[generate-resume] Wrote LaTeX-template PDF resume to {pdf_target}")
+        if args.tex_output:
+            print(f"[generate-resume] Wrote rendered LaTeX source to {args.tex_output}")
+    elif args.pdf_output:
+        resume_to_pdf(resume, args.pdf_output)
         print(f"[generate-resume] Wrote PDF resume to {args.pdf_output}")
 
     return 0
