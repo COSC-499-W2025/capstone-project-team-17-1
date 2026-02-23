@@ -1,19 +1,41 @@
 import os
+import traceback
 from fastapi import FastAPI
+
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
+from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
 
-try:
-    from capstone.api.routes.portfolio import router as portfolio_router, configure as configure_portfolio
-except ImportError:
-    portfolio_router = None
-    configure_portfolio = None
-try:
-    from capstone.api.routes.portfolio_showcase import router as showcase_router, configure as configure_showcase
-except ImportError:
-    showcase_router = None
-    configure_showcase = None
+
+def _safe_import_portfolio():
+    """Attempt to import portfolio router + configure."""
+    try:
+        from capstone.api.routes.portfolio import router, configure  # type: ignore
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
+
+
+def _safe_import_showcase():
+    """Attempt to import showcase router + configure."""
+    try:
+        from capstone.api.routes.portfolio_showcase import router, configure  # type: ignore
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
+
+
+def _safe_import_resume():
+    """Attempt to import resume router + optional configure."""
+    try:
+        from capstone.api.routes.resume import router  # type: ignore
+        # resume.py may or may not expose configure(db_dir, auth_token)
+        configure = getattr(__import__("capstone.api.routes.resume", fromlist=["configure"]), "configure", None)
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
+
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Capstone API")
@@ -26,21 +48,69 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     @app.get("/health")
     def health():
         return {"status": "ok"}
-    
+
+    # Always-available routers
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
-    
 
-    if configure_portfolio and portfolio_router:
-        configure_portfolio(db_dir, auth_token)
-        app.include_router(portfolio_router)
-        
-    if configure_showcase and showcase_router:
-        configure_showcase(db_dir, auth_token)
-        app.include_router(showcase_router)
+    # Optional portfolio routes
+    portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
+    if portfolio_err is None and portfolio_router is not None and configure_portfolio is not None:
+        try:
+            configure_portfolio(db_dir, auth_token)
+            app.include_router(portfolio_router)
+        except Exception:
+            app.state.portfolio_mount_error = traceback.format_exc()
+    else:
+        app.state.portfolio_import_error = portfolio_err
+
+    # Optional showcase routes
+    showcase_router, configure_showcase, showcase_err = _safe_import_showcase()
+    if showcase_err is None and showcase_router is not None and configure_showcase is not None:
+        try:
+            configure_showcase(db_dir, auth_token)
+            app.include_router(showcase_router)
+        except Exception:
+            app.state.showcase_mount_error = traceback.format_exc()
+    else:
+        app.state.showcase_import_error = showcase_err
+
+    # Resume routes (+ configure if present)
+    resume_router, configure_resume, resume_err = _safe_import_resume()
+    if resume_router is not None:
+        try:
+            if configure_resume is not None:
+                configure_resume(db_dir, auth_token)
+            app.include_router(resume_router)
+        except Exception:
+            app.state.resume_mount_error = traceback.format_exc()
+    else:
+        app.state.resume_import_error = resume_err
+
+    # Legacy aliases (old endpoints like /portfolios/* and /users/*)
+    app.include_router(legacy_aliases_router)
+
+    # Debug endpoint
+    @app.get("/__debug/routers")
+    def debug_routers():
+        routes = sorted({getattr(r, "path", str(r)) for r in app.router.routes})
+        return {
+            "routes": routes,
+            "portfolio_import_error": getattr(app.state, "portfolio_import_error", None),
+            "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
+            "showcase_import_error": getattr(app.state, "showcase_import_error", None),
+            "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
+            "resume_import_error": getattr(app.state, "resume_import_error", None),
+            "resume_mount_error": getattr(app.state, "resume_mount_error", None),
+        }
 
     return app
+
+
+def get_app_for_tests(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
+    return create_app(db_dir=db_dir, auth_token=auth_token)
+
 
 DB_DIR = os.getenv("CAPSTONE_DB_DIR")
 AUTH_TOKEN = os.getenv("CAPSTONE_AUTH_TOKEN")

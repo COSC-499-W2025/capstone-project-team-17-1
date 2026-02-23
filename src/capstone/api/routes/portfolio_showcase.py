@@ -85,24 +85,45 @@ def portfolio_summary(user: str, request: Request, limit: int = 3):
     payload = [export_markdown(item) for item in summaries]
     return {"data": payload, "meta": {"user": user, "limit": limit}, "error": None}
 
+from typing import Optional  # already there
+
 @router.get("/portfolios/latest")
-def latest(request: Request, projectId: str, view: Optional[str] = None):
+def latest(request: Request, projectId: str, view: Optional[str] = None, user: Optional[str] = None):
     _check_auth(request)
     view = _parse_view(view)
+
+    user_role = None
+    if user:
+        with _db_session(_require_db()) as c:
+            row = c.execute(
+                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
+                (projectId, user),
+            ).fetchone()
+        if row:
+            user_role = "primary_contributor"
+
     if view == "resume":
         with _db_session(_require_db()) as c:
             ensure_resume_schema(c)
             item = get_resume_project_description(c, projectId)
         if not item:
             raise HTTPException(status_code=404, detail="No resume project found")
-        return {"data": item.to_dict(), "meta": {"projectId": projectId, "view": "resume"}, "error": None}
+        return {
+            "data": item.to_dict(),
+            "meta": {"projectId": projectId, "view": "resume", "user": user, "userRole": user_role},
+            "error": None,
+        }
 
     with _db_session(_require_db()) as c:
         ensure_indexes(c)
         data = get_latest_snapshot(c, projectId)
     if data is None:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    return {"data": data, "meta": {"projectId": projectId, "view": "portfolio"}, "error": None}
+    return {
+        "data": data,
+        "meta": {"projectId": projectId, "view": "portfolio", "user": user, "userRole": user_role},
+        "error": None,
+    }
 
 @router.get("/portfolios/evidence")
 def evidence_latest(request: Request, projectId: str):
