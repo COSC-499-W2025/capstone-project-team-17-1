@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
@@ -106,6 +107,8 @@ class ContributorStats:
     reviews: int = 0
     score: float = 0.0
     email: str | None = None
+    first_commit_at: str | None = None
+    last_commit_at: str | None = None
 
 
 class GitHubClient:
@@ -259,6 +262,31 @@ def collect_contributor_stats(
             contributor=login,
             commits=int(entry.get("total", 0)),
         )
+        weeks = entry.get("weeks") if isinstance(entry, dict) else None
+        if isinstance(weeks, list):
+            active_weeks = []
+            for week in weeks:
+                if not isinstance(week, dict):
+                    continue
+                try:
+                    week_commits = int(week.get("c", 0) or 0)
+                except Exception:
+                    week_commits = 0
+                if week_commits <= 0:
+                    continue
+                try:
+                    week_start = int(week.get("w", 0) or 0)
+                except Exception:
+                    week_start = 0
+                if week_start <= 0:
+                    continue
+                active_weeks.append(week_start)
+            if active_weeks:
+                first_ts = min(active_weeks)
+                last_ts = max(active_weeks)
+                stats_by_login[login].first_commit_at = datetime.fromtimestamp(first_ts, tz=UTC).strftime("%Y-%m-%d")
+                # Weekly buckets represent week start; use the latest active week start as last-known active point.
+                stats_by_login[login].last_commit_at = datetime.fromtimestamp(last_ts, tz=UTC).strftime("%Y-%m-%d")
 
     for entry in contributors_data:
         if not isinstance(entry, dict):
@@ -344,7 +372,14 @@ def sync_contributor_stats(
     for row in stats:
         # upsert user first to get stable id
         user_id = upsert_user(conn, row.contributor, email=row.email)
-        link_user_to_project(conn, user_id, resolved_project_id, contributor_name=row.contributor)
+        link_user_to_project(
+            conn,
+            user_id,
+            resolved_project_id,
+            contributor_name=row.contributor,
+            first_commit_at=row.first_commit_at,
+            last_commit_at=row.last_commit_at,
+        )
         store_contributor_stats(
             conn,
             project_id=resolved_project_id,
