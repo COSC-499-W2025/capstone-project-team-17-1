@@ -546,6 +546,7 @@ The goal of this milestone is to build a service-oriented system that supports a
 
 ### Burnup chart Week 6
 <img width="1039" height="616" alt="Screenshot 2026-02-23 at 3 14 21 PM" src="https://github.com/user-attachments/assets/7b82e4d7-5be6-4b85-b354-7aeed83f9395" />
+
 ### Completed Tasks Week 6
 <img width="1216" height="643" alt="Screenshot 2026-02-23 at 3 14 56 PM" src="https://github.com/user-attachments/assets/61c3d89c-6bd2-433d-a3ce-1bc946e8adeb" />
 
