@@ -184,6 +184,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             user_id INTEGER NOT NULL,
             project_id TEXT NOT NULL,
             contributor_name TEXT,
+            first_commit_at TEXT,
+            last_commit_at TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (user_id, project_id),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -373,6 +375,14 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
     conn.commit()
 
+    # Add per-user per-project activity period columns when missing.
+    user_projects_info = conn.execute("PRAGMA table_info(user_projects)").fetchall()
+    user_projects_columns = {row[1] for row in user_projects_info}
+    for column_name in ("first_commit_at", "last_commit_at"):
+        if column_name not in user_projects_columns:
+            conn.execute(f"ALTER TABLE user_projects ADD COLUMN {column_name} TEXT")
+    conn.commit()
+
     desired_users_order = [
         "id",
         "username",
@@ -455,6 +465,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
                 user_id INTEGER NOT NULL,
                 project_id TEXT NOT NULL,
                 contributor_name TEXT,
+                first_commit_at TEXT,
+                last_commit_at TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (user_id, project_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -469,8 +481,10 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         conn.execute(
             """
-            INSERT OR IGNORE INTO user_projects (id, user_id, project_id, contributor_name, created_at)
-            SELECT id, user_id, project_id, contributor_name, created_at
+            INSERT OR IGNORE INTO user_projects (
+                id, user_id, project_id, contributor_name, first_commit_at, last_commit_at, created_at
+            )
+            SELECT id, user_id, project_id, contributor_name, NULL, NULL, created_at
             FROM user_projects_old
             """
         )
@@ -1982,6 +1996,9 @@ def upsert_default_resume_modules(
             {
                 "title": project.get("title") or "Project",
                 "subtitle": project.get("stack") or "",
+                "start_date": project.get("start_date") or "",
+                "end_date": project.get("end_date") or "",
+                "location": project.get("location") or "",
                 "content": project.get("content") or "",
             }
         )
@@ -2022,6 +2039,8 @@ def link_user_to_project(
     project_id: str,
     *,
     contributor_name: str | None = None,
+    first_commit_at: str | None = None,
+    last_commit_at: str | None = None,
 ) -> None:
     if not user_id:
         raise ValueError("user_id must be provided")
@@ -2029,12 +2048,67 @@ def link_user_to_project(
         raise ValueError("project_id must be provided")
     conn.execute(
         """
-        INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
-        VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO user_projects (
+            user_id, project_id, contributor_name, first_commit_at, last_commit_at
+        )
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (int(user_id), project_id, contributor_name),
+        (int(user_id), project_id, contributor_name, first_commit_at, last_commit_at),
     )
+    existing = conn.execute(
+        """
+        SELECT contributor_name, first_commit_at, last_commit_at
+        FROM user_projects
+        WHERE user_id = ? AND project_id = ?
+        """,
+        (int(user_id), project_id),
+    ).fetchone()
+    if existing:
+        merged_name = contributor_name if contributor_name is not None else existing[0]
+        merged_first = existing[1]
+        merged_last = existing[2]
+        if first_commit_at and (not merged_first or str(first_commit_at) < str(merged_first)):
+            merged_first = first_commit_at
+        if last_commit_at and (not merged_last or str(last_commit_at) > str(merged_last)):
+            merged_last = last_commit_at
+        conn.execute(
+            """
+            UPDATE user_projects
+            SET contributor_name = ?, first_commit_at = ?, last_commit_at = ?
+            WHERE user_id = ? AND project_id = ?
+            """,
+            (merged_name, merged_first, merged_last, int(user_id), project_id),
+        )
     conn.commit()
+
+
+def fetch_user_project_activity_periods(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    project_ids: Iterable[str],
+) -> dict[str, dict[str, str]]:
+    cleaned = [str(pid).strip() for pid in project_ids if str(pid).strip()]
+    if not cleaned:
+        return {}
+    placeholders = ",".join("?" * len(cleaned))
+    rows = conn.execute(
+        f"""
+        SELECT project_id, first_commit_at, last_commit_at
+        FROM user_projects
+        WHERE user_id = ?
+          AND project_id IN ({placeholders})
+        """,
+        (int(user_id), *cleaned),
+    ).fetchall()
+    return {
+        str(row[0]): {
+            "first_commit_at": str(row[1] or ""),
+            "last_commit_at": str(row[2] or ""),
+        }
+        for row in rows
+        if row and row[0]
+    }
 
 
 def upsert_users_from_contributors(
@@ -2260,6 +2334,7 @@ __all__ = [
     "update_user_profile",
     "upsert_default_resume_modules",
     "link_user_to_project",
+    "fetch_user_project_activity_periods",
     "upsert_users_from_contributors",
     # evidence
     "store_project_evidence",

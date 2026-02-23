@@ -143,7 +143,13 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
                 "portfolio_url": "https://alice.dev",
             },
             core_skills=["Python", "SQL", "Python"],
-            projects=[{"title": "Proj A", "content": "Built APIs", "stack": "Python, FastAPI"}],
+            projects=[{
+                "title": "Proj A",
+                "content": "Built APIs",
+                "stack": "Python, FastAPI",
+                "start_date": "Jan 2025",
+                "end_date": "Current",
+            }],
             resume_title="Generated Resume",
         )
         assert resume_id
@@ -194,6 +200,19 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
             (resume_id,),
         ).fetchall()
         assert placeholder_rows == [("education", "University"), ("experience", "Event")]
+
+        project_row = conn.execute(
+            """
+            SELECT i.start_date, i.end_date
+            FROM resume_items i
+            JOIN resume_sections s ON s.id = i.section_id
+            WHERE s.resume_id = ? AND s.key = 'project'
+            ORDER BY i.sort_order, i.id
+            LIMIT 1
+            """,
+            (resume_id,),
+        ).fetchone()
+        assert project_row == ("Jan 2025", "Current")
 
         conn.close()
 
