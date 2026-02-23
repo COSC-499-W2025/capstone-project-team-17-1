@@ -233,3 +233,42 @@ def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
     title = kwargs.get("resume_title") or ""
     assert re.fullmatch(r"Alice Doe_\d{14}", title)
     assert kwargs.get("create_new") is True
+
+
+def test_sync_generated_resume_modules_includes_project_activity_period_dates():
+    with (
+        patch.object(app, "fetch_user_project_activity_periods", return_value={
+            "demo-project": {
+                "first_commit_at": "2025-01-10",
+                "last_commit_at": "2025-01-20",
+            }
+        }),
+        patch.object(app, "upsert_default_resume_modules", return_value="resume-id") as upsert_mock,
+    ):
+        app._sync_generated_resume_modules_to_db(
+            conn=None,
+            user_id=1,
+            resume_preview={
+                "sections": [
+                    {
+                        "name": "projects",
+                        "items": [
+                            {
+                                "title": "Demo",
+                                "excerpt": "Built demo. Delivered 82 files, 1 active days.",
+                                "projectIds": ["demo-project"],
+                            },
+                        ],
+                    }
+                ]
+            },
+            header_profile={"full_name": "Alice"},
+            chosen_snapshots=[{"project_id": "demo-project", "snapshot": {"project_id": "demo-project"}}],
+        )
+
+    kwargs = upsert_mock.call_args.kwargs
+    projects = kwargs.get("projects") or []
+    assert len(projects) == 1
+    assert projects[0]["start_date"] == "01 2025"
+    assert projects[0]["end_date"] == "01 2025"
+    assert "10 active days" in projects[0]["content"]

@@ -2,6 +2,7 @@ import urllib
 import urllib.request
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -48,6 +49,7 @@ from capstone.storage import (
     fetch_latest_contributor_stats,
     fetch_latest_snapshot,
     fetch_latest_snapshots,
+    fetch_user_project_activity_periods,
     get_user_profile,
     open_db,
     store_github_source,
@@ -2307,6 +2309,51 @@ def _sync_generated_resume_modules_to_db(
     header_profile: dict,
     chosen_snapshots: List[dict],
 ) -> str:
+    def _parse_iso_date(raw: str) -> datetime | None:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
+        except Exception:
+            try:
+                dt = datetime.strptime(text, "%Y-%m-%d")
+                return dt.replace(tzinfo=UTC)
+            except Exception:
+                return None
+
+    def _format_project_period(period: dict | None) -> tuple[str | None, str | None]:
+        if not isinstance(period, dict):
+            return (None, None)
+        first_dt = _parse_iso_date(str(period.get("first_commit_at") or ""))
+        last_dt = _parse_iso_date(str(period.get("last_commit_at") or ""))
+        if not first_dt and not last_dt:
+            return (None, None)
+        now_utc = datetime.now(UTC)
+        recent_last = last_dt is not None and (now_utc - last_dt).days <= 30
+        recent_first = first_dt is not None and (now_utc - first_dt).days <= 30
+        if recent_first:
+            return (None, "Current")
+        if recent_last:
+            return (first_dt.strftime("%m %Y") if first_dt else None, "Current")
+        return (
+            first_dt.strftime("%m %Y") if first_dt else None,
+            last_dt.strftime("%m %Y") if last_dt else None,
+        )
+
+    def _project_active_days(period: dict | None) -> int | None:
+        if not isinstance(period, dict):
+            return None
+        first_dt = _parse_iso_date(str(period.get("first_commit_at") or ""))
+        last_dt = _parse_iso_date(str(period.get("last_commit_at") or ""))
+        if not first_dt or not last_dt:
+            return None
+        delta_days = (last_dt.date() - first_dt.date()).days
+        return max(0, int(delta_days))
+
     city = (header_profile.get("city") or "").strip()
     state = (header_profile.get("state_region") or "").strip()
     location = ", ".join([part for part in [city, state] if part]) if (city or state) else ""
@@ -2324,6 +2371,16 @@ def _sync_generated_resume_modules_to_db(
         snapshot_data = snap.get("snapshot") or {}
         all_skills.extend(_extract_skill_names(snapshot_data))
 
+    chosen_project_ids = [
+        str(snap.get("project_id") or (snap.get("snapshot") or {}).get("project_id") or "").strip()
+        for snap in chosen_snapshots
+    ]
+    activity_map = fetch_user_project_activity_periods(
+        conn,
+        user_id=user_id,
+        project_ids=chosen_project_ids,
+    )
+
     projects: List[dict[str, str]] = []
     for section in resume_preview.get("sections") or []:
         if section.get("name") != "projects":
@@ -2331,11 +2388,25 @@ def _sync_generated_resume_modules_to_db(
         for item in section.get("items") or []:
             if not isinstance(item, dict):
                 continue
+            project_ids = [str(pid).strip() for pid in (item.get("projectIds") or []) if str(pid).strip()]
+            period = activity_map.get(project_ids[0]) if project_ids else None
+            start_date, end_date = _format_project_period(period)
+            content = str(item.get("excerpt") or "")
+            active_days = _project_active_days(period)
+            if active_days is not None:
+                content = re.sub(
+                    r"\b\d+\s+active days\b",
+                    f"{active_days} active days",
+                    content,
+                    count=1,
+                )
             projects.append(
                 {
                     "title": str(item.get("title") or "Project"),
-                    "content": str(item.get("excerpt") or ""),
+                    "content": content,
                     "stack": "",
+                    "start_date": start_date or "",
+                    "end_date": end_date or "",
                 }
             )
 
