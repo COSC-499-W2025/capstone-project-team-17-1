@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Request
 
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
@@ -15,7 +13,6 @@ from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
 from capstone.top_project_summaries import generate_top_project_summaries, export_markdown
 
 from capstone.api.portfolio_helpers import ensure_indexes, list_snapshots
-
 
 router = APIRouter(prefix="/showcase", tags=["portfolio", "resume", "users"])
 
@@ -53,7 +50,6 @@ async def _get_payload(request: Request) -> dict:
     except Exception:
         return {}
 
-
 @router.get("/users")
 def list_users(request: Request):
     _check_auth(request)
@@ -63,7 +59,6 @@ def list_users(request: Request):
         ).fetchall()
     users = [r[0] for r in rows if r and r[0] and "[bot]" not in r[0].lower()]
     return {"data": users, "error": None}
-
 
 @router.get("/users/{user}/projects")
 def list_user_projects(user: str, request: Request):
@@ -75,7 +70,6 @@ def list_user_projects(user: str, request: Request):
         ).fetchall()
     projects = [r[0] for r in rows if r and r[0]]
     return {"data": projects, "error": None}
-
 
 @router.get("/portfolio/summary")
 def portfolio_summary(user: str, request: Request, limit: int = 3):
@@ -90,7 +84,6 @@ def portfolio_summary(user: str, request: Request, limit: int = 3):
     summaries = generate_top_project_summaries(snapshot_map, limit=limit, user=user)
     payload = [export_markdown(item) for item in summaries]
     return {"data": payload, "meta": {"user": user, "limit": limit}, "error": None}
-
 
 @router.get("/portfolios/latest")
 def latest(request: Request, projectId: str, view: Optional[str] = None):
@@ -110,7 +103,6 @@ def latest(request: Request, projectId: str, view: Optional[str] = None):
     if data is None:
         raise HTTPException(status_code=404, detail="No snapshots found")
     return {"data": data, "meta": {"projectId": projectId, "view": "portfolio"}, "error": None}
-
 
 @router.get("/portfolios/evidence")
 def evidence_latest(request: Request, projectId: str):
@@ -145,6 +137,9 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
         "error": None,
     }
 
+@router.get("/portfolio/showcase")
+def get_portfolio_showcase_query(request: Request, projectId: str):
+    return get_portfolio_showcase(projectId, request)
 
 @router.get("/portfolio/{project_id}")
 def get_portfolio_showcase(project_id: str, request: Request):
@@ -159,12 +154,6 @@ def get_portfolio_showcase(project_id: str, request: Request):
         raise HTTPException(status_code=404, detail="No snapshots found")
     summary = build_resume_project_summary(project_id, snap)
     return {"data": {"project_id": project_id, "summary": summary}, "error": None}
-
-
-@router.get("/portfolio/showcase")
-def get_portfolio_showcase_query(request: Request, projectId: str):
-    return get_portfolio_showcase(projectId, request)
-
 
 @router.post("/portfolio/generate")
 async def generate_portfolio_showcase(request: Request):
@@ -191,7 +180,6 @@ async def generate_portfolio_showcase(request: Request):
             results.append(item.to_dict())
     return {"data": results, "error": None}
 
-
 @router.post("/portfolio/showcase/edit")
 async def edit_portfolio_showcase_query(request: Request):
     _check_auth(request)
@@ -201,7 +189,6 @@ async def edit_portfolio_showcase_query(request: Request):
     if not project_id or not summary:
         raise HTTPException(status_code=400, detail="projectId and summary are required")
     return await edit_portfolio_showcase(project_id, request)
-
 
 @router.post("/portfolio/{project_id}/edit")
 async def edit_portfolio_showcase(project_id: str, request: Request):
