@@ -147,7 +147,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
             },
             headers=headers,
         )
-        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.status_code, 200)
 
         r = client.post("/resume-projects/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)

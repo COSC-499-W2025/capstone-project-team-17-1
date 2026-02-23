@@ -46,13 +46,17 @@ def ensure_file(
     uploader: str | None = None,
     source: str | None = None,
     files_root: Path | None = None,
+    upload_id: str | None = None,
 ) -> dict:
     """Ingest a file with deduplication. Returns metadata dict."""
     root = files_root or DEFAULT_FILES_ROOT
     root.mkdir(parents=True, exist_ok=True)
 
     file_hash, size_bytes = hash_file_stream(source_path)
-    file_id = file_hash
+    file_id = file_hash  # content-addressable
+
+    # Reuse provided upload_id for incremental uploads; otherwise create new
+    effective_upload_id = upload_id or str(uuid.uuid4())
 
     with conn:  # ensures transactional behavior
         existing = conn.execute(
@@ -66,12 +70,15 @@ def ensure_file(
             raise ValueError("Hash collision detected: stored size differs")
 
         dest_path = Path(path_str or _storage_path(root, file_hash))
+
+        # If the DB says it exists but file missing, restore it
         if not dest_path.exists():
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = dest_path.with_suffix(".tmp")
             with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
                 shutil.copyfileobj(src, dst, length=64 * 1024)
             os.replace(tmp_path, dest_path)
+
             conn.execute(
                 """
                 UPDATE files
@@ -85,25 +92,27 @@ def ensure_file(
                 "UPDATE files SET ref_count = ref_count + 1 WHERE file_id = ?",
                 (existing_id,),
             )
-        upload_id = str(uuid.uuid4())
+
         _record_upload(
             conn,
-            upload_id=upload_id,
+            upload_id=effective_upload_id,
             original_name=original_name,
             uploader=uploader,
             source=source,
             file_hash=file_hash,
             file_id=existing_id,
         )
+
         return {
             "file_id": existing_id,
             "hash": file_hash,
             "path": str(dest_path),
             "size_bytes": size_bytes,
             "dedup": True,
-            "upload_id": upload_id,
+            "upload_id": effective_upload_id,
         }
 
+    # Not deduped: store new blob and insert file row
     dest_path = _storage_path(root, file_hash)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dest_path.with_suffix(".tmp")
@@ -119,10 +128,10 @@ def ensure_file(
         """,
         (file_id, file_hash, size_bytes, mime, str(dest_path)),
     )
-    upload_id = str(uuid.uuid4())
+
     _record_upload(
         conn,
-        upload_id=upload_id,
+        upload_id=effective_upload_id,
         original_name=original_name,
         uploader=uploader,
         source=source,
@@ -136,7 +145,7 @@ def ensure_file(
         "path": str(dest_path),
         "size_bytes": size_bytes,
         "dedup": False,
-        "upload_id": upload_id,
+        "upload_id": effective_upload_id,
     }
 
 
