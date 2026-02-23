@@ -34,7 +34,8 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 ## PDF Export Dependencies
 
-PDF export requires `pandoc` and a LaTeX engine (`tectonic` recommended). On macOS you can install both with:
+PDF export requires a LaTeX engine (`xelatex`, `lualatex`, or `pdflatex`).
+On macOS you can install a TeX distribution with:
 
 ```bash
 ./scripts/setup.sh

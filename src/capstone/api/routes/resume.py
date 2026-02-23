@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from capstone.portfolio_retrieval import _db_session
-from capstone.resume_pdf_builder import build_pdf_with_pandoc
+from capstone.resume_pdf_builder import build_pdf_with_latex
 from capstone.resume_retrieval import (
     build_resume_preview,
     ensure_resume_schema,
@@ -62,7 +62,7 @@ async def resume_render_pdf(request: Request):
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = Path(tmpdir) / "resume.pdf"
         try:
-            build_pdf_with_pandoc(resume_payload, out_path)
+            build_pdf_with_latex(resume_payload, out_path)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
         encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")

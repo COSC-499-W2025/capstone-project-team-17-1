@@ -1,0 +1,92 @@
+\documentclass[10pt,letterpaper]{article}
+
+% ---------- Core Packages ----------
+\usepackage[margin=0.65in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{setspace}
+
+\definecolor{Primary}{HTML}{0F2A43}
+\definecolor{Accent}{HTML}{1F6AA5}
+\definecolor{BodyText}{HTML}{1E1E1E}
+\definecolor{MutedText}{HTML}{5A6472}
+\definecolor{RuleColor}{HTML}{D8DEE8}
+
+\hypersetup{
+  colorlinks=true,
+  urlcolor=Accent,
+  linkcolor=Primary
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setstretch{1.06}
+\pagenumbering{gobble}
+\raggedbottom
+
+\titleformat{\section}
+  {\large\bfseries\color{Primary}}
+  {}{0pt}{}
+  [\vspace{2pt}\color{RuleColor}\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\setlist[itemize]{leftmargin=1.15em, itemsep=2pt, topsep=3pt}
+\renewcommand{\arraystretch}{1.1}
+
+\newcommand{\ResumeHeader}[4]{%
+  {\fontsize{20}{24}\selectfont\bfseries\color{Primary} #1}\par
+  \vspace{2pt}
+  {\small\color{MutedText} #2 \quad | \quad #3 \quad | \quad #4}\par
+}
+
+\newcommand{\ResumeEntry}[4]{%
+  \begin{tabularx}{\textwidth}{@{}X>{\raggedleft\arraybackslash}p{0.30\textwidth}@{}}
+    {\bfseries\color{Primary} #1} & {\small\color{MutedText} #2} \\
+    {\small\color{MutedText} #3} & {\small\color{MutedText} #4}
+  \end{tabularx}
+}
+
+\newcommand{\SkillRow}[2]{%
+  {\small\bfseries\color{Primary} #1:} {\small\color{BodyText} #2}\par
+}
+
+\begin{document}
+\color{BodyText}
+
+% =============================
+% Fill the named fields below with generated resume content.
+% =============================
+
+\ResumeHeader{__FULL_NAME__}{__LOCATION__}{\href{mailto:__EMAIL__}{__EMAIL__}}{__PHONE__}
+{\small\color{MutedText}
+  \href{__GITHUB_URL__}{GitHub} \quad | \quad
+  \href{__PORTFOLIO_URL__}{Portfolio}
+}
+
+\vspace{\baselineskip}
+__SUMMARY_SECTION__
+
+\vspace{\baselineskip}
+__EDUCATION_SECTION__
+
+\vspace{\baselineskip}
+__EXPERIENCE_SECTION__
+
+\vspace{\baselineskip}
+__CORE_SKILL_SECTION__
+
+\vspace{\baselineskip}
+__PROJECT_SECTION__
+
+\vspace{\baselineskip}
+__CUSTOM_SECTION_BLOCK__
+
+\end{document}

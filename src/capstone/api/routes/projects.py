@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, HTTPException, Response
 from pathlib import Path
 import tempfile
@@ -5,12 +7,19 @@ import shutil
 import time
 
 from capstone import file_store, storage
+class ProjectEdit(BaseModel):
+    key_role: Optional[str] = None
+    evidence: Optional[str] = None
+    portfolio_blurb: Optional[str] = None
+    resume_bullets: Optional[List[str]] = None
+    selected: Optional[bool] = None
+    rank: Optional[int] = None
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post("/upload")
-async def upload_project(file: UploadFile = File(...)):
+async def upload_project(file: UploadFile = File(...), project_id: str | None = None):
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -27,6 +36,7 @@ async def upload_project(file: UploadFile = File(...)):
             original_name=filename,
             source="api_upload",
             mime="application/zip",
+            upload_id=project_id,  #this is for uploading project id 
         )
     finally:
         try:
@@ -199,3 +209,65 @@ def get_project_thumbnail(project_id: str):
             "Content-Disposition": f"inline; filename=\"{meta.get('filename') or 'thumbnail'}\"",
         },
     )
+
+@router.get("/{project_id}/uploads")
+def list_project_uploads(project_id: str):
+    conn = storage.open_db()
+    rows = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        ORDER BY datetime(u.created_at) ASC
+        """,
+        (project_id,),
+    ).fetchall()
+
+    return {
+        "project_id": project_id,
+        "count": len(rows),
+        "uploads": [
+            {
+                "project_id": r[0],
+                "filename": r[1],
+                "file_id": r[2],
+                "hash": r[3],
+                "created_at": r[4],
+                "size_bytes": r[5],
+                "stored_path": r[6],
+            }
+            for r in rows
+        ],
+    }
+@router.patch("/{project_id}")
+def edit_project(project_id: str, payload: ProjectEdit):
+    conn = storage.open_db()
+    exists = conn.execute(
+        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    updated = storage.upsert_project_overrides(
+        conn,
+        project_id=project_id,
+        key_role=payload.key_role,
+        evidence=payload.evidence,
+        portfolio_blurb=payload.portfolio_blurb,
+        resume_bullets=payload.resume_bullets,
+        selected=payload.selected,
+        rank=payload.rank,
+    )
+    return {"data": updated, "error": None}
+
+
+@router.get("/{project_id}/overrides")
+def get_project_overrides(project_id: str):
+    conn = storage.open_db()
+    data = storage.fetch_project_overrides(conn, project_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="No overrides found")
+    return {"data": data, "error": None}
