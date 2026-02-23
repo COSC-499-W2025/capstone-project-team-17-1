@@ -269,6 +269,6 @@ def test_sync_generated_resume_modules_includes_project_activity_period_dates():
     kwargs = upsert_mock.call_args.kwargs
     projects = kwargs.get("projects") or []
     assert len(projects) == 1
-    assert projects[0]["start_date"] == "01 2025"
-    assert projects[0]["end_date"] == "01 2025"
+    assert projects[0]["start_date"] == "Jan 2025"
+    assert projects[0]["end_date"] == "Jan 2025"
     assert "10 active days" in projects[0]["content"]

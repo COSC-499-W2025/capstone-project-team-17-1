@@ -2338,10 +2338,10 @@ def _sync_generated_resume_modules_to_db(
         if recent_first:
             return (None, "Current")
         if recent_last:
-            return (first_dt.strftime("%m %Y") if first_dt else None, "Current")
+            return (first_dt.strftime("%b %Y") if first_dt else None, "Current")
         return (
-            first_dt.strftime("%m %Y") if first_dt else None,
-            last_dt.strftime("%m %Y") if last_dt else None,
+            first_dt.strftime("%b %Y") if first_dt else None,
+            last_dt.strftime("%b %Y") if last_dt else None,
         )
 
     def _project_active_days(period: dict | None) -> int | None:

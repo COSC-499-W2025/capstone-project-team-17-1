@@ -147,7 +147,7 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
                 "title": "Proj A",
                 "content": "Built APIs",
                 "stack": "Python, FastAPI",
-                "start_date": "01 2025",
+                "start_date": "Jan 2025",
                 "end_date": "Current",
             }],
             resume_title="Generated Resume",
@@ -212,7 +212,7 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
             """,
             (resume_id,),
         ).fetchone()
-        assert project_row == ("01 2025", "Current")
+        assert project_row == ("Jan 2025", "Current")
 
         conn.close()
 
