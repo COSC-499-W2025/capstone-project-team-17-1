@@ -12,6 +12,9 @@ source .venv/bin/activate
 # Install the package in editable mode
 pip install -e .
 
+# (Dev) Install API/test dependencies
+pip install -r requirements-dev.txt
+
 # Record consent for analysis
 capstone consent grant
 
@@ -30,7 +33,14 @@ capstone config reset
 
 # Run the Python unit test suite (config, consent, CLI, metrics, etc.)
 python -m unittest discover -s tests -p "test_*.py" -v
+
+# Run pytest suite (recommended for API endpoint tests)
+python -m pytest
 ```
+
+Notes:
+- `requirements-dev.txt` includes API test dependencies such as `fastapi`, `httpx`, `pytest`, and `python-multipart` (required for file-upload endpoints using `UploadFile`/`File(...)`).
+- Prefer `python -m pytest` instead of `pytest` if you use multiple environments (e.g., Conda + `.venv`) to ensure tests run with the active Python interpreter.
 
 ## PDF Export Dependencies
 
@@ -71,6 +81,22 @@ The repo includes sample ZIPs for demos and validation under `test_data/`:
     - `code_collab_proj/`
     - `text_indiv_proj/`
     - `image_indiv_proj/`
+
+  - Source bundle used to build/update this ZIP:
+    - `test_data/multi_project_bundle/`
+    - (edit files there, then re-zip to regenerate `test-data-multi-projects.zip`)
+
+## `main.py` Interactive Shortcuts
+
+When running `python main.py`, the terminal menu supports these shortcuts:
+
+- `b` = back (go to previous menu)
+- `m` = return to main menu
+- `Enter` = cancel current prompt (where supported)
+
+Notes:
+- Snapshot ZIP uploads now auto-detect and reuse the same `project_id` (no manual project ID entry required).
+- Project details views show `Snapshot Diff (earliest -> latest)` when a project has multiple uploads.
 
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)

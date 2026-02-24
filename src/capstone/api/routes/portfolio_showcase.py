@@ -159,22 +159,37 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
     }
 
 @router.get("/portfolio/showcase")
-def get_portfolio_showcase_query(request: Request, projectId: str):
-    return get_portfolio_showcase(projectId, request)
+def get_portfolio_showcase_query(request: Request, projectId: str, user: Optional[str] = None):
+    return get_portfolio_showcase(projectId, request, user=user)
 
 @router.get("/portfolio/{project_id}")
-def get_portfolio_showcase(project_id: str, request: Request):
+def get_portfolio_showcase(project_id: str, request: Request, user: Optional[str] = None):
     _check_auth(request)
+    user_role = None
+    if user:
+        with _db_session(_require_db()) as c:
+            row = c.execute(
+                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
+                (project_id, user),
+            ).fetchone()
+        if row:
+            user_role = "primary_contributor"
     with _db_session(_require_db()) as c:
         ensure_resume_schema(c)
         item = get_resume_project_description(c, project_id, variant_name="portfolio_showcase")
         if item:
-            return {"data": item.to_dict(), "error": None}
+            payload = item.to_dict()
+            if user_role:
+                payload["user_role"] = user_role
+            return {"data": payload, "error": None}
         snap = get_latest_snapshot(c, project_id)
     if not snap:
         raise HTTPException(status_code=404, detail="No snapshots found")
     summary = build_resume_project_summary(project_id, snap)
-    return {"data": {"project_id": project_id, "summary": summary}, "error": None}
+    payload = {"project_id": project_id, "summary": summary}
+    if user_role:
+        payload["user_role"] = user_role
+    return {"data": payload, "error": None}
 
 @router.post("/portfolio/generate")
 async def generate_portfolio_showcase(request: Request):
