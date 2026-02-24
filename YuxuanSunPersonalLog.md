@@ -4,8 +4,10 @@
 - [Milestone 2 - Week 1 [Jan 5 – Jan 11, 2026]](#week-1-m2)
 - [Milestone 2 - Week 2 [Jan 12 – Jan 18, 2026]](#week-2-m2)
 - [Milestone 2 - Week 3 [Jan 19 – Jan 25, 2026]](#week-3-m2)
-- [Milestone 2 - Week 4 [Jan 26 – Feb 2, 2026]](#week-4-m2)
-- [Milestone 2 - Week 5 [Feb 3 – Feb 9, 2026]](#week-5-m2)
+- [Milestone 2 - Week 4 [Jan 26 – Feb 1, 2026]](#week-4-m2)
+- [Milestone 2 - Week 5 [Feb 2 – Feb 8, 2026]](#week-5-m2)
+- [Milestone 2 - Week 6 [Feb 9 – Feb 15, 2026]](#week-6-m2)
+- [Milestone 2 - Week 7 [Feb 16 – Feb 22, 2026]](#week-7-m2)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -176,8 +178,9 @@ During this work, I also identified an issue in the current database workflow wh
 
 [Back](#table-of-contents)
 
+
 ## Week 5 (M2)
-[Feb 3 – Feb 9, 2026]
+[Feb 2 – Feb 8, 2026]
 Last week, I implemented duplicate file detection by assigning hash values to each file and added an uploads table to record upload logs. This week, I made a major update to the resume module, changing the analysis from all projects in the database to a user-specific flow that analyzes a selected set of projects. To support this change, I introduced new users and user_projects tables in the database. However, due to an existing bug in the local ZIP analysis collaboration module that prevents correct collaboration analysis, these tables are currently intentionally limited to retrieving data only from GitHub URL–imported projects.
 
 As a result, a new workflow was introduced. In the “Generate Resume Preview” process, the system first outputs a list of users, then the projects associated with the selected user, and finally a basic resume preview. However, several issues remain. Some users’ email addresses cannot be correctly retrieved from GitHub, so a feature allowing users to manually supplement their information needs to be added. In addition, PDF generation is currently not working due to unresolved dependency and engine issues, both on the API client side and the host environment. The current resume content and styling are also very minimal.
@@ -187,4 +190,21 @@ Finally, database tables such as resume_entry and resume_section may no longer b
 <img width="1550" height="906" alt="52df745191a1b8479f91131401628d59" src="https://github.com/user-attachments/assets/664a4ce0-ef0a-419d-99ef-336363362a97" />
 
 [Back](#table-of-contents)
+
+
+## Week 6 (M2)
+[Feb 9 – Feb 15, 2026]
+This week, I completed the core implementation of the resume generation and customization system at the CLI level. The system now supports reading users and their associated projects from the database and automatically generating an initial resume template using LaTeX. I expanded the users table to include additional fields such as full_name, phone_number, and city, and extended the “Manage user profile” submenu to allow users to edit and update personal information. The system also detects missing user data during resume generation and prompts for immediate completion.
+
+In addition, I designed and implemented the resumes, resume_sections, and resume_items tables to establish a structured resume data model. Full customization is now supported, including add/edit/delete operations for sections and items, automatic PDF rebuilding after changes, and proper handling of sort order updates. Due to the deeply nested CLI menus, extensive testing was required to ensure stability. Next week, I aim to further refine usability and improve the overall workflow.
+
+[Back](#table-of-contents)
+
+
+## Week 7 (M2)
+[Feb 16 – Feb 22, 2026]
+Following last week’s implementation of the core resume generation and customization system, this week I focused on improving data accuracy related to project timelines. Previously, failures in retrieving project start and end dates caused missing or incomplete information during project analysis, database storage, and resume generation. To address this, I updated the user_projects table by adding first_commit_at and last_commit_at fields. When fetching commit data through the GitHub API, the system now records each user’s first and last commit dates and stores them reliably in the database. These dates are automatically formatted and inserted during resume generation. Additionally, I implemented a more accurate calculation of active days, based on the difference between the first and last commit timestamps. This update improves timeline correctness in resumes and ensures better consistency between project analysis and resume outputs.
+
+[Back](#table-of-contents)
+
 

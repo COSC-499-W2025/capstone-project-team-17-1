@@ -6,6 +6,8 @@
 - [Week 3 Team Log (Term2)](#week-3-team-log-term2)
 - [Week 4 Team Log (Term2)](#week-4-team-log-term2)
 - [Week 5 Team Log (Term2)](#week-5-team-log-term2)
+- [Week 6 Team Log (Term2)](#week-6-team-log-term2)
+- [Week 7 Team Log (Term2)](#week-7-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
@@ -528,3 +530,68 @@ Finally, foundational storage improvements were implemented by introducing dedup
 
 Overall, this week strengthened the system’s usability, test stability, and backend foundations while pushing Milestone 2 features—timelines, insights, portfolio/résumé workflows, and APIs—closer to a complete and review-ready state.
 
+## WEEK 6 TEAM LOG (Term2)
+(Jan09 - Jan15, 2026)
+
+### Recap of Milestone Goal - Week 6
+
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart Week 6
+<img width="1039" height="616" alt="Screenshot 2026-02-23 at 3 14 21 PM" src="https://github.com/user-attachments/assets/7b82e4d7-5be6-4b85-b354-7aeed83f9395" />
+
+### Completed Tasks Week 6
+<img width="1216" height="643" alt="Screenshot 2026-02-23 at 3 14 56 PM" src="https://github.com/user-attachments/assets/61c3d89c-6bd2-433d-a3ce-1bc946e8adeb" />
+
+### In Progress Tasks Week 6
+<img width="1258" height="334" alt="Screenshot 2026-02-23 at 3 15 10 PM" src="https://github.com/user-attachments/assets/e194bed4-2f13-436a-899d-768d5aba929f" />
+
+### Test Report Week 6
+This week, the team focused on strengthening API completeness, improving portfolio workflows, and expanding test coverage to ensure Milestone 2 stability. Several key features were finalized and merged, reinforcing both backend reliability and end-to-end integration across the CLI and FastAPI layers.
+
+Portfolio-related functionality saw substantial progress. The API surface for portfolio generation and showcase display was expanded and refined, ensuring consistent endpoints for structured portfolio retrieval and UI rendering. Enhancements to duplicate file recognition improved upload reliability and reduced redundant data storage, while snapshot history helpers were introduced to make project analysis more traceable and testable. These changes collectively improve the determinism and robustness of the portfolio pipeline. [API Endpoints for Portfolio (#205)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/205)  [Improving Duplicate file recognition (#203)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/203)  [Add snapshot history helper + test (#202)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/202)
+
+Resume and job-alignment workflows were also strengthened. Updates to the resume module improved customization and structural consistency, while the job description matching feature was integrated with analyzed project data to provide clearer skill alignment insights. These improvements enhance the system’s ability to translate project evidence into resume-ready and job-targeted outputs. [Updates and changes to the resume module (#209)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/209)  [Job Description With Analyzed Projects (#207)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/207)
+
+In addition, the team improved overall development workflow and validation quality. Test data and API coverage were expanded to better reflect realistic usage scenarios, and missing API endpoints were completed to reduce integration gaps. Documentation and weekly logs were updated to maintain project traceability and milestone alignment. [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)  [added some missing api endpoints (#201)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/201)
+
+Overall, this week’s work strengthened the structural integrity of the portfolio and resume pipelines, improved API completeness, and reinforced testing and documentation foundations as the project moves toward final milestone consolidation.
+
+
+## WEEK 7 TEAM LOG (Term2)
+(Jan16 - Jan22, 2026)
+
+### Recap of Milestone Goal - Week 7
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Burnup chart - Week  7
+<img width="1634" height="900" alt="image" src="https://github.com/user-attachments/assets/4ec862fe-9b2d-4411-8e49-7f97c40d57cb" />
+
+### Completed Tasks - Week 7
+<img width="1921" height="300" alt="image" src="https://github.com/user-attachments/assets/05f46ffa-6118-4ab3-a469-aa3698862547" />
+<img width="1925" height="100" alt="image" src="https://github.com/user-attachments/assets/e40008a0-f5e9-4d00-a930-106125e08460" />
+
+### In Progress Tasks - Week 7
+<img width="1945" height="414" alt="image" src="https://github.com/user-attachments/assets/f058c396-9781-432b-9e09-4c6fcc3ac6b6" />
+
+### Test Report - Week 7
+This week, the team concentrated on enhancing backend consistency, refining resume and timeline accuracy, and stabilizing CLI-driven workflows. Multiple Milestone 2–related improvements were completed, focusing on database integrity, incremental data handling, AI integration, and test reliability across local and CI environments.
+
+Milestone 2 API capabilities were expanded to support incremental uploads and snapshot history. The uploads table schema was migrated to remove the strict UNIQUE constraint, enabling multiple uploads per project over time. Project override support (human-in-the-loop edits) was added with new API endpoints and storage logic, and targeted tests were included to validate the new behavior. [Milestone 2 API: uploads table migration, incremental snapshots, project overrides, and tests (#220)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/220)
+
+Project lifecycle accuracy and resume consistency were improved by fixing user project start/end date retrieval. First and last commit timestamps are now stored in the user_projects table and used for resume generation and active-day calculation, eliminating missing timeline data. [Fix and enhancement of user project start/end dates (database layer and resume layer) (#222)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/222)
+
+System stability under pytest was significantly improved. All failing CLI and menu-related tests were fixed by making the input flow deterministic, stabilizing user profile handling, and adding proper test setup for API initialization. This reduced flaky behavior and improved CI reliability. [All Failing Tests (Menu+CLI) Fixed + stabilize menu/user profile input flow (Milestone 2 branch) (#219)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/219)
+
+AI-based insight functionality continued to mature with the deep AI analysis feature. Users can now select specific files for targeted review, and the system constructs structured prompts using snapshot context. Focused unit tests were added to ensure bundling, filtering, and redaction logic remain stable. [Feature/deep ai analysis (#216)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/216)
+
+Overall, this week’s progress improved system robustness, reduced regression risk through stronger test coverage, and aligned core data flows across storage, API, and CLI layers as the project moves closer to full milestone completion.
