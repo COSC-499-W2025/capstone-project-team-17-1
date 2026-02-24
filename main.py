@@ -1,5 +1,6 @@
 import urllib
 import urllib.request
+import hashlib
 import json
 import os
 import re
@@ -11,6 +12,7 @@ import uuid
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Iterable, List, Mapping
 import zipfile
+from collections import Counter
 
 ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -340,6 +342,7 @@ def _record_zip_upload(path: pathlib.Path, original_name: str | None = None) -> 
                 original_name=original_name or path.name,
                 source="cli_upload",
                 mime="application/zip",
+                upload_id=None,
             )
         if stored.get("dedup"):
             print("Duplicate upload detected; existing file reused.")
@@ -347,6 +350,177 @@ def _record_zip_upload(path: pathlib.Path, original_name: str | None = None) -> 
             print("Upload stored successfully.")
     except Exception as exc:
         print(f"Upload failed: {exc}")
+
+
+_CLI_EXT_TO_SKILL = {
+    ".py": "python", ".js": "javascript", ".ts": "typescript", ".java": "java",
+    ".cpp": "c++", ".c": "c", ".go": "go", ".rs": "rust", ".sql": "sql",
+    ".html": "html", ".css": "css", ".yml": "yaml", ".yaml": "yaml",
+    ".json": "json", ".md": "markdown",
+}
+
+
+def _norm_token(value: str | None) -> str:
+    s = (value or "").strip().lower()
+    out, sep = [], False
+    for ch in s:
+        if ch.isalnum():
+            out.append(ch)
+            sep = False
+        elif not sep:
+            out.append("_")
+            sep = True
+    return "".join(out).strip("_")
+
+
+def _zip_manifest_from_path(zip_path: pathlib.Path) -> dict:
+    files = []
+    roots = []
+    skills = Counter()
+    with zipfile.ZipFile(zip_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            p = info.filename.strip("/")
+            if not p:
+                continue
+            files.append((p, int(info.file_size), int(getattr(info, "CRC", 0))))
+            parts = [x for x in p.split("/") if x]
+            if parts:
+                roots.append(parts[0])
+            skill = _CLI_EXT_TO_SKILL.get(pathlib.Path(p).suffix.lower())
+            if skill:
+                skills[skill] += 1
+    root = roots[0] if roots and all(r == roots[0] for r in roots) else None
+    rel_files = []
+    for p, size, crc in files:
+        rel = p[len(root) + 1:] if root and p.startswith(root + "/") else p
+        rel_files.append((rel, size, crc))
+    rel_files.sort(key=lambda x: x[0])
+    sig = hashlib.sha256("|".join(f"{p}:{s}:{c}" for p, s, c in rel_files).encode("utf-8")).hexdigest() if rel_files else ""
+    return {
+        "root_name": root,
+        "root_norm": _norm_token(root),
+        "file_paths": {p for p, _, _ in rel_files},
+        "files": {p: {"size": s, "crc": c} for p, s, c in rel_files},
+        "skills": dict(skills),
+        "signature": sig,
+    }
+
+
+def _zip_manifest_from_stored_file(conn, file_id: str) -> dict:
+    with file_store.open_file(conn, file_id) as fh, tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        tmp.write(fh.read())
+        tmp_path = pathlib.Path(tmp.name)
+    try:
+        return _zip_manifest_from_path(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _detect_or_create_project_id_for_zip(zip_path: pathlib.Path, original_name: str | None = None) -> tuple[str, bool]:
+    filename = original_name or zip_path.name
+    current = _zip_manifest_from_path(zip_path)
+    with _open_app_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT u.upload_id, u.file_id, u.original_name
+            FROM uploads u
+            JOIN (
+              SELECT upload_id, MAX(datetime(created_at)) AS latest_created
+              FROM uploads GROUP BY upload_id
+            ) x ON x.upload_id = u.upload_id AND datetime(u.created_at) = x.latest_created
+            ORDER BY datetime(u.created_at) DESC
+            """
+        ).fetchall()
+        best = None
+        name_norm = _norm_token(pathlib.Path(filename).stem)
+        for upload_id, file_id, original in rows:
+            try:
+                prior = _zip_manifest_from_stored_file(conn, file_id)
+            except Exception:
+                continue
+            if current["signature"] and current["signature"] == prior.get("signature"):
+                #treat as the same project immediately.
+                return str(upload_id), True
+            score = 0.0
+            # Heuristic match for snapshot uploads
+            if current["root_norm"] and current["root_norm"] == prior.get("root_norm"):
+                score += 0.6
+            if name_norm and name_norm == _norm_token(pathlib.Path(original or "").stem):
+                score += 0.2
+            union = len(current["file_paths"] | prior.get("file_paths", set()))
+            if union:
+                score += 0.6 * (len(current["file_paths"] & prior.get("file_paths", set())) / union)
+            if score >= 0.65 and (best is None or score > best[0]):
+                best = (score, str(upload_id))
+        if best:
+            return best[1], True
+        base = current.get("root_norm") or _norm_token(pathlib.Path(filename).stem) or "project"
+        short = (current.get("signature") or hashlib.sha256(filename.encode("utf-8")).hexdigest())[:8]
+        pid = f"{base}_{short}"
+        i = 2
+        while conn.execute("SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1", (pid,)).fetchone():
+            pid = f"{base}_{short}_{i}"
+            i += 1
+        return pid, False
+
+
+def _record_zip_upload(path: pathlib.Path, original_name: str | None = None, upload_id: str | None = None) -> None:
+    """
+    Store the uploaded zip in CAS storage and print a user-facing status message.
+    """
+    try:
+        with _open_app_db() as conn:
+            stored = file_store.ensure_file(
+                conn,
+                path,
+                original_name=original_name or path.name,
+                source="cli_upload",
+                mime="application/zip",
+                upload_id=upload_id,
+            )
+        if stored.get("dedup"):
+            print("Duplicate upload detected; existing file reused.")
+        else:
+            print("Upload stored successfully.")
+    except Exception as exc:
+        print(f"Upload failed: {exc}")
+
+
+def _build_project_upload_diff_for_cli(project_id: str) -> dict | None:
+    with _open_app_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT original_name, file_id, created_at
+            FROM uploads
+            WHERE upload_id = ?
+            ORDER BY datetime(created_at) ASC, id ASC
+            """,
+            (project_id,),
+        ).fetchall()
+        if len(rows) < 2:
+            return None
+        # CLI demo defaults to earliest vs latest upload
+        earlier, later = rows[0], rows[-1]
+        em = _zip_manifest_from_stored_file(conn, earlier[1])
+        lm = _zip_manifest_from_stored_file(conn, later[1])
+    ef, lf = em["files"], lm["files"]
+    epaths, lpaths = set(ef), set(lf)
+    added = sorted(lpaths - epaths)
+    removed = sorted(epaths - lpaths)
+    modified = sorted(p for p in (epaths & lpaths) if ef[p] != lf[p])
+    changes = []
+    for name in sorted(set(em["skills"]) | set(lm["skills"])):
+        before, after = int(em["skills"].get(name, 0)), int(lm["skills"].get(name, 0))
+        if before != after:
+            changes.append({"name": name, "before": before, "after": after, "delta": after - before})
+    return {
+        "earlier": {"filename": earlier[0], "created_at": earlier[2]},
+        "later": {"filename": later[0], "created_at": later[2]},
+        "files": {"added": added, "removed": removed, "modified": modified},
+        "skills": {"before": em["skills"], "after": lm["skills"], "changes": changes},
+    }
 
 
 def _collect_subproject_summaries(zip_path: pathlib.Path) -> dict[str, dict]:
@@ -380,7 +554,7 @@ def _collect_subproject_summaries(zip_path: pathlib.Path) -> dict[str, dict]:
     return summaries
 
 
-def _store_subproject_summaries(zip_path: pathlib.Path) -> None:
+def _store_subproject_summaries(zip_path: pathlib.Path, *, mode, preferences) -> None:
     summaries = _collect_subproject_summaries(zip_path)
     if len(summaries) <= 1:
         return
@@ -390,15 +564,43 @@ def _store_subproject_summaries(zip_path: pathlib.Path) -> None:
     ).strip().lower()
     if choice != "y":
         return
-    with _open_app_db() as conn:
-        for project_id, summary in summaries.items():
-            store_analysis_snapshot(
-                conn,
-                project_id=project_id,
-                classification="unknown",
-                primary_contributor=None,
-                snapshot=summary,
-            )
+    analyzer = ZipAnalyzer()
+    with zipfile.ZipFile(zip_path) as src_zip:
+        for project_id in sorted(summaries.keys()):
+            with tempfile.TemporaryDirectory() as td:
+                td_path = pathlib.Path(td)
+                sub_zip = td_path / f"{project_id}.zip"
+                # Repackage one top-level directory
+                # goes through the full analyzer
+                with zipfile.ZipFile(sub_zip, "w", zipfile.ZIP_DEFLATED) as out_zip:
+                    for info in src_zip.infolist():
+                        if info.is_dir():
+                            continue
+                        name = info.filename
+                        if not (name == project_id or name.startswith(project_id + "/")):
+                            continue
+                        out_zip.writestr(name, src_zip.read(info))
+                try:
+                    analyzer.analyze(
+                        zip_path=sub_zip,
+                        metadata_path=td_path / f"{project_id}_metadata.jsonl",
+                        summary_path=td_path / f"{project_id}_summary.json",
+                        mode=mode,
+                        preferences=preferences,
+                        project_id=project_id,
+                        db_dir=ROOT / "data",
+                    )
+                except Exception as exc:
+                    # Fall back so one bad subproject does not block the rest of the bundle.
+                    summary = summaries[project_id]
+                    with _open_app_db() as conn:
+                        store_analysis_snapshot(
+                            conn,
+                            project_id=project_id,
+                            classification="unknown",
+                            primary_contributor=None,
+                            snapshot={**summary, "subproject_analysis_error": str(exc)},
+                        )
     print("Multi-project snapshots stored.")
 
 def _merge_year_counts(target, incoming):
@@ -2776,7 +2978,18 @@ def main():
                     if payload:
                         print(json.dumps(payload))
                         continue
-                    _record_zip_upload(pathlib.Path(archive_path), pathlib.Path(zip_path).name)
+                    if project_id_override:
+                        effective_project_id = project_id_override
+                        auto_detected = False
+                    else:
+                        effective_project_id, auto_detected = _detect_or_create_project_id_for_zip(
+                            pathlib.Path(archive_path),
+                            pathlib.Path(zip_path).name,
+                        )
+                    if auto_detected:
+                        print(f"Auto-detected existing project ID: {effective_project_id}")
+                    else:
+                        print(f"Using project ID: {effective_project_id}")
                     consent = ensure_consent()
                     config = load_config()
                     mode = resolve_mode("local", consent)
@@ -2787,18 +3000,26 @@ def main():
                             summary_path=pathlib.Path("analysis_output/summary.json"),
                             mode=mode,
                             preferences=config.preferences,
-                            project_id=project_id_override or pathlib.Path(zip_path).stem,
+                            project_id=effective_project_id,
                             db_dir=ROOT / "data",
                         )
                     except ArchiveAnalysisError as exc:
                         print(json.dumps(exc.payload))
                         continue
+                    if summary.get("archive_dedup"):
+                        print("Duplicate upload detected; existing file reused.")
+                    else:
+                        print("Upload stored successfully.")
                     if not project_id_override:
-                        _store_subproject_summaries(pathlib.Path(archive_path))
+                        _store_subproject_summaries(
+                            pathlib.Path(archive_path),
+                            mode=mode,
+                            preferences=config.preferences,
+                        )
                     store = SnapshotStore(ROOT / "data")
                     try:
                         store.store_snapshot(
-                            project_id=summary.get("project_id") or pathlib.Path(zip_path).stem,
+                            project_id=summary.get("project_id") or effective_project_id,
                             classification=summary.get("collaboration", {}).get("classification", "unknown"),
                             primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
                             snapshot=summary,
@@ -2808,7 +3029,7 @@ def main():
                     with _open_app_db() as conn:
                         make_entry = _prompt_choice("Do you want to begin processing this zip file? (y/n): ", ["y", "n"])
                         if make_entry == "y":
-                            project_id = summary.get("project_id") or pathlib.Path(zip_path).stem
+                            project_id = summary.get("project_id") or effective_project_id
                             insert_resume_entry(
                                 conn,
                                 section="projects",
@@ -3021,6 +3242,12 @@ def main():
                             project_id = str(project.get("project_id"))
                             snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
                             print(json.dumps(snapshot, indent=4))
+                            diff = _build_project_upload_diff_for_cli(project_id)
+                            if diff:
+                                print("\nSnapshot Diff (earliest -> latest):")
+                                print(json.dumps(diff, indent=4))
+                            else:
+                                print("\nSnapshot Diff: not available (need at least 2 uploads for this project).")
                         elif follow in {"2", "b"}:
                             break
                         else:
@@ -3052,6 +3279,12 @@ def main():
                         else:
                             snapshot = _prepare_snapshot_for_display(project.get("snapshot") or {})
                             print(json.dumps(snapshot, indent=4))
+                            diff = _build_project_upload_diff_for_cli(project_id)
+                            if diff:
+                                print("\nSnapshot Diff (earliest -> latest):")
+                                print(json.dumps(diff, indent=4))
+                            else:
+                                print("\nSnapshot Diff: not available (need at least 2 uploads for this project).")
                     if project:
                         pass
                 elif choice == "5":

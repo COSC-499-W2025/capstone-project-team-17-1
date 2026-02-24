@@ -120,6 +120,7 @@ class ZipAnalyzer:
                 zip_path,
                 original_name=zip_path.name,
                 source="zip_analyzer",
+                upload_id=project_id,
             )
         except sqlite3.OperationalError as exc:
             if "readonly" not in str(exc).lower():
@@ -135,6 +136,7 @@ class ZipAnalyzer:
                 zip_path,
                 original_name=zip_path.name,
                 source="zip_analyzer",
+                upload_id=project_id,
             )
         canonical_zip_path = Path(stored["path"])
 
