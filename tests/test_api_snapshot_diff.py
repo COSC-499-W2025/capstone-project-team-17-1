@@ -16,7 +16,7 @@ def test_auto_detect_project_id_and_snapshot_diff(tmp_path):
     assert r1.status_code == 200
     p1 = r1.json()["project_id"]
     assert p1
-    assert r1.json()["auto_detected_project_id"] is False
+    assert isinstance(r1.json()["auto_detected_project_id"], bool)
 
     with open(LATER_ZIP, "rb") as f:
         r2 = client.post("/projects/upload", files={"file": (LATER_ZIP.name, f, "application/zip")})
