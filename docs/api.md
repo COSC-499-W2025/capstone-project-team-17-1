@@ -2,7 +2,8 @@ API Endpoints
 
 Overview
 - The API is served by `capstone.api.server.create_app` (FastAPI).
-- All endpoints are JSON and return `{ data, error, meta? }`.
+- All endpoints are JSON, but response envelopes are not fully uniform yet:
+  some endpoints return `{ data, error, meta? }`, while others return direct JSON objects.
 - Base URL defaults to `http://127.0.0.1:<port>` when launched via the CLI.
 
 System
@@ -13,6 +14,11 @@ System
 Auth
 - If `PORTFOLIO_API_TOKEN` or `--token` is set, pass `Authorization: Bearer <token>` for every request.
 
+API Testing (No Real Server Required)
+- API endpoints are tested using FastAPI's `TestClient`, which exercises routes as HTTP requests/responses without starting a real server process.
+- Tests validate status codes and response payloads (e.g., `tests/test_api_incremental_upload.py`, `tests/test_api_project_edits.py`, `tests/test_api_snapshot_diff.py`).
+- We also manually validated key endpoints with Postman for integration/demo checks.
+
 Consent
 - `POST /privacy-consent`
   - Body: `{ "consent": true|false }`
@@ -22,13 +28,23 @@ Consent
 Projects
 - `POST /projects/upload`
   - Upload a `.zip` project archive.
-  - Response includes `message` and `dedup` indicating duplicate reuse.
+  - If `project_id` is omitted, the server can auto-detect and reuse an existing project id for snapshot uploads of the same project.
+  - Response includes `message`, `dedup`, and `auto_detected_project_id`.
 - `GET /projects`
   - Lists uploaded project archives.
 - `GET /projects/{id}`
   - Returns a single uploaded project archive.
 - `DELETE /projects/{id}`
   - Deletes an uploaded project and its stored file.
+- `GET /projects/{id}/uploads`
+  - Lists all uploads for a project (oldest to newest).
+  - Includes `snapshot_diff` (earliest vs latest upload) when at least two uploads exist.
+  - `snapshot_diff` includes file changes (`added`, `removed`, `modified`) and skill changes (`before`, `after`, `changes`).
+- `PATCH /projects/{id}`
+  - Updates project-level overrides used for portfolio/resume editing.
+  - Body supports: `key_role`, `evidence`, `portfolio_blurb`, `resume_bullets`, `selected`, `rank`.
+- `GET /projects/{id}/overrides`
+  - Returns the saved overrides for a project.
 
 Portfolios
 - `GET /portfolios/latest?projectId=<id>&view=portfolio|resume`
@@ -154,3 +170,36 @@ Project Thumbnails
   - Uploads an image to use as the project thumbnail.
 - `GET /projects/{id}/thumbnail`
   - Returns the latest thumbnail image for a project.
+
+Projects (Additional)
+- `GET /projects/{id}/skills`
+  - Returns skills detected from the latest uploaded ZIP for the project.
+- `GET /skills`
+  - Aggregates skills across uploaded projects.
+
+Showcase Router Prefix (`/showcase`, additional mounted aliases)
+- `GET /showcase/users`
+- `GET /showcase/users/{user}/projects`
+- `GET /showcase/portfolio/summary?user=<user>&limit=3`
+- `GET /showcase/portfolios/latest?projectId=<id>&view=portfolio|resume`
+- `GET /showcase/portfolios/evidence?projectId=<id>`
+- `GET /showcase/portfolios?projectId=<id>&page=1&pageSize=20&sort=created_at:desc`
+- `GET /showcase/portfolio/showcase?projectId=<id>`
+- `GET /showcase/portfolio/{id}`
+- `POST /showcase/portfolio/generate`
+- `POST /showcase/portfolio/showcase/edit`
+- `POST /showcase/portfolio/{id}/edit`
+
+Legacy Aliases (compatibility routes)
+- `GET /users`
+  - Alias to showcase users listing.
+- `GET /users/{user}/projects`
+  - Alias to showcase user-project listing.
+- `GET /portfolios/latest`
+  - Alias to showcase latest portfolio/resume snapshot endpoint.
+- `GET /portfolios/evidence`
+  - Alias to showcase evidence endpoint.
+
+Debug
+- `GET /__debug/routers`
+  - Lists mounted routes and optional import/mount errors for optional routers.

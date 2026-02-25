@@ -50,3 +50,25 @@ def test_duplicate_upload_sets_dedup_true(tmp_path):
         r2 = client.post(f"/projects/upload?project_id={project_id}", files={"file": (zip_path.name, f, "application/zip")})
     assert r2.status_code == 200
     assert r2.json()["dedup"] is True
+
+
+def test_upload_auto_detects_existing_project_id_for_same_snapshot_series(tmp_path):
+    app = get_app_for_tests(str(tmp_path))
+    client = TestClient(app)
+
+    earlier_zip = Path("test_data/test-data-code-collab-earlier.zip")
+    later_zip = Path("test_data/test-data-code-collab-later.zip")
+
+    with open(earlier_zip, "rb") as f:
+        r1 = client.post("/projects/upload", files={"file": (earlier_zip.name, f, "application/zip")})
+    assert r1.status_code == 200
+    b1 = r1.json()
+    assert b1["project_id"]
+    assert isinstance(b1["auto_detected_project_id"], bool)
+
+    with open(later_zip, "rb") as f:
+        r2 = client.post("/projects/upload", files={"file": (later_zip.name, f, "application/zip")})
+    assert r2.status_code == 200
+    b2 = r2.json()
+    assert b2["project_id"] == b1["project_id"]
+    assert b2["auto_detected_project_id"] is True
