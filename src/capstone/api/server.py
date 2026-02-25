@@ -6,6 +6,7 @@ from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
+from capstone.api.routes.job_match import router as job_match_router
 
 
 def _safe_import_portfolio():
@@ -53,6 +54,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
+    app.include_router(job_match_router)
 
     # Optional portfolio routes
     portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
