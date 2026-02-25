@@ -355,19 +355,57 @@ def score_project_for_job(
         matched_keywords=matched_keywords,
     )
 
+def compute_weights_from_jd(jd_profile) -> Dict[str, float]:
+    required_count = len(jd_profile.get("required_skills", []))
+    preferred_count = len(jd_profile.get("preferred_skills", []))
+    
+    total = required_count + preferred_count
+    
+    keyword_weight = 0.1
+    recency_weight = 0.1
+    other_weight = 1.0 - keyword_weight - recency_weight
+    
+    if total == 0:
+        return {
+            "required": 0.4,
+            "preferred": 0.4,
+            "keywords": keyword_weight,
+            "recency": recency_weight,
+        }
+    
+    required_weight = (required_count / total) * other_weight
+    preferred_weight = (preferred_count / total) * other_weight
+        
+    return {
+        "required": required_weight,
+        "preferred": preferred_weight,
+        "keywords": keyword_weight,
+        "recency": recency_weight
+    }
 
 def rank_projects_for_job(
     jd_profile: Dict[str, Any],
     project_snapshots: List[Dict[str, Any]],
     weights: Optional[Dict[str, float]] = None,
 ) -> List[ProjectMatch]:
-    """Score all projects and return them sorted best to worst."""
-    matches = [
-        score_project_for_job(jd_profile, snap, weights=weights)
-        for snap in project_snapshots
-    ]
-    matches.sort(key=lambda m: m.score, reverse=True)
-    return matches
+    if weights is None:
+        weights = compute_weights_from_jd(jd_profile)
+        
+    default = {
+        "required": 0.6,
+        "preferred": 0.2,
+        "keywords": 0.1,
+        "recency": 0.1,
+    }
+    
+    weights = {**default, **weights}
+    
+    results = []
+    for snap in project_snapshots:
+        score = score_project_for_job(jd_profile, snap, weights)
+        results.append(score)
+    
+    return sorted(results, key=lambda x: x.score, reverse=True)
 
 
 def matches_to_json(matches: List[ProjectMatch]) -> Dict[str, Any]:
