@@ -8,6 +8,15 @@ from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
 
 
+def _safe_import_job_match():
+    """Attempt to import job_match router (optional)."""
+    try:
+        from capstone.api.routes.job_match import router  # type: ignore
+        return router, None
+    except Exception:
+        return None, traceback.format_exc()
+
+
 def _safe_import_portfolio():
     """Attempt to import portfolio router + configure."""
     try:
@@ -30,7 +39,6 @@ def _safe_import_resume():
     """Attempt to import resume router + optional configure."""
     try:
         from capstone.api.routes.resume import router  # type: ignore
-        # resume.py may or may not expose configure(db_dir, auth_token)
         configure = getattr(__import__("capstone.api.routes.resume", fromlist=["configure"]), "configure", None)
         return router, configure, None
     except Exception:
@@ -53,6 +61,13 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
+
+    # Optional job-match routes (since routes/job_match.py may not exist in this branch)
+    job_match_router, job_match_err = _safe_import_job_match()
+    if job_match_router is not None:
+        app.include_router(job_match_router)
+    else:
+        app.state.job_match_import_error = job_match_err
 
     # Optional portfolio routes
     portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
@@ -97,6 +112,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         routes = sorted({getattr(r, "path", str(r)) for r in app.router.routes})
         return {
             "routes": routes,
+            "job_match_import_error": getattr(app.state, "job_match_import_error", None),
             "portfolio_import_error": getattr(app.state, "portfolio_import_error", None),
             "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
             "showcase_import_error": getattr(app.state, "showcase_import_error", None),
