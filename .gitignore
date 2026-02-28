@@ -22,3 +22,7 @@ config/user_config.json
 demo_db/*
 data/files
 PATH_HERE
+.venv/
+env/
+pycache/
+*.pyc
