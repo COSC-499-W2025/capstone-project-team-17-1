@@ -26,7 +26,7 @@ from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
-from .storage import open_db, close_db, store_analysis_snapshot
+from .storage import open_db, close_db, store_analysis_snapshot, upsert_user, link_user_to_project
 import sqlite3
 from . import file_store
 
@@ -335,6 +335,9 @@ class ZipAnalyzer:
 
         metric_summary = compute_metrics(metrics_inputs)
         collaboration = self._summarize_collaboration(git_logs)
+        # Build author→email map from the raw git log lines while they are still available.
+        # to_compact_collaboration drops email, so we capture it here for upsert_user below.
+        author_email_map = _build_author_email_map(git_logs)
         duration = perf_counter() - start
 
         skill_observations = [
@@ -393,6 +396,20 @@ class ZipAnalyzer:
             snapshot=summary,
         )
         self._logger.info("Stored zip analysis snapshot for %s", project_id)
+
+        # store zip contributors in users and user_projects
+        contrib_raw = (
+            collaboration.get("contributors (commits, PRs, issues, reviews)")
+            or collaboration.get("contributors (commits, line changes, reviews)")
+            or {}
+        )
+        if isinstance(contrib_raw, dict):
+            for cname in contrib_raw:
+                cname = str(cname).strip()
+                if cname:
+                    uid = upsert_user(conn, cname, email=author_email_map.get(cname))
+                    link_user_to_project(conn, uid, project_id, contributor_name=cname)
+            self._logger.info("Stored %d zip contributors for project %s", len(contrib_raw), project_id)
 
         return summary
 
@@ -456,6 +473,31 @@ class ZipAnalyzer:
             "primary_contributor": basic.primary_contributor,
             "contribution_compute": "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
         }
+
+
+def _build_author_email_map(git_log_lines: list[str]) -> dict[str, str]:
+    """Return {author_name: email} from raw git log lines (commit:HASH|%an|%ae|%ct|%s).
+
+    Skips noreply GitHub emails. First occurrence per author wins.
+    """
+    _NOREPLY_SUFFIXES = ("@users.noreply.github.com", "@noreply.github.com")
+    result: dict[str, str] = {}
+    for line in git_log_lines:
+        if not line.startswith("commit:"):
+            continue
+        parts = line[len("commit:"):].split("|")
+        if len(parts) < 3:
+            continue
+        author = parts[1].strip()
+        email = parts[2].strip()
+        if not author or not email:
+            continue
+        lowered = email.lower()
+        if lowered == "noreply@github.com" or any(lowered.endswith(s) for s in _NOREPLY_SUFFIXES):
+            continue
+        if author not in result:
+            result[author] = email
+    return result
 
 
 def _compute_top_skills_by_year(skill_timeline: Dict[str, Dict[str, object]], top_n: int = 5) -> Dict[str, List[Dict[str, float]]]:
