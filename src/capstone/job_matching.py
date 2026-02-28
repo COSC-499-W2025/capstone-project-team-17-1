@@ -157,10 +157,19 @@ def match_job_to_project(
     job_set = {s.lower() for s in job_skills}
 
     matched: List[Dict[str, Any]] = []
+    
     for row in project_skills:
-        name = str(row.get("skill", "")).lower()
+        if isinstance(row, dict):
+            name = str(row.get("skill", "")).lower()
+            record = row
+        elif isinstance(row, str):
+            name = row.lower()
+            record = {"skill": row}
+        else:
+            continue
+        
         if name in job_set:
-            matched.append(row)
+            matched.append(record)
 
     matched_names = {row.get("skill", "").lower() for row in matched}
     missing = sorted(job_set - matched_names)
