@@ -1,7 +1,15 @@
-from __future__ import annotations
-import sys
-from pathlib import Path
+"""Job matching utilities."""
 
+from __future__ import annotations
+
+import math
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+from .skills import SkillScore
+from .storage import open_db, fetch_latest_snapshot
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -108,18 +116,8 @@ def extract_job_skills(text: str) -> List[str]:
     return sorted(found)
 
 def build_jd_profile(jd_text: str) -> Dict[str, Any]:
-    """
-    Build a simple 'job description profile' from raw JD text.
-
-    Right now we just treat all detected skills as both required and preferred,
-    similar to build_company_profile() for company profiles.
-    """
-    from .job_matching import extract_job_skills  # or use it directly if already in scope
-
     skills = extract_job_skills(jd_text)
-    # de-duplicate while preserving order
     skills = list(dict.fromkeys(skills))
-
     return {
         "required_skills": skills,
         "preferred_skills": skills,
