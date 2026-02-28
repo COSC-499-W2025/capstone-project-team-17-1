@@ -76,7 +76,7 @@ Resume Entries
     `includeOutdated`, `limit`, `offset`.
 - `GET /resume/{id}`
   - Returns a single resume entry by id.
-  - Alias: `GET /resume/<entry_id>`.
+  - Path param name in code: `entry_id` (route path is still `GET /resume/{entry_id}`).
 - `POST /resume`
   - Creates a resume entry.
   - Body: `section`, `title`, `body` required. Optional `summary`, `status`, `metadata` (object),
@@ -164,6 +164,14 @@ Skills API (`src/capstone/api/routes/skills.py`)
   - Returns skills detected for a project.
 - `GET /skills`
   - Aggregates skills across uploaded projects.
+
+Job Matching API (`src/capstone/api/routes/job_match.py`)
+- `POST /job-matching/match`
+  - Matches one project against a job description.
+  - Body: `project_id`, `job_description`.
+- `POST /job-matching/rank`
+  - Ranks all projects against a job description.
+  - Body: `job_description`.
 
 Project Thumbnails
 - `POST /projects/{id}/thumbnail`
