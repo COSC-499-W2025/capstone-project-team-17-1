@@ -373,6 +373,7 @@ Beyond feature completion, I discussed implementation details and integration de
 
  ## Term2 week8 Personal LOG (Feb23-Mar1, 2026)
 ### 1. Type of Tasks Worked On
+<img width="1048" height="547" alt="Screenshot 2026-02-27 at 10 28 41 PM" src="https://github.com/user-attachments/assets/93c7f32b-4def-4e7b-93d6-bf44a50766e5" />
 
 
 ### 2. Weekly Goals Recap
