@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Capstone Desktop</title>
+</head>
+<body>
+  <h1>Capstone Desktop</h1>
+
+  <button id="btn">Test Backend</button>
+  <pre id="output"></pre>
+
+  <script>
+    document.getElementById("btn").addEventListener("click", async () => {
+      const data = await window.backendAPI.getUsers()
+      document.getElementById("output").textContent =
+        JSON.stringify(data, null, 2)
+    })
+  </script>
+</body>
+</html>

@@ -6,7 +6,7 @@ from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
-
+from fastapi.middleware.cors import CORSMiddleware
 
 def _safe_import_job_match():
     """Attempt to import job_match router (optional)."""
@@ -49,6 +49,14 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app = FastAPI(title="Capstone API")
     app.state.auth_token = auth_token
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # for development
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
     @app.get("/")
     def root():
         return {"message": "Capstone API is running"}
