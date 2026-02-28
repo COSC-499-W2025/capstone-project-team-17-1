@@ -487,7 +487,7 @@ Overall, the team has strengthened the system foundation by stabilizing core pip
 
 
 ## WEEK 5 TEAM LOG (Term2)
-(Jan26 - Feb01, 2026)
+(Jan 26-Feb 08, 2026)
 
 ### Recap of Milestone Goal - Week 4+5
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
@@ -531,7 +531,7 @@ Finally, foundational storage improvements were implemented by introducing dedup
 Overall, this week strengthened the system’s usability, test stability, and backend foundations while pushing Milestone 2 features—timelines, insights, portfolio/résumé workflows, and APIs—closer to a complete and review-ready state.
 
 ## WEEK 6 TEAM LOG (Term2)
-(Jan09 - Jan15, 2026)
+(Feb 09-15, 2026)
 
 ### Recap of Milestone Goal - Week 6
 
@@ -568,7 +568,7 @@ Overall, this week’s work strengthened the structural integrity of the portfol
 
 
 ## WEEK 7 TEAM LOG (Term2)
-(Jan16 - Jan22, 2026)
+(Feb 16-22, 2026)
 
 ### Recap of Milestone Goal - Week 7
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
@@ -597,7 +597,7 @@ AI-based insight functionality continued to mature with the deep AI analysis fea
 Overall, this week’s progress improved system robustness, reduced regression risk through stronger test coverage, and aligned core data flows across storage, API, and CLI layers as the project moves closer to full milestone completion.
 
 ## WEEK 8 TEAM LOG (Term2)
-(Jan23 - Jan29, 2026)
+(Feb 23 - Mar 01, 2026)
 
 ### Recap of Milestone Goal - Week 8
 
