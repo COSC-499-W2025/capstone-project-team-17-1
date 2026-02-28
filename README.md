@@ -39,8 +39,43 @@ python -m pytest
 ```
 
 Notes:
-- `requirements-dev.txt` includes API test dependencies such as `fastapi`, `httpx`, `pytest`, and `python-multipart` (required for file-upload endpoints using `UploadFile`/`File(...)`).
+- `requirements-dev.txt` includes API/test dependencies such as `fastapi`, `httpx`, `pytest`, `python-multipart` (required for file-upload endpoints using `UploadFile`/`File(...)`), and `uvicorn` (required to run the FastAPI server).
 - Prefer `python -m pytest` instead of `pytest` if you use multiple environments (e.g., Conda + `.venv`) to ensure tests run with the active Python interpreter.
+
+## Run API Server
+
+```bash
+# Start FastAPI on port 8003
+capstone api --host 127.0.0.1 --port 8003
+```
+
+Verify the API is active:
+- Swagger UI: `http://127.0.0.1:8003/docs`
+- Mounted route list + mount/import errors: `http://127.0.0.1:8003/__debug/routers`
+
+## Environment Requirements
+
+- Python: `>=3.10` (project metadata requirement)
+- Recommended: use a dedicated virtual environment (`venv` or Conda) before installing dependencies
+- macOS/Linux:
+  - Both are supported for local CLI/API workflows
+  - PDF export additionally requires a system LaTeX engine (`xelatex`, `lualatex`, or `pdflatex`)
+
+## Dependency Tiers
+
+- Minimal runtime (CLI core):
+  - `pip install -e .`
+- API + test dependencies:
+  - `pip install -r requirements-dev.txt`
+  - Includes: `fastapi`, `httpx`, `pytest`, `python-multipart`, `uvicorn`
+- Optional dependencies:
+  - `openai` package + `OPENAI_API_KEY` for LLM-powered features
+  - LaTeX engine for PDF export
+
+## API Documentation
+
+- Human-readable API route documentation: `docs/api.md`
+- Live OpenAPI docs when server is running: `http://127.0.0.1:8003/docs`
 
 ## PDF Export Dependencies
 
