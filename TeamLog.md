@@ -595,3 +595,27 @@ System stability under pytest was significantly improved. All failing CLI and me
 AI-based insight functionality continued to mature with the deep AI analysis feature. Users can now select specific files for targeted review, and the system constructs structured prompts using snapshot context. Focused unit tests were added to ensure bundling, filtering, and redaction logic remain stable. [Feature/deep ai analysis (#216)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/216)
 
 Overall, this week’s progress improved system robustness, reduced regression risk through stronger test coverage, and aligned core data flows across storage, API, and CLI layers as the project moves closer to full milestone completion.
+
+## WEEK 8 TEAM LOG (Term2)
+(Jan23 - Jan29, 2026)
+
+### Recap of Milestone Goal - Week 8
+
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart - Week  8
+
+### Completed Tasks - Week 8
+
+### In Progress Tasks - Week 8
+
+### Test Report - Week 8
