@@ -199,6 +199,24 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
             pass
 
     project_id = stored["upload_id"]
+    
+    manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
+    
+    snapshot = {
+        "project_id": project_id,
+        "skills": manifest.get("skills", {}),
+        "root_name": manifest.get("root_name"),
+        "file_count": len(manifest.get("files", []))
+    }
+    
+    storage.store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification="unknown",
+        primary_contributor=None,
+        snapshot=snapshot
+    )
+    
     message = "Upload stored successfully."
     if stored.get("dedup"):
         message = "Duplicate upload detected; existing file reused."
