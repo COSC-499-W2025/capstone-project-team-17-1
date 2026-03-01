@@ -16,6 +16,7 @@
 - [Term 2 Week 2 Personal Log](#term-2-week-2-personal-log)
 - [Term 2 Week 3 Personal Log](#term-2-week-3-personal-log)
 - [Term 2 Week 5 Personal Log](#term-2-week-5-personal-log)
+- [Term 2 Week 8 Personal Log](#term-2-week-8-personal-log)
 
 ---
 
@@ -957,7 +958,8 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 ✅ Added unit tests + manual demo + verified passing with pytest.
 <img width="1140" height="619" alt="T2WEEK3PEEREVAL" src="https://github.com/user-attachments/assets/ff2d0f7b-cf35-4e9a-abf0-1d49e435d915" />
 
----
+--------
+
 ### TERM 2 WEEK 5 PERSONAL LOG
 # (WEEK 4+5 Logs) 
 # Merged PR's and their impact 
@@ -1069,4 +1071,206 @@ python3 -c "import capstone.portfolio_retrieval as pr; app=pr.create_app(auth_to
 - **Foundation for API uploads**: backend now has the right primitives for `/projects/upload`-style flows without ballooning DB size.
 
 <img width="1141" height="647" alt="Screenshot 2026-02-08 at 8 26 25 PM" src="https://github.com/user-attachments/assets/56a68622-b4fa-4897-abde-949389fec312" />
+
+
+
+
+
+### TERM 2 WEEK 8 PERSONAL LOG
+## PR : Safer optional router mounting and declaring API/dev dependencies
+
+### Summary
+Today I focused on stabilizing our Milestone 2 API workflow by improving FastAPI app initialization, adding request tracing middleware, and making our environment reproducible through `pyproject.toml` dependency declarations.
+
+---
+
+### 1) Refactor: FastAPI app initialization (`src/capstone/api/server.py`)
+**Problem:** `server.py` had multiple duplicated “safe import” blocks for optional routers (job_match, portfolio, showcase, resume). Each block repeated: dynamic import → optional `configure(...)` → `include_router(...)` → store traceback on failure.
+
+**Changes:**
+- Centralized optional-router mounting into a consistent pattern:
+  - Dynamic import for optional router modules so missing modules don’t crash app startup (useful across branches).
+  - Optional `configure(db_dir, auth_token)` hook supported per router before mounting.
+  - Standardized error capture by storing failures in `app.state.<name>_import_error` / `app.state.<name>_mount_error`.
+- Kept always-available routers mounted unconditionally (consent/projects/skills + legacy aliases) to ensure core API stays up.
+
+**Outcome:** Cleaner entrypoint, less duplication, more resilient startup without changing the exposed route surface.
+
+---
+
+### 2) Feature: Request tracing middleware (`src/capstone/api/middleware/request_id.py`)
+Added `RequestIdMiddleware` to improve debugging and observability:
+- Ensures every request has an `X-Request-ID`.
+- If client provides `X-Request-ID`, server echoes it.
+- If missing, server generates a UUID4.
+- Attaches the value to both:
+  - `request.state.request_id` (available to handlers/logging)
+  - Response headers (`X-Request-ID`) for client-side correlation.
+
+**Why:** Standard production API pattern; makes it easier to track failures and correlate logs across multi-step flows (upload → analyze → generate resume/portfolio).
+
+---
+
+### 3) Build/Setup: Reproducible deps via `pyproject.toml`
+A fresh env previously required manual installs to run the API and HTTP-level tests. I updated `pyproject.toml` to explicitly declare:
+
+**Runtime deps:**
+- `fastapi`
+- `python-multipart` (required for `/projects/upload` multipart form data)
+- `uvicorn[standard]` (local server runner for `/docs`)
+
+**Dev deps (extras):**
+- `pytest`
+- `httpx` (required by `starlette.testclient` / FastAPI `TestClient`)
+
+This enables clean setup using:
+- `pip install -e .`
+- `pip install -e ".[dev]"`
+
+---
+
+### Testing / Verification
+- ✅ `pytest -q` (full suite passes locally)
+- ✅ API boots with `uvicorn capstone.api.server:app --reload`
+- ✅ Swagger UI loads at `/docs`
+- ✅ Verified auth-protected endpoints return `401` without `Authorization: Bearer <token>`
+
+---
+## Collaboration Note — Contributions to Michelle’s PR (Job Match API Endpoint #232)
+
+I collaborated with Michelle on PR **#232: Job Match API Endpoint** by contributing both API functionality and test coverage to help ship a stable Milestone-2–ready endpoint set.
+
+### What I contributed
+- **Implemented `top_k` support for ranking endpoint**
+  - Added support for `top_k` as a query parameter on `POST /job-matching/rank` so clients can request a bounded number of ranked projects instead of always returning the full list.
+  - Implemented input validation for `top_k` (e.g., rejecting invalid values such as 0 or overly large values) to keep behavior predictable and avoid expensive/unbounded ranking calls.
+
+- **Strengthened HTTP-level test coverage**
+  - Added/extended FastAPI `TestClient` tests for the ranking endpoint to verify:
+    - Correct behavior when `top_k` is provided (returns exactly N results).
+    - Correct error handling for invalid `top_k` values (boundary cases/out-of-range).
+    - Proper request validation for malformed or missing payloads (ensures API responds with the expected error/validation status).
+  - Used mocking where appropriate to isolate endpoint behavior from the underlying ranking implementation and keep tests deterministic.
+
+- **Coordinated integration with Michelle’s branch**
+  - Synced changes with Michelle’s branch to avoid conflicts and ensure the endpoint implementation + tests landed together.
+  - Confirmed changes aligned with the existing API structure and did not break other routes (ran local pytest suite before pushing).
+
+### Outcome
+Michelle’s PR merged with:
+- a more flexible `/job-matching/rank` API (`top_k` support),
+- stronger automated regression tests around rank request validation and edge cases,
+- and cleaner integration into the overall FastAPI route surface for Milestone 2.
+
+## Collaboration / Contribution Note — PR #225 (Portfolio Showcase + Legacy Route Compatibility)
+
+I contributed to PR **#224** by focusing on API stability and backward compatibility after the `/showcase/*` rollout, and by coordinating with teammates to ensure the existing test suite + older client calls continued to work without sacrificing the new endpoint structure.
+
+---
+
+### What I worked on (technical)
+
+#### 1) Restored backward-compatible API surface via legacy aliases
+After the new `/showcase/*` endpoints landed, several older routes used by existing tests/clients started returning `404` or behaving inconsistently. I helped address this by adding **legacy route aliases** that map old endpoints to the new showcase implementation. This preserved the upgraded architecture while preventing breakage for consumers that still call legacy URLs.
+
+Key alias mappings included (conceptually):
+- `GET /portfolios/latest` → `GET /showcase/portfolios/latest`
+- `GET /portfolios/evidence` → `GET /showcase/portfolios/evidence`
+- `GET /users` and `GET /users/{user}/projects` → `GET /showcase/users` and `GET /showcase/users/{user}/projects`
+
+This approach keeps the new canonical endpoints while supporting “old” traffic through a thin compatibility layer.
+
+#### 2) Stabilized FastAPI app wiring for deterministic mounting
+I also worked on making the app initialization more deterministic in `create_app()`:
+- Ensured routers for **portfolio / showcase / resume** are mounted consistently.
+- Avoided cases where route availability depended on import order or runtime conditions.
+- Added/maintained a stable app factory (`get_app_for_tests`) so endpoint tests can build an identical app instance without starting a real server.
+
+This reduced “it works locally but CI fails” problems tied to router mounting differences.
+
+#### 3) Tightened validation behavior for legacy endpoints
+For some legacy routes, missing fields/params were silently accepted or behaved unpredictably. I adjusted validation so requests that are missing required inputs return **400/422** instead of “passing” and producing incorrect outputs. This makes API behavior more explicit and prevents flaky downstream behavior.
+
+#### 4) Dependency note for upload endpoints
+Documented/confirmed the requirement for `python-multipart` for upload/form-data routes (e.g., endpoints using `UploadFile`). This is necessary for FastAPI to register multipart dependencies correctly and prevents runtime failures when starting the server.
+
+---
+
+### Collaboration
+- Coordinated with the PR owner/merger (Eren) to make sure the fix preserved the new `/showcase/*` design while keeping existing test expectations intact.
+- Reviewed changes with the lens of “don’t break tests / don’t break old clients,” and iterated until the endpoints, validation, and router mounting aligned with the current test suite.
+- Verified behavior by running the relevant endpoint tests locally and confirming `/docs` reflected the restored legacy routes alongside the new showcase routes.
+
+---
+
+### Outcome
+PR #225 successfully merged with:
+- **Backward-compatible endpoints restored** via alias routing,
+- **Deterministic app initialization** for consistent test/runtime behavior,
+- **Improved request validation** for legacy compatibility routes,
+- Reduced regression risk while keeping `/showcase/*` as the canonical API surface.
+
+## Journal Update — PR #220 (Milestone 2 API: incremental uploads, DB migration, overrides, tests)
+
+I delivered the core Milestone 2 API functionality in PR **#220**, focused on enabling incremental artifact uploads, storing multiple snapshots over time, and supporting human-in-the-loop edits with persistent overrides.
+
+---
+
+### 1) Incremental uploads support (`POST /projects/upload`)
+**Goal:** Allow the same project to be uploaded multiple times over time (incremental snapshots), instead of treating each upload as a brand new project.
+
+**Changes:**
+- Updated `POST /projects/upload` to accept an **optional `project_id`** query parameter.
+  - If `project_id` is provided, the new upload is attached to the same project, creating a new snapshot entry rather than creating an entirely separate project.
+- Updated the file storage path to support reusing the provided `upload_id` when appropriate, instead of always generating a new one.  
+  - This reduced duplication and kept snapshot linkage consistent.
+
+---
+
+### 2) DB schema migration for snapshots (`uploads` table)
+**Problem:** The existing schema prevented storing multiple upload rows per logical project upload id (or enforced uniqueness constraints that made incremental snapshots impossible).
+
+**Changes:**
+- Added a migration step in the DB open/init path (e.g., `storage.open_db()` style flow) to update the `uploads` table schema so multiple rows can exist for the same logical upload identifier.
+- Removed/relaxed the **UNIQUE constraint** on `upload_id` (or equivalent key), enabling multiple upload records to reference the same project while still preserving dedupe/file store semantics.
+
+**Outcome:** The DB can now store multiple snapshots for a project without breaking existing stored file references.
+
+---
+
+### 3) Human-in-the-loop project overrides (`project_overrides` table + endpoints)
+**Goal:** Support user edits/corrections (Milestone 2 requirement) and persist them in the DB.
+
+**Changes:**
+- Added a new DB table (e.g., `project_overrides`) to store edits such as:
+  - `key_role`, `evidence`, `portfolio_blurb`, `resume_bullets`, `selected`, and `rank`
+- Implemented endpoints:
+  - `PATCH /projects/{project_id}` to save overrides
+  - `GET /projects/{project_id}/overrides` to fetch overrides
+
+**Outcome:** Generated content can be corrected by the user and remains stable across re-runs.
+
+---
+
+### 4) Tests (API-level validation)
+Added/updated endpoint tests to verify:
+- Incremental upload behavior works as expected (same project gets multiple uploads)
+- Dedupe behavior still holds (no unintended duplication)
+- Overrides endpoints persist and return updates correctly
+
+---
+
+### Verification
+- ✅ Full test suite passes locally (`pytest -q`)
+- ✅ `/docs` shows the new/updated endpoints
+- ✅ Incremental uploads visible via upload history endpoints (snapshot flow confirmed)
+
+---
+
+### Impact
+This PR completed the core Milestone 2 API requirements around incremental uploads/snapshots, DB persistence, and human-in-the-loop editing — while keeping behavior testable via HTTP-level endpoint tests.
+
+
+<img width="1080" height="626" alt="Screenshot 2026-03-01 at 1 21 15 PM" src="https://github.com/user-attachments/assets/b45eaf54-b1f2-455d-9668-a16b43041c4f" />
+
 
