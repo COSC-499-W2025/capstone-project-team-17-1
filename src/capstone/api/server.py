@@ -9,16 +9,19 @@ from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
-from capstone.api.middleware.request_id import RequestIdMiddleware
 
 
-def _safe_import(module_path: str, router_attr: str = "router", configure_attr: str = "configure"):
-    """
-    Safely import a router module that may not exist on all branches.
+def _safe_import_job_match():
+    """Attempt to import job_match router (optional)."""
+    try:
+        from capstone.api.routes.job_match import router  # type: ignore
+        return router, None
+    except Exception:
+        return None, traceback.format_exc()
 
-    Returns:
-        (router, configure, error_str)
-    """
+
+def _safe_import_portfolio():
+    """Attempt to import portfolio router + configure."""
     try:
         mod = import_module(module_path)
         router = getattr(mod, router_attr, None)
@@ -71,6 +74,14 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.add_middleware(RequestIdMiddleware)
     app.state.auth_token = auth_token
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # for development
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
     @app.get("/")
     def root():
         return {"message": "Capstone API is running"}
