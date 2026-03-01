@@ -26,3 +26,13 @@ PATH_HERE
 env/
 pycache/
 *.pyc
+# SQLite DB files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local runtime artifacts
+.memory/
+uploads/
+data/*.db
+data/capstone.db
