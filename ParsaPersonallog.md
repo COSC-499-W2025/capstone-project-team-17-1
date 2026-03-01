@@ -1174,3 +1174,97 @@ Several small issues surfaced during integration, and I fixed them systematicall
 
 This week focused on adding a practical and user friendly “deep review” feature while keeping our consent and privacy posture explicit. The feature now supports a realistic workflow where users can choose exactly which files to send for analysis instead of dumping an entire project, and the new unit tests provide confidence that bundling and prompt formatting behavior will remain stable. The extra time spent recovering my local environment also helped me ensure that the setup and dependency assumptions are clear and reproducible for future development and peer testing.
 
+---
+
+## Week 8 Personal Log [Feb 23 – Mar 1, 2026]
+
+This week I focused on designing and implementing a fully functional real time System Health dashboard inside our Electron frontend, backed by a new FastAPI system metrics endpoint. The primary goal was to transform a static UI card into a production quality monitoring panel that displays CPU, memory, GPU, storage usage, temperatures, health status, and live mini charts. A significant portion of the work involved backend hardware integration, resolving Windows monitoring constraints, and polishing frontend visualization logic for smooth real time updates.
+
+**Peer Eval**  
+>
+> ![Week 8 — forntend mock design]
+> <img width="1071" height="621" alt="image" src="https://github.com/user-attachments/assets/e77e15af-a801-4047-9dbb-50b3182e0b80" />
+>
+> _Figure 0. peer evaluation._
+>
+---
+
+### Backend system metrics endpoint design
+
+I began by designing and implementing a new `/system/system-metrics` API endpoint in FastAPI to provide live hardware metrics to the Electron frontend.
+
+* Implemented CPU usage retrieval using `psutil`.
+* Implemented memory usage, used GB, and total GB calculations.
+* Implemented storage usage as a fallback metric when GPU is not detected.
+* Integrated Libre Hardware Monitor (running in background mode) to extract CPU and GPU temperature data.
+* Resolved COM and threading issues related to WMI access and migrated to Libre’s `data.json` HTTP endpoint for stable metric extraction.
+* Ensured GPU detection logic gracefully falls back to storage metrics when no GPU is present.
+* Added CORS middleware to allow Electron to fetch backend metrics.
+* Verified correct JSON structure and validated endpoint behavior via Swagger and direct requests.
+
+---
+
+### Background hardware monitor integration
+
+To avoid requiring a visible monitoring window in production, I implemented automatic Libre Hardware Monitor startup in headless mode.
+
+* Configured Libre to expose `data.json` via its internal web server.
+* Ensured it launches silently without displaying a UI window.
+* Validated that the monitoring service runs reliably in the background when the app starts.
+* Confirmed that JSON polling is stable and does not block the backend process.
+
+---
+
+### Electron frontend system health card redesign
+
+The existing static “System Health” card was redesigned into a fully dynamic monitoring component.
+
+* Replaced static content with SVG based half arc gauges for CPU, Memory, and GPU.
+* Implemented dynamic stroke dash offset animation for real time gauge updates.
+* Added system status indicator using `/health` endpoint with green and red visual state.
+* Integrated CPU and GPU temperature display beneath each gauge.
+* Structured HTML and CSS to ensure proper alignment and prevent overflow beyond card boundaries.
+* Converted a single chart implementation into three independent mini charts aligned beneath each respective gauge.
+
+---
+
+### Real time chart implementation and refinement
+
+To improve clarity and usability, I refined the visualization logic for live usage trends.
+
+* Implemented three separate Chart.js instances for CPU, Memory, and GPU.
+* Added sliding window history buffers to maintain the last 40 data points.
+* Increased stroke width for improved visual clarity.
+* Adjusted layout so each chart is directly positioned under its corresponding gauge.
+* Eliminated rendering crashes caused by scope errors and misplaced metric references.
+* Ensured all DOM updates are synchronized with fetch intervals to prevent stale UI states.
+
+---
+
+### Dynamic usage based color gradients
+
+To improve visual feedback and make the dashboard feel more production ready, I implemented dynamic gauge coloring.
+
+* Designed a continuous gradient interpolation function for usage values from 0 to 100.
+* Implemented smooth blending from green (low usage) to yellow (medium) to red (high).
+* Applied dynamic color updates directly to SVG stroke properties.
+* Extended color logic to update chart line colors based on current usage values.
+* Verified smooth transitions without abrupt threshold jumps.
+
+---
+
+### Debugging and stability improvements
+
+Several frontend and backend integration issues surfaced and were resolved.
+
+* Fixed a scope error where metrics were referenced outside of `fetchMetrics()`, causing runtime crashes.
+* Resolved GPU percentage text not updating despite arc animation working.
+* Fixed intermittent GPU usage update issues caused by mixed data sources.
+* Ensured all fetch calls include error handling to prevent silent UI freezes.
+* Confirmed consistent one second polling behavior without blocking Electron rendering.
+
+---
+
+### Reflection
+
+This week significantly improved the professionalism and technical depth of the project. The System Health card evolved from a placeholder UI element into a fully functional real time monitoring panel powered by custom backend hardware integration and dynamic frontend visualization. The combination of background hardware monitoring, structured API design, SVG animation, and gradient based usage indicators demonstrates strong full stack integration and attention to detail. The result is a responsive and production quality dashboard component that enhances both usability and technical sophistication of the application.
