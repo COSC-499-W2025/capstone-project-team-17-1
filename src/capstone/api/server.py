@@ -35,11 +35,10 @@ def _safe_import_showcase():
         return None, None, traceback.format_exc()
 
 
-def _safe_import_resume():
-    """Attempt to import resume router + optional configure."""
+def _safe_import_resumes():
+    """Attempt to import new modular resumes router + configure."""
     try:
-        from capstone.api.routes.resume import router  # type: ignore
-        configure = getattr(__import__("capstone.api.routes.resume", fromlist=["configure"]), "configure", None)
+        from capstone.api.routes.resumes import router, configure  # type: ignore
         return router, configure, None
     except Exception:
         return None, None, traceback.format_exc()
@@ -91,17 +90,16 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     else:
         app.state.showcase_import_error = showcase_err
 
-    # Resume routes (+ configure if present)
-    resume_router, configure_resume, resume_err = _safe_import_resume()
-    if resume_router is not None:
+    # Modular resume routes (/resumes/*)
+    resumes_router, configure_resumes, resumes_err = _safe_import_resumes()
+    if resumes_err is None and resumes_router is not None and configure_resumes is not None:
         try:
-            if configure_resume is not None:
-                configure_resume(db_dir, auth_token)
-            app.include_router(resume_router)
+            configure_resumes(db_dir, auth_token)
+            app.include_router(resumes_router)
         except Exception:
             app.state.resume_mount_error = traceback.format_exc()
     else:
-        app.state.resume_import_error = resume_err
+        app.state.resume_import_error = resumes_err
 
     # Legacy aliases (old endpoints like /portfolios/* and /users/*)
     app.include_router(legacy_aliases_router)
@@ -117,8 +115,8 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
             "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
             "showcase_import_error": getattr(app.state, "showcase_import_error", None),
             "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
-            "resume_import_error": getattr(app.state, "resume_import_error", None),
-            "resume_mount_error": getattr(app.state, "resume_mount_error", None),
+            "resumes_import_error": getattr(app.state, "resume_import_error", None),
+            "resumes_mount_error": getattr(app.state, "resume_mount_error", None),
         }
 
     return app
