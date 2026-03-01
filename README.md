@@ -2,6 +2,15 @@
 
 Local, consent-aware archive analysis implemented entirely in Python – no Electron dependencies required. Use the `capstone` CLI to manage consent preferences and to extract metadata, collaboration insights, languages, frameworks, and timeline metrics from zipped projects.
 
+## Tips
+For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
+```
+git log --pretty=format:"commit:%H|%an|%ae|%ct|%s" --numstat > git_log.txt
+```
+This generates the required commit metadata file for parsing.
+
+Alternatively, for greater convenience, you can directly provide the GitHub repository URL along with an API token to perform repository-based analysis via the GitHub API.
+
 ## Quickstart
 
 ```bash
@@ -346,6 +355,61 @@ The system must be able to ... :
   - 20.3 Time Attribution (first seen, last active, active spans)
   - 20.4 Aggregation (per year/quarter, intensity score)
   - 20.5 Exports (skill timeline table, “top skills by year” chart data)
+
+## 20.0 Chronological list of skills 
+  - 20.1 Skill taxonomy (language, framework, tool, domain; map via files/PR labels)
+  - 20.2 Skill detector (per commit/release via file extensions, package manifests)
+  - 20.3 Time Attribution (first seen, last active, active spans)
+  - 20.4 Aggregation (per year/quarter, intensity score)
+  - 20.5 Exports (skill timeline table, “top skills by year” chart data)
+
+## 21.0 Allow incremental information by adding another zipped folder of files for the same portfolio or résumé
+  - 21.1 Support uploading additional zipped folders for an existing portfolio or résumé
+  - 21.2 Merge newly added files with previously ingested artifacts
+  - 21.3 Preserve existing project data and user customizations across uploads
+
+## 22.0 Recognize duplicate files and maintains only one in the system
+  - 22.1 Generate unique identifiers (e.g., hashes) for all ingested files
+  - 22.2 Detect duplicate files across multiple uploads
+  - 22.3 Maintain a single canonical copy of duplicated files in the system
+
+## 23.0 Allow users to choose which information is represented
+  - 23.1 Allow manual re-ranking of projects
+  - 23.2 Enable user corrections to project chronology
+  - 23.3 Allow selection of attributes for project comparison
+  - 23.4 Allow selection of skills and projects for showcase
+
+ ## 24.0 Incorporate key role of the user in a given project
+  - 24.1 Capture the user’s primary role within each project
+  - 24.2 Store role information as part of project metadata
+
+## 25.0 Incorporate evidence of success for a given project
+  - 25.1 Associate quantitative metrics with projects
+  - 25.2 Allow inclusion of qualitative feedback or evaluations
+  - 25.3 Persist evidence of success for later display
+
+## 26.0 Allow user to associate an image for a given project to use as the thumbnail
+  - 26.1 Allow user to upload or select an image for a project
+  - 26.2 Associate the image with the project as a thumbnail
+  - 26.3 Store and retrieve image metadata
+
+## 27.0 Customize and save information about a portfolio showcase project
+  - 27.1 Customize project descriptions for portfolio presentation
+  - 27.2 Save portfolio-specific project information
+  - 27.3 Maintain user-defined showcase settings
+
+## 28.0 Customize and save the wording of a project used for a résumé item
+  - 28.1 Customize concise project wording for résumé use
+  - 28.2 Save résumé-specific project descriptions
+  - 28.3 Support updates without affecting portfolio text
+
+## 29.0 Display textual information about a project as a portfolio showcase
+  - 29.1 Generate textual representations of projects for portfolio display
+  - 29.2 Include user-selected content, roles, and evidence
+
+## 30.0 Display textual information about a project as a résumé item
+  - 30.1 Generate résumé-ready textual project descriptions
+  - 30.2 Display only résumé-selected projects and wording
 
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
