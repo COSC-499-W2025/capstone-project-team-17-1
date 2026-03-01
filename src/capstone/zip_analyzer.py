@@ -406,7 +406,7 @@ class ZipAnalyzer:
         if isinstance(contrib_raw, dict):
             for cname in contrib_raw:
                 cname = str(cname).strip()
-                if cname:
+                if cname and not cname.lower().endswith("[bot]"):
                     uid = upsert_user(conn, cname, email=author_email_map.get(cname))
                     link_user_to_project(conn, uid, project_id, contributor_name=cname)
             self._logger.info("Stored %d zip contributors for project %s", len(contrib_raw), project_id)
@@ -490,7 +490,7 @@ def _build_author_email_map(git_log_lines: list[str]) -> dict[str, str]:
             continue
         author = parts[1].strip()
         email = parts[2].strip()
-        if not author or not email:
+        if not author or author.lower().endswith("[bot]") or not email:
             continue
         lowered = email.lower()
         if lowered == "noreply@github.com" or any(lowered.endswith(s) for s in _NOREPLY_SUFFIXES):

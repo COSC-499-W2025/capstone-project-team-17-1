@@ -142,7 +142,7 @@ def _extract_contributors_from_zip(conn, file_id: str) -> list[tuple[str, str | 
                             if len(parts) < 2:
                                 continue
                             author = parts[1].strip()
-                            if not author:
+                            if not author or author.lower().endswith("[bot]"):
                                 continue
                             email: str | None = None
                             if len(parts) >= 3:
