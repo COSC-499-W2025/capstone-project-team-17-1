@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Sequence, Literal
+from typing import Callable, Dict, Iterable, Sequence, Literal, Optional
 
 from .config import Config, ConsentState, load_config, save_config, update_consent
 
@@ -26,17 +26,32 @@ _CONSENT_JOURNAL = _LOG_DIR / "consent_decisions.jsonl"
 _ALLOW_DECISIONS = {"allow", "allow_once", "allow_always"}
 _DENY_DECISIONS = {"deny", "deny_once", "deny_always"}
 
-ConsentResult = Literal["saved_existing", "saved_new", "sessions_only", "denied"]
+# Keep backward compatibility with your current return values.
+ConsentResult = Literal[
+    "saved_existing",
+    "saved_new",
+    "granted_existing",
+    "granted_new",
+    "sessions_only",
+    "denied",
+]
 
 
 def prompt_for_consent(
-    input_fn: Callable[[str], str] = input,
-    output_fn: Callable[[str], None] = print,
+    input_fn: Optional[Callable[[str], str]] = None,
+    output_fn: Optional[Callable[[str], None]] = None,
 ) -> str:
     """Prompt the user repeatedly until a valid y/n input is provided.
 
     Returns "accepted" for affirmative answers and "rejected" otherwise.
+
+    NOTE: input_fn/output_fn default to None (not input/print) so tests that patch
+    builtins.input will work correctly.
     """
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
 
     prompt = "Please enter 'y' for yes or 'n' for no: "
     while True:
@@ -57,12 +72,21 @@ def ensure_consent(require_granted: bool = True) -> ConsentState:
         )
     return consent
 
+
 # helper for prompting consent on startup
 def prompt_yes_no(
     msg: str,
-    input_fn: Callable[[str], str] = input,
-    output_fn: Callable[[str], None] = print,
+    input_fn: Optional[Callable[[str], str]] = None,
+    output_fn: Optional[Callable[[str], None]] = None,
 ) -> bool:
+    """
+    IMPORTANT: input_fn/output_fn default to None so patch("builtins.input") works in tests.
+    """
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
+
     while True:
         response = input_fn(f"{msg} (y/n): ").strip().lower()
         if response in {"y", "yes"}:
@@ -71,43 +95,58 @@ def prompt_yes_no(
             return False
         output_fn("Invalid input! Please enter 'y' for yes or 'n' for no.")
 
+
 def ensure_or_prompt_consent(
-    input_fn: Callable[[str], str] = input,
-    output_fn: Callable[[str], None] = print,
-) -> bool:
+    input_fn: Optional[Callable[[str], str]] = None,
+    output_fn: Optional[Callable[[str], None]] = None,
+) -> ConsentResult:
+    """
+    If consent already granted, returns 'granted_existing'.
+    Otherwise prompts for session consent and optionally persists it.
+
+    NOTE: input_fn/output_fn default to None so tests can patch builtins.input cleanly.
+    """
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
+
     config = load_config()
     consent = config.consent
-    
+
     if consent.granted:
         return "granted_existing"
-    
+
     output_fn("\nWelcome! Thanks for being here. Let's get started :)")
-    output_fn("\n\nNOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)")
-    
+    output_fn(
+        "\n\nNOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)"
+    )
+
     # first decision - grant or not
     allow_now = prompt_yes_no(
         "Grant consent for this session",
         input_fn=input_fn,
-        output_fn=output_fn
+        output_fn=output_fn,
     )
-    
+
     if not allow_now:
         return "denied"
-    
+
     # second decision - remember for future sessions or not
     remember = prompt_yes_no(
         "Save consent decision for future sessions",
         input_fn=input_fn,
-        output_fn=output_fn
+        output_fn=output_fn,
     )
-    
+
     if remember:
         grant_consent("allow")
         return "granted_new"
     else:
         revoke_consent("deny")
         return "sessions_only"
-        
+
+
 def grant_consent(decision: str = "allow") -> Config:
     return update_consent(granted=decision in _ALLOW_DECISIONS, decision=decision, source="cli")
 
@@ -172,14 +211,12 @@ def _store_permission(
 
 def get_external_permission(service: str) -> Dict[str, object] | None:
     """Return the stored permission decision for the given service, if any."""
-
     permissions = _load_permissions()
     return permissions.get(service)
 
 
 def clear_external_permission(service: str) -> Config:
     """Remove the stored decision for an external service."""
-
     return _store_permission(service, None)
 
 
@@ -232,12 +269,16 @@ def request_external_service_permission(
     purpose: str = "",
     destination: str = "",
     privacy: str | None = None,
-    input_fn: Callable[[str], str] = input,
-    output_fn: Callable[[str], None] = print,
+    input_fn: Optional[Callable[[str], str]] = None,
+    output_fn: Optional[Callable[[str], None]] = None,
     source: str = "runtime",
     auto: bool | None = None,
 ) -> bool:
     """Prompt for consent to use an external service, returning True if allowed."""
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
 
     config = load_config()
     user_id = config.preferences.user_id or "local-user"
@@ -299,11 +340,15 @@ def ensure_external_permission(
     purpose: str = "",
     destination: str = "",
     privacy: str | None = None,
-    input_fn: Callable[[str], str] = input,
-    output_fn: Callable[[str], None] = print,
+    input_fn: Optional[Callable[[str], str]] = None,
+    output_fn: Optional[Callable[[str], None]] = None,
     source: str = "runtime",
 ) -> None:
     """Raise if the user does not authorise contacting an external service."""
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
 
     allowed = request_external_service_permission(
         service,
@@ -323,7 +368,7 @@ def ensure_external_permission(
 
 def grant_external_consent(
     service: str = "analysis",
-    decision: str = "allow_always"
+    decision: str = "allow_always",
 ) -> None:
     """Manually grant external consent via CLI (no prompts)."""
     granted = decision in _ALLOW_DECISIONS
@@ -339,13 +384,15 @@ def grant_external_consent(
     _store_permission(service, payload)
     print(f"✓ External consent granted ({decision}) for service '{service}'.")
 
+
 def revoke_external_consent(
     service: str = "analysis",
-    decision: str = "deny_always"
+    decision: str = "deny_always",
 ) -> None:
     """Manually revoke stored external consent."""
     clear_external_permission(service)
     print(f"✗ External consent revoked for service '{service}'.")
+
 
 def show_external_consent_status(service: str = "analysis") -> None:
     """Display current stored external permission state."""
@@ -353,7 +400,7 @@ def show_external_consent_status(service: str = "analysis") -> None:
     if not perm:
         print(f"No external consent stored for service '{service}'.")
         return
-    
+
     print("External Consent Status:")
     print(f"  Service:    {service}")
     print(f"  Decision:   {perm.get('decision')}")
