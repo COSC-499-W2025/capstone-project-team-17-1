@@ -1,5 +1,8 @@
 import os
 import traceback
+from importlib import import_module
+from typing import Any
+
 from fastapi import FastAPI
 
 from capstone.api.routes.consent import router as consent_router
@@ -8,41 +11,58 @@ from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
 
 
-def _safe_import_job_match():
-    """Attempt to import job_match router (optional)."""
-    try:
-        from capstone.api.routes.job_match import router  # type: ignore
-        return router, None
-    except Exception:
-        return None, traceback.format_exc()
+def _safe_import(module_path: str, router_attr: str = "router", configure_attr: str = "configure"):
+    """
+    Safely import a router module that may not exist on all branches.
 
-
-def _safe_import_portfolio():
-    """Attempt to import portfolio router + configure."""
+    Returns:
+        (router, configure, error_str)
+    """
     try:
-        from capstone.api.routes.portfolio import router, configure  # type: ignore
+        mod = import_module(module_path)
+        router = getattr(mod, router_attr, None)
+        configure = getattr(mod, configure_attr, None)
         return router, configure, None
     except Exception:
         return None, None, traceback.format_exc()
 
 
-def _safe_import_showcase():
-    """Attempt to import showcase router + configure."""
-    try:
-        from capstone.api.routes.portfolio_showcase import router, configure  # type: ignore
-        return router, configure, None
-    except Exception:
-        return None, None, traceback.format_exc()
+def _mount_optional_router(
+    app: FastAPI,
+    *,
+    module_path: str,
+    state_prefix: str,
+    db_dir: str | None,
+    auth_token: str | None,
+) -> None:
+    """
+    Import a router module and mount it on the app.
+    If a configure(db_dir, auth_token) exists, call it before mounting.
+    Records any import/mount error on app.state.<...>.
+    """
+    router, configure, err = _safe_import(module_path)
 
+    if err is not None:
+        setattr(app.state, f"{state_prefix}_import_error", err)
+        return
 
-def _safe_import_resume():
-    """Attempt to import resume router + optional configure."""
+    if router is None:
+        setattr(app.state, f"{state_prefix}_import_error", f"Module imported but '{module_path}.router' was not found.")
+        return
+
+    # Configure if present
+    if callable(configure):
+        try:
+            configure(db_dir, auth_token)
+        except Exception:
+            setattr(app.state, f"{state_prefix}_mount_error", traceback.format_exc())
+            return
+
+    # Mount router
     try:
-        from capstone.api.routes.resume import router  # type: ignore
-        configure = getattr(__import__("capstone.api.routes.resume", fromlist=["configure"]), "configure", None)
-        return router, configure, None
+        app.include_router(router)
     except Exception:
-        return None, None, traceback.format_exc()
+        setattr(app.state, f"{state_prefix}_mount_error", traceback.format_exc())
 
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
@@ -55,6 +75,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
 
     @app.get("/health")
     def health():
+        # If you want, you can surface partial-mount errors here too.
         return {"status": "ok"}
 
     # Always-available routers
@@ -62,64 +83,58 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(projects_router)
     app.include_router(skills_router)
 
-    # Optional job-match routes (since routes/job_match.py may not exist in this branch)
-    job_match_router, job_match_err = _safe_import_job_match()
-    if job_match_router is not None:
-        app.include_router(job_match_router)
-    else:
-        app.state.job_match_import_error = job_match_err
+    # Optional routers (safe import + configure + mount)
+    _mount_optional_router(
+        app,
+        module_path="capstone.api.routes.job_match",
+        state_prefix="job_match",
+        db_dir=db_dir,
+        auth_token=auth_token,
+    )
 
-    # Optional portfolio routes
-    portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
-    if portfolio_err is None and portfolio_router is not None and configure_portfolio is not None:
-        try:
-            configure_portfolio(db_dir, auth_token)
-            app.include_router(portfolio_router)
-        except Exception:
-            app.state.portfolio_mount_error = traceback.format_exc()
-    else:
-        app.state.portfolio_import_error = portfolio_err
+    _mount_optional_router(
+        app,
+        module_path="capstone.api.routes.portfolio",
+        state_prefix="portfolio",
+        db_dir=db_dir,
+        auth_token=auth_token,
+    )
 
-    # Optional showcase routes
-    showcase_router, configure_showcase, showcase_err = _safe_import_showcase()
-    if showcase_err is None and showcase_router is not None and configure_showcase is not None:
-        try:
-            configure_showcase(db_dir, auth_token)
-            app.include_router(showcase_router)
-        except Exception:
-            app.state.showcase_mount_error = traceback.format_exc()
-    else:
-        app.state.showcase_import_error = showcase_err
+    _mount_optional_router(
+        app,
+        module_path="capstone.api.routes.portfolio_showcase",
+        state_prefix="showcase",
+        db_dir=db_dir,
+        auth_token=auth_token,
+    )
 
-    # Resume routes (+ configure if present)
-    resume_router, configure_resume, resume_err = _safe_import_resume()
-    if resume_router is not None:
-        try:
-            if configure_resume is not None:
-                configure_resume(db_dir, auth_token)
-            app.include_router(resume_router)
-        except Exception:
-            app.state.resume_mount_error = traceback.format_exc()
-    else:
-        app.state.resume_import_error = resume_err
+    _mount_optional_router(
+        app,
+        module_path="capstone.api.routes.resume",
+        state_prefix="resume",
+        db_dir=db_dir,
+        auth_token=auth_token,
+    )
 
     # Legacy aliases (old endpoints like /portfolios/* and /users/*)
     app.include_router(legacy_aliases_router)
 
-    # Debug endpoint
-    @app.get("/__debug/routers")
-    def debug_routers():
-        routes = sorted({getattr(r, "path", str(r)) for r in app.router.routes})
-        return {
-            "routes": routes,
-            "job_match_import_error": getattr(app.state, "job_match_import_error", None),
-            "portfolio_import_error": getattr(app.state, "portfolio_import_error", None),
-            "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
-            "showcase_import_error": getattr(app.state, "showcase_import_error", None),
-            "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
-            "resume_import_error": getattr(app.state, "resume_import_error", None),
-            "resume_mount_error": getattr(app.state, "resume_mount_error", None),
-        }
+    # Debug endpoint (gated)
+    if os.getenv("CAPSTONE_DEBUG_ROUTES") == "1":
+        @app.get("/__debug/routers")
+        def debug_routers():
+            routes = sorted({getattr(r, "path", str(r)) for r in app.router.routes})
+            return {
+                "routes": routes,
+                "job_match_import_error": getattr(app.state, "job_match_import_error", None),
+                "job_match_mount_error": getattr(app.state, "job_match_mount_error", None),
+                "portfolio_import_error": getattr(app.state, "portfolio_import_error", None),
+                "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
+                "showcase_import_error": getattr(app.state, "showcase_import_error", None),
+                "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
+                "resume_import_error": getattr(app.state, "resume_import_error", None),
+                "resume_mount_error": getattr(app.state, "resume_mount_error", None),
+            }
 
     return app
 
