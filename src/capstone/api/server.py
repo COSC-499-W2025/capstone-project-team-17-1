@@ -9,6 +9,7 @@ from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
+from capstone.api.middleware.request_id import RequestIdMiddleware
 
 
 def _safe_import(module_path: str, router_attr: str = "router", configure_attr: str = "configure"):
@@ -67,6 +68,7 @@ def _mount_optional_router(
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Capstone API")
+    app.add_middleware(RequestIdMiddleware)
     app.state.auth_token = auth_token
 
     @app.get("/")
@@ -82,6 +84,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
+    
 
     # Optional routers (safe import + configure + mount)
     _mount_optional_router(
