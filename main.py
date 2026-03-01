@@ -3529,6 +3529,8 @@ def main():
                                 choice = "3"
                             elif choice == "10":
                                 choice = "12"
+                            elif choice == "14":
+                                choice = "18"
                     if choice in {str(i) for i in range(1, 19)}:
                         break
                     print("Invalid choice. Please enter a number between 1 and 18.")
