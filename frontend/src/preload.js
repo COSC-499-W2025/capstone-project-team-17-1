@@ -1,4 +1,10 @@
-const { contextBridge } = require("electron")
+const { contextBridge, ipcRenderer } = require("electron")
+
+contextBridge.exposeInMainWorld("api", {
+  close: () => ipcRenderer.send("close"),
+  minimize: () => ipcRenderer.send("minimize"),
+  maximize: () => ipcRenderer.send("maximize")
+})
 
 contextBridge.exposeInMainWorld("backendAPI", {
   getUsers: async () => {

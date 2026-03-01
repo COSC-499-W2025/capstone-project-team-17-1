@@ -1,21 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Capstone Desktop</title>
+  <meta charset="UTF-8" />
+  <title>Capstone</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-  <h1>Capstone Desktop</h1>
+<body class="dark">
 
-  <button id="btn">Test Backend</button>
-  <pre id="output"></pre>
+  <!-- Custom Title Bar -->
+  <div class="titlebar">
+    <div class="logo-wrapper">
+      <img src="../assets/logo.png" class="logo-img" />
+      <span class="logo-text">Loom</span>
+    </div>
 
-  <script>
-    document.getElementById("btn").addEventListener("click", async () => {
-      const data = await window.backendAPI.getUsers()
-      document.getElementById("output").textContent =
-        JSON.stringify(data, null, 2)
-    })
-  </script>
+    <div class="nav">
+      <span class="active">Dashboard</span>
+      <span>Projects</span>
+      <span>Analysis</span>
+      <span>Settings</span>
+    </div>
+
+    <div class="right-controls">
+      <input type="text" placeholder="Search..." />
+      <div class="theme-toggle"></div>
+      <div class="profile"></div>
+    </div>
+
+    <div class="window-controls">  
+      <div class="dot yellow" id="minimize"></div>
+      <div class="dot green" id="maximize"></div>
+      <div class="dot red" id="close"></div>
+    </div>
+
+    
+  </div>
+
+  <!-- Dashboard Grid -->
+  <div class="dashboard">
+    <div class="card">Most Used Skills</div>
+    <div class="card">Error Analysis</div>
+    <div class="card">Data Quality</div>
+    <div class="card">Deduplication</div>
+    <div class="card">System Health</div>
+    <div class="card">Recent Activity</div>
+  </div>
+
+  <script src="renderer.js"></script>
 </body>
 </html>
