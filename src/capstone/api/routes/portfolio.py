@@ -217,12 +217,12 @@ def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> d
     }
 
 # POST /portfolio/{id}/edit to modify existing portfolio contents
-@router.post("/{portfolio_id}/edit")
-def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
+@router.post("/{id}/edit")
+def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
     # Avoid swallowing the legacy static route `/portfolio/showcase/edit` via the dynamic
     # `/{portfolio_id}/edit` matcher when clients omit required legacy fields.
-    if portfolio_id == "showcase":
+    if id == "showcase":
         raise HTTPException(status_code=400, detail="Use /portfolio/showcase/edit with projectId and summary")
 
     # Compatibility path used by endpoint tests: treat a simple `{summary: "..."}`
@@ -231,14 +231,14 @@ def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest, request: Re
         summary = str(payload.summary).strip()
         if not summary:
             raise HTTPException(status_code=400, detail="summary is required")
-        return {"data": {"projectId": portfolio_id, "summary": summary}, "error": None}
+        return {"data": {"projectId": id, "summary": summary}, "error": None}
 
     if payload.summary is None and payload.projects is None and payload.owner is None:
         raise HTTPException(status_code=400, detail="No changes provided")
     
     projects = payload.projects or []
     portfolio = build_portfolio(
-        portfolio_id=portfolio_id,
+        portfolio_id=id,
         owner=payload.owner,
         projects=projects
     )
@@ -246,18 +246,18 @@ def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest, request: Re
     return {"portfolio": portfolio}
 
 # GET /portfolio/{id}/export to return exportable portfolio
-@router.get("/{portfolio_id}/export")
-def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
+@router.get("/{id}/export")
+def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
     _check_auth(request)
     
     if format == ExportFormat.json:
         return {
-            "portfolio_id": portfolio_id,
+            "portfolio_id": id,
             "exported_at": _now_utc().isoformat()
         }
     
     if format == ExportFormat.markdown:
-        content = f"# Portfolio {portfolio_id}\n\nExport generated at {_now_utc().isoformat()}\n"
+        content = f"# Portfolio {id}\n\nExport generated at {_now_utc().isoformat()}\n"
         return {
             "content": content
         }
@@ -274,7 +274,7 @@ def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat =
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="portfolio_{portfolio_id}.pdf"'
+                "Content-Disposition": f'attachment; filename="portfolio_{id}.pdf"'
             }
         )
         

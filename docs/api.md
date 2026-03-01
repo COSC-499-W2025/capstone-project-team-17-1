@@ -76,7 +76,7 @@ Resume Entries
     `includeOutdated`, `limit`, `offset`.
 - `GET /resume/{id}`
   - Returns a single resume entry by id.
-  - Path param name in code: `entry_id` (route path is still `GET /resume/{entry_id}`).
+  - Path param name in code: `id` (route path: `GET /resume/{id}`).
 - `POST /resume`
   - Creates a resume entry.
   - Body: `section`, `title`, `body` required. Optional `summary`, `status`, `metadata` (object),

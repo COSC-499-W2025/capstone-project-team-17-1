@@ -266,8 +266,8 @@ def list_projects():
     }
 
 
-@router.get("/{project_id}")
-def get_project(project_id: str):
+@router.get("/{id}")
+def get_project(id: str):
     """
     Returns info for a specific uploaded project zip by upload_id.
     """
@@ -281,7 +281,7 @@ def get_project(project_id: str):
         WHERE u.upload_id = ?
         LIMIT 1
         """,
-        (project_id,),
+        (id,),
     ).fetchone()
 
     if not row:
@@ -297,8 +297,8 @@ def get_project(project_id: str):
         "stored_path": row[6],
     }
 
-@router.delete("/{project_id}")
-def delete_project(project_id: str):
+@router.delete("/{id}")
+def delete_project(id: str):
     """
     Deletes a project upload and its associated stored file.
     """
@@ -311,7 +311,7 @@ def delete_project(project_id: str):
         JOIN files f ON f.file_id = u.file_id
         WHERE u.upload_id = ?
         """,
-        (project_id,),
+        (id,),
     ).fetchone()
 
     if not row:
@@ -320,7 +320,7 @@ def delete_project(project_id: str):
     file_id, file_path = row
 
     # delete upload reference
-    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (project_id,))
+    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
     # delete file reference
     conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
     conn.commit()
@@ -334,15 +334,15 @@ def delete_project(project_id: str):
     return {
         "data": {
             "deleted": True,
-            "project_id": project_id,
+            "project_id": id,
             "file_id": file_id,
         },
         "error": None,
     }
 
 
-@router.post("/{project_id}/thumbnail")
-async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)):
+@router.post("/{id}/thumbnail")
+async def upload_project_thumbnail(id: str, file: UploadFile = File(...)):
     # Only accept images
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image uploads are supported")
@@ -356,7 +356,7 @@ async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)
         # Store latest thumbnail
         stored = storage.upsert_project_thumbnail(
             conn,
-            project_id=project_id,
+            project_id=id,
             image_bytes=image_bytes,
             filename=filename,
             content_type=file.content_type or "application/octet-stream",
@@ -367,14 +367,14 @@ async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)
     return {"data": stored, "error": None}
 
 
-@router.get("/{project_id}/thumbnail")
-def get_project_thumbnail(project_id: str):
+@router.get("/{id}/thumbnail")
+def get_project_thumbnail(id: str):
     # Return the latest thumbnail bytes
     conn = storage.open_db()
-    meta = storage.fetch_project_thumbnail_meta(conn, project_id)
+    meta = storage.fetch_project_thumbnail_meta(conn, id)
     if not meta:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    image_bytes = storage.fetch_project_thumbnail_bytes(conn, project_id)
+    image_bytes = storage.fetch_project_thumbnail_bytes(conn, id)
     if not image_bytes:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return Response(
@@ -385,8 +385,8 @@ def get_project_thumbnail(project_id: str):
         },
     )
 
-@router.get("/{project_id}/uploads")
-def list_project_uploads(project_id: str):
+@router.get("/{id}/uploads")
+def list_project_uploads(id: str):
     conn = storage.open_db()
     rows = conn.execute(
         """
@@ -397,12 +397,12 @@ def list_project_uploads(project_id: str):
         WHERE u.upload_id = ?
         ORDER BY datetime(u.created_at) ASC
         """,
-        (project_id,),
+        (id,),
     ).fetchall()
 
     uploads_payload = [
         {
-            "project_id": project_id,
+            "project_id": id,
             "filename": r[0],
             "file_id": r[2],
             "hash": r[1],
@@ -415,7 +415,7 @@ def list_project_uploads(project_id: str):
     snapshot_diff = _build_upload_diff(conn, rows)
 
     return {
-        "project_id": project_id,
+        "project_id": id,
         "count": len(rows),
         "uploads": uploads_payload,
         "snapshot_diff": snapshot_diff,
@@ -497,19 +497,19 @@ def _build_upload_diff(conn, rows, earlier_index: int = 0, later_index: int = -1
         },
         "skills": {"before": es, "after": ls, "changes": skill_changes},
     }
-@router.patch("/{project_id}")
-def edit_project(project_id: str, payload: ProjectEdit):
+@router.patch("/{id}")
+def edit_project(id: str, payload: ProjectEdit):
     conn = storage.open_db()
     exists = conn.execute(
         "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
-        (project_id,),
+        (id,),
     ).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Project not found")
 
     updated = storage.upsert_project_overrides(
         conn,
-        project_id=project_id,
+        project_id=id,
         key_role=payload.key_role,
         evidence=payload.evidence,
         portfolio_blurb=payload.portfolio_blurb,
@@ -520,10 +520,10 @@ def edit_project(project_id: str, payload: ProjectEdit):
     return {"data": updated, "error": None}
 
 
-@router.get("/{project_id}/overrides")
-def get_project_overrides(project_id: str):
+@router.get("/{id}/overrides")
+def get_project_overrides(id: str):
     conn = storage.open_db()
-    data = storage.fetch_project_overrides(conn, project_id)
+    data = storage.fetch_project_overrides(conn, id)
     if not data:
         raise HTTPException(status_code=404, detail="No overrides found")
     return {"data": data, "error": None}
