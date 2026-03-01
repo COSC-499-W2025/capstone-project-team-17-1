@@ -356,13 +356,6 @@ The system must be able to ... :
   - 20.4 Aggregation (per year/quarter, intensity score)
   - 20.5 Exports (skill timeline table, “top skills by year” chart data)
 
-## 20.0 Chronological list of skills 
-  - 20.1 Skill taxonomy (language, framework, tool, domain; map via files/PR labels)
-  - 20.2 Skill detector (per commit/release via file extensions, package manifests)
-  - 20.3 Time Attribution (first seen, last active, active spans)
-  - 20.4 Aggregation (per year/quarter, intensity score)
-  - 20.5 Exports (skill timeline table, “top skills by year” chart data)
-
 ## 21.0 Allow incremental information by adding another zipped folder of files for the same portfolio or résumé
   - 21.1 Support uploading additional zipped folders for an existing portfolio or résumé
   - 21.2 Merge newly added files with previously ingested artifacts
