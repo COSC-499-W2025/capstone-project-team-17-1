@@ -1,7 +1,7 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
--e git+https://github.com/COSC-499-W2025/capstone-project-team-17-1.git@69c212b8cd372622af910a475dbed222ad6ec074#egg=capstone_analyzer
+-e .
 certifi==2026.2.25
 fastapi==0.135.1
 h11==0.16.0
