@@ -26,7 +26,7 @@ from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
-from .storage import open_db, close_db, store_analysis_snapshot, upsert_user, link_user_to_project
+from .storage import open_db, close_db, store_analysis_snapshot, upsert_user, link_user_to_project, store_contributor_stats
 import sqlite3
 from . import file_store
 
@@ -404,11 +404,24 @@ class ZipAnalyzer:
             or {}
         )
         if isinstance(contrib_raw, dict):
-            for cname in contrib_raw:
+            for cname, cdata in contrib_raw.items():
                 cname = str(cname).strip()
-                if cname and not cname.lower().endswith("[bot]"):
-                    uid = upsert_user(conn, cname, email=author_email_map.get(cname))
-                    link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                if not cname or cname.lower().endswith("[bot]"):
+                    continue
+                uid = upsert_user(conn, cname, email=author_email_map.get(cname))
+                link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                commits, _lines, reviews = _parse_contrib_data(cdata)
+                score = commits * 1.0 + reviews * 0.5
+                store_contributor_stats(
+                    conn,
+                    project_id=project_id,
+                    contributor=cname,
+                    user_id=uid,
+                    commits=commits,
+                    reviews=reviews,
+                    score=score,
+                    source="zip",
+                )
             self._logger.info("Stored %d zip contributors for project %s", len(contrib_raw), project_id)
 
         return summary
@@ -473,6 +486,29 @@ class ZipAnalyzer:
             "primary_contributor": basic.primary_contributor,
             "contribution_compute": "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
         }
+
+
+def _parse_contrib_data(value: object) -> tuple[int, int, int]:
+    """Parse a contrib_raw value into (commits, lines, reviews).
+
+    Handles both list/tuple [c, l, r] and string "[c, l, r]" from
+    to_compact_collaboration, as well as bare integers (commit count only).
+    """
+    if isinstance(value, (list, tuple)):
+        data = list(value)
+    elif isinstance(value, str):
+        try:
+            data = [int(x.strip()) for x in value.strip("[] ").split(",")]
+        except (ValueError, AttributeError):
+            data = []
+    elif isinstance(value, (int, float)):
+        data = [int(value)]
+    else:
+        data = []
+    commits = int(data[0]) if len(data) > 0 else 0
+    lines = int(data[1]) if len(data) > 1 else 0
+    reviews = int(data[2]) if len(data) > 2 else 0
+    return commits, lines, reviews
 
 
 def _build_author_email_map(git_log_lines: list[str]) -> dict[str, str]:
