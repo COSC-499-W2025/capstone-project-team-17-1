@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
@@ -22,17 +22,36 @@ import capstone.storage as storage
 def _resume_to_pdf_payload(resume: dict) -> dict:
     """
     Map fetch_resume() output → dict accepted by build_pdf_with_latex / _extract_template_fields.
-    Renames section 'key' → 'name', hoists header metadata to top level.
+    - Renames section 'key' → 'name', normalising singular→plural where the PDF builder expects it
+    - Hoists header metadata to top-level fields
+    - Adds 'dateRange' to each item from start_date / end_date
     """
+    # PDF builder expects plural section names for these
+    _KEY_MAP = {
+        "project": "projects",
+        "certification": "certifications",
+        "award": "awards",
+    }
+
+    def _item_for_pdf(item: dict) -> dict:
+        """Add dateRange field and keep everything else as-is."""
+        out = dict(item)
+        start = item.get("start_date") or ""
+        end = item.get("end_date") or ""
+        if start or end:
+            out["dateRange"] = " – ".join(filter(None, [start, end]))
+        return out
+
     payload: dict = {
         "title": resume.get("title", ""),
         "target_role": resume.get("target_role", ""),
         "sections": [],
     }
     for sec in resume.get("sections") or []:
-        items = sec.get("items") or []
+        key = sec.get("key", "")
+        items = [_item_for_pdf(i) for i in (sec.get("items") or [])]
         # Hoist header metadata to top-level fields PDF builder expects
-        if sec.get("key") == "header" and items:
+        if key == "header" and items:
             meta = items[0].get("metadata") or {}
             payload.setdefault("fullName", meta.get("full_name", ""))
             payload.setdefault("email", meta.get("email", ""))
@@ -40,7 +59,8 @@ def _resume_to_pdf_payload(resume: dict) -> dict:
             payload.setdefault("location", meta.get("location", ""))
             payload.setdefault("github", meta.get("github_url", ""))
             payload.setdefault("portfolio", meta.get("portfolio_url", ""))
-        payload["sections"].append({"name": sec.get("key", ""), "items": items})
+        section_name = _KEY_MAP.get(key, key)
+        payload["sections"].append({"name": section_name, "items": items})
     return payload
 
 
@@ -306,7 +326,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
         return {"data": resume, "error": None}
     if fmt == "markdown":
         return PlainTextResponse(_resume_to_markdown(resume))
-    # pdf
+    # pdf — return binary stream so Postman / browsers can open it directly
     pdf_payload = _resume_to_pdf_payload(resume)
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = Path(tmpdir) / "resume.pdf"
@@ -314,8 +334,13 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
             build_pdf_with_latex(pdf_payload, out_path)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
-        encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")
-    return {"data": {"format": "pdf", "payload": encoded}, "error": None}
+        pdf_bytes = out_path.read_bytes()
+    title_slug = (resume.get("title") or "resume").replace(" ", "_")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{title_slug}.pdf"'},
+    )
 
 
 # ---------------------------------------------------------------------------
