@@ -55,7 +55,7 @@ Notes:
 
 ```bash
 # Start FastAPI on port 8003
-capstone api --host 127.0.0.1 --port 8003
+capstone api --host 127.0.0.1 --port 8003 --db-dir data
 ```
 
 Verify the API is active:
@@ -330,7 +330,7 @@ The system must be able to ... :
 
 ## 17.0 Top Project Summaries
   - 17.1 Summary template
-  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark)
+  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark
   - 17.3 Auto-Writer (offline first; optional LLM use)
   - 17.4 Hallucination guardrails (quote facts, add refs, confidence flags)
   - 17.5 Exporters (Markdown, PDF one-pager, README snippet)
