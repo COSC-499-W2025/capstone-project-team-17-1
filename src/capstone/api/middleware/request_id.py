@@ -1,24 +1,27 @@
-from __future__ import annotations
-
 import uuid
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 
+class RequestIdMiddleware:
+    def __init__(self, app, header_name: str = "X-Request-ID"):
+        self.app = app
+        self.header_name = header_name
+        self.header_name_bytes = header_name.lower().encode()
 
-class RequestIdMiddleware(BaseHTTPMiddleware):
-    """
-    Ensures every request/response carries an X-Request-ID header.
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-    - If the client provides X-Request-ID, we reuse it.
-    - Otherwise we generate a UUID4.
-    """
-    HEADER = "X-Request-ID"
+        headers = dict(scope.get("headers") or [])
+        incoming = headers.get(self.header_name_bytes)
+        request_id = incoming.decode() if incoming else str(uuid.uuid4())
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        req_id = request.headers.get(self.HEADER) or str(uuid.uuid4())
-        request.state.request_id = req_id  # optional: available to handlers
+        scope.setdefault("state", {})
+        scope["state"]["request_id"] = request_id
 
-        response = await call_next(request)
-        response.headers[self.HEADER] = req_id
-        return response
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                message.setdefault("headers", [])
+                message["headers"].append((self.header_name_bytes, request_id.encode()))
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
