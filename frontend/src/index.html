@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Capstone</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="dark">
 
@@ -38,12 +39,74 @@
 
   <!-- Dashboard Grid -->
   <div class="dashboard">
-    <div class="card">Most Used Skills</div>
+    <div id="most-used-skills" class="card">Most Used Skills</div>
     <div class="card">Error Analysis</div>
     <div class="card">Data Quality</div>
     <div class="card">Deduplication</div>
-    <div class="card">System Health</div>
-    <div class="card">Recent Activity</div>
+    <div id="system-health-card" class="card">
+  <h3>System Health</h3>
+
+  <div class="status-row">
+    <span id="status-dot" class="status-dot"></span>
+    <span id="system-status">Checking...</span>
+  </div>
+
+  <div class="gauges">
+
+    <!-- CPU -->
+    <div class="gauge">
+      <svg viewBox="0 0 100 60">
+        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+        <path id="cpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+      </svg>
+
+      <div class="gauge-info">
+        <span id="cpu-value">0%</span>
+        <span id="cpu-temp">--°C</span>
+      </div>
+
+      <p>CPU</p>
+
+      <canvas id="cpu-chart" class="mini-chart"></canvas>
+    </div>
+
+    <!-- Memory -->
+    <div class="gauge">
+      <svg viewBox="0 0 100 60">
+        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+        <path id="memory-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+      </svg>
+
+      <div class="gauge-info">
+        <span id="memory-value">0%</span>
+        <span>RAM</span>
+      </div>
+
+      <p>Memory</p>
+
+      <canvas id="memory-chart" class="mini-chart"></canvas>
+    </div>
+
+    <!-- GPU -->
+    <div class="gauge">
+      <svg viewBox="0 0 100 60">
+        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+        <path id="gpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+      </svg>
+
+      <div class="gauge-info">
+        <span id="gpu-value">0%</span>
+        <span id="gpu-temp">--°C</span>
+      </div>
+
+      <p id="gpu-label">GPU</p>
+
+      <canvas id="gpu-chart" class="mini-chart"></canvas>
+    </div>
+
+  </div>
+</div>
+    <div id="recent-activity" class="card">Recent Activity</div>
   </div>
 
   <script src="renderer.js"></script>

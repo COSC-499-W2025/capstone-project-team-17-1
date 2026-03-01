@@ -10,6 +10,7 @@ from enum import Enum
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.storage import fetch_latest_snapshot
+from capstone.activity_log import log_event
 
 # main router for all portfolio endpoints
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -189,6 +190,7 @@ def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> d
         for pid in payload.project_ids:
             snap = fetch_latest_snapshot(c, str(pid))
             if not snap:
+                log_event("ERROR", f"Snapshot missing during portfolio generation · Project: {pid}")
                 raise HTTPException(status_code=404, detail=f"No snapshot found for project ID {pid}")
             if not isinstance(snap, dict):
                 raise HTTPException(status_code=500, detail=f"Invalid snapshot format for project ID {pid}")
@@ -200,6 +202,8 @@ def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> d
         owner=payload.owner,
         projects=projects
     )
+
+    log_event("SUCCESS", f"Portfolio generated · Owner: {payload.owner or 'N/A'} · Projects: {len(projects)}")
     
     # Compatibility: some tests/clients expect showcase-style `{data: [...]}` while
     # others expect the portfolio object envelope.
@@ -243,13 +247,14 @@ def edit_portfolio(portfolio_id: str, payload: EditPortfolioRequest, request: Re
         projects=projects
     )
     
+    log_event("INFO", f"Portfolio edited · Portfolio ID: {portfolio_id}")
     return {"portfolio": portfolio}
 
 # GET /portfolio/{id}/export to return exportable portfolio
 @router.get("/{portfolio_id}/export")
 def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
     _check_auth(request)
-    
+    log_event("INFO", f"Portfolio export requested · ID: {portfolio_id} · Format: {format.value}")
     if format == ExportFormat.json:
         return {
             "portfolio_id": portfolio_id,
@@ -258,6 +263,7 @@ def export_portfolio(portfolio_id: str, request: Request, format: ExportFormat =
     
     if format == ExportFormat.markdown:
         content = f"# Portfolio {portfolio_id}\n\nExport generated at {_now_utc().isoformat()}\n"
+        log_event("SUCCESS", f"Portfolio exported · ID: {portfolio_id} · Format: {format.value}")
         return {
             "content": content
         }

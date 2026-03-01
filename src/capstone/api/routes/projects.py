@@ -8,7 +8,7 @@ import time
 import zipfile
 import hashlib
 from collections import Counter
-
+from capstone.activity_log import log_event
 from capstone import file_store, storage
 class ProjectEdit(BaseModel):
     key_role: Optional[str] = None
@@ -216,12 +216,16 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         primary_contributor=None,
         snapshot=snapshot
     )
-    
+    log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
     message = "Upload stored successfully."
     if stored.get("dedup"):
+        log_event("WARNING", f"Duplicate upload detected · Project: {project_id}")
         message = "Duplicate upload detected; existing file reused."
     elif auto_detected:
+        log_event("SUCCESS", f"Upload matched to existing project · Project: {project_id}")
         message = "Upload stored and matched to existing project automatically."
+    else: 
+        log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
     return {
         "message": message,
         "project_id": project_id,
@@ -315,6 +319,7 @@ def delete_project(project_id: str):
     ).fetchone()
 
     if not row:
+        log_event("ERROR", "Project not found · Project: ")
         raise HTTPException(status_code=404, detail="Project not found")
 
     file_id, file_path = row
@@ -330,7 +335,7 @@ def delete_project(project_id: str):
         Path(file_path).unlink(missing_ok=True)
     except Exception:
         pass
-
+    log_event("WARNING", f"Project deleted · Project: {project_id}")
     return {
         "data": {
             "deleted": True,
@@ -363,7 +368,7 @@ async def upload_project_thumbnail(project_id: str, file: UploadFile = File(...)
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
+    log_event("SUCCESS", f"Thumbnail updated · Project: {project_id}")
     return {"data": stored, "error": None}
 
 
@@ -517,6 +522,7 @@ def edit_project(project_id: str, payload: ProjectEdit):
         selected=payload.selected,
         rank=payload.rank,
     )
+    log_event("INFO", f"Project overrides updated · Project: {project_id}")
     return {"data": updated, "error": None}
 
 

@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require("electron")
-
+const skills = require("./mostUsedSkills");
 contextBridge.exposeInMainWorld("api", {
   close: () => ipcRenderer.send("close"),
   minimize: () => ipcRenderer.send("minimize"),
@@ -12,3 +12,8 @@ contextBridge.exposeInMainWorld("backendAPI", {
     return await res.json()
   }
 })
+
+
+contextBridge.exposeInMainWorld("skillsAPI", {
+  loadMostUsedSkills: skills.loadMostUsedSkills
+});

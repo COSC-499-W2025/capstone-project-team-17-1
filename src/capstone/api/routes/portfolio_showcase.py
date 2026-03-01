@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
+from capstone.activity_log import log_event
 
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
 from capstone.resume_retrieval import (
@@ -107,7 +108,10 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
             ensure_resume_schema(c)
             item = get_resume_project_description(c, projectId)
         if not item:
+            log_event("ERROR", f"No resume found · Project: {projectId}")
             raise HTTPException(status_code=404, detail="No resume project found")
+        
+        log_event("INFO", f"Resume accessed · Project: {projectId}")
         return {
             "data": item.to_dict(),
             "meta": {"projectId": projectId, "view": "resume", "user": user, "userRole": user_role},
@@ -184,6 +188,7 @@ def get_portfolio_showcase(project_id: str, request: Request, user: Optional[str
             return {"data": payload, "error": None}
         snap = get_latest_snapshot(c, project_id)
     if not snap:
+        log_event("ERROR", f"Snapshot not found · Project: {project_id}")
         raise HTTPException(status_code=404, detail="No snapshots found")
     summary = build_resume_project_summary(project_id, snap)
     payload = {"project_id": project_id, "summary": summary}
@@ -204,6 +209,7 @@ async def generate_portfolio_showcase(request: Request):
         for pid in project_ids:
             snap = get_latest_snapshot(c, str(pid))
             if not snap:
+                log_event("WARNING", f"Portfolio generation skipped · No snapshot · {pid}")
                 continue
             summary = build_resume_project_summary(str(pid), snap)
             item = upsert_resume_project_description(
@@ -214,6 +220,8 @@ async def generate_portfolio_showcase(request: Request):
                 metadata={"source": "auto"},
             )
             results.append(item.to_dict())
+
+            log_event("SUCCESS", f"Portfolio generated · Project: {pid}")
     return {"data": results, "error": None}
 
 @router.post("/portfolio/showcase/edit")
@@ -242,4 +250,6 @@ async def edit_portfolio_showcase(project_id: str, request: Request):
             variant_name="portfolio_showcase",
             metadata={"source": "custom"},
         )
+
+    log_event("INFO", f"Portfolio updated · Project: {project_id}")
     return {"data": item.to_dict(), "error": None}

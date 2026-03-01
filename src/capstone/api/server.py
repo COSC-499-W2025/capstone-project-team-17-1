@@ -1,13 +1,15 @@
 import os
 import traceback
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
 from fastapi.middleware.cors import CORSMiddleware
-
+from capstone.api.routes.system_metrics import get_system_metrics
+from capstone.system.monitor_manager import start_monitor, stop_monitor
 def _safe_import_job_match():
     """Attempt to import job_match router (optional)."""
     try:
@@ -46,7 +48,18 @@ def _safe_import_resume():
 
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
-    app = FastAPI(title="Capstone API")
+    @asynccontextmanager
+    async def lifespan(app):
+        # Startup
+        start_monitor()
+        print("Application startup complete.")
+
+        yield
+
+        # Shutdown
+        stop_monitor()
+        print("Application shutdown complete.")
+    app = FastAPI(title="Capstone API", lifespan=lifespan)
     app.state.auth_token = auth_token
 
     app.add_middleware(
@@ -56,7 +69,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     @app.get("/")
     def root():
         return {"message": "Capstone API is running"}
@@ -65,6 +78,9 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     def health():
         return {"status": "ok"}
 
+    @app.get("/system/system-metrics")
+    def system_metrics():
+        return get_system_metrics()
     # Always-available routers
     app.include_router(consent_router)
     app.include_router(projects_router)
@@ -128,7 +144,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
             "resume_import_error": getattr(app.state, "resume_import_error", None),
             "resume_mount_error": getattr(app.state, "resume_mount_error", None),
         }
-
+    
     return app
 
 

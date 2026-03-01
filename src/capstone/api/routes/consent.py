@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from capstone.activity_log import log_event
 
 router = APIRouter(tags=["consent"])
 
@@ -13,6 +14,17 @@ class ConsentIn(BaseModel):
 @router.post("/privacy-consent")
 def privacy_consent(payload: ConsentIn):
     _CONSENT_STATE["consent"] = payload.consent
+
+    if payload.consent:
+        log_event(
+            "INFO",
+            "Privacy consent granted"
+        )
+    else:
+        log_event(
+            "WARNING",
+            "Privacy consent revoked"
+        )
     return {"consent": payload.consent}
 
 
