@@ -1,29 +1,6 @@
 import os
 import traceback
-from fastapi import FastAPI
-
-from capstone.api.routes.consent import router as consent_router
-from capstone.api.routes.projects import router as projects_router
-from capstone.api.routes.skills import router as skills_router
-from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
-
-
-def _safe_import_job_match():
-    """Attempt to import job_match router (optional)."""
-    try:
-        from capstone.api.routes.job_match import router  # type: ignore
-        return router, None
-    except Exception:
-        return None, traceback.format_exc()
-
-
-def _safe_import_portfolio():
-    """Attempt to import portfolio router + configure."""
-    try:
-        from capstone.api.routes.portfolio import router, configure  # type: ignore
-        return router, configure, None
-    except Exception:
-        return None, None, traceback.format_exc()
+from typing import Optional
 
 
 def _safe_import_showcase():
@@ -35,11 +12,10 @@ def _safe_import_showcase():
         return None, None, traceback.format_exc()
 
 
-def _safe_import_resume():
-    """Attempt to import resume router + optional configure."""
+def _safe_import_resumes():
+    """Attempt to import new modular resumes router + configure."""
     try:
-        from capstone.api.routes.resume import router  # type: ignore
-        configure = getattr(__import__("capstone.api.routes.resume", fromlist=["configure"]), "configure", None)
+        from capstone.api.routes.resumes import router, configure  # type: ignore
         return router, configure, None
     except Exception:
         return None, None, traceback.format_exc()
@@ -47,7 +23,41 @@ def _safe_import_resume():
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Capstone API")
+
+    # State (some deps look here)
+    app.state.db_dir = db_dir
     app.state.auth_token = auth_token
+
+    # Middleware
+    app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # dev-friendly; adjust in prod
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Configure route modules (if they support it)
+    # Do this BEFORE including routers so dependency wiring is ready.
+    _configure_module(projects, db_dir, auth_token, app, "projects")
+    _configure_module(skills, db_dir, auth_token, app, "skills")
+    _configure_module(resume, db_dir, auth_token, app, "resume")
+    _configure_module(job_match, db_dir, auth_token, app, "job_match")
+    _configure_module(portfolio, db_dir, auth_token, app, "portfolio")
+    _configure_module(portfolio_showcase, db_dir, auth_token, app, "portfolio_showcase")
+    _configure_module(legacy_aliases, db_dir, auth_token, app, "legacy_aliases")
+    _configure_module(consent, db_dir, auth_token, app, "consent")
+
+    # Routers (include ONCE)
+    app.include_router(consent.router)
+    app.include_router(projects.router)
+    app.include_router(skills.router)
+    app.include_router(resume.router)
+    app.include_router(job_match.router)
+    app.include_router(portfolio.router)
+    app.include_router(portfolio_showcase.router)
+    app.include_router(legacy_aliases.router)
 
     @app.get("/")
     def root():
@@ -91,17 +101,16 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     else:
         app.state.showcase_import_error = showcase_err
 
-    # Resume routes (+ configure if present)
-    resume_router, configure_resume, resume_err = _safe_import_resume()
-    if resume_router is not None:
+    # Modular resume routes (/resumes/*)
+    resumes_router, configure_resumes, resumes_err = _safe_import_resumes()
+    if resumes_err is None and resumes_router is not None and configure_resumes is not None:
         try:
-            if configure_resume is not None:
-                configure_resume(db_dir, auth_token)
-            app.include_router(resume_router)
+            configure_resumes(db_dir, auth_token)
+            app.include_router(resumes_router)
         except Exception:
             app.state.resume_mount_error = traceback.format_exc()
     else:
-        app.state.resume_import_error = resume_err
+        app.state.resume_import_error = resumes_err
 
     # Legacy aliases (old endpoints like /portfolios/* and /users/*)
     app.include_router(legacy_aliases_router)
@@ -117,8 +126,8 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
             "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
             "showcase_import_error": getattr(app.state, "showcase_import_error", None),
             "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
-            "resume_import_error": getattr(app.state, "resume_import_error", None),
-            "resume_mount_error": getattr(app.state, "resume_mount_error", None),
+            "resumes_import_error": getattr(app.state, "resume_import_error", None),
+            "resumes_mount_error": getattr(app.state, "resume_mount_error", None),
         }
 
     return app

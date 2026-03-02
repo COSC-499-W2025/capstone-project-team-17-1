@@ -162,31 +162,31 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
 def get_portfolio_showcase_query(request: Request, projectId: str, user: Optional[str] = None):
     return get_portfolio_showcase(projectId, request, user=user)
 
-@router.get("/portfolio/{project_id}")
-def get_portfolio_showcase(project_id: str, request: Request, user: Optional[str] = None):
+@router.get("/portfolio/{id}")
+def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None):
     _check_auth(request)
     user_role = None
     if user:
         with _db_session(_require_db()) as c:
             row = c.execute(
                 "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
-                (project_id, user),
+                (id, user),
             ).fetchone()
         if row:
             user_role = "primary_contributor"
     with _db_session(_require_db()) as c:
         ensure_resume_schema(c)
-        item = get_resume_project_description(c, project_id, variant_name="portfolio_showcase")
+        item = get_resume_project_description(c, id, variant_name="portfolio_showcase")
         if item:
             payload = item.to_dict()
             if user_role:
                 payload["user_role"] = user_role
             return {"data": payload, "error": None}
-        snap = get_latest_snapshot(c, project_id)
+        snap = get_latest_snapshot(c, id)
     if not snap:
         raise HTTPException(status_code=404, detail="No snapshots found")
-    summary = build_resume_project_summary(project_id, snap)
-    payload = {"project_id": project_id, "summary": summary}
+    summary = build_resume_project_summary(id, snap)
+    payload = {"project_id": id, "summary": summary}
     if user_role:
         payload["user_role"] = user_role
     return {"data": payload, "error": None}
@@ -226,8 +226,8 @@ async def edit_portfolio_showcase_query(request: Request):
         raise HTTPException(status_code=400, detail="projectId and summary are required")
     return await edit_portfolio_showcase(project_id, request)
 
-@router.post("/portfolio/{project_id}/edit")
-async def edit_portfolio_showcase(project_id: str, request: Request):
+@router.post("/portfolio/{id}/edit")
+async def edit_portfolio_showcase(id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
     summary = (payload.get("summary") or "").strip()
@@ -237,7 +237,7 @@ async def edit_portfolio_showcase(project_id: str, request: Request):
         ensure_resume_schema(c)
         item = upsert_resume_project_description(
             c,
-            project_id=project_id,
+            project_id=id,
             summary=summary,
             variant_name="portfolio_showcase",
             metadata={"source": "custom"},

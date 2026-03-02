@@ -511,6 +511,8 @@ def build_pdf_with_latex(
             cwd=tmp,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if proc.returncode != 0 or not pdf_path.exists():
             stderr_tail = (proc.stderr or "").strip().splitlines()[-20:]

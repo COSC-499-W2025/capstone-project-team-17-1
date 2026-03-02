@@ -1,3 +1,5 @@
+# DEPRECATED: This router operates on the legacy resume_entries / resume_entry_links tables.
+# It has been removed from server.py. Use /resumes (routes/resumes.py) instead.
 from __future__ import annotations
 
 import base64
@@ -120,7 +122,7 @@ async def resume_insert(request: Request):
         raise HTTPException(status_code=400, detail="title is required")
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        entry_id = insert_resume_entry(
+        id = insert_resume_entry(
             c,
             section=section,
             title=title,
@@ -131,30 +133,30 @@ async def resume_insert(request: Request):
             status=payload.get("status"),
             metadata=payload.get("metadata"),
         )
-        entry = get_resume_entry(c, entry_id)
+        entry = get_resume_entry(c, id)
     return JSONResponse({"data": entry.to_dict(), "error": None}, status_code=200)
 
 
-@router.get("/resume/{entry_id}")
-def resume_get(entry_id: str, request: Request):
+@router.get("/resume/{id}")
+def resume_get(id: str, request: Request):
     _check_auth(request)
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        entry = get_resume_entry(c, entry_id)
+        entry = get_resume_entry(c, id)
     if not entry:
         raise HTTPException(status_code=404, detail="Resume entry not found")
     return {"data": entry.to_dict(), "error": None}
 
 
-@router.patch("/resume/{entry_id}")
-async def resume_update(entry_id: str, request: Request):
+@router.patch("/resume/{id}")
+async def resume_update(id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
         entry = update_resume_entry(
             c,
-            entry_id=entry_id,
+            entry_id=id,
             summary=payload.get("summary"),
             _summary_provided="summary" in payload,
             body=payload.get("body"),
@@ -169,24 +171,24 @@ async def resume_update(entry_id: str, request: Request):
     return {"data": entry.to_dict(), "error": None}
 
 
-@router.post("/resume/{entry_id}/edit")
-async def resume_update_alias(entry_id: str, request: Request):
+@router.post("/resume/{id}/edit")
+async def resume_update_alias(id: str, request: Request):
     """
     Alias for PATCH /resume/{id} to satisfy API consumers expecting POST.
     """
     # Delegate to the main update handler
-    return await resume_update(entry_id, request)
+    return await resume_update(id, request)
 
 
-@router.delete("/resume/{entry_id}")
-def resume_delete(entry_id: str, request: Request):
+@router.delete("/resume/{id}")
+def resume_delete(id: str, request: Request):
     _check_auth(request)
     with _db_session(_DB_DIR) as c:
         ensure_resume_schema(c)
-        ok = delete_resume_entry(c, entry_id)
+        ok = delete_resume_entry(c, id)
     if not ok:
         raise HTTPException(status_code=404, detail="Resume entry not found")
-    return {"data": {"deleted": True, "id": entry_id}, "error": None}
+    return {"data": {"deleted": True, "id": id}, "error": None}
 
 
 @router.post("/resume/generate")
