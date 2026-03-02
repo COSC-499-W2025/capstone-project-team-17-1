@@ -1,137 +1,205 @@
 # Capstone Analyzer (Python)
 
-Local, consent-aware archive analysis implemented entirely in Python – no Electron dependencies required. Use the `capstone` CLI to manage consent preferences and to extract metadata, collaboration insights, languages, frameworks, and timeline metrics from zipped projects.
+Capstone Analyzer is a local-first software analysis tool for processing project archives and generating portfolio/resume-oriented insights.  
+The system supports three workflows: CLI analysis, interactive menu usage, and FastAPI HTTP endpoints.
 
-## Quickstart
+## Project Description
+
+This project analyzes uploaded `.zip` projects (or imported repositories), extracts file/project metadata, identifies languages and skills, and stores snapshots for later portfolio/resume generation.
+
+Key capabilities:
+- Consent-aware analysis (local/external modes).
+- Project upload and snapshot storage.
+- Skill/language and contribution-oriented analysis.
+- Resume and portfolio API endpoints.
+- Local SQLite-based persistence.
+
+## Built With
+
+- Python 3.10+
+- FastAPI + Uvicorn
+- SQLite
+- pytest + unittest
+- Optional PDF stack: LaTeX (`xelatex` / `lualatex` / `pdflatex`)
+
+## Getting Started
+
+### Prerequisites
+
+- Python `>=3.10`
+- `pip`
+- (Optional) virtual environment tool (`venv` or Conda)
+
+### Installation
 
 ```bash
-# (Optional) create and activate a virtual environment before running commands
+# 1) Clone repository
+git clone https://github.com/COSC-499-W2025/capstone-project-team-17-1.git
+cd capstone-project-team-17-1
+
+# 2) Create & activate venv
 python -m venv .venv
 source .venv/bin/activate
 
-# Install the package in editable mode
+# 3) Install package
 pip install -e .
 
-# (Dev) Install API/test dependencies
+# 4) Install dev/API dependencies
 pip install -r requirements-dev.txt
-
-# Record consent for analysis
-capstone consent grant
-
-# Analyse an archive (results saved to analysis_output/ by default)
-capstone analyze /path/to/project.zip
-
-# Request external processing explicitly (default mode is local)
-capstone analyze /path/to/project.zip --analysis-mode external
-
-# Stream the summary JSON to the terminal
-capstone analyze /path/to/project.zip --summary-to-stdout
-
-# Inspect or reset stored preferences/consent
-capstone config show
-capstone config reset
-
-# Run the Python unit test suite (config, consent, CLI, metrics, etc.)
-python -m unittest discover -s tests -p "test_*.py" -v
-
-# Run pytest suite (recommended for API endpoint tests)
-python -m pytest
 ```
 
-Notes:
-- `requirements-dev.txt` includes API/test dependencies such as `fastapi`, `httpx`, `pytest`, `python-multipart` (required for file-upload endpoints using `UploadFile`/`File(...)`), and `uvicorn` (required to run the FastAPI server).
-- Prefer `python -m pytest` instead of `pytest` if you use multiple environments (e.g., Conda + `.venv`) to ensure tests run with the active Python interpreter.
+## Usage
 
-## Run API Server
+### Run CLI
 
 ```bash
-# Start FastAPI on port 8003
+# consent
+capstone consent local grant
+
+# analyze local zip
+capstone analyze /path/to/project.zip
+
+# optional: import and analyze repository
+capstone import-repo https://github.com/<org>/<repo>.git
+
+# optional: print summary JSON
+capstone analyze /path/to/project.zip --summary-to-stdout
+```
+
+### Run Interactive Menu
+
+```bash
+python main.py
+```
+
+Input shortcuts in interactive mode:
+- `b` = back
+- `m` = main menu
+- `Enter` = cancel current prompt (where supported)
+
+### Run API Backend
+
+```bash
 capstone api --host 127.0.0.1 --port 8003
 ```
 
-Verify the API is active:
+Base URL: `http://127.0.0.1:8003`
+
+API docs:
 - Swagger UI: `http://127.0.0.1:8003/docs`
-- Mounted route list + mount/import errors: `http://127.0.0.1:8003/__debug/routers`
+- OpenAPI JSON: `http://127.0.0.1:8003/openapi.json`
+- Route debug (mounted routers + import errors): `http://127.0.0.1:8003/__debug/routers`
 
-## Environment Requirements
+## API Route Map (Overview)
 
-- Python: `>=3.10` (project metadata requirement)
-- Recommended: use a dedicated virtual environment (`venv` or Conda) before installing dependencies
-- macOS/Linux:
-  - Both are supported for local CLI/API workflows
-  - PDF export additionally requires a system LaTeX engine (`xelatex`, `lualatex`, or `pdflatex`)
+### System
+- `GET /` - API status
+- `GET /health` - health check
 
-## Dependency Tiers
+### Consent
+- `POST /privacy-consent` - save privacy consent choice
+- `GET /privacy-consent` - get current privacy consent
 
-- Minimal runtime (CLI core):
-  - `pip install -e .`
-- API + test dependencies:
-  - `pip install -r requirements-dev.txt`
-  - Includes: `fastapi`, `httpx`, `pytest`, `python-multipart`, `uvicorn`
-- Optional dependencies:
-  - `openai` package + `OPENAI_API_KEY` for LLM-powered features
-  - LaTeX engine for PDF export
+### Projects
+- `POST /projects/upload` - upload `.zip` and create/update project snapshot
+- `GET /projects` - list uploaded projects
+- `GET /projects/{id}` - get project details
+- `DELETE /projects/{id}` - delete project
+- `GET /projects/{id}/uploads` - list all uploads for a project
+- `PATCH /projects/{id}` - update project overrides (role, evidence, resume/portfolio edits)
+- `GET /projects/{id}/overrides` - get project overrides
 
-## API Documentation
+### Skills
+- `GET /projects/{project_id}/skills` - detect skills for a specific project
+- `GET /skills` - aggregate skills across projects
 
-- Human-readable API route documentation: `docs/api.md`
-- Live OpenAPI docs when server is running: `http://127.0.0.1:8003/docs`
+### Resume
+- `GET /resume` - list/search resume entries
+- `POST /resume` - create resume entry
+- `GET /resume/{id}` - get resume entry
+- `PATCH /resume/{id}` - update resume entry
+- `DELETE /resume/{id}` - delete resume entry
+- `POST /resume/generate` - generate resume output (`json|markdown|pdf`)
+- `POST /resume/render-pdf` - render resume payload to PDF (base64 response)
+- `GET /resume-projects` - list/get project-specific resume wording
+- `POST /resume-projects` - upsert project-specific resume wording
+- `POST /resume-projects/generate` - auto-generate resume wording from snapshots
 
-## PDF Export Dependencies
+### Portfolio / Showcase
+- `GET /portfolio/{id}` - get portfolio/showcase summary for project
+- `POST /portfolio/generate` - generate portfolio summaries
+- `POST /portfolio/{id}/edit` - edit project portfolio summary
+- `GET /showcase/...` - showcase-prefixed aliases
+- `GET /portfolios/...` and `GET /users...` - legacy compatibility aliases
 
-PDF export requires a LaTeX engine (`xelatex`, `lualatex`, or `pdflatex`).
-On macOS you can install a TeX distribution with:
+Note:
+- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
+
+## Example Requests
+
+Upload a project zip:
+
+```bash
+curl -X POST "http://127.0.0.1:8003/projects/upload" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/project.zip;type=application/zip"
+```
+
+List projects:
+
+```bash
+curl "http://127.0.0.1:8003/projects"
+```
+
+Get project skills:
+
+```bash
+curl "http://127.0.0.1:8003/projects/<project_id>/skills"
+```
+
+Generate resume JSON:
+
+```bash
+curl -X POST "http://127.0.0.1:8003/resume/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"format":"json","limit":20}'
+```
+
+## Testing
+
+Backend/API:
+
+```bash
+python -m pytest
+```
+
+Alternative unittest run:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Testing notes:
+- API endpoints are tested with FastAPI TestClient through HTTP-style requests.
+- Prefer `python -m pytest` to avoid interpreter/environment mismatch.
+
+## Additional Notes
+
+- `requirements-dev.txt` includes API/test deps: `fastapi`, `httpx`, `pytest`, `python-multipart`, `uvicorn`.
+- PDF export requires a LaTeX engine. On macOS you can use:
 
 ```bash
 ./scripts/setup.sh
 ```
 
-Key features:
-- Encrypted local configuration that stores consent decisions, analysis preferences, and last-opened folders.
-- Consent workflow that blocks analysis until users explicitly grant permission.
-- JSONL metadata with per-file language classification and activity type (code, documentation, asset, other).
-- Collaboration labelling (individual vs collaborative) driven by Git log evidence found within the archive.
-- Automatic fallback to local analysis whenever external processing is unavailable or not approved.
-- Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
-- Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
-- Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
-- Git collaboration analysis now parses `git log --numstat` output, filters bots/shared accounts, weights commits/reviews/line changes, and stores JSON snapshots in a local SQLite db for future dashboards.
-
 ## Test Data ZIPs
+
 The repo includes sample ZIPs for demos and validation under `test_data/`:
-
-- Same project, two snapshots (earlier/later):
-  - `test_data/test-data-code-collab-earlier.zip`
-  - `test_data/test-data-code-collab-later.zip`
-  - Structure inside each ZIP:
-    - `code_collab_proj/app/`
-    - `code_collab_proj/test/`
-    - `code_collab_proj/doc/`
-    - (later snapshot adds `code_collab_proj/infra/` and new/modified files)
-
-- Multi-project bundle (code + non-code):
-  - `test_data/test-data-multi-projects.zip`
-  - Structure inside the ZIP:
-    - `code_indiv_proj/`
-    - `code_collab_proj/`
-    - `text_indiv_proj/`
-    - `image_indiv_proj/`
-
-  - Source bundle used to build/update this ZIP:
-    - `test_data/multi_project_bundle/`
-    - (edit files there, then re-zip to regenerate `test-data-multi-projects.zip`)
-
-## `main.py` Interactive Shortcuts
-
-When running `python main.py`, the terminal menu supports these shortcuts:
-
-- `b` = back (go to previous menu)
-- `m` = return to main menu
-- `Enter` = cancel current prompt (where supported)
-
-Notes:
-- Snapshot ZIP uploads now auto-detect and reuse the same `project_id` (no manual project ID entry required).
-- Project details views show `Snapshot Diff (earliest -> latest)` when a project has multiple uploads.
+- `test_data/test-data-code-collab-earlier.zip`
+- `test_data/test-data-code-collab-later.zip`
+- `test_data/test-data-multi-projects.zip`
+- Source bundle for regeneration: `test_data/multi_project_bundle/`
 
 # Work Breakdown Structure
 [Link to WBS](docs/Plan/wbs.md)
