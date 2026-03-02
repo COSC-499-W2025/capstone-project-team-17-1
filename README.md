@@ -55,6 +55,9 @@ Requirements:
 - Python 3.10+
 - pip
 - git
+- tkinter (required by the file picker in CLI interactive flows)
+  - Ubuntu/Debian: `sudo apt-get install python3-tk`
+  - macOS/Windows: usually included with standard Python installers
 
 ## Usage
 
@@ -83,6 +86,54 @@ capstone analyze /path/to/project.zip --summary-to-stdout
 
 ```bash
 python main.py
+```
+
+Example startup flow:
+
+```text
+python main.py
+============================================================
+            Data and Artifact Mining Application
+               Portfolio & Resume Generator
+============================================================
+
+
+Welcome! Thanks for being here. Let's get started :)
+
+
+NOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)
+Grant consent for this session (y/n): y
+Save consent decision for future sessions (y/n): y
+Saving consent for future sessions.
+
+
+Proceeding with analysis...
+
+Input shortcuts: b = back, m = main menu, Enter = cancel.
+
+========================================
+Main Menu
+========================================
+1.  Analyze new project archive (ZIP)
+2.  Import from GitHub URL
+3.  View all projects
+4.  View project details
+5.  Generate portfolio summary
+6.  Resume
+7.  View chronological project timeline
+8.  View chronological skills timeline
+9.  Delete project insights
+10. Manage consent (LLM/external services)
+11. Contributor rankings (Quick Access)
+12. AI-based project analysis (external LLM)
+13. Manage user profile
+14. Project Representation Settings
+15. Analyze User Role in Project
+16. Set Project Success Evidence
+17. Set Project Thumbnail
+18. Exit
+
+Please select an option (1-18):
 ```
 
 Input shortcuts in interactive mode:
