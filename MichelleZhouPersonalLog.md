@@ -6,6 +6,7 @@
 - [T2 Week 2 Personal Log](#T2-week-2-personal-log)
 - [T2 Week 3 Personal Log](#T2-week-3-personal-log)
 - [T2 Week 5 Personal Log](#T2-week-5-personal-log)
+- [T2 Week 8 Personal Log](#T2-week-8-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -311,3 +312,29 @@ I reviewed and provided feedback on teammate pull requests related to backend st
 
 ### Additionally:
 Next week, I plan to focus on integrating portfolio and resume generation more tightly by implementing resume ready textual outputs derived from analyzed projects. The goal is to ensure generated content is professionally formatted, reusable across interfaces, and integrates cleanly with the existing snapshot, storage, and resume pipelines. I also plan to learn and experiment using Postman with the team to properly test api calls and endpoints.
+
+## T2 Week 8 Personal Log
+
+- (Feb 09 - Mar 01, 2025)<br />
+
+<img width="971" height="571" alt="image" src="https://github.com/user-attachments/assets/9d0097a5-ca05-4f15-84b3-9db7e2e5277a" />
+
+### Weekly Recap:
+The past two weeks built on previous expansion of FastAPI endpoints, specifically stablizing ranking logic, strengthening endpoint reliability, and finalizing portfolio showcase endpoints. Portfolio, job matching, and frontend/backend integration are now functional and stable. This week marks the completion of Milestone #2.
+
+Coding tasks<br />
+I added and finalized the /job-matching endpoints ([PR #232](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/232)), ensuring it properly retrieves project snapshots, build a job profile, and compute dynamic weights to return deterministic project ranking results based on the imported job description. The logic was improved to handle different internal skill formats, and assumptions from attribute errors during matching were fixed and removed. A major improvement this week was fixing the overall weight calculation logic ([PR #230](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/230)). Previously the weights were inconsistently applied and resulted in unstable scoring behaviour. This refractor now dynamically distributes weights between required and preferred skills, and reserves consistent portions for keyword overlap and recency. Ranking is now more realistic and mathematically stable. I also worked with Raunak to expand and stablize the portfolio showcase endpoints ([PR #224](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/224)). Analyzed project data and portfolio summaries can now be reliably retrieved for future frontend rendering.
+
+Testing or Debugging Tasks<br />
+This week involved significant debugging and stabilization work. Issues included database misconfiguration during endpoint tests, integration mismatch between snapshot structure and skill extraction logic, inconsistent weight dictionary structure, and internal server errors from missing fields. These were resolved by refractoring weight merging logic to guarantee consistent keys, remove outdated references to payload-supplied weights, properly override db during tests, and aligning snapshot skill structure with ranking logic.
+
+Both mocked endpoint tests and integration tests using isolated SQLite db were added to validate real system behaviour. All endpoints now return stable and predictable responses.
+
+Reviewing or collaboration tasks<br />
+I reviewed and provided feedback on teammate pull requests related to backend storage improvements, including a content addressable file storage and deduplication layer. I also tested related changes locally to ensure compatibility with existing analysis and retrieval workflows. In parallel, I collaborated with teammates by aligning API design decisions with the broader project architecture and ensuring the new FastAPI endpoints fit cleanly alongside the existing APIs.
+
+I reviewed and provided feedback on teammate prs related to a deep ai analysis, which allows users to select specific files and request a targeted analysis. I evaluated the architectural flow to ensure it respects our external permission design and cleanly integrates with our snapshot system. I also provided feedback related to our github commit metadata capture feature, focused on improving consistency and resume generation reliability. I verifed that these changes maintain metric consistency and improve downstream behaviour in resume generation.
+
+### Additionally:<br />
+Moving forward my focus will shift towards refractoring complex or confusing backend logic and improving code clarity. I will also be supporting frontend development and improving data output presentation (final exports). The goal is to polish the system and making sure everything works together seamlessly for our target audience.
+

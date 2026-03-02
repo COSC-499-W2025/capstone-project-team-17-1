@@ -487,7 +487,7 @@ Overall, the team has strengthened the system foundation by stabilizing core pip
 
 
 ## WEEK 5 TEAM LOG (Term2)
-(Jan26 - Feb01, 2026)
+(Jan 26-Feb 08, 2026)
 
 ### Recap of Milestone Goal - Week 4+5
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
@@ -531,7 +531,7 @@ Finally, foundational storage improvements were implemented by introducing dedup
 Overall, this week strengthened the system’s usability, test stability, and backend foundations while pushing Milestone 2 features—timelines, insights, portfolio/résumé workflows, and APIs—closer to a complete and review-ready state.
 
 ## WEEK 6 TEAM LOG (Term2)
-(Jan09 - Jan15, 2026)
+(Feb 09-15, 2026)
 
 ### Recap of Milestone Goal - Week 6
 
@@ -568,7 +568,7 @@ Overall, this week’s work strengthened the structural integrity of the portfol
 
 
 ## WEEK 7 TEAM LOG (Term2)
-(Jan16 - Jan22, 2026)
+(Feb 16-22, 2026)
 
 ### Recap of Milestone Goal - Week 7
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
@@ -595,3 +595,38 @@ System stability under pytest was significantly improved. All failing CLI and me
 AI-based insight functionality continued to mature with the deep AI analysis feature. Users can now select specific files for targeted review, and the system constructs structured prompts using snapshot context. Focused unit tests were added to ensure bundling, filtering, and redaction logic remain stable. [Feature/deep ai analysis (#216)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/216)
 
 Overall, this week’s progress improved system robustness, reduced regression risk through stronger test coverage, and aligned core data flows across storage, API, and CLI layers as the project moves closer to full milestone completion.
+
+## WEEK 8 TEAM LOG (Term2)
+(Feb 23 - Mar 01, 2026)
+
+### Recap of Milestone Goal - Week 8
+The goal of Milestone 3 is to develop a front-end dashboard built on our M2 API that supports a human-in-the-loop workflow. Users will be able to review and customize content before publishing. By the end of the milestone, the system will generate a one-page résumé and a web portfolio, with both private customization and public view-only modes.
+
+### Username and Student Name for Team 17
+| Student Name | Github Username |
+| ------------ | --------------- |
+| Yuxuan Sun | ErenSun408 |
+| Parsa Aminian | Pmoney1383 |
+| Raunak Khanna | ronziekhanna |
+| Shuyu Yan | yanshuyu280042 |
+| Michelle Zhou | mltzhou |
+
+### Burnup chart - Week  8
+<img width="1018" height="581" alt="Screenshot 2026-03-01 at 6 36 28 PM" src="https://github.com/user-attachments/assets/31ca1bbc-c6a3-4640-8c52-8fc1ada418f5" />
+
+### Completed Tasks - Week 8
+<img width="1217" height="521" alt="Screenshot 2026-03-01 at 6 35 42 PM" src="https://github.com/user-attachments/assets/afaca91c-09a1-49f0-9fa8-938888a6ed87" />
+
+### In Progress Tasks - Week 8
+<img width="1310" height="312" alt="Screenshot 2026-03-01 at 6 38 14 PM" src="https://github.com/user-attachments/assets/0a9414c6-0966-421e-b76d-4abafbd263dc" />
+
+### Test Report - Week 8
+This week, the team finalized Milestone 2 while beginning early development for Milestone 3. The focus was on strengthening backend modularity, improving API reliability, and preparing the system for front-end integration.
+
+API stability and maintainability were improved by refactoring optional router mounting logic and formally declaring runtime and development dependencies to ensure reproducible setup across environments. Consent gating behavior was corrected to properly exit on denial and satisfy CLI/menu tests, reducing inconsistencies between interactive flows and automated testing. [Safer optional router mounting and declaring API/dev dependencies (#240)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/240) [Fix consent gating to exit on denied and satisfy menu/CLI tests (#241)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/241)
+
+Milestone 2 feature integration was completed by connecting the ZIP analysis workflow directly to resume generation, enabling extracted project data to flow seamlessly into the résumé pipeline. Supporting improvements included enhancements to the Job Match API endpoint, corrected weight calculation logic, and automatic project ID detection for incremental uploads to improve data consistency across snapshots. [Integrate the ZIP analysis workflow into resume generation (#239)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/239) [Job Match API Endpoint (#232)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/232) [Fixed weight calculation (#230)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/230) [Auto-detect project ID (#227)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/227)
+
+In parallel, initial Milestone 3 development began with frontend initialization and mock dashboard design, establishing the structural foundation for an interactive human-in-the-loop interface that will generate a one-page résumé and web portfolio. [Feature/frontend initialization (#234)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/234) [Feature/mocket frontend design (#236)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/236)
+
+Overall, this week marked the completion of Milestone 2’s core architecture and the transition toward a full-stack system with a user-facing dashboard in Milestone 3.

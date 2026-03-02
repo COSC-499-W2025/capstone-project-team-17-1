@@ -369,3 +369,24 @@ Beyond feature completion, I discussed implementation details and integration de
 
 ### Completed Tasks Week 6
 - complete [Add M2 test data, API coverage, and duplicate upload feedback (#212)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/212)
+
+
+ ## Term2 week8 Personal LOG (Feb23-Mar1, 2026)
+### 1. Type of Tasks Worked On
+<img width="1048" height="547" alt="Screenshot 2026-02-27 at 10 28 41 PM" src="https://github.com/user-attachments/assets/93c7f32b-4def-4e7b-93d6-bf44a50766e5" />
+
+
+### 2. Weekly Goals Recap
+- complete [Auto-detect project ID (#227)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/227)
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the auto-detect project ID enhancement for snapshot ZIP uploads (#227). [Auto-detect project ID (#227)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/227) This update removes the need for users to manually enter a project ID when uploading snapshot archives. Instead, the system now automatically extracts the embedded project ID and displays a diff of detected changes before applying the update. This significantly reduces workflow friction and minimizes the risk of mismatched or invalid IDs.
+
+To ensure consistency and clarity, I updated both `README.md` and `api.md` to reflect the new snapshot behavior and usage expectations. The snapshot update flow is now more transparent and aligned with the goal of making incremental project updates intuitive and reliable.
+
+From a reliability standpoint, I added an automated test covering project ID auto-detection and diff display behavior. I also manually tested the full snapshot upload and update process, verifying correct ID extraction, diff visualization, and successful application of updates. All existing tests pass, ensuring no regressions were introduced.
+
+Beyond implementation, I discussed design and edge-case handling details with team members to ensure alignment with our milestone expectations. I also reviewed teammates’ pull requests, provided technical feedback, and helped resolve issues to maintain overall system stability and integration consistency.
+### Completed Tasks Week 6
+- complete [Auto-detect project ID (#227)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/227)
