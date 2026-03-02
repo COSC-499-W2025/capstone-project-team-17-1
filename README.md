@@ -19,18 +19,49 @@ Alternatively, for greater convenience, you can directly provide the GitHub repo
 git clone https://github.com/COSC-499-W2025/capstone-project-team-17-1.git
 cd capstone-project-team-17-1
 
-# 2) Create & activate venv
+# 2) Create virtual environment
 python -m venv .venv
-source .venv/bin/activate
+```
 
+Activate virtual environment:
+
+```bash
+# macOS/Linux
+source .venv/bin/activate
+```
+
+```powershell
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+```
+
+```cmd
+REM Windows (Command Prompt)
+.venv\Scripts\activate.bat
+```
+
+```bash
 # 3) Install package
 pip install -e .
 
 # 4) Install dev/API dependencies
 pip install -r requirements-dev.txt
+
+# 5) Quick verification
+capstone --help
 ```
 
+Requirements:
+- Python 3.10+
+- pip
+- git
+
 ## Usage
+
+Run mode guidance:
+- `CLI (capstone ...)` - best for scripted/local automation and reproducible analysis runs.
+- `Interactive Menu (python main.py)` - best for guided demos and manual workflows.
+- `FastAPI Backend (capstone api ...)` - best for frontend integration, API clients, and HTTP-based testing.
 
 ### Run CLI
 
@@ -118,6 +149,39 @@ API docs:
 Note:
 - Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
 
+## API Route Map (Table)
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/` | API status | Implemented |
+| GET | `/health` | Health check | Implemented |
+| POST | `/privacy-consent` | Save privacy consent | Implemented |
+| GET | `/privacy-consent` | Get privacy consent | Implemented |
+| POST | `/projects/upload` | Upload zip and store project snapshot | Implemented |
+| GET | `/projects` | List projects | Implemented |
+| GET | `/projects/{id}` | Get project details | Implemented |
+| DELETE | `/projects/{id}` | Delete project | Implemented |
+| GET | `/projects/{id}/uploads` | List project uploads | Implemented |
+| PATCH | `/projects/{id}` | Update project overrides | Implemented |
+| GET | `/projects/{id}/overrides` | Get project overrides | Implemented |
+| GET | `/projects/{project_id}/skills` | Get detected skills for project | Implemented |
+| GET | `/skills` | Aggregate skills across projects | Implemented |
+| GET | `/resume` | List/search resume entries | Implemented |
+| POST | `/resume` | Create resume entry | Implemented |
+| GET | `/resume/{id}` | Get resume entry | Implemented |
+| PATCH | `/resume/{id}` | Update resume entry | Implemented |
+| DELETE | `/resume/{id}` | Delete resume entry | Implemented |
+| POST | `/resume/generate` | Generate resume (`json|markdown|pdf`) | Implemented |
+| POST | `/resume/render-pdf` | Render resume payload as PDF | Implemented |
+| GET | `/resume-projects` | List/get resume wording by project | Implemented |
+| POST | `/resume-projects` | Upsert project resume wording | Implemented |
+| POST | `/resume-projects/generate` | Auto-generate resume wording | Implemented |
+| GET | `/portfolio/{id}` | Get portfolio/showcase summary | Implemented |
+| POST | `/portfolio/generate` | Generate portfolio summaries | Implemented |
+| POST | `/portfolio/{id}/edit` | Edit portfolio summary | Implemented |
+| GET | `/showcase/*` | Showcase-prefixed aliases | Implemented |
+| GET | `/portfolios/*`, `/users/*` | Legacy compatibility aliases | Implemented |
+
 ## Example Requests
 
 Upload a project zip:
@@ -166,6 +230,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 Testing notes:
 - API endpoints are tested with FastAPI TestClient through HTTP-style requests.
 - Prefer `python -m pytest` to avoid interpreter/environment mismatch.
+- Coverage focuses on API route behavior (status codes/payloads), core analysis/storage logic, and CLI-related integration paths.
 
 ## Additional Notes
 
