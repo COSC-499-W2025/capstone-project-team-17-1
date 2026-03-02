@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
 import tempfile
 import shutil
@@ -10,6 +10,7 @@ import hashlib
 from collections import Counter
 
 from capstone import file_store, storage
+from capstone.resume_retrieval import build_resume_project_summary
 class ProjectEdit(BaseModel):
     key_role: Optional[str] = None
     evidence: Optional[str] = None
@@ -95,6 +96,80 @@ def _inspect_zip_manifest(zip_path: Path) -> dict:
         "skills": dict(skills),
         "signature": signature,
     }
+
+
+def _is_noreply_email(email: str) -> bool:
+    lowered = email.strip().lower()
+    return (
+        lowered == "noreply@github.com"
+        or lowered.endswith("@users.noreply.github.com")
+        or lowered.endswith("@noreply.github.com")
+    )
+
+
+def _extract_contributors_from_zip(conn, file_id: str) -> list[tuple[str, str | None]]:
+    """Extract contributor (name, email) pairs from git log files in a stored zip.
+
+    Parses lines of the form ``commit:HASH|%an|%ae|%ct|%s``
+    (written by ``_write_git_log`` in cli.py).
+
+    Returns deduplicated ``(author_name, email_or_None)`` tuples.  Passing both
+    values to ``upsert_user`` lets the storage layer match contributors across
+    the GitHub-URL flow (GitHub login + email) and the ZIP flow (git user.name +
+    git user.email), reconciling them via shared email when available.
+    """
+    raw_entries: list[tuple[str, str | None]] = []
+    try:
+        with file_store.open_file(conn, file_id) as fh:
+            with zipfile.ZipFile(fh) as zf:
+                for info in zf.infolist():
+                    path_lower = info.filename.lower()
+                    is_git_log = (
+                        ".git/logs/git_log" in path_lower
+                        or path_lower.endswith("git_log")
+                        or path_lower.endswith("git_log.txt")
+                    )
+                    if not is_git_log:
+                        continue
+                    try:
+                        raw = zf.read(info)
+                        text = raw.decode("utf-8", errors="ignore")
+                        for line in text.splitlines():
+                            if not line.startswith("commit:"):
+                                continue
+                            # format: commit:HASH|%an|%ae|%ct|%s
+                            parts = line[len("commit:"):].split("|")
+                            if len(parts) < 2:
+                                continue
+                            author = parts[1].strip()
+                            if not author or author.lower().endswith("[bot]"):
+                                continue
+                            email: str | None = None
+                            if len(parts) >= 3:
+                                raw_email = parts[2].strip()
+                                if raw_email and not _is_noreply_email(raw_email):
+                                    email = raw_email
+                            raw_entries.append((author, email))
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+    # Deduplicate: email takes priority (keeps first occurrence per email, then per name)
+    seen_emails: set[str] = set()
+    seen_names: set[str] = set()
+    result: list[tuple[str, str | None]] = []
+    for name, email in raw_entries:
+        if email:
+            if email in seen_emails:
+                continue
+            seen_emails.add(email)
+        name_key = name.lower()
+        if name_key in seen_names:
+            continue
+        seen_names.add(name_key)
+        result.append((name, email))
+    return result
 
 
 def _inspect_stored_zip_manifest(conn, file_id: str) -> dict:
@@ -216,7 +291,18 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         primary_contributor=None,
         snapshot=snapshot
     )
-    
+
+    # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
+    # Pass email alongside the git author name so upsert_user can reconcile with the same
+    # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
+    try:
+        contributors = _extract_contributors_from_zip(conn, stored["file_id"])
+        for cname, cemail in contributors:
+            uid = storage.upsert_user(conn, cname, email=cemail)
+            storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+    except Exception:
+        pass  # non-fatal; contributors will be populated on full analysis
+
     message = "Upload stored successfully."
     if stored.get("dedup"):
         message = "Duplicate upload detected; existing file reused."
@@ -527,3 +613,138 @@ def get_project_overrides(id: str):
     if not data:
         raise HTTPException(status_code=404, detail="No overrides found")
     return {"data": data, "error": None}
+
+
+@router.post("/{project_id}/generate-resume")
+async def generate_project_resume(project_id: str, request: Request):
+    """Generate a modular resume (resumes/resume_sections/resume_items) from a zip project.
+
+    Mirrors the GitHub import resume flow:
+    1. Resolves the contributor/user for this project.
+    2. Extracts skills and builds a project summary from the stored snapshot.
+    3. Calls upsert_default_resume_modules to persist to the new resume tables.
+
+    Optional JSON body:
+      { "username": "<github_username>" }   -- pick a specific contributor
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    requested_username: str | None = (body.get("username") or "").strip() or None
+
+    conn = storage.open_db()
+
+    # 1. Verify project exists and get latest snapshot
+    snap = storage.fetch_latest_snapshot(conn, project_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Project not found or not yet analyzed")
+
+    # 2. Resolve the contributor to use as the resume owner
+    username = requested_username
+    if not username:
+        # Prefer primary_contributor from snapshot collaboration data
+        collab = snap.get("collaboration") or {}
+        username = (
+            collab.get("primary_contributor")
+            or snap.get("primary_contributor")
+        )
+    if not username:
+        # Fall back to any contributor linked to this project
+        linked = conn.execute(
+            """
+            SELECT u.username
+            FROM user_projects up
+            JOIN users u ON u.id = up.user_id
+            WHERE up.project_id = ?
+            ORDER BY up.id
+            LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+        if linked:
+            username = linked[0]
+    if not username:
+        username = project_id  # last-resort fallback
+
+    # 3. Upsert user and ensure project link
+    user_id = storage.upsert_user(conn, username)
+    storage.link_user_to_project(conn, user_id, project_id, contributor_name=username)
+
+    # 4. Extract skills from snapshot (languages + frameworks + skills list)
+    skill_names: list[str] = []
+    seen_skills: set[str] = set()
+
+    def _add_skill(name: str) -> None:
+        key = name.strip().lower()
+        if key and key not in seen_skills:
+            seen_skills.add(key)
+            skill_names.append(name.strip())
+
+    langs = snap.get("languages") or {}
+    if isinstance(langs, dict):
+        for lang in langs:
+            _add_skill(lang)
+
+    frameworks = snap.get("frameworks") or []
+    if isinstance(frameworks, list):
+        for fw in frameworks:
+            if fw:
+                _add_skill(str(fw))
+
+    raw_skills = snap.get("skills") or []
+    if isinstance(raw_skills, list):
+        for item in raw_skills:
+            if isinstance(item, dict):
+                name = item.get("skill") or item.get("name") or ""
+                if name:
+                    _add_skill(str(name))
+            elif item:
+                _add_skill(str(item))
+    elif isinstance(raw_skills, dict):
+        for name in raw_skills:
+            _add_skill(name)
+
+    # 5. Build project summary text from snapshot
+    project_summary = build_resume_project_summary(project_id, snap)
+    project_title = (
+        snap.get("project_name")
+        or snap.get("root_name")
+        or project_id
+    )
+
+    project_items = [{"title": project_title, "content": project_summary}]
+
+    # 6. Build header from user profile
+    user_profile = storage.get_user_profile(conn, user_id) or {}
+    city = (user_profile.get("city") or "").strip()
+    state = (user_profile.get("state_region") or "").strip()
+    location = ", ".join(part for part in [city, state] if part)
+    header = {
+        "full_name": (user_profile.get("full_name") or username).strip(),
+        "email": (user_profile.get("email") or "").strip(),
+        "phone": (user_profile.get("phone_number") or "").strip(),
+        "location": location,
+        "github_url": (user_profile.get("github_url") or "").strip(),
+        "portfolio_url": (user_profile.get("portfolio_url") or "").strip(),
+    }
+
+    # 7. Persist using the modular resume tables (same as GitHub import flow)
+    resume_id = storage.upsert_default_resume_modules(
+        conn,
+        user_id=user_id,
+        header=header,
+        core_skills=skill_names,
+        projects=project_items,
+        create_new=True,
+    )
+
+    return {
+        "data": {
+            "resume_id": resume_id,
+            "user_id": user_id,
+            "username": username,
+            "project_id": project_id,
+        },
+        "error": None,
+    }

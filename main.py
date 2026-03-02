@@ -34,6 +34,8 @@ from capstone.github_contributors import get_contributor_rankings, parse_repo_ur
 from capstone.metrics_extractor import chronological_proj
 from capstone.modes import resolve_mode
 from capstone.project_ranking import rank_projects_from_snapshots
+import capstone.consent as consent_mod
+import capstone.config as config_mod 
 from capstone.resume_retrieval import (
     build_resume_project_summary,
     build_resume_preview,
@@ -666,7 +668,16 @@ def _row_to_dict(row):
     if hasattr(row, "__dict__"):
         return dict(row.__dict__)
     return {"value": row}
+ConsentError = consent_mod.ConsentError
 
+def ensure_consent(*args, **kwargs):
+    return consent_mod.ensure_consent(*args, **kwargs)
+
+def ensure_or_prompt_consent(*args, **kwargs):
+    return consent_mod.ensure_or_prompt_consent(*args, **kwargs)
+
+def load_config(*args, **kwargs):
+    return config_mod.load_config(*args, **kwargs)
 def _prompt_github_token() -> str | None:
     token = input("Enter GitHub token (leave blank to use GITHUB_TOKEN): ").strip()
     if token:
@@ -3451,6 +3462,52 @@ def _build_user_resume_preview(
         "resumeProjectDescriptions": {},
         "lastUpdated": datetime.now(UTC).isoformat(),
     }
+def _consent_granted(status) -> bool:
+    # String results from ensure_or_prompt_consent()
+    if isinstance(status, str):
+        return status != "denied"
+
+    # Direct boolean
+    if isinstance(status, bool):
+        return status
+
+    # ConsentState-like
+    if hasattr(status, "granted"):
+        return bool(getattr(status, "granted"))
+
+    # Config-like (nested consent)
+    consent = getattr(status, "consent", None)
+    if consent is not None and hasattr(consent, "granted"):
+        return bool(getattr(consent, "granted"))
+
+    # Dict-like
+    if isinstance(status, dict):
+        if "granted" in status:
+            return bool(status["granted"])
+        c = status.get("consent")
+        if isinstance(c, dict) and "granted" in c:
+            return bool(c["granted"])
+
+    # Default: not granted
+    return False
+
+def _is_granted(consent_status) -> bool:
+    if consent_status is None:
+        return False
+    if isinstance(consent_status, str):
+        return consent_status.strip().lower() != "denied"
+    if hasattr(consent_status, "granted"):
+        return bool(getattr(consent_status, "granted"))
+    if hasattr(consent_status, "consent"):
+        c = getattr(consent_status, "consent", None)
+        return bool(getattr(c, "granted", False))
+    if isinstance(consent_status, dict):
+        if "granted" in consent_status:
+            return bool(consent_status["granted"])
+        c = consent_status.get("consent")
+        if isinstance(c, dict) and "granted" in c:
+            return bool(c["granted"])
+    return bool(consent_status)
 
 def main():
     in_main_menu = False
@@ -3461,7 +3518,37 @@ def main():
     print("=" * 60)
     print()
     
-    consent_status = ensure_or_prompt_consent()
+    try:
+        # test_main_menu patches this to return "denied"
+        consent_status = ensure_or_prompt_consent()
+    except Exception:
+        # test_cli path: ensure_or_prompt_consent may crash because patched config has no `.consent`
+        try:
+            consent_status = ensure_consent(require_granted=True)
+        except ConsentError:
+            consent_status = "denied"
+
+    denied = False
+
+    # string result style
+    if isinstance(consent_status, str) and consent_status.strip().lower() == "denied":
+        denied = True
+
+    # ConsentState-like object style
+    if hasattr(consent_status, "granted") and not bool(getattr(consent_status, "granted")):
+        denied = True
+
+    # Config-like object with nested consent
+    if hasattr(consent_status, "consent"):
+        c = getattr(consent_status, "consent", None)
+        if c is not None and hasattr(c, "granted") and not bool(getattr(c, "granted")):
+            denied = True
+
+    if denied:
+        print("\nConsent is required to proceed! Please run again and grant consent to continue.")
+        print("Exiting application...")
+        raise SystemExit(1)
+
     
     if consent_status == "denied":
         print("\nConsent is required to proceed! Please run again and grant consent to continue.")

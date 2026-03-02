@@ -3,34 +3,16 @@
 Capstone Analyzer is a local-first software analysis tool for processing project archives and generating portfolio/resume-oriented insights.  
 The system supports three workflows: CLI analysis, interactive menu usage, and FastAPI HTTP endpoints.
 
-## Project Description
+## Tips
+For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
+```
+git log --pretty=format:"commit:%H|%an|%ae|%ct|%s" --numstat > git_log.txt
+```
+This generates the required commit metadata file for parsing.
 
-This project analyzes uploaded `.zip` projects (or imported repositories), extracts file/project metadata, identifies languages and skills, and stores snapshots for later portfolio/resume generation.
+Alternatively, for greater convenience, you can directly provide the GitHub repository URL along with an API token to perform repository-based analysis via the GitHub API.
 
-Key capabilities:
-- Consent-aware analysis (local/external modes).
-- Project upload and snapshot storage.
-- Skill/language and contribution-oriented analysis.
-- Resume and portfolio API endpoints.
-- Local SQLite-based persistence.
-
-## Built With
-
-- Python 3.10+
-- FastAPI + Uvicorn
-- SQLite
-- pytest + unittest
-- Optional PDF stack: LaTeX (`xelatex` / `lualatex` / `pdflatex`)
-
-## Getting Started
-
-### Prerequisites
-
-- Python `>=3.10`
-- `pip`
-- (Optional) virtual environment tool (`venv` or Conda)
-
-### Installation
+## Quickstart
 
 ```bash
 # 1) Clone repository
@@ -80,7 +62,8 @@ Input shortcuts in interactive mode:
 ### Run API Backend
 
 ```bash
-capstone api --host 127.0.0.1 --port 8003
+# Start FastAPI on port 8003
+capstone api --host 127.0.0.1 --port 8003 --db-dir data
 ```
 
 Base URL: `http://127.0.0.1:8003`
@@ -389,7 +372,7 @@ The system must be able to ... :
 
 ## 17.0 Top Project Summaries
   - 17.1 Summary template
-  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark)
+  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark
   - 17.3 Auto-Writer (offline first; optional LLM use)
   - 17.4 Hallucination guardrails (quote facts, add refs, confidence flags)
   - 17.5 Exporters (Markdown, PDF one-pager, README snippet)
@@ -414,46 +397,55 @@ The system must be able to ... :
   - 20.3 Time Attribution (first seen, last active, active spans)
   - 20.4 Aggregation (per year/quarter, intensity score)
   - 20.5 Exports (skill timeline table, “top skills by year” chart data)
-# Milestone #2
-21. Allow incremental information by adding another zipped folder of files for the same portfolio or résumé that incorporates additional information at a later point in time
-22. Recognize duplicate files and maintains only one in the system
-23. Allow users to choose which information is represented (e.g., re-ranking of projects, corrections to chronology, attributes for project comparison, skills to highlight, projects selected for showcase)
-24. Incorporate a key role of the user in a given project
-25. Incorporate evidence of success (e.g., metrics, feedback, evaluation) for a given project
-26. Allow user to associate a portfolio image for a given project to use as the thumbnail
-27. Customize and save information about a portfolio showcase project
-28. Customize and save the wording of a project used for a résumé item
-29. Display textual information about a project as a portfolio showcase
-30. Display textual information about a project as a résumé item
-31. Use a FastAPI to faciliate the communication between the backend and the frontend
-32. Support API endpoints for:
-POST /projects/upload
-POST /privacy-consent
-GET /projects
-GET /projects/{id}
-GET /skills
-GET /resume/{id}
-POST /resume/generate
-POST /resume/{id}/edit
-GET /portfolio/{id}
-POST /portfolio/generate
-POST /portfolio/{id}/edit
-Exact wording and use of {id} can vary. You may also decide to have more endpoints.
-33. You need to provide at least two zipped test data files for the same project, one as a snapshot at an earlier point in time, and another as a snapshot later in time that could have additional/modified files, with the following directory structure:
-test-data.zip:
-./code_collab_proj/app/
-./code_collab_proj/test/
-./code_collab_proj/doc/
-etc.
-34. You need to provide at least one zipped test data file that has multiple projects, showcasing individual and collaborative projects. If you have code and non-code projects, be sure to provide test data for those too. The directory structure should resemble the following:
-test-data.zip:
-./code_indiv_proj/
-./code_collab_proj/
-./text_indiv_proj/
-./image_indiv_proj/
-etc.
-35. Your API endpoints must be tested as if they are being called over HTTP but without running a real server, ensuring the correct status code and expected data.
-36. Your system must have clear documentation for all of the API endpoints
+
+## 21.0 Allow incremental information by adding another zipped folder of files for the same portfolio or résumé
+  - 21.1 Support uploading additional zipped folders for an existing portfolio or résumé
+  - 21.2 Merge newly added files with previously ingested artifacts
+  - 21.3 Preserve existing project data and user customizations across uploads
+
+## 22.0 Recognize duplicate files and maintains only one in the system
+  - 22.1 Generate unique identifiers (e.g., hashes) for all ingested files
+  - 22.2 Detect duplicate files across multiple uploads
+  - 22.3 Maintain a single canonical copy of duplicated files in the system
+
+## 23.0 Allow users to choose which information is represented
+  - 23.1 Allow manual re-ranking of projects
+  - 23.2 Enable user corrections to project chronology
+  - 23.3 Allow selection of attributes for project comparison
+  - 23.4 Allow selection of skills and projects for showcase
+
+ ## 24.0 Incorporate key role of the user in a given project
+  - 24.1 Capture the user’s primary role within each project
+  - 24.2 Store role information as part of project metadata
+
+## 25.0 Incorporate evidence of success for a given project
+  - 25.1 Associate quantitative metrics with projects
+  - 25.2 Allow inclusion of qualitative feedback or evaluations
+  - 25.3 Persist evidence of success for later display
+
+## 26.0 Allow user to associate an image for a given project to use as the thumbnail
+  - 26.1 Allow user to upload or select an image for a project
+  - 26.2 Associate the image with the project as a thumbnail
+  - 26.3 Store and retrieve image metadata
+
+## 27.0 Customize and save information about a portfolio showcase project
+  - 27.1 Customize project descriptions for portfolio presentation
+  - 27.2 Save portfolio-specific project information
+  - 27.3 Maintain user-defined showcase settings
+
+## 28.0 Customize and save the wording of a project used for a résumé item
+  - 28.1 Customize concise project wording for résumé use
+  - 28.2 Save résumé-specific project descriptions
+  - 28.3 Support updates without affecting portfolio text
+
+## 29.0 Display textual information about a project as a portfolio showcase
+  - 29.1 Generate textual representations of projects for portfolio display
+  - 29.2 Include user-selected content, roles, and evidence
+
+## 30.0 Display textual information about a project as a résumé item
+  - 30.1 Generate résumé-ready textual project descriptions
+  - 30.2 Display only résumé-selected projects and wording
+
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
 <img width="1134" height="569" alt="image" src="https://github.com/user-attachments/assets/4c2d9c6b-ff7a-452c-85e7-b1f4403be251" />

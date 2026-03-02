@@ -9,7 +9,20 @@ description = "Local zip analysis CLI for capstone project"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Capstone Team 17", email = "team17@example.com" }]
-dependencies = []
+
+dependencies = [
+  "fastapi>=0.100",
+  "starlette>=0.27",
+  "pydantic>=2.0",
+  "python-multipart>=0.0.6",
+  "uvicorn[standard]>=0.23",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "httpx>=0.24",
+]
 
 [project.scripts]
 capstone = "capstone.cli:main"
