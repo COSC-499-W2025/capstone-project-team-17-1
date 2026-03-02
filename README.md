@@ -202,8 +202,8 @@ The repo includes sample ZIPs for demos and validation under `test_data/`:
 - Source bundle for regeneration: `test_data/multi_project_bundle/`
 
 # Work Breakdown Structure
-[Link to WBS](docs/Plan/wbs.md)
 # Milestone #1
+[Link to WBS](docs/Plan/wbs.md)
 The focus of this milestone is to create the functionality for parsing and outputting information correctly. We will be very particular about your system design and testing approach during this phase. All the output for this milestone is expected to be in text (that is, you can opt for a CSV, JSON, plain text output, etc., or a combination that facilitates your future development). The specific requirements are below.
 The system must be able to ... :
 
