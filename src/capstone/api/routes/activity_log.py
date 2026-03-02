@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from activity_log import activity_logs
+from capstone.activity_log import activity_logs
 
 router = APIRouter()
 

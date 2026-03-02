@@ -210,38 +210,41 @@ document.addEventListener("DOMContentLoaded", async () => {
   <h3 class="skills-title">Most Used Skills</h3>
   <div class="skills-wrapper">
     ${result.skills
+      .slice(0, 5)
       .map(
         (skill) => `
-      <div class="skill-row">
-        <div class="skill-header">
-          <div class="skill-left">
-            <div class="skill-name">${capitalize(skill.skill)}</div>
-            <div class="skill-meta">
-              <span class="project-dot"></span>
-              Highest Contribution · 
-              <span class="skill-project">${capitalize(skill.topProject)}</span>
+        <div class="skill-row-modern">
+          
+          <div class="skill-left-modern">
+            ${capitalize(skill.skill)}
+          </div>
+
+          <div class="skill-middle-modern">
+            <div class="skill-bar-modern">
+              <div 
+                class="skill-bar-fill-modern"
+                data-width="${(skill.confidence * 100).toFixed(1)}%"
+                style="width: 0%"
+              ></div>
             </div>
+            <span class="skill-percentage-modern">
+              ${(skill.confidence * 100).toFixed(1)}%
+            </span>
           </div>
-          <div class="skill-right ${skill.confidence > 0.7 ? 'highlight' : ''}">
-            ${(skill.confidence * 100).toFixed(1)}%
+
+          <div class="skill-right-modern">
+            ${capitalize(skill.topProject)}
           </div>
+
         </div>
-        <div class="skill-bar">
-          <div 
-            class="skill-bar-fill"
-            data-width="${(skill.confidence * 100).toFixed(1)}%"
-            style="width: 0%"
-          ></div>
-        </div>
-      </div>
-    `
+      `
       )
       .join("")}
   </div>
 `;
 
 // FORCE reflow before animating
-const bars = document.querySelectorAll(".skill-bar-fill");
+const bars = document.querySelectorAll(".skill-bar-fill-modern");
 
 // Step 1: ensure width is 0
 bars.forEach(bar => {
@@ -258,37 +261,48 @@ bars.forEach(bar => {
 });
 
 });
+function renderActivity(logs) {
+  const container = document.getElementById("recent-activity");
 
+  const isNearBottom =
+    container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+
+  container.innerHTML = logs.map(log => {
+    const level = (log.level || "info").toLowerCase();
+
+    return `
+      <div class="activity-line level-${level}">
+        <span class="activity-timestamp">${log.timestamp}</span>
+        <span class="activity-tag">[${log.level}]</span>
+        ${log.message}
+      </div>
+    `;
+  }).join("");
+
+  if (isNearBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
 async function loadRecentActivity() {
   const container = document.getElementById("recent-activity");
   if (!container) return;
 
-  const res = await fetch("http://127.0.0.1:8002/activity");
-  const data = await res.json();
+  try {
+    const res = await fetch("http://127.0.0.1:8002/activity");
+    const result = await res.json();
 
-  if (!data.logs || data.logs.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <p>No recent activity recorded.</p>
-      </div>
-    `;
-    return;
+    const logs = result.logs || [];
+
+    if (logs.length === 0) {
+      container.innerHTML = `<div class="activity-line">No recent activity.</div>`;
+      return;
+    }
+
+    renderActivity(logs);
+
+  } catch (err) {
+    console.error("Activity fetch failed:", err);
   }
-
-  container.innerHTML = `
-    <div class="activity-wrapper">
-      ${data.logs.map(log => `
-        <div class="activity-entry ${log.level.toLowerCase()}">
-          <span class="activity-timestamp">
-            ${log.timestamp}
-          </span>
-          <span class="activity-message">
-            ${log.message}
-          </span>
-        </div>
-      `).join("")}
-    </div>
-  `;
 }
 
 loadRecentActivity();

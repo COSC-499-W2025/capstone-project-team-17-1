@@ -5,6 +5,8 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
+    minWidth: 1200,  
+    minHeight: 900,   
     frame: false,
     titleBarStyle: "hidden",
     roundedCorners: true,

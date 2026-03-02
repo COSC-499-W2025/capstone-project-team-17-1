@@ -98,7 +98,8 @@ const skills = Object.keys(globalSkillTotals)
       : 0,
     topProject: skillProjectMap[skill]?.topProject || "-"
   }))
-  .sort((a, b) => b.confidence - a.confidence);
+  .sort((a, b) => b.confidence - a.confidence)
+  .slice(0, 5);
 
   if (skills.length === 0) {
     return { empty: true };
