@@ -104,59 +104,26 @@ API docs:
 - OpenAPI JSON: `http://127.0.0.1:8003/openapi.json`
 - Route debug (mounted routers + import errors): `http://127.0.0.1:8003/__debug/routers`
 
-## API Route Map (Overview)
+## API Route Map (Table)
 
 ### System
-- `GET /` - API status
-- `GET /health` - health check
-
-### Consent
-- `POST /privacy-consent` - save privacy consent choice
-- `GET /privacy-consent` - get current privacy consent
-
-### Projects
-- `POST /projects/upload` - upload `.zip` and create/update project snapshot
-- `GET /projects` - list uploaded projects
-- `GET /projects/{id}` - get project details
-- `DELETE /projects/{id}` - delete project
-- `GET /projects/{id}/uploads` - list all uploads for a project
-- `PATCH /projects/{id}` - update project overrides (role, evidence, resume/portfolio edits)
-- `GET /projects/{id}/overrides` - get project overrides
-
-### Skills
-- `GET /projects/{project_id}/skills` - detect skills for a specific project
-- `GET /skills` - aggregate skills across projects
-
-### Resume
-- `GET /resume` - list/search resume entries
-- `POST /resume` - create resume entry
-- `GET /resume/{id}` - get resume entry
-- `PATCH /resume/{id}` - update resume entry
-- `DELETE /resume/{id}` - delete resume entry
-- `POST /resume/generate` - generate resume output (`json|markdown|pdf`)
-- `POST /resume/render-pdf` - render resume payload to PDF (base64 response)
-- `GET /resume-projects` - list/get project-specific resume wording
-- `POST /resume-projects` - upsert project-specific resume wording
-- `POST /resume-projects/generate` - auto-generate resume wording from snapshots
-
-### Portfolio / Showcase
-- `GET /portfolio/{id}` - get portfolio/showcase summary for project
-- `POST /portfolio/generate` - generate portfolio summaries
-- `POST /portfolio/{id}/edit` - edit project portfolio summary
-- `GET /showcase/...` - showcase-prefixed aliases
-- `GET /portfolios/...` and `GET /users...` - legacy compatibility aliases
-
-Note:
-- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
-
-## API Route Map (Table)
 
 | Method | Path | Description | Status |
 |---|---|---|---|
 | GET | `/` | API status | Implemented |
 | GET | `/health` | Health check | Implemented |
+
+### Consent
+
+| Method | Path | Description | Status |
+|---|---|---|---|
 | POST | `/privacy-consent` | Save privacy consent | Implemented |
 | GET | `/privacy-consent` | Get privacy consent | Implemented |
+
+### Projects
+
+| Method | Path | Description | Status |
+|---|---|---|---|
 | POST | `/projects/upload` | Upload zip and store project snapshot | Implemented |
 | GET | `/projects` | List projects | Implemented |
 | GET | `/projects/{id}` | Get project details | Implemented |
@@ -164,8 +131,18 @@ Note:
 | GET | `/projects/{id}/uploads` | List project uploads | Implemented |
 | PATCH | `/projects/{id}` | Update project overrides | Implemented |
 | GET | `/projects/{id}/overrides` | Get project overrides | Implemented |
+
+### Skills
+
+| Method | Path | Description | Status |
+|---|---|---|---|
 | GET | `/projects/{project_id}/skills` | Get detected skills for project | Implemented |
 | GET | `/skills` | Aggregate skills across projects | Implemented |
+
+### Resume
+
+| Method | Path | Description | Status |
+|---|---|---|---|
 | GET | `/resume` | List/search resume entries | Implemented |
 | POST | `/resume` | Create resume entry | Implemented |
 | GET | `/resume/{id}` | Get resume entry | Implemented |
@@ -176,11 +153,19 @@ Note:
 | GET | `/resume-projects` | List/get resume wording by project | Implemented |
 | POST | `/resume-projects` | Upsert project resume wording | Implemented |
 | POST | `/resume-projects/generate` | Auto-generate resume wording | Implemented |
+
+### Portfolio / Showcase
+
+| Method | Path | Description | Status |
+|---|---|---|---|
 | GET | `/portfolio/{id}` | Get portfolio/showcase summary | Implemented |
 | POST | `/portfolio/generate` | Generate portfolio summaries | Implemented |
 | POST | `/portfolio/{id}/edit` | Edit portfolio summary | Implemented |
 | GET | `/showcase/*` | Showcase-prefixed aliases | Implemented |
 | GET | `/portfolios/*`, `/users/*` | Legacy compatibility aliases | Implemented |
+
+Note:
+- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
 
 ## Example Requests
 
