@@ -320,6 +320,136 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
     }
 
 
+@router.post("/upload-bundle")
+async def upload_project_bundle(file: UploadFile = File(...)):
+    """Upload a multi-project zip bundle.
+
+    Each top-level directory inside the zip is treated as a separate project
+    and stored independently.  Returns a list of per-project records.
+
+    If the zip contains only one top-level directory it is stored the same as
+    a regular ``POST /projects/upload`` call.
+    """
+    filename = file.filename or "upload.zip"
+    if not filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are supported")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        # --- Discover top-level directories ---
+        try:
+            with zipfile.ZipFile(tmp_path) as src:
+                top_dirs: dict[str, list] = {}
+                for info in src.infolist():
+                    if info.is_dir():
+                        continue
+                    name = info.filename.strip("/")
+                    if not name:
+                        continue
+                    parts = [p for p in name.split("/") if p]
+                    top = parts[0]
+                    if top.startswith("__MACOSX"):
+                        continue
+                    top_dirs.setdefault(top, []).append(info)
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Invalid zip archive")
+
+        if not top_dirs:
+            raise HTTPException(status_code=400, detail="Zip archive is empty")
+
+        conn = storage.open_db()
+        results = []
+
+        for sub_name in sorted(top_dirs.keys()):
+            entries = top_dirs[sub_name]
+
+            # Repackage this subproject into its own temporary zip
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as sub_tmp:
+                sub_tmp_path = Path(sub_tmp.name)
+
+            try:
+                with zipfile.ZipFile(tmp_path) as src:
+                    with zipfile.ZipFile(sub_tmp_path, "w", zipfile.ZIP_DEFLATED) as out:
+                        for info in entries:
+                            out.writestr(info, src.read(info))
+
+                sub_filename = f"{sub_name}.zip"
+
+                # Try to match an existing project, otherwise generate a new id
+                project_id = _auto_detect_project_id(conn, sub_tmp_path, sub_filename)
+                auto_detected = bool(project_id)
+                if not project_id:
+                    project_id = _generate_project_id_from_zip(conn, sub_tmp_path, sub_filename)
+
+                stored = file_store.ensure_file(
+                    conn,
+                    sub_tmp_path,
+                    original_name=sub_filename,
+                    source="api_upload_bundle",
+                    mime="application/zip",
+                    upload_id=project_id,
+                )
+                project_id = stored["upload_id"]
+
+                manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
+                snapshot = {
+                    "project_id": project_id,
+                    "skills": manifest.get("skills", {}),
+                    "root_name": manifest.get("root_name") or sub_name,
+                    "file_count": len(manifest.get("files", [])),
+                    "source": "multi_project_zip",
+                }
+                storage.store_analysis_snapshot(
+                    conn,
+                    project_id=project_id,
+                    classification="unknown",
+                    primary_contributor=None,
+                    snapshot=snapshot,
+                )
+
+                try:
+                    contributors = _extract_contributors_from_zip(conn, stored["file_id"])
+                    for cname, cemail in contributors:
+                        uid = storage.upsert_user(conn, cname, email=cemail)
+                        storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                except Exception:
+                    pass  # non-fatal
+
+                results.append(
+                    {
+                        "project_id": project_id,
+                        "subproject_name": sub_name,
+                        "auto_detected_project_id": auto_detected,
+                        "file_id": stored["file_id"],
+                        "hash": stored["hash"],
+                        "dedup": stored["dedup"],
+                        "size_bytes": stored["size_bytes"],
+                        "file_count": snapshot["file_count"],
+                        "skills": snapshot["skills"],
+                    }
+                )
+            finally:
+                try:
+                    sub_tmp_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    return {
+        "message": f"Bundle split into {len(results)} project(s).",
+        "count": len(results),
+        "projects": results,
+    }
+
+
 @router.get("")
 def list_projects():
     """
