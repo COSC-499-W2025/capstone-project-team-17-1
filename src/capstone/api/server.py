@@ -2,33 +2,23 @@ import os
 import traceback
 from typing import Optional
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from capstone.api.middleware.request_id import RequestIdMiddleware
-from capstone.api.routes import (
-    consent,
-    projects,
-    skills,
-    resume,
-    job_match,
-    portfolio,
-    portfolio_showcase,
-    legacy_aliases,
-)
+def _safe_import_showcase():
+    """Attempt to import showcase router + configure."""
+    try:
+        from capstone.api.routes.portfolio_showcase import router, configure  # type: ignore
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
 
 
-def _configure_module(module, db_dir: Optional[str], auth_token: Optional[str], app: FastAPI, name: str) -> None:
-    """
-    If a routes module exposes `configure(db_dir, auth_token)`, call it.
-    Store any configure error on app.state.<name>_configure_error for debugging.
-    """
-    cfg = getattr(module, "configure", None)
-    if callable(cfg):
-        try:
-            cfg(db_dir=db_dir, auth_token=auth_token)
-        except Exception:
-            setattr(app.state, f"{name}_configure_error", traceback.format_exc())
+def _safe_import_resumes():
+    """Attempt to import new modular resumes router + configure."""
+    try:
+        from capstone.api.routes.resumes import router, configure  # type: ignore
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
 
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
@@ -76,6 +66,69 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    # Always-available routers
+    app.include_router(consent_router)
+    app.include_router(projects_router)
+    app.include_router(skills_router)
+
+    # Optional job-match routes (since routes/job_match.py may not exist in this branch)
+    job_match_router, job_match_err = _safe_import_job_match()
+    if job_match_router is not None:
+        app.include_router(job_match_router)
+    else:
+        app.state.job_match_import_error = job_match_err
+
+    # Optional portfolio routes
+    portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
+    if portfolio_err is None and portfolio_router is not None and configure_portfolio is not None:
+        try:
+            configure_portfolio(db_dir, auth_token)
+            app.include_router(portfolio_router)
+        except Exception:
+            app.state.portfolio_mount_error = traceback.format_exc()
+    else:
+        app.state.portfolio_import_error = portfolio_err
+
+    # Optional showcase routes
+    showcase_router, configure_showcase, showcase_err = _safe_import_showcase()
+    if showcase_err is None and showcase_router is not None and configure_showcase is not None:
+        try:
+            configure_showcase(db_dir, auth_token)
+            app.include_router(showcase_router)
+        except Exception:
+            app.state.showcase_mount_error = traceback.format_exc()
+    else:
+        app.state.showcase_import_error = showcase_err
+
+    # Modular resume routes (/resumes/*)
+    resumes_router, configure_resumes, resumes_err = _safe_import_resumes()
+    if resumes_err is None and resumes_router is not None and configure_resumes is not None:
+        try:
+            configure_resumes(db_dir, auth_token)
+            app.include_router(resumes_router)
+        except Exception:
+            app.state.resume_mount_error = traceback.format_exc()
+    else:
+        app.state.resume_import_error = resumes_err
+
+    # Legacy aliases (old endpoints like /portfolios/* and /users/*)
+    app.include_router(legacy_aliases_router)
+
+    # Debug endpoint
+    @app.get("/__debug/routers")
+    def debug_routers():
+        routes = sorted({getattr(r, "path", str(r)) for r in app.router.routes})
+        return {
+            "routes": routes,
+            "job_match_import_error": getattr(app.state, "job_match_import_error", None),
+            "portfolio_import_error": getattr(app.state, "portfolio_import_error", None),
+            "portfolio_mount_error": getattr(app.state, "portfolio_mount_error", None),
+            "showcase_import_error": getattr(app.state, "showcase_import_error", None),
+            "showcase_mount_error": getattr(app.state, "showcase_mount_error", None),
+            "resumes_import_error": getattr(app.state, "resume_import_error", None),
+            "resumes_mount_error": getattr(app.state, "resume_mount_error", None),
+        }
 
     return app
 

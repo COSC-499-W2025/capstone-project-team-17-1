@@ -1,3 +1,5 @@
+# DEPRECATED: This router operates on the legacy resume_entries / resume_entry_links tables.
+# It has been removed from server.py. Use /resumes (routes/resumes.py) instead.
 from __future__ import annotations
 
 import base64

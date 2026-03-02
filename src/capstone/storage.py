@@ -2033,6 +2033,355 @@ def upsert_default_resume_modules(
     return resume_id
 
 
+# ---------------------------------------------------------------------------
+# Modular resume query / mutation helpers
+# ---------------------------------------------------------------------------
+
+def _item_row_to_dict(row: tuple) -> dict:
+    """Convert a resume_items DB row to a plain dict."""
+    (
+        id_, section_id, title, subtitle, start_date, end_date,
+        location, content, bullets_json, metadata_json,
+        sort_order, is_enabled, created_at, updated_at,
+    ) = row
+    return {
+        "id": id_,
+        "section_id": section_id,
+        "title": title,
+        "subtitle": subtitle,
+        "start_date": start_date,
+        "end_date": end_date,
+        "location": location,
+        "content": content,
+        "bullets": json.loads(bullets_json or "[]"),
+        "metadata": json.loads(metadata_json or "{}"),
+        "sort_order": sort_order,
+        "is_enabled": bool(is_enabled),
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
+def _section_row_to_dict(row: tuple, items: list[dict] | None = None) -> dict:
+    """Convert a resume_sections DB row to a plain dict."""
+    id_, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at = row
+    d: dict = {
+        "id": id_,
+        "resume_id": resume_id,
+        "key": key,
+        "label": label,
+        "is_custom": bool(is_custom),
+        "sort_order": sort_order,
+        "is_enabled": bool(is_enabled),
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+    if items is not None:
+        d["items"] = items
+    return d
+
+
+def fetch_resumes(conn: sqlite3.Connection, user_id: int) -> list[dict]:
+    """List all resumes for a user (no sections/items)."""
+    rows = conn.execute(
+        """
+        SELECT id, user_id, title, target_role, status, created_at, updated_at
+        FROM resumes
+        WHERE user_id = ?
+        ORDER BY datetime(updated_at) DESC, id DESC
+        """,
+        (int(user_id),),
+    ).fetchall()
+    return [
+        {
+            "id": r[0], "user_id": r[1], "title": r[2],
+            "target_role": r[3], "status": r[4],
+            "created_at": r[5], "updated_at": r[6],
+        }
+        for r in rows
+    ]
+
+
+def fetch_resume(conn: sqlite3.Connection, resume_id: str) -> dict | None:
+    """Get a single resume with nested sections and items."""
+    row = conn.execute(
+        "SELECT id, user_id, title, target_role, status, created_at, updated_at FROM resumes WHERE id = ?",
+        (resume_id,),
+    ).fetchone()
+    if not row:
+        return None
+    resume = {
+        "id": row[0], "user_id": row[1], "title": row[2],
+        "target_role": row[3], "status": row[4],
+        "created_at": row[5], "updated_at": row[6],
+        "sections": [],
+    }
+    sec_rows = conn.execute(
+        """
+        SELECT id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+        FROM resume_sections
+        WHERE resume_id = ?
+        ORDER BY sort_order, id
+        """,
+        (resume_id,),
+    ).fetchall()
+    for sec_row in sec_rows:
+        section_id = sec_row[0]
+        item_rows = conn.execute(
+            """
+            SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
+                   bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+            FROM resume_items
+            WHERE section_id = ?
+            ORDER BY sort_order, id
+            """,
+            (section_id,),
+        ).fetchall()
+        resume["sections"].append(
+            _section_row_to_dict(sec_row, items=[_item_row_to_dict(ir) for ir in item_rows])
+        )
+    return resume
+
+
+def insert_resume(
+    conn: sqlite3.Connection,
+    user_id: int,
+    title: str = "Default Resume",
+    target_role: str | None = None,
+) -> str:
+    """Insert a new resume row and return its id."""
+    resume_id = str(uuid.uuid4())
+    conn.execute(
+        "INSERT INTO resumes (id, user_id, title, target_role, status) VALUES (?, ?, ?, ?, 'draft')",
+        (resume_id, int(user_id), title or "Default Resume", target_role),
+    )
+    conn.commit()
+    return resume_id
+
+
+def update_resume(
+    conn: sqlite3.Connection,
+    resume_id: str,
+    *,
+    title: str | None = None,
+    target_role: str | None = None,
+    status: str | None = None,
+) -> bool:
+    """Update mutable resume fields. Returns True if a row was found."""
+    sets, params = [], []
+    if title is not None:
+        sets.append("title = ?"); params.append(title)
+    if target_role is not None:
+        sets.append("target_role = ?"); params.append(target_role)
+    if status is not None:
+        sets.append("status = ?"); params.append(status)
+    if not sets:
+        return bool(conn.execute("SELECT 1 FROM resumes WHERE id = ?", (resume_id,)).fetchone())
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(resume_id)
+    cur = conn.execute(f"UPDATE resumes SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_resume(conn: sqlite3.Connection, resume_id: str) -> bool:
+    """Delete a resume (cascade deletes sections + items via FK)."""
+    cur = conn.execute("DELETE FROM resumes WHERE id = ?", (resume_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+# --- Sections ---
+
+def fetch_resume_sections(conn: sqlite3.Connection, resume_id: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
+        FROM resume_sections WHERE resume_id = ? ORDER BY sort_order, id
+        """,
+        (resume_id,),
+    ).fetchall()
+    return [_section_row_to_dict(r) for r in rows]
+
+
+def insert_resume_section(
+    conn: sqlite3.Connection,
+    resume_id: str,
+    key: str,
+    label: str,
+    *,
+    is_custom: bool = True,
+    sort_order: int | None = None,
+) -> str:
+    if sort_order is None:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM resume_sections WHERE resume_id = ?",
+            (resume_id,),
+        ).fetchone()
+        sort_order = (row[0] or 0) + 1
+    section_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO resume_sections (id, resume_id, key, label, is_custom, sort_order, is_enabled)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+        """,
+        (section_id, resume_id, key, label, int(is_custom), sort_order),
+    )
+    conn.commit()
+    return section_id
+
+
+def update_resume_section(
+    conn: sqlite3.Connection,
+    section_id: str,
+    *,
+    label: str | None = None,
+    is_enabled: bool | None = None,
+    sort_order: int | None = None,
+) -> bool:
+    sets, params = [], []
+    if label is not None:
+        sets.append("label = ?"); params.append(label)
+    if is_enabled is not None:
+        sets.append("is_enabled = ?"); params.append(int(is_enabled))
+    if sort_order is not None:
+        sets.append("sort_order = ?"); params.append(sort_order)
+    if not sets:
+        return bool(conn.execute("SELECT 1 FROM resume_sections WHERE id = ?", (section_id,)).fetchone())
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(section_id)
+    cur = conn.execute(f"UPDATE resume_sections SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_resume_section(conn: sqlite3.Connection, section_id: str) -> bool:
+    cur = conn.execute("DELETE FROM resume_sections WHERE id = ?", (section_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def reorder_resume_sections(conn: sqlite3.Connection, resume_id: str, ids: list[str]) -> list[dict]:
+    """Assign sort_order based on position in ids list. Unknown ids are ignored."""
+    for idx, section_id in enumerate(ids, start=1):
+        conn.execute(
+            "UPDATE resume_sections SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND resume_id = ?",
+            (idx, section_id, resume_id),
+        )
+    conn.commit()
+    return fetch_resume_sections(conn, resume_id)
+
+
+# --- Items ---
+
+def fetch_resume_items(conn: sqlite3.Connection, section_id: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
+               bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+        FROM resume_items WHERE section_id = ? ORDER BY sort_order, id
+        """,
+        (section_id,),
+    ).fetchall()
+    return [_item_row_to_dict(r) for r in rows]
+
+
+def insert_resume_item(
+    conn: sqlite3.Connection,
+    section_id: str,
+    *,
+    title: str | None = None,
+    subtitle: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    location: str | None = None,
+    content: str | None = None,
+    bullets: list | None = None,
+    metadata: dict | None = None,
+    sort_order: int | None = None,
+) -> str:
+    if sort_order is None:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM resume_items WHERE section_id = ?",
+            (section_id,),
+        ).fetchone()
+        sort_order = (row[0] or 0) + 1
+    item_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO resume_items (
+            id, section_id, title, subtitle, start_date, end_date, location, content,
+            bullets_json, metadata_json, sort_order, is_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """,
+        (
+            item_id, section_id, title, subtitle, start_date, end_date, location, content,
+            json.dumps(bullets or []), json.dumps(metadata or {}), sort_order,
+        ),
+    )
+    conn.commit()
+    return item_id
+
+
+def update_resume_item(
+    conn: sqlite3.Connection,
+    item_id: str,
+    *,
+    title: str | None = None,
+    subtitle: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    location: str | None = None,
+    content: str | None = None,
+    bullets: list | None = None,
+    metadata: dict | None = None,
+    is_enabled: bool | None = None,
+) -> bool:
+    sets, params = [], []
+    if title is not None:
+        sets.append("title = ?"); params.append(title)
+    if subtitle is not None:
+        sets.append("subtitle = ?"); params.append(subtitle)
+    if start_date is not None:
+        sets.append("start_date = ?"); params.append(start_date)
+    if end_date is not None:
+        sets.append("end_date = ?"); params.append(end_date)
+    if location is not None:
+        sets.append("location = ?"); params.append(location)
+    if content is not None:
+        sets.append("content = ?"); params.append(content)
+    if bullets is not None:
+        sets.append("bullets_json = ?"); params.append(json.dumps(bullets))
+    if metadata is not None:
+        sets.append("metadata_json = ?"); params.append(json.dumps(metadata))
+    if is_enabled is not None:
+        sets.append("is_enabled = ?"); params.append(int(is_enabled))
+    if not sets:
+        return bool(conn.execute("SELECT 1 FROM resume_items WHERE id = ?", (item_id,)).fetchone())
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(item_id)
+    cur = conn.execute(f"UPDATE resume_items SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_resume_item(conn: sqlite3.Connection, item_id: str) -> bool:
+    cur = conn.execute("DELETE FROM resume_items WHERE id = ?", (item_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def reorder_resume_items(conn: sqlite3.Connection, section_id: str, ids: list[str]) -> list[dict]:
+    """Assign sort_order based on position in ids list."""
+    for idx, item_id in enumerate(ids, start=1):
+        conn.execute(
+            "UPDATE resume_items SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND section_id = ?",
+            (idx, item_id, section_id),
+        )
+    conn.commit()
+    return fetch_resume_items(conn, section_id)
+
+
 def link_user_to_project(
     conn: sqlite3.Connection,
     user_id: int,
