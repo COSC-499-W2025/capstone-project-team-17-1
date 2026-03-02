@@ -8,6 +8,7 @@
 - [Milestone 2 - Week 5 [Feb 2 – Feb 8, 2026]](#week-5-m2)
 - [Milestone 2 - Week 6 [Feb 9 – Feb 15, 2026]](#week-6-m2)
 - [Milestone 2 - Week 7 [Feb 16 – Feb 22, 2026]](#week-7-m2)
+- [Milestone 2 - Week 8 [Feb 23 – Mar 1, 2026]](#week-8-m2)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -204,6 +205,19 @@ In addition, I designed and implemented the resumes, resume_sections, and resume
 ## Week 7 (M2)
 [Feb 16 – Feb 22, 2026]
 Following last week’s implementation of the core resume generation and customization system, this week I focused on improving data accuracy related to project timelines. Previously, failures in retrieving project start and end dates caused missing or incomplete information during project analysis, database storage, and resume generation. To address this, I updated the user_projects table by adding first_commit_at and last_commit_at fields. When fetching commit data through the GitHub API, the system now records each user’s first and last commit dates and stores them reliably in the database. These dates are automatically formatted and inserted during resume generation. Additionally, I implemented a more accurate calculation of active days, based on the difference between the first and last commit timestamps. This update improves timeline correctness in resumes and ensures better consistency between project analysis and resume outputs.
+
+[Back](#table-of-contents)
+
+
+## Week 8 (M2)
+[Feb 23 – Mar 1, 2026]
+This week, I focused on strengthening the resume pipeline and aligning the API layer with the new data model. First, I integrated the ZIP analysis workflow into the users, user_projects, and contributor_stats tables, formally connecting ZIP-based analysis to resume generation. This enables resumes to be generated from ZIP-uploaded project data, with bot accounts properly filtered. I also updated the README, added usage tips, and supplemented the WBS section for clarity. [Integrate the ZIP analysis workflow into resume generation (#239)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/239)
+
+In addition, I migrated the resume API from the deprecated routes/resume.py to routes/resumes.py, fully aligning it with the new resumes, resume_sections, and resume_items structure. The updated API now supports full CRUD operations, reordering, export (JSON/Markdown), and auto-generation from project snapshots. Legacy tests were replaced with integration tests to ensure end-to-end stability. [Migration and testing of the resume API based on the new data structure (#245)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/245)
+
+I also recorded the demo video this week to showcase the system workflow and API route.
+
+<img width="1399" height="820" alt="3c51c2a0c776c26e6093ac50e41006b2" src="https://github.com/user-attachments/assets/7925ee37-4047-48f4-8a92-e9690a8fcbf0" />
 
 [Back](#table-of-contents)
 
