@@ -7,9 +7,12 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Any
 from datetime import datetime, UTC
 from enum import Enum
+from pathlib import Path
+import tempfile
 
+from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
-from capstone.storage import fetch_latest_snapshot
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
 
 # main router for all portfolio endpoints
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -168,6 +171,26 @@ def build_portfolio(portfolio_id: str, owner: Optional[str], projects: list[Port
         created_at = now,
         updated_at = now
     )
+
+
+def _load_export_projects(portfolio_id: str) -> list[PortfolioProject]:
+    if not _DB_DIR:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    with _db_session(_DB_DIR) as c:
+        if portfolio_id == "latest":
+            rows = fetch_latest_snapshots(c)
+            projects: list[PortfolioProject] = []
+            for row in rows:
+                project_id = row.get("project_id")
+                snapshot = row.get("snapshot")
+                if project_id and isinstance(snapshot, dict):
+                    projects.append(_project_from_snapshot(str(project_id), snapshot))
+            return projects
+
+        snapshot = fetch_latest_snapshot(c, portfolio_id)
+        if not snapshot:
+            return []
+        return [_project_from_snapshot(portfolio_id, snapshot)]
     
 # Endpoints    
 
@@ -263,12 +286,33 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         }
         
     if format == ExportFormat.pdf:
-        pdf_bytes = (
-            b"%PDF-1.4\n"
-            b"1 0 obj<<>>\n"
-            b"trailer<<>>\n"
-            b"%%EOF"
-        )
+        projects = _load_export_projects(id)
+        entries = [
+            {
+                "project_id": p.project_id,
+                "name": p.title,
+                "summary": p.summary
+                or ("Highlights: " + "; ".join(p.highlights) if p.highlights else ""),
+                "source": "latest_snapshot",
+            }
+            for p in projects
+        ]
+        if not entries:
+            entries = [{"project_id": id, "name": id, "summary": "No snapshot data available.", "source": "placeholder"}]
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                out_path = Path(tmpdir) / f"portfolio_{id}.pdf"
+                build_portfolio_pdf_with_pandoc(entries, out_path, title=f"Portfolio {id}")
+                pdf_bytes = out_path.read_bytes()
+        except Exception:
+            # Keep endpoint behavior stable when optional system deps are missing.
+            pdf_bytes = (
+                b"%PDF-1.4\n"
+                b"1 0 obj<<>>\n"
+                b"trailer<<>>\n"
+                b"%%EOF"
+            )
         
         return Response(
             content=pdf_bytes,
