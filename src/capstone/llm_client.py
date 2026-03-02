@@ -1,104 +1,93 @@
-from __future__ import annotations
-
 import os
 from typing import Optional
 
-from .logging_utils import get_logger
-
-logger = get_logger(__name__)
-
 try:
-    # will use it in try just in case someone don't have openapi library installed
-    from openai import OpenAI  
-except Exception:  
-    OpenAI = None  
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 
-class OpenAILlmClient:
-    """
-    Thin wrapper around the OpenAI Responses API.
+class LLMClient:
+    """Thin wrapper around an LLM provider (raises if not configured)."""
 
-    It exposes a single method, generate_summary, which matches
-    what AutoWriter expects in top_project_summaries.
-    """
-
-    def __init__(self, model: str = "gpt-4.1-mini") -> None:
-        self._model = model
+    def __init__(self, model: str = "gpt-4o-mini") -> None:
         api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key or OpenAI is None:
-            # No api key or library not installed, run in no network mode.
-            logger.warning(
-                "OpenAILlmClient initialised without OpenAI configuration, "
-                "LLM calls will be skipped."
-            )
-            self._client = None
-        else:
-            # The OpenAI client reads the api key from the environment.
-            self._client = OpenAI()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set")
 
-    def generate_summary(self, prompt: str) -> str:
-        """
-        Return a short summary string for the given prompt.
+        if OpenAI is None:
+            raise RuntimeError("openai package is not installed")
 
-        If the client is not configured or the call fails, this
-        method returns an empty string so callers can fall back
-        to offline summaries.
-        """
-        if self._client is None:
-            logger.info("Skipping LLM call because client is not configured")
-            return ""
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
 
-        try:
-            response = self._client.responses.create(
-                model=self._model,
-                input=prompt,
-                max_output_tokens=400,
-            )
-            text = getattr(response, "output_text", None)
-            if text is not None:
-                return text
-            # Fallback in case output_text is not present.
-            try:
-                return response.output[0].content[0].text  # type: ignore[no-any-return]
-            except Exception:
-                return ""
-        except Exception as exc:  
-            logger.warning("OpenAI LLM call failed: %s", exc)
-            return ""
+    def ask(self, prompt: str) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You are a technical project analysis assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+        return response.choices[0].message.content.strip()
 
 
 class DummyLlmClient:
-    """
-    Offline test double for the LLM client.
+    """Offline-friendly LLM stub used in tests and dry-runs."""
 
-    This never touches the network and lets us exercise the
-    rest of the pipeline during development and in unit tests.
-    """
-
-    def __init__(self, prefix: str = "[DUMMY LLM]") -> None:
-        self._prefix = prefix
+    def __init__(self, prefix: str = "[LLM]") -> None:
+        self.prefix = prefix
 
     def generate_summary(self, prompt: str) -> str:
-        # Compact the prompt to a single line and trim it so
-        # test output stays small and predictable.
-        snippet = " ".join(prompt.split())
-        max_len = 200
-        if len(snippet) > max_len:
-            snippet = snippet[: max_len - 3] + "..."
-        return f"{self._prefix} {snippet}"
+        snippet = " ".join((prompt or "").split())
+        max_total = 220
+        available = max_total - len(self.prefix) - 1
+        if available < 0:
+            return self.prefix[:max_total]
+        if len(snippet) > available:
+            snippet = snippet[:available].rstrip()
+        return f"{self.prefix} {snippet}".rstrip()
 
 
-def build_default_llm() -> Optional[object]:
-    """
-    Factory used by higher level code.
+class OpenAILlmClient:
+    """OpenAI client that safely no-ops when not configured."""
 
-    When an api key and library are available, this returns
-    an OpenAILlmClient instance. Otherwise it returns None
-    so callers can decide whether to fall back to offline
-    summaries or a DummyLlmClient.
-    """
-    if OpenAI is None:
-        return None
+    def __init__(self, model: str = "gpt-4o-mini", api_key: Optional[str] = None) -> None:
+        self.model = model
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._client = OpenAI(api_key=self.api_key) if self.api_key and OpenAI is not None else None
+
+    def generate_summary(self, prompt: str) -> str:
+        if not self._client:
+            return ""
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a technical project analysis assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            )
+        except Exception:
+            return ""
+        content = response.choices[0].message.content
+        return content.strip() if content else ""
+
+
+def build_default_llm() -> Optional[OpenAILlmClient]:
+    """Return a configured OpenAI client, or None when unavailable."""
     if not os.getenv("OPENAI_API_KEY"):
         return None
+    if OpenAI is None:
+        return None
     return OpenAILlmClient()
+
+
+__all__ = [
+    "DummyLlmClient",
+    "LLMClient",
+    "OpenAILlmClient",
+    "build_default_llm",
+]

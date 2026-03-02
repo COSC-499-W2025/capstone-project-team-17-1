@@ -7,11 +7,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+    
 from capstone.job_matching import (
     extract_job_skills,
     JobMatchResult,
     match_job_to_project,
     build_resume_snippet,
+    compute_weights_from_jd,
+    score_project_for_job,
+    rank_projects_for_job
 )
 
 
@@ -117,6 +121,84 @@ class TestMatchJobToProject(unittest.TestCase):
         self.assertIn("python", result.missing_skills)
         self.assertIn("react", result.missing_skills)
 
+class TestComputeWeights(unittest.TestCase):
+    def test_weights_sum_to_one(self):
+        jd_profile = {
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["docker"],
+            "keywords": ["backend", "api"]
+        }
+        
+        weights = compute_weights_from_jd(jd_profile)
+        total = sum(weights.values())
+        self.assertAlmostEqual(total, 1.0, places=5)
+        
+        self.assertIn("required", weights)
+        self.assertIn("preferred", weights)
+        self.assertIn("keywords", weights)
+        self.assertIn("recency", weights)
+        
+    def test_weights_no_skills(self):
+        jd_profile = {
+            "required_skills": [],
+            "preferred_skills": [],
+            "keywords": []
+        }
+        
+        weights = compute_weights_from_jd(jd_profile)
+        total = sum(weights.values())
+        self.assertAlmostEqual(total, 1.0, places=5)
+        
+        # Should fall back to defaults
+        self.assertEqual(weights["required"], 0.4)
+        self.assertEqual(weights["preferred"], 0.4)
+        self.assertEqual(weights["keywords"], 0.1)
+        self.assertEqual(weights["recency"], 0.1)
+        
+class TestScoreProjectForJob(unittest.TestCase):
+    def test_score_project_for_job(self):
+        jd_profile = {
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["docker"],
+            "keywords": ["backend", "api"]
+        }
+        
+        project_snapshot = {
+            "project_id": "demo",
+            "skills": [{"skill": "python", "category": "language", "confidence": 0.9}],
+            "metrics": {"recency_days": 0}
+        }
+        
+        result = score_project_for_job(jd_profile, project_snapshot)
+        self.assertGreaterEqual(result.score, 0.0)
+        self.assertLessEqual(result.score, 1.0)
+        self.assertEqual(result.project_id, "demo")
+        self.assertGreater(result.required_coverage, 0.0)
+        
+class TestRankProjects(unittest.TestCase):
+    def test_ranking_orders_by_score(self):
+        jd_profile = {
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["docker"],
+            "keywords": ["backend", "api"]
+        }
+        
+        projA = {
+            "project_id": "A",
+            "skills": [{"skill": "python"}],
+            "metrics": {"recency_days": 0}
+        }
+        
+        projB = {
+            "project_id": "B",
+            "skills": [{"skill": "java"}],
+            "metrics": {"recency_days": 0}
+        }
+        
+        matches = rank_projects_for_job(jd_profile, [projA, projB])
+        
+        self.assertEqual(matches[0].project_id, "A")
+        self.assertGreaterEqual(matches[0].score, matches[1].score)
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,56 +2,77 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shutil
+import subprocess
 import sys
+import tempfile
+import tkinter as tk
+from tkinter import filedialog
 from pathlib import Path
 
+from capstone.storage import open_db, close_db, fetch_latest_snapshots  # <-- MUST exist for tests
+
 from capstone.llm_client import build_default_llm
-from .insight_store import InsightStore
-from .config import load_config, reset_config
 from .consent import (
     ConsentError,
     ExternalPermissionDenied,
     ensure_consent,
     ensure_external_permission,
-    export_consent,
     grant_consent,
     prompt_for_consent,
     revoke_consent,
+    export_consent,
 )
+from .config import load_config, reset_config
+from .insight_store import InsightStore
 from .logging_utils import get_logger
 from .modes import ModeResolution, resolve_mode
 from .project_ranking import WEIGHTS as RANK_WEIGHTS, rank_projects_from_snapshots
-from .storage import fetch_latest_snapshot, fetch_latest_snapshots, open_db, close_db, store_analysis_snapshot
-
-from .zip_analyzer import InvalidArchiveError, ZipAnalyzer
+from .services import (
+    ArchiveAnalysisError,
+    ArchiveAnalyzerService,
+    ConfigService,
+    ConsentService,
+    RankingService,
+    SnapshotStore,
+    SnapshotSummaryService,
+    TimelineService,
+    TopSummaryService,
+)
+from .storage import close_db, fetch_latest_snapshots, open_db
+from .zip_analyzer import ZipAnalyzer
 from .job_matching import match_job_to_project, build_resume_snippet
 from .resume_retrieval import (
     build_resume_preview,
     export_resume,
     query_resume_entries,
     ensure_resume_schema,
+    get_resume_project_description,
+    list_resume_project_descriptions,
+    generate_resume_project_descriptions,
+    upsert_resume_project_description,
 )
-from pathlib import Path
 from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
-from .portfolio_retrieval import ensure_indexes as ensure_portfolio_indexes
-from .portfolio_retrieval import list_snapshots as list_portfolio_snapshots
-from .portfolio_retrieval import get_latest_snapshot as get_portfolio_latest
-from .timeline import write_projects_timeline, write_skills_timeline
-from .top_project_summaries import (
-    create_summary_template,
-    AutoWriter,
-    EvidenceItem,
-    export_markdown,
-    export_readme_snippet,
-    generate_top_project_summaries
-)
+from .resume_pdf_builder import build_pdf_with_latex
+from .storage import fetch_latest_snapshot as get_portfolio_latest
+from .api.portfolio_helpers import ensure_indexes as ensure_portfolio_indexes
+from .api.portfolio_helpers import list_snapshots as list_portfolio_snapshots
+from .top_project_summaries import export_markdown, generate_top_project_summaries
+from .github_contributors import get_contributor_rankings, sync_contributor_stats
 
 logger = get_logger(__name__)
 
 def _print(obj):
     print(json.dumps(obj, indent=2))
+
+
+def _safe_slug(text: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", (text or "").strip())
+    cleaned = cleaned.strip("_")
+    return cleaned or "resume"
 
 # ----------------------------- Parsers ---------------------------------
 def build_parser() -> argparse.ArgumentParser:
@@ -156,6 +177,63 @@ def build_parser() -> argparse.ArgumentParser:
         help="Identifier used when persisting analysis snapshots",
     )
     analyze_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where the analysis database (SQLite) should be stored",
+    )
+
+    # import-repo: clone a git repo by URL and run the same analysis pipeline
+    import_parser = subparsers.add_parser(
+        "import-repo",
+        help="Clone a git repository from a URL, zip it, and analyse the snapshot",
+    )
+    import_parser.add_argument("url", type=str, help="Git repository URL (e.g., https://github.com/org/repo)")
+    import_parser.add_argument(
+        "--branch",
+        type=str,
+        default=None,
+        help="Optional branch or tag to checkout before analysis",
+    )
+    import_parser.add_argument(
+        "--depth",
+        type=int,
+        default=0,
+        help="Shallow clone depth (0 means full clone)",
+    )
+    import_parser.add_argument(
+        "--metadata-output",
+        type=Path,
+        default=Path("analysis_output/metadata.jsonl"),
+        help="Path to save JSONL metadata",
+    )
+    import_parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=Path("analysis_output/summary.json"),
+        help="Path to save the analysis summary",
+    )
+    import_parser.add_argument(
+        "--analysis-mode",
+        choices=["local", "external", "auto"],
+        default="local",
+        help="Requested analysis mode (default: local)",
+    )
+    import_parser.add_argument(
+        "--quiet", action="store_true", help="Suppress terminal output and only write files"
+    )
+    import_parser.add_argument(
+        "--summary-to-stdout",
+        action="store_true",
+        help="Print summary JSON directly to stdout",
+    )
+    import_parser.add_argument(
+        "--project-id",
+        type=str,
+        default=None,
+        help="Identifier used when persisting analysis snapshots",
+    )
+    import_parser.add_argument(
         "--db-dir",
         type=Path,
         default=None,
@@ -271,6 +349,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional path to write a one-page resume PDF",
     )
+    resume_parser.add_argument(
+        "--latex-template",
+        action="store_true",
+        help="Render PDF from templates/resume_template.tex with placeholder replacement",
+    )
+    resume_parser.add_argument(
+        "--template-path",
+        type=Path,
+        default=None,
+        help="Optional custom LaTeX template path (used with --latex-template)",
+    )
+    resume_parser.add_argument(
+        "--tex-output",
+        type=Path,
+        default=None,
+        help="Optional path to write the rendered .tex file (used with --latex-template)",
+    )
 
     job_parser = subparsers.add_parser(
         "job-match",
@@ -357,6 +452,97 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include entries flagged as outdated or expired",
     )
 
+    resume_project_parser = subparsers.add_parser(
+        "resume-project",
+        help="Save or retrieve resume-specific project wording",
+    )
+    resume_project_parser.add_argument(
+        "action",
+        choices=["set", "get", "list", "generate"],
+        help="Action to perform",
+    )
+    resume_project_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    resume_project_parser.add_argument(
+        "--project-id",
+        action="append",
+        help="Project id to target (repeatable for list)",
+    )
+    resume_project_parser.add_argument(
+        "--summary",
+        type=str,
+        help="Resume-specific project summary text",
+    )
+    resume_project_parser.add_argument(
+        "--summary-file",
+        type=Path,
+        help="File containing the resume-specific project summary text",
+    )
+    resume_project_parser.add_argument(
+        "--variant-name",
+        type=str,
+        help="Variant name for resume-specific project summary",
+    )
+    resume_project_parser.add_argument(
+        "--audience",
+        type=str,
+        help="Audience for resume-specific project summary (e.g., SWE, DS)",
+    )
+    resume_project_parser.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Store the resume project summary as inactive",
+    )
+    resume_project_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum number of resume project descriptions to load",
+    )
+    resume_project_parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Offset for pagination when listing resume project descriptions",
+    )
+    resume_project_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing resume project descriptions when generating",
+    )
+
+    api_parser = subparsers.add_parser(
+        "api",
+        help="Run the local API service",
+    )
+    api_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind (default: 127.0.0.1)",
+    )
+    api_parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="Port to listen on (default: 5000)",
+    )
+    api_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    api_parser.add_argument(
+        "--token",
+        type=str,
+        default=None,
+        help="Optional Bearer token to protect API routes",
+    )
+
     # portfolio retrieval
     portfolio_parser = subparsers.add_parser(
         "portfolio",
@@ -441,6 +627,59 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Directory where capstone.db is stored",
+    )
+
+    # contributor stats
+    contributors_parser = subparsers.add_parser(
+        "contributors",
+        help="Sync or rank contributor stats for a GitHub repository",
+    )
+    contributors_sub = contributors_parser.add_subparsers(dest="contributors_action", required=True)
+
+    contributors_sync = contributors_sub.add_parser(
+        "sync",
+        help="Fetch GitHub contribution stats and store them",
+    )
+    contributors_sync.add_argument("--repo-url", required=True, help="GitHub repository URL")
+    contributors_sync.add_argument(
+        "--project-id",
+        default=None,
+        help="Project id to store (defaults to owner/repo)",
+    )
+    contributors_sync.add_argument(
+        "--token",
+        default=None,
+        help="GitHub token (defaults to GITHUB_TOKEN env var)",
+    )
+    contributors_sync.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    contributors_sync.add_argument(
+        "--max-contributors",
+        type=int,
+        default=50,
+        help="Maximum number of contributors to fetch",
+    )
+
+    contributors_rank = contributors_sub.add_parser(
+        "rank",
+        help="Rank contributors for a project",
+    )
+    contributors_rank.add_argument("--project-id", required=True, help="Project id to rank")
+    contributors_rank.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory where capstone.db is stored",
+    )
+    contributors_rank.add_argument(
+        "--sort-by",
+        choices=["score", "commits", "pull_requests", "issues", "reviews"],
+        default="score",
+        help="Metric to sort by",
     )
 
     # metrics summary (thin wrapper to inspect file metrics/timeline for a project)
@@ -548,7 +787,39 @@ def build_parser() -> argparse.ArgumentParser:
     demo_parser.add_argument("--owner-b", default="bob", help="Owner for insight B")
     demo_parser.add_argument("--dry-strategy", choices=["block", "cascade"], default="block")
     demo_parser.add_argument("--soft-strategy", choices=["block", "cascade"], default="cascade")
-
+    summarize_parser = subparsers.add_parser(
+        "summarize-top-projects",
+        help="Summarize top projects from the latest stored snapshots",
+    )
+    summarize_parser.add_argument(
+        "--db-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the analysis database",
+    )
+    summarize_parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Contributor name to weight when ranking",
+    )
+    summarize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of projects to summarize",
+    )
+    summarize_parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="Use an LLM to enrich the summaries",
+    )
+    summarize_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format",
+    )
     return parser
 
 
@@ -562,7 +833,8 @@ def _handle_job_match(args: argparse.Namespace) -> int:
 
 
 def _handle_resume(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
     try:
         ensure_resume_schema(conn)
         result = query_resume_entries(
@@ -585,7 +857,22 @@ def _handle_resume(args: argparse.Namespace) -> int:
             print("No resume entries found that match the provided filters.")
             return 0
 
-        data = export_resume(entries, fmt=args.format, destination=args.output)
+        project_ids = sorted({pid for entry in entries for pid in entry.project_ids})
+        description_map = {}
+        if project_ids:
+            descriptions = list_resume_project_descriptions(
+                conn,
+                project_ids=project_ids,
+                active_only=True,
+                limit=len(project_ids),
+            )
+            description_map = {item.project_id: item for item in descriptions}
+        data = export_resume(
+            entries,
+            fmt=args.format,
+            destination=args.output,
+            project_descriptions=description_map,
+        )
         if args.output:
             print(f"Wrote resume {args.format} export to {args.output}")
             return 0
@@ -599,10 +886,101 @@ def _handle_resume(args: argparse.Namespace) -> int:
             print(data.decode("utf-8"))
         return 0
     finally:
-        close_db()
+        store.close()
+        try:
+            close_db()
+        except Exception:
+            pass
+
+
+def _handle_resume_project(args: argparse.Namespace) -> int:
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
+    try:
+        ensure_resume_schema(conn)
+        project_ids = args.project_id or []
+        if args.action in {"set", "get"}:
+            if len(project_ids) != 1:
+                print("resume-project set/get requires exactly one --project-id", file=sys.stderr)
+                return 2
+            project_id = project_ids[0]
+
+        if args.action == "set":
+            summary = args.summary
+            if args.summary_file:
+                summary = args.summary_file.read_text(encoding="utf-8", errors="ignore").strip()
+            if not summary:
+                print("resume-project set requires --summary or --summary-file", file=sys.stderr)
+                return 2
+            result = upsert_resume_project_description(
+                conn,
+                project_id=project_id,
+                summary=summary,
+                variant_name=args.variant_name,
+                audience=args.audience,
+                is_active=not args.inactive,
+                metadata={"source": "custom"},
+            )
+            print(json.dumps(result.to_dict(), indent=2))
+            return 0
+
+        if args.action == "get":
+            result = get_resume_project_description(
+                conn,
+                project_id,
+                variant_name=args.variant_name,
+                audience=args.audience,
+            )
+            if not result:
+                print(json.dumps({"error": "NotFound", "detail": "No resume project description found"}, indent=2))
+                return 0
+            print(json.dumps(result.to_dict(), indent=2))
+            return 0
+
+        if args.action == "list":
+            results = list_resume_project_descriptions(
+                conn,
+                project_ids=project_ids or None,
+                limit=args.limit,
+                offset=args.offset,
+            )
+            print(json.dumps([item.to_dict() for item in results], indent=2))
+            return 0
+
+        if args.action == "generate":
+            if not project_ids:
+                print("resume-project generate requires at least one --project-id", file=sys.stderr)
+                return 2
+            results = generate_resume_project_descriptions(
+                conn,
+                project_ids=project_ids,
+                overwrite=args.overwrite,
+            )
+            print(json.dumps([item.to_dict() for item in results], indent=2))
+            return 0
+
+        print("Unknown resume-project action", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+
+def _handle_api(args: argparse.Namespace) -> int:
+    db_dir = str(args.db_dir) if args.db_dir else None
+    from capstone.api.server import create_app as create_api_app
+    app = create_api_app(db_dir=db_dir, auth_token=args.token)
+    try:
+        import uvicorn
+    except Exception:
+        print("Uvicorn is required to run the FastAPI server. Install with `pip install uvicorn`.", file=sys.stderr)
+        return 2
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
 
 def _handle_portfolio(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    conn = store.open()
     try:
         ensure_portfolio_indexes(conn)
         if args.portfolio_action == "latest":
@@ -638,142 +1016,150 @@ def _handle_portfolio(args: argparse.Namespace) -> int:
         print("Unknown portfolio action", file=sys.stderr)
         return 1
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_collab_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        collab = snapshot.get("collaboration") or {}
-        payload = {
-            "projectId": args.project_id,
-            "classification": collab.get("classification", "unknown"),
-            "primaryContributor": collab.get("primary_contributor"),
-            "contributors": collab.get("contributors", {}),
-        }
+        payload = service.collab_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_tech_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        payload = {
-            "projectId": args.project_id,
-            "languages": snapshot.get("languages", {}),
-            "frameworks": snapshot.get("frameworks", []),
-        }
+        payload = service.tech_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_skill_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        payload = {
-            "projectId": args.project_id,
-            "skills": snapshot.get("skills", []),
-            "skillTimeline": (snapshot.get("skill_timeline") or {}).get("skills", []),
-            "topSkillsByYear": snapshot.get("top_skills_by_year", {}),
-        }
+        payload = service.skill_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
+
+
+def _handle_contributors(args: argparse.Namespace) -> int:
+    if args.contributors_action == "sync":
+        token = args.token or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("GitHub token missing. Provide --token or set GITHUB_TOKEN.", file=sys.stderr)
+            return 2
+        progress_state = {"last_len": 0}
+
+        def _progress(message: str, current: int | None, total: int | None) -> None:
+            if not sys.stdout.isatty():
+                return
+            if current is not None and total is not None:
+                text = f"[github] {message} {current}/{total}..."
+            else:
+                text = f"[github] {message}..."
+            padded = text.ljust(progress_state["last_len"])
+            sys.stdout.write(f"\r{padded}")
+            sys.stdout.flush()
+            progress_state["last_len"] = len(text)
+
+        def _clear_progress() -> None:
+            if not sys.stdout.isatty() or not progress_state["last_len"]:
+                return
+            sys.stdout.write("\r" + (" " * progress_state["last_len"]) + "\r")
+            sys.stdout.flush()
+            progress_state["last_len"] = 0
+
+        try:
+            stats = sync_contributor_stats(
+                repo_url=args.repo_url,
+                token=token,
+                project_id=args.project_id,
+                db_dir=args.db_dir,
+                max_contributors=args.max_contributors,
+                progress_cb=_progress,
+            )
+        finally:
+            _clear_progress()
+        for index, row in enumerate(stats, start=1):
+            print(
+                f"{index}. {row.contributor} "
+                f"(Total Score: {row.score:.2f}, Commits: {row.commits}, "
+                f"PRs: {row.pull_requests}, Issues: {row.issues}, Reviews: {row.reviews})"
+            )
+        return 0
+
+    if args.contributors_action == "rank":
+        conn = open_db(args.db_dir)
+        try:
+            rankings = get_contributor_rankings(conn, args.project_id, sort_by=args.sort_by)
+        finally:
+            close_db()
+        if not rankings:
+            print("No contributor stats found.")
+            return 0
+        for index, row in enumerate(rankings, start=1):
+            print(
+                f"{index}. {row['contributor']} "
+                f"(Total Score: {row['score']:.2f}, Commits: {row['commits']}, "
+                f"PRs: {row['pull_requests']}, Issues: {row['issues']}, Reviews: {row['reviews']})"
+            )
+        return 0
+
+    print("Unknown contributors action", file=sys.stderr)
+    return 1
 
 
 def _handle_metrics_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    store = SnapshotStore(args.db_dir)
+    service = SnapshotSummaryService(store)
     try:
-        snapshot = fetch_latest_snapshot(conn, args.project_id)
-        if not snapshot:
-            print(json.dumps({"projectId": args.project_id, "detail": "No snapshots found"}, indent=2))
-            return 0
-        file_summary = snapshot.get("file_summary", {}) or {}
-        payload = {
-            "projectId": args.project_id,
-            "fileSummary": file_summary,
-            "activityBreakdown": file_summary.get("activity_breakdown", {}),
-            "timeline": file_summary.get("timeline", {}),
-        }
+        payload = service.metrics_summary(args.project_id)
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_top_summary(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
+    g = globals()
+    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    service = TopSummaryService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
-        raw = fetch_latest_snapshots(conn)
-        snapshots = {row["project_id"]: row["snapshot"] for row in raw if row.get("project_id") and isinstance(row.get("snapshot"), dict)}
-        if not snapshots:
-            print("No project analyses available for summary.")
-            return 0
-        rankings = rank_projects_from_snapshots(snapshots)
-        target_id = args.project_id or (rankings[0].project_id if rankings else None)
-        if not target_id:
-            print("No project available for summary.")
-            return 0
-        snapshot = snapshots.get(target_id)
-        if not snapshot:
-            print(f"Project '{target_id}' not found in snapshots.")
+        payload = service.generate(
+            project_id=args.project_id,
+            output_dir=args.output_dir,
+            pdf_output=args.pdf_output,
+        )
+        if payload.get("error"):
+            print(json.dumps(payload, indent=2))
             return 1
-        ranking = next((r for r in rankings if r.project_id == target_id), None)
-        template = create_summary_template(target_id, snapshot, ranking)
-        # Keep evidence explicit to ground the summary; no LLM used.
-        evidence = [
-            EvidenceItem(kind="metric", reference="analysis:file_count", detail=f"{snapshot.get('file_summary', {}).get('file_count', 0)} files", source="analysis"),
-            EvidenceItem(kind="collaboration", reference="collaboration:contributors", detail="contributors weighted", source="analysis"),
-            EvidenceItem(kind="languages", reference="languages", detail=", ".join(snapshot.get("languages", {}).keys()), source="analysis"),
-        ]
-        summary = AutoWriter().compose(template, evidence, snapshot, ranking, rank_position=1, use_llm=False)
-        out_dir = args.output_dir
-        out_dir.mkdir(parents=True, exist_ok=True)
-        md_path = out_dir / "top_project.md"
-        readme_path = out_dir / "top_project_README.md"
-        md_path.write_text(export_markdown(summary), encoding="utf-8")
-        readme_path.write_text(export_readme_snippet(summary), encoding="utf-8")
-        pdf_path = args.pdf_output or (out_dir / "top_project.pdf")
-        pdf_path.write_bytes(export_markdown(summary).encode("utf-8"))
-        payload = {
-            "top_project": summary.title,
-            "markdown": str(md_path),
-            "readme": str(readme_path),
-            "pdf": str(pdf_path),
-            "evidence": [e.__dict__ for e in evidence],
-            "confidence": {"llm_used": False, "mode": "offline", "guardrails": "facts quoted with references in markdown/readme/pdf"},
-        }
+        if payload.get("detail"):
+            print(payload.get("detail"))
+            return 0
         print(json.dumps(payload, indent=2))
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_projects_timeline(args: argparse.Namespace) -> int:
-    rows = write_projects_timeline(args.db_dir, args.output)
+    rows = TimelineService().export_projects(args.db_dir, args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
 
 def _handle_skills_timeline(args: argparse.Namespace) -> int:
-    rows = write_skills_timeline(args.db_dir, args.output)
+    rows = TimelineService().export_skills(args.db_dir, args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
@@ -880,7 +1266,13 @@ def _handle_preview(args: argparse.Namespace) -> int:
 
 
 def _handle_config(args: argparse.Namespace) -> int:
-    config_state = load_config()
+    g = globals()  # allow legacy tests 
+    config_service = ConfigService(
+        load_fn=g.get("load_config", load_config),
+        reset_fn=g.get("reset_config", reset_config),
+        export_consent_fn=g.get("export_consent", export_consent),
+    )
+    config_state = config_service.load()
     if args.config_action == "show":
         payload = {
             "consent": config_state.consent.__dict__,
@@ -889,7 +1281,7 @@ def _handle_config(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2))
         return 0
     if args.config_action == "reset":
-        reset = reset_config()
+        reset = config_service.reset()
         logger.info("Configuration reset to defaults")
         print("Configuration reset. Current preferences:")
         print(json.dumps(reset.preferences.__dict__, indent=2))
@@ -898,65 +1290,133 @@ def _handle_config(args: argparse.Namespace) -> int:
     return 1
 
 
-def _handle_analyze(args: argparse.Namespace) -> int:
-    archive_arg = (args.archive or "").strip()
-    if not archive_arg:
-        payload = {"error": "InvalidInput", "detail": "Archive path must not be empty"}
-        print(json.dumps(payload), file=sys.stderr)
-        return 5
+def _infer_repo_name(url: str) -> str:
+    slug = url.rstrip("/").rsplit("/", 1)[-1]
+    name = slug.split(":")[-1].removesuffix(".git")
+    return name or "repository"
 
-    archive_path = Path(archive_arg).expanduser()
-    if not archive_path.exists():
-        detail = f"Archive not found: {archive_path}"
-        payload = {"error": "FileNotFound", "detail": detail}
-        print(json.dumps(payload), file=sys.stderr)
-        return 4
-    if archive_path.suffix.lower() != ".zip":
-        payload = {
-            "error": "InvalidInput",
-            "detail": "Unsupported file format. Please provide a .zip archive.",
-        }
-        print(json.dumps(payload), file=sys.stderr)
-        return 3
 
+def _clone_repository(
+    url: str,
+    *,
+    branch: str | None,
+    depth: int,
+    dest_root: Path,
+) -> Path:
+    repo_name = _infer_repo_name(url)
+    target_dir = dest_root / repo_name
+    cmd = ["git", "clone"]
+    if depth and depth > 0:
+        cmd += ["--depth", str(depth)]
+    if branch:
+        cmd += ["--branch", branch]
+    cmd += [url, str(target_dir)]
     try:
-        consent = ensure_consent(require_granted=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("git executable not found in PATH") from None
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        raise RuntimeError(f"git clone failed: {detail}") from exc
+    return target_dir
+
+
+def _write_git_log(repo_path: Path) -> None:
+    """Persist git log into .git/logs for downstream contribution analysis."""
+    cmd = [
+        "git",
+        "-C",
+        str(repo_path),
+        "log",
+        "--no-color",
+        "--pretty=format:commit:%H|%an|%ae|%ct|%s",
+        "--numstat",
+    ]
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        logger.warning("Unable to capture git log for %s: %s", repo_path, detail)
+        return
+    except FileNotFoundError:
+        logger.warning("git executable not found; skipping git log capture for %s", repo_path)
+        return
+
+    log_dir = repo_path / ".git" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "git_log").write_text(result.stdout, encoding="utf-8")
+    # Also drop a copy at repo root so we can delete most of .git before zipping.
+    (repo_path / "git_log.txt").write_text(result.stdout, encoding="utf-8")
+
+
+def _prune_repository(repo_path: Path) -> None:
+    """Drop bulky/non-essential folders before zipping to avoid noisy warnings."""
+    prune_targets = [
+        ".git",
+        ".venv",
+    ]
+    for rel in prune_targets:
+        target = repo_path / rel
+        if target.exists():
+            try:
+                shutil.rmtree(target)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to prune %s: %s", target, exc)
+
+
+def _handle_analyze(args: argparse.Namespace) -> int:
+    archive_service = ArchiveAnalyzerService(ZipAnalyzer())
+    archive_path, payload, code = archive_service.validate_archive(args.archive)
+    if payload:
+        print(json.dumps(payload), file=sys.stderr)
+        return code
+
+    g = globals()  # keep test patches 
+    consent_service = ConsentService(
+        ensure_consent_fn=g.get("ensure_consent", ensure_consent),
+        prompt_fn=g.get("prompt_for_consent", prompt_for_consent),
+        grant_fn=g.get("grant_consent", grant_consent),
+        ensure_external_fn=g.get("ensure_external_permission", ensure_external_permission),
+    )
+    try:
+        consent = consent_service.ensure_local_consent()
     except ConsentError as exc:
         privacy_message = (
             "This analysis runs locally and reads file metadata (paths, sizes, timestamps). "
             "No data leaves your machine unless you later export results."
         )
         print(privacy_message)
-        decision = prompt_for_consent()
-        if decision == "accepted":
-            config_state = grant_consent()
-            consent = config_state.consent
+        try:
+            consent = consent_service.prompt_and_grant()
             logger.info("Consent granted interactively: %s", consent)
-        else:
+        except ConsentError:
             payload = {"error": "ConsentRequired", "detail": str(exc)}
             print(json.dumps(payload), file=sys.stderr)
             return 2
 
-    config = load_config()
+    config = ConfigService(
+        load_fn=g.get("load_config", load_config),
+        reset_fn=g.get("reset_config", reset_config),
+        export_consent_fn=g.get("export_consent", export_consent),
+    ).load()
     mode: ModeResolution = resolve_mode(args.analysis_mode, consent)
-    if mode.resolved == "external":
-        try:
-            ensure_external_permission(
-                "capstone.external.analysis",
-                data_types=["artifact metadata", "language statistics", "collaboration summaries"],
-                purpose="Generate remote analytics for the selected archive",
-                destination="Configured external analysis provider",
-                privacy="No source code is transmitted; only derived metadata is shared.",
-                source="cli",
-            )
-        except ExternalPermissionDenied as exc:
-            payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
-            print(json.dumps(payload), file=sys.stderr)
-            return 6
-
-    analyzer = ZipAnalyzer()
     try:
-        summary = analyzer.analyze(
+        consent_service.ensure_external(
+            mode,
+            service="capstone.external.analysis",
+            data_types=["artifact metadata", "language statistics", "collaboration summaries"],
+            purpose="Generate remote analytics for the selected archive",
+            destination="Configured external analysis provider",
+            privacy="No source code is transmitted; only derived metadata is shared.",
+            source="cli",
+        )
+    except ExternalPermissionDenied as exc:
+        payload = {"error": "ExternalPermissionDenied", "detail": str(exc)}
+        print(json.dumps(payload), file=sys.stderr)
+        return 6
+
+    try:
+        summary = archive_service.analyze(
             zip_path=archive_path,
             metadata_path=args.metadata_output,
             summary_path=args.summary_output,
@@ -965,10 +1425,12 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             project_id=args.project_id,
             db_dir=args.db_dir,
         )
-    except InvalidArchiveError as exc:
-        payload = getattr(exc, "payload", {"error": "InvalidInput", "detail": str(exc)})
-        print(json.dumps(payload), file=sys.stderr)
+    except ArchiveAnalysisError as exc:
+        print(json.dumps(exc.payload), file=sys.stderr)
         return 3
+
+    if summary.get("warnings") and not args.quiet:
+        print(json.dumps({"warnings": summary["warnings"]}, indent=2), file=sys.stderr)
 
     # --- summary_to_stdout mode: behave exactly like original tests expect ---
     if args.summary_to_stdout:
@@ -980,50 +1442,77 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         _print_human_summary(summary, args)
 
     # --- Save analysis snapshot to SQLite (for resume / ranking) ---
-    conn = None
+    store = SnapshotStore(args.db_dir)
     try:
-        conn = open_db(args.db_dir)
-        store_analysis_snapshot(
-            conn,
+        store.store_snapshot(
             project_id=summary.get("project_id") or args.project_id or archive_path.stem,
             classification=summary.get("collaboration", {}).get("classification", "unknown"),
             primary_contributor=summary.get("collaboration", {}).get("primary_contributor"),
             snapshot=summary,
         )
-        # This extra print is fine here: tests don't check this branch's stdout
         if not args.quiet:
             print("[analyze] Snapshot saved to SQLite database.")
     except Exception as exc:
-        # Warnings go to stderr; they won't break stdout parsing.
         print(f"[analyze] WARNING: Failed to store snapshot in DB: {exc}", file=sys.stderr)
     finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
+        store.close()
 
     return 0
 
-def _handle_rank_projects(args: argparse.Namespace) -> int:
-    conn = open_db(args.db_dir)
-    try:
-        raw_snapshots = fetch_latest_snapshots(conn)
-        snapshot_map: dict[str, dict] = {}
-        for row in raw_snapshots:
-            pid = row.get("project_id")
-            snap = row.get("snapshot")
-            if not pid or not isinstance(snap, dict):
-                continue
-            snapshot_map[pid] = snap
 
+def _handle_import_repo(args: argparse.Namespace) -> int:
+    with tempfile.TemporaryDirectory(prefix="capstone-import-") as temp_dir:
+        temp_path = Path(temp_dir)
+        try:
+            repo_path = _clone_repository(
+                args.url,
+                branch=args.branch,
+                depth=args.depth or 0,
+                dest_root=temp_path,
+            )
+        except Exception as exc:
+            print(f"[import-repo] Failed to clone repository: {exc}", file=sys.stderr)
+            return 4
+
+        # Capture git log to feed collaboration analysis (avoids relying on reflog only).
+        try:
+            _write_git_log(repo_path)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to persist git log for analysis: %s", exc)
+
+        # Remove bulky/unnecessary bits that trigger warnings but don't affect analysis.
+        _prune_repository(repo_path)
+
+        try:
+            print("Packaging repository...")
+            archive_path = Path(shutil.make_archive(str(temp_path / repo_path.name), "zip", root_dir=repo_path))
+        except Exception as exc:
+            print(f"[import-repo] Failed to package repository: {exc}", file=sys.stderr)
+            return 5
+
+        project_id = args.project_id or repo_path.name
+        analyze_args = argparse.Namespace(
+            archive=str(archive_path),
+            metadata_output=args.metadata_output,
+            summary_output=args.summary_output,
+            analysis_mode=args.analysis_mode,
+            quiet=args.quiet,
+            summary_to_stdout=args.summary_to_stdout,
+            project_id=project_id,
+            db_dir=args.db_dir,
+        )
+        return _handle_analyze(analyze_args)
+
+
+def _handle_rank_projects(args: argparse.Namespace) -> int:
+    g = globals()
+    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    service = RankingService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
+    try:
+        rankings, snapshot_map = service.rank(user=args.user, limit=args.limit)
         if not snapshot_map:
             print("No project analyses available for ranking.")
             return 0
-
-        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
-        if args.limit is not None and args.limit >= 0:
-            rankings = rankings[: args.limit]
 
         contributor_label = args.user or "primary contributor"
         print(f"Project rankings for {contributor_label}:")
@@ -1033,7 +1522,6 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
                 weight = RANK_WEIGHTS[factor]
                 print(f"   - {factor}: weight {weight:.2f}, contribution {ranking.breakdown[factor]:.3f}")
             details = ranking.details
-            # Expose raw metrics so users understand how each factor influenced the score.
             print(
                 "     raw metrics: "
                 f"files={details['artifact_count']:.0f}, "
@@ -1045,42 +1533,35 @@ def _handle_rank_projects(args: argparse.Namespace) -> int:
             )
         return 0
     finally:
-        close_db()
+        store.close()
 
 def _handle_summarize_projects(args: argparse.Namespace) -> int:
     """Summarize top ranked projects, optionally using an LLM."""
-    conn = open_db(args.db_dir)
+    g = globals()  # tests patch fetch_latest_snapshots
+    close_fn = g.get("close_db", close_db)
+    store = SnapshotStore(
+        args.db_dir,
+        open_fn=g.get("open_db", open_db),
+        fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots),
+        close_fn=close_fn,
+    )
+    service = RankingService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
-        # 1. Load latest snapshots
-        raw_snapshots = fetch_latest_snapshots(conn)
-        snapshot_map: dict[str, dict] = {}
-        for row in raw_snapshots:
-            pid = row.get("project_id")
-            snap = row.get("snapshot")
-            if not pid or not isinstance(snap, dict):
-                continue
-            snapshot_map[pid] = snap
-
+        rankings, snapshot_map = service.rank(user=args.user, limit=args.limit)
         if not snapshot_map:
             print("No project analyses available for summary.")
             return 0
 
-        # 2. Rank projects (reuse existing ranking flow)
-        rankings = rank_projects_from_snapshots(snapshot_map, user=args.user)
         if not rankings:
             print("No ranked projects available for summary.")
             return 0
 
-        if args.limit is not None and args.limit >= 0:
-            rankings = rankings[: args.limit]
-
-        # 3. Optional LLM
+        # Optional LLM
         llm = None
         use_llm = bool(args.use_llm)
         if use_llm:
             llm = build_default_llm()
 
-        # 4. Generate summaries via helper
         summaries = generate_top_project_summaries(
             snapshots=snapshot_map,
             rankings=rankings,
@@ -1089,7 +1570,6 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
             use_llm=use_llm,
         )
 
-        # 5. Print in requested format
         if args.format == "json":
             def to_jsonable(s):
                 if isinstance(s, dict):
@@ -1103,12 +1583,9 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
             payload = [to_jsonable(s) for s in summaries]
             print(json.dumps(payload, indent=2))
         else:
-            # markdown: join each summary's markdown
             parts = []
             for s in summaries:
                 try:
-                    # if generate_top_project_summaries returns the same summary
-                    # objects used by export_markdown, use that for nice output
                     parts.append(export_markdown(s))
                 except Exception:
                     md = getattr(s, "markdown", None) or str(s)
@@ -1117,7 +1594,7 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
 
         return 0
     finally:
-        close_db()
+        store.close()
 
 
 def _handle_generate_resume(args: argparse.Namespace) -> int:
@@ -1146,14 +1623,9 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
     # If your implementation has a slightly different signature, tweak this call.
     # 3) Load latest project snapshots
     # 3) Open DB and load all project snapshots
-    conn = open_db(args.db_dir)
-    try:
-        snapshots = fetch_latest_snapshots(conn)
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+    store = SnapshotStore(args.db_dir)
+    snapshots = store.fetch_all_latest()
+    store.close()
 
     if not snapshots:
         print("[generate-resume] No analyzed projects found in database. Run 'capstone analyze' first.")
@@ -1189,8 +1661,21 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
         print(json.dumps(resume_json, indent=2))
 
     # 6) Optional PDF output
-    if args.pdf_output:
-        resume_to_pdf(resume, args.pdf_output)       
+    if args.latex_template:
+        pdf_target = args.pdf_output
+        if not pdf_target:
+            pdf_target = Path("Output") / f"resume_{_safe_slug(args.company)}.pdf"
+        build_pdf_with_latex(
+            resume.to_dict(),
+            pdf_target,
+            template_path=args.template_path,
+            tex_output_path=args.tex_output,
+        )
+        print(f"[generate-resume] Wrote LaTeX-template PDF resume to {pdf_target}")
+        if args.tex_output:
+            print(f"[generate-resume] Wrote rendered LaTeX source to {args.tex_output}")
+    elif args.pdf_output:
+        resume_to_pdf(resume, args.pdf_output)
         print(f"[generate-resume] Wrote PDF resume to {args.pdf_output}")
 
     return 0
@@ -1214,6 +1699,61 @@ def _print_human_summary(summary: dict[str, object], args: argparse.Namespace) -
     collaboration = summary.get("collaboration", {})
     if collaboration:
         print("Collaboration classification:", collaboration.get("classification", "unknown"))
+        contributors = (
+            collaboration.get("contributors (commits, PRs, issues, reviews)")
+            or collaboration.get("contributors (commits, line changes, reviews)")
+            or {}
+        )
+        if contributors:
+            formula = collaboration.get(
+                "contribution_compute",
+                "weightedScore = commits*1.0 + line_changes*0.0 + reviews*0.5",
+            )
+            print(f"Contribution formula: {formula}")
+            print("Contributors (commits, PRs, issues, reviews):")
+            def _parse_counts(data) -> tuple[int, int, int, int]:
+                if isinstance(data, str):
+                    try:
+                        parts = [int(x.strip()) for x in data.strip("[]").split(",") if x.strip()]
+                        commits = parts[0] if len(parts) > 0 else 0
+                        if len(parts) >= 4:
+                            prs = parts[1]
+                            issues = parts[2]
+                            reviews = parts[3]
+                        else:
+                            prs = 0
+                            issues = 0
+                            reviews = parts[2] if len(parts) > 2 else 0
+                        return commits, prs, issues, reviews
+                    except Exception:
+                        return 0, 0, 0, 0
+                if isinstance(data, (list, tuple)):
+                    commits = int(data[0]) if len(data) > 0 else 0
+                    if len(data) >= 4:
+                        prs = int(data[1])
+                        issues = int(data[2])
+                        reviews = int(data[3])
+                    else:
+                        prs = 0
+                        issues = 0
+                        reviews = int(data[2]) if len(data) > 2 else 0
+                    return commits, prs, issues, reviews
+                if isinstance(data, dict):
+                    return (
+                        int(data.get("commits", 0)),
+                        int(data.get("pull_requests", data.get("prs", 0))),
+                        int(data.get("issues", 0)),
+                        int(data.get("reviews", 0)),
+                    )
+                return 0, 0, 0, 0
+
+            sorted_items = sorted(
+                contributors.items(),
+                key=lambda item: (-_parse_counts(item[1])[0], item[0]),
+            )
+            for author, values in sorted_items:
+                commits, prs, issues, reviews = _parse_counts(values)
+                print(f" - {author}: {commits}, {prs}, {issues}, {reviews}")
     print(f"Scan duration: {summary.get('scan_duration_seconds', 0)} seconds")
 
 
@@ -1251,7 +1791,29 @@ def _handle_clean(args: argparse.Namespace) -> int:
     if args.all:
         rc |= _safe_wipe_dir(repo_root / "out", repo_root)
     return rc
+def prompt_project_metadata():
+    print("\nOptional Project Timeline Information")
 
+    start = input("Start date (YYYY-MM-DD) [optional]: ").strip()
+    end = input("End date (YYYY-MM-DD) [optional]: ").strip()
+    status = input("Status (ongoing/completed) [default: ongoing]: ").strip().lower()
+
+    return {
+        "start_date": start or None,
+        "end_date": end or None,
+        "status": status if status in {"ongoing", "completed"} else "ongoing",
+    }
+def pick_zip_file():
+    root = tk.Tk()
+    root.withdraw()  # hide the empty Tk window
+    root.attributes("-topmost", True)
+
+    file_path = filedialog.askopenfilename(
+        title="Select a ZIP file",
+        filetypes=[("ZIP files", "*.zip")]
+    )
+    root.destroy()
+    return file_path
 
 # ----------------------------- Main ------------------------------------
 def main(argv: list[str] | None = None) -> int:
@@ -1266,6 +1828,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_config(args)
     if args.command == "analyze":
         return _handle_analyze(args)
+    if args.command == "import-repo":
+        return _handle_import_repo(args)
     if args.command == "clean":
         return _handle_clean(args)
     if args.command == "rank-projects":
@@ -1281,6 +1845,10 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_job_match(args)
     if args.command == "resume":
         return _handle_resume(args)
+    if args.command == "resume-project":
+        return _handle_resume_project(args)
+    if args.command == "api":
+        return _handle_api(args)
     if args.command == "generate-resume":
         return _handle_generate_resume(args)
     if args.command == "portfolio":
@@ -1303,6 +1871,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_insight_dry_run(args)
     if args.command == "insight-demo":
         return _handle_insight_demo(args)
+    if args.command == "summarize-top-projects":
+        return _handle_summarize_projects(args)
 
     parser.print_help()
     p = argparse.ArgumentParser(prog="capstone")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Iterable, List, Mapping, MutableMapping, Optional
 
+from .collaboration_analysis import compact_contributors
 from .external_artifacts import fetch_snapshot_artifacts
 from .project_ranking import ProjectRanking, rank_projects_from_snapshots
 
@@ -164,7 +165,7 @@ def gather_evidence(
         _add_evidence(evidence, "commit", "frameworks", detail, "snapshot", weight=0.7)
 
     collaboration = snapshot.get("collaboration", {}) or {}
-    contributors = collaboration.get("contributors", {}) or {}
+    contributors = compact_contributors(collaboration)
     if contributors:
         total_contributions = sum(int(value) for value in contributors.values())
         leader, leader_count = max(contributors.items(), key=lambda item: item[1])
@@ -416,7 +417,7 @@ class AutoWriter:
         if framework_list:
             parts.append(f"Frameworks: {', '.join(sorted(framework_list))}")
         return "Stack overview:\n- " + "\n- ".join(parts)
-#build prompt
+    #build prompt
     def _build_prompt(
         self,
         template: SummaryTemplate,
@@ -425,16 +426,72 @@ class AutoWriter:
         ranking: ProjectRanking | None,
         rank_position: Optional[int],
     ) -> str:
-        references = "\n".join(item.format_reference(index) for index, item in enumerate(evidence, start=1))
-        score_line = f"Rank {rank_position} with score {ranking.score:.2f}" if ranking and rank_position else "Unranked"
+        # --- Evidence formatting ---
+        references = "\n".join(
+            item.format_reference(index)
+            for index, item in enumerate(evidence, start=1)
+        )
+
+        # --- Ownership ---
+        collaboration = snapshot.get("collaboration", {}) or {}
+        primary = collaboration.get("primary_contributor", "unknown")
+        contributors = collaboration.get("contributors", {}) or {}
+        total_contribs = sum(contributors.values()) if contributors else 0
+        ratio = (
+            round(contributors.get(primary, 0) / total_contribs, 2)
+            if total_contribs > 0 and primary in contributors
+            else 0.0
+        )
+
+        # --- Timeline ---
+        file_summary = snapshot.get("file_summary", {}) or {}
+        first_seen = (
+            file_summary.get("first_modified")
+            or file_summary.get("earliest_modified")
+            or "unknown"
+        )
+        last_seen = (
+            file_summary.get("last_modified")
+            or file_summary.get("latest_modified")
+            or "unknown"
+        )
+        active_days = file_summary.get("active_days", 0)
+
+        # --- Skills / Stack ---
+        languages = sorted((snapshot.get("languages") or {}).keys())
+        frameworks = snapshot.get("frameworks", []) or []
+
+        # --- Rank ---
+        score_line = (
+            f"Rank #{rank_position} with score {ranking.score:.2f}"
+            if ranking and rank_position
+            else "Unranked"
+        )
+
         return (
             f"Project: {template.project_id}\n"
             f"Title: {template.title}\n"
-            f"{score_line}\n"
-            f"Evidence:\n{references}\n"
-            f"Snapshot metadata: {template.metadata}\n"
-            "Write a concise summary that cites evidence using [n] markers."
+            f"{score_line}\n\n"
+            "Ownership:\n"
+            f"- Primary contributor: {primary}\n"
+            f"- Contribution ratio: {ratio}\n\n"
+            "Timeline:\n"
+            f"- First activity: {first_seen}\n"
+            f"- Last activity: {last_seen}\n"
+            f"- Active days: {active_days}\n\n"
+            "Skills and Stack:\n"
+            f"- Languages: {', '.join(languages) if languages else 'None detected'}\n"
+            f"- Frameworks: {', '.join(frameworks) if frameworks else 'None detected'}\n\n"
+            "Evidence:\n"
+            f"{references}\n\n"
+            "Instructions:\n"
+            "- Write 3 to 5 concise resume ready bullet points\n"
+            "- Emphasize technical impact, ownership, and growth over time\n"
+            "- Cite evidence using [n] markers\n"
+            "- Keep each bullet under 25 words\n"
+            "- Output bullets only, no paragraphs\n"
         )
+
 
     def _merge_llm_output(self, offline_summary: str, llm_output: str) -> str:
         if not llm_output.strip():
@@ -478,7 +535,7 @@ class AutoWriter:
             total_weight += 0.1
 
         collaboration = snapshot.get("collaboration", {}) or {}
-        contributors = collaboration.get("contributors", {}) or {}
+        contributors = compact_contributors(collaboration)
         if contributors:
             signals.append({"signal": "collaboration", "weight": 0.2, "present": True})
             total_weight += 0.2

@@ -7,5 +7,5 @@ def test_pipeline_smoke():
         projects_dir="demo/sample_projects"
     )
 
-    assert "status" in out
-    assert out["status"] == "stub"
+    assert "company" in out
+    assert out["company"] == "TestCorp"

@@ -2,7 +2,6 @@ node_modules/
 dist/
 out/
 analysis_output/
-**/capstone.db
 log/
 !log/.gitkeep
 *.log
@@ -18,3 +17,37 @@ __pycache__/
 src/capstone_analyzer.egg-info/
 log/consent_decisions.jsonl
 /.venv
+config/user_config.json
+# databases
+demo_db/*
+data/files
+PATH_HERE
+.venv/
+env/
+pycache/
+*.pyc
+node_modules/
+frontend/node_modules/
+
+dist/
+build/
+
+.env
+.env.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.DS_Store
+Thumbs.db
+# SQLite DB files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local runtime artifacts
+.memory/
+uploads/
+data/*.db
+data/capstone.db

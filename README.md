@@ -1,51 +1,293 @@
 # Capstone Analyzer (Python)
 
-Local, consent-aware archive analysis implemented entirely in Python – no Electron dependencies required. Use the `capstone` CLI to manage consent preferences and to extract metadata, collaboration insights, languages, frameworks, and timeline metrics from zipped projects.
+Capstone Analyzer is a local-first software analysis tool for processing project archives and generating portfolio/resume-oriented insights.  
+The system supports three workflows: CLI analysis, interactive menu usage, and FastAPI HTTP endpoints.
+
+## Tips
+For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
+```
+git log --pretty=format:"commit:%H|%an|%ae|%ct|%s" --numstat > git_log.txt
+```
+This generates the required commit metadata file for parsing.
+
+Alternatively, for greater convenience, you can directly provide the GitHub repository URL along with an API token to perform repository-based analysis via the GitHub API.
 
 ## Quickstart
 
 ```bash
-# (Optional) create and activate a virtual environment before running commands
-python -m venv .venv
-source .venv/bin/activate
+# 1) Clone repository
+git clone https://github.com/COSC-499-W2025/capstone-project-team-17-1.git
+cd capstone-project-team-17-1
 
-# Install the package in editable mode
+# 2) Create virtual environment
+python -m venv .venv
+```
+
+Activate virtual environment:
+
+```bash
+# macOS/Linux
+source .venv/bin/activate
+```
+
+```powershell
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+```
+
+```cmd
+REM Windows (Command Prompt)
+.venv\Scripts\activate.bat
+```
+
+```bash
+# 3) Install package
 pip install -e .
 
-# Record consent for analysis
-capstone consent grant
+# 4) Install dev/API dependencies
+pip install -r requirements-dev.txt
 
-# Analyse an archive (results saved to analysis_output/ by default)
+# 5) Quick verification
+capstone --help
+```
+
+Requirements:
+- Python 3.10+
+- pip
+- git
+- tkinter (required by the file picker in CLI interactive flows)
+  - Ubuntu/Debian: `sudo apt-get install python3-tk`
+  - macOS/Windows: usually included with standard Python installers
+
+## Usage
+
+Run mode guidance:
+- `CLI (capstone ...)` - best for scripted/local automation and reproducible analysis runs.
+- `Interactive Menu (python main.py)` - best for guided demos and manual workflows.
+- `FastAPI Backend (capstone api ...)` - best for frontend integration, API clients, and HTTP-based testing.
+
+### Run CLI
+
+```bash
+# consent
+capstone consent local grant
+
+# analyze local zip
 capstone analyze /path/to/project.zip
 
-# Request external processing explicitly (default mode is local)
-capstone analyze /path/to/project.zip --analysis-mode external
+# optional: import and analyze repository
+capstone import-repo https://github.com/<org>/<repo>.git
 
-# Stream the summary JSON to the terminal
+# optional: print summary JSON
 capstone analyze /path/to/project.zip --summary-to-stdout
+```
 
-# Inspect or reset stored preferences/consent
-capstone config show
-capstone config reset
+### Run Interactive Menu
 
-# Run the Python unit test suite (config, consent, CLI, metrics, etc.)
+```bash
+python main.py
+```
+
+Example startup flow:
+
+```text
+python main.py
+============================================================
+            Data and Artifact Mining Application
+               Portfolio & Resume Generator
+============================================================
+
+
+Welcome! Thanks for being here. Let's get started :)
+
+
+NOTE: This application processes and stores your project data. Do you wish to proceed? (This can be changed later)
+Grant consent for this session (y/n): y
+Save consent decision for future sessions (y/n): y
+Saving consent for future sessions.
+
+
+Proceeding with analysis...
+
+Input shortcuts: b = back, m = main menu, Enter = cancel.
+
+========================================
+Main Menu
+========================================
+1.  Analyze new project archive (ZIP)
+2.  Import from GitHub URL
+3.  View all projects
+4.  View project details
+5.  Generate portfolio summary
+6.  Resume
+7.  View chronological project timeline
+8.  View chronological skills timeline
+9.  Delete project insights
+10. Manage consent (LLM/external services)
+11. Contributor rankings (Quick Access)
+12. AI-based project analysis (external LLM)
+13. Manage user profile
+14. Project Representation Settings
+15. Analyze User Role in Project
+16. Set Project Success Evidence
+17. Set Project Thumbnail
+18. Exit
+
+Please select an option (1-18):
+```
+
+Input shortcuts in interactive mode:
+- `b` = back
+- `m` = main menu
+- `Enter` = cancel current prompt (where supported)
+
+### Run API Backend
+
+```bash
+# Start FastAPI on port 8003
+capstone api --host 127.0.0.1 --port 8003 --db-dir data
+```
+
+Base URL: `http://127.0.0.1:8003`
+
+API docs:
+- Swagger UI: `http://127.0.0.1:8003/docs`
+- OpenAPI JSON: `http://127.0.0.1:8003/openapi.json`
+- Route debug (mounted routers + import errors): `http://127.0.0.1:8003/__debug/routers`
+
+## API Route Map (Table)
+
+### System
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/` | API status | Implemented |
+| GET | `/health` | Health check | Implemented |
+
+### Consent
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| POST | `/privacy-consent` | Save privacy consent | Implemented |
+| GET | `/privacy-consent` | Get privacy consent | Implemented |
+
+### Projects
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| POST | `/projects/upload` | Upload zip and store project snapshot | Implemented |
+| GET | `/projects` | List projects | Implemented |
+| GET | `/projects/{id}` | Get project details | Implemented |
+| DELETE | `/projects/{id}` | Delete project | Implemented |
+| GET | `/projects/{id}/uploads` | List project uploads | Implemented |
+| PATCH | `/projects/{id}` | Update project overrides | Implemented |
+| GET | `/projects/{id}/overrides` | Get project overrides | Implemented |
+
+### Skills
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/projects/{project_id}/skills` | Get detected skills for project | Implemented |
+| GET | `/skills` | Aggregate skills across projects | Implemented |
+
+### Resume
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/resume` | List/search resume entries | Implemented |
+| POST | `/resume` | Create resume entry | Implemented |
+| GET | `/resume/{id}` | Get resume entry | Implemented |
+| PATCH | `/resume/{id}` | Update resume entry | Implemented |
+| DELETE | `/resume/{id}` | Delete resume entry | Implemented |
+| POST | `/resume/generate` | Generate resume (`json|markdown|pdf`) | Implemented |
+| POST | `/resume/render-pdf` | Render resume payload as PDF | Implemented |
+| GET | `/resume-projects` | List/get resume wording by project | Implemented |
+| POST | `/resume-projects` | Upsert project resume wording | Implemented |
+| POST | `/resume-projects/generate` | Auto-generate resume wording | Implemented |
+
+### Portfolio / Showcase
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/portfolio/{id}` | Get portfolio/showcase summary | Implemented |
+| POST | `/portfolio/generate` | Generate portfolio summaries | Implemented |
+| POST | `/portfolio/{id}/edit` | Edit portfolio summary | Implemented |
+| GET | `/showcase/*` | Showcase-prefixed aliases | Implemented |
+| GET | `/portfolios/*`, `/users/*` | Legacy compatibility aliases | Implemented |
+
+Note:
+- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
+
+## Example Requests
+
+Upload a project zip:
+
+```bash
+curl -X POST "http://127.0.0.1:8003/projects/upload" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/project.zip;type=application/zip"
+```
+
+List projects:
+
+```bash
+curl "http://127.0.0.1:8003/projects"
+```
+
+Get project skills:
+
+```bash
+curl "http://127.0.0.1:8003/projects/<project_id>/skills"
+```
+
+Generate resume JSON:
+
+```bash
+curl -X POST "http://127.0.0.1:8003/resume/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"format":"json","limit":20}'
+```
+
+## Testing
+
+Backend/API:
+
+```bash
+python -m pytest
+```
+
+Alternative unittest run:
+
+```bash
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Key features:
-- Encrypted local configuration that stores consent decisions, analysis preferences, and last-opened folders.
-- Consent workflow that blocks analysis until users explicitly grant permission.
-- JSONL metadata with per-file language classification and activity type (code, documentation, asset, other).
-- Collaboration labelling (individual vs collaborative) driven by Git log evidence found within the archive.
-- Automatic fallback to local analysis whenever external processing is unavailable or not approved.
-- Rich summary including language counts, framework detection (from `requirements.txt`/`package.json`), activity timeline, and scan duration.
-- Entire test suite is Python-based; use `python -m unittest ...` rather than `npm test`.
-- Additional helpers replicate legacy Electron behaviours: config reset/validation, interactive consent prompting, markdown detection for Node/Electron apps, and skill confidence scoring.
-- Git collaboration analysis now parses `git log --numstat` output, filters bots/shared accounts, weights commits/reviews/line changes, and stores JSON snapshots in a local SQLite db for future dashboards.
+Testing notes:
+- API endpoints are tested with FastAPI TestClient through HTTP-style requests.
+- Prefer `python -m pytest` to avoid interpreter/environment mismatch.
+- Coverage focuses on API route behavior (status codes/payloads), core analysis/storage logic, and CLI-related integration paths.
+
+## Additional Notes
+
+- `requirements-dev.txt` includes API/test deps: `fastapi`, `httpx`, `pytest`, `python-multipart`, `uvicorn`.
+- PDF export requires a LaTeX engine. On macOS you can use:
+
+```bash
+./scripts/setup.sh
+```
+
+## Test Data ZIPs
+
+The repo includes sample ZIPs for demos and validation under `test_data/`:
+- `test_data/test-data-code-collab-earlier.zip`
+- `test_data/test-data-code-collab-later.zip`
+- `test_data/test-data-multi-projects.zip`
+- Source bundle for regeneration: `test_data/multi_project_bundle/`
 
 # Work Breakdown Structure
-[Link to WBS](docs/Plan/wbs.md)
 # Milestone #1
+[Link to WBS](docs/Plan/wbs.md)
 The focus of this milestone is to create the functionality for parsing and outputting information correctly. We will be very particular about your system design and testing approach during this phase. All the output for this milestone is expected to be in text (that is, you can opt for a CSV, JSON, plain text output, etc., or a combination that facilitates your future development). The specific requirements are below.
 The system must be able to ... :
 
@@ -231,7 +473,7 @@ The system must be able to ... :
 
 ## 17.0 Top Project Summaries
   - 17.1 Summary template
-  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark)
+  - 17.2 Evidence Gatherer for pull PR links, commits, issues, benchmark
   - 17.3 Auto-Writer (offline first; optional LLM use)
   - 17.4 Hallucination guardrails (quote facts, add refs, confidence flags)
   - 17.5 Exporters (Markdown, PDF one-pager, README snippet)
@@ -256,6 +498,54 @@ The system must be able to ... :
   - 20.3 Time Attribution (first seen, last active, active spans)
   - 20.4 Aggregation (per year/quarter, intensity score)
   - 20.5 Exports (skill timeline table, “top skills by year” chart data)
+
+## 21.0 Allow incremental information by adding another zipped folder of files for the same portfolio or résumé
+  - 21.1 Support uploading additional zipped folders for an existing portfolio or résumé
+  - 21.2 Merge newly added files with previously ingested artifacts
+  - 21.3 Preserve existing project data and user customizations across uploads
+
+## 22.0 Recognize duplicate files and maintains only one in the system
+  - 22.1 Generate unique identifiers (e.g., hashes) for all ingested files
+  - 22.2 Detect duplicate files across multiple uploads
+  - 22.3 Maintain a single canonical copy of duplicated files in the system
+
+## 23.0 Allow users to choose which information is represented
+  - 23.1 Allow manual re-ranking of projects
+  - 23.2 Enable user corrections to project chronology
+  - 23.3 Allow selection of attributes for project comparison
+  - 23.4 Allow selection of skills and projects for showcase
+
+ ## 24.0 Incorporate key role of the user in a given project
+  - 24.1 Capture the user’s primary role within each project
+  - 24.2 Store role information as part of project metadata
+
+## 25.0 Incorporate evidence of success for a given project
+  - 25.1 Associate quantitative metrics with projects
+  - 25.2 Allow inclusion of qualitative feedback or evaluations
+  - 25.3 Persist evidence of success for later display
+
+## 26.0 Allow user to associate an image for a given project to use as the thumbnail
+  - 26.1 Allow user to upload or select an image for a project
+  - 26.2 Associate the image with the project as a thumbnail
+  - 26.3 Store and retrieve image metadata
+
+## 27.0 Customize and save information about a portfolio showcase project
+  - 27.1 Customize project descriptions for portfolio presentation
+  - 27.2 Save portfolio-specific project information
+  - 27.3 Maintain user-defined showcase settings
+
+## 28.0 Customize and save the wording of a project used for a résumé item
+  - 28.1 Customize concise project wording for résumé use
+  - 28.2 Save résumé-specific project descriptions
+  - 28.3 Support updates without affecting portfolio text
+
+## 29.0 Display textual information about a project as a portfolio showcase
+  - 29.1 Generate textual representations of projects for portfolio display
+  - 29.2 Include user-selected content, roles, and evidence
+
+## 30.0 Display textual information about a project as a résumé item
+  - 30.1 Generate résumé-ready textual project descriptions
+  - 30.2 Display only résumé-selected projects and wording
 
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
@@ -371,4 +661,3 @@ Member Name: **Raunak Khanna** Signature: **Raunakk>.** Date: **11/24/2025**
 Member Name: **Shuyu Yan** Signature: **Shuyu yan** Date: **11/24/2025**
 
 Member Name: **Michelle Zhou** Signature: **Michelle Zhou** **Date: 11/24/2025**
-

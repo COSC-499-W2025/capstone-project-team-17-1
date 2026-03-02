@@ -12,6 +12,7 @@ def generate_resume_json(**kwargs):
 
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, TYPE_CHECKING
 
 from .company_profile import (
@@ -197,9 +198,9 @@ def resume_to_json(resume: TailoredResume) -> Dict[str, Any]:
 
 def resume_to_pdf(resume: TailoredResume, output_path: Path) -> bytes:
     """
-    Render the resume as a professionally formatted PDF using Pandoc.
+    Render the resume as a professionally formatted PDF using LaTeX templates.
     """
-    from .resume_pdf_builder import build_pdf_with_pandoc
+    from .resume_pdf_builder import build_pdf_with_latex
 
-    pdf_path = build_pdf_with_pandoc(resume.to_dict(), output_path)
+    pdf_path = build_pdf_with_latex(resume.to_dict(), output_path)
     return pdf_path.read_bytes()

@@ -153,10 +153,10 @@ class ResumeGeneratorTests(unittest.TestCase):
         if data["projects"]:
             self.assertIsInstance(data["projects"][0], dict)
 
-    @patch("capstone.resume_pdf_builder.build_pdf_with_pandoc")
-    def test_resume_to_pdf_uses_pandoc_builder(self, mock_build_pdf):
+    @patch("capstone.resume_pdf_builder.build_pdf_with_latex")
+    def test_resume_to_pdf_uses_latex_builder(self, mock_build_pdf):
         """
-        resume_to_pdf should delegate to build_pdf_with_pandoc and return its bytes.
+        resume_to_pdf should delegate to build_pdf_with_latex and return its bytes.
         """
         # Fake resume dict → the actual content is not important here
         jd_profile = {"required_skills": [], "preferred_skills": []}
