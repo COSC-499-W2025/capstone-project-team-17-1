@@ -414,7 +414,46 @@ The system must be able to ... :
   - 20.3 Time Attribution (first seen, last active, active spans)
   - 20.4 Aggregation (per year/quarter, intensity score)
   - 20.5 Exports (skill timeline table, “top skills by year” chart data)
-
+# Milestone #2
+21. Allow incremental information by adding another zipped folder of files for the same portfolio or résumé that incorporates additional information at a later point in time
+22. Recognize duplicate files and maintains only one in the system
+23. Allow users to choose which information is represented (e.g., re-ranking of projects, corrections to chronology, attributes for project comparison, skills to highlight, projects selected for showcase)
+24. Incorporate a key role of the user in a given project
+25. Incorporate evidence of success (e.g., metrics, feedback, evaluation) for a given project
+26. Allow user to associate a portfolio image for a given project to use as the thumbnail
+27. Customize and save information about a portfolio showcase project
+28. Customize and save the wording of a project used for a résumé item
+29. Display textual information about a project as a portfolio showcase
+30. Display textual information about a project as a résumé item
+31. Use a FastAPI to faciliate the communication between the backend and the frontend
+32. Support API endpoints for:
+POST /projects/upload
+POST /privacy-consent
+GET /projects
+GET /projects/{id}
+GET /skills
+GET /resume/{id}
+POST /resume/generate
+POST /resume/{id}/edit
+GET /portfolio/{id}
+POST /portfolio/generate
+POST /portfolio/{id}/edit
+Exact wording and use of {id} can vary. You may also decide to have more endpoints.
+33. You need to provide at least two zipped test data files for the same project, one as a snapshot at an earlier point in time, and another as a snapshot later in time that could have additional/modified files, with the following directory structure:
+test-data.zip:
+./code_collab_proj/app/
+./code_collab_proj/test/
+./code_collab_proj/doc/
+etc.
+34. You need to provide at least one zipped test data file that has multiple projects, showcasing individual and collaborative projects. If you have code and non-code projects, be sure to provide test data for those too. The directory structure should resemble the following:
+test-data.zip:
+./code_indiv_proj/
+./code_collab_proj/
+./text_indiv_proj/
+./image_indiv_proj/
+etc.
+35. Your API endpoints must be tested as if they are being called over HTTP but without running a real server, ensuring the correct status code and expected data.
+36. Your system must have clear documentation for all of the API endpoints
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
 <img width="1134" height="569" alt="image" src="https://github.com/user-attachments/assets/4c2d9c6b-ff7a-452c-85e7-b1f4403be251" />
