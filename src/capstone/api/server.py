@@ -1,6 +1,29 @@
 import os
 import traceback
-from typing import Optional
+from fastapi import FastAPI
+
+from capstone.api.routes.consent import router as consent_router
+from capstone.api.routes.projects import router as projects_router
+from capstone.api.routes.skills import router as skills_router
+from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
+
+
+def _safe_import_job_match():
+    """Attempt to import job_match router (optional)."""
+    try:
+        from capstone.api.routes.job_match import router  # type: ignore
+        return router, None
+    except Exception:
+        return None, traceback.format_exc()
+
+
+def _safe_import_portfolio():
+    """Attempt to import portfolio router + configure."""
+    try:
+        from capstone.api.routes.portfolio import router, configure  # type: ignore
+        return router, configure, None
+    except Exception:
+        return None, None, traceback.format_exc()
 
 
 def _safe_import_showcase():
@@ -23,41 +46,7 @@ def _safe_import_resumes():
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Capstone API")
-
-    # State (some deps look here)
-    app.state.db_dir = db_dir
     app.state.auth_token = auth_token
-
-    # Middleware
-    app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # dev-friendly; adjust in prod
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Configure route modules (if they support it)
-    # Do this BEFORE including routers so dependency wiring is ready.
-    _configure_module(projects, db_dir, auth_token, app, "projects")
-    _configure_module(skills, db_dir, auth_token, app, "skills")
-    _configure_module(resume, db_dir, auth_token, app, "resume")
-    _configure_module(job_match, db_dir, auth_token, app, "job_match")
-    _configure_module(portfolio, db_dir, auth_token, app, "portfolio")
-    _configure_module(portfolio_showcase, db_dir, auth_token, app, "portfolio_showcase")
-    _configure_module(legacy_aliases, db_dir, auth_token, app, "legacy_aliases")
-    _configure_module(consent, db_dir, auth_token, app, "consent")
-
-    # Routers (include ONCE)
-    app.include_router(consent.router)
-    app.include_router(projects.router)
-    app.include_router(skills.router)
-    app.include_router(resume.router)
-    app.include_router(job_match.router)
-    app.include_router(portfolio.router)
-    app.include_router(portfolio_showcase.router)
-    app.include_router(legacy_aliases.router)
 
     @app.get("/")
     def root():
