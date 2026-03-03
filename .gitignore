@@ -29,7 +29,7 @@ pycache/
 *.pyc
 node_modules/
 frontend/node_modules/
-
+data/capstone.db
 dist/
 build/
 
