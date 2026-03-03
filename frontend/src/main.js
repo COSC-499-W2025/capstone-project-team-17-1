@@ -1,5 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require("electron")
 const path = require("path")
+const { spawn } = require("child_process");
+
+let apiProcess = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -25,6 +28,17 @@ function createWindow() {
 
 ipcMain.on("close", (event) => {
   event.sender.getOwnerBrowserWindow().close()
+  if (apiProcess) {
+    console.log("Shutting down API...");
+
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", apiProcess.pid, "/f", "/t"]);
+    } else {
+      apiProcess.kill("SIGTERM");
+    }
+
+    apiProcess = null;
+  }
 })
 
 ipcMain.on("minimize", (event) => {
@@ -39,5 +53,76 @@ ipcMain.on("maximize", (event) => {
     win.maximize()
   }
 })
+function startAPI() {
+   if (apiProcess) {
+    console.log("API already running.");
+    return;
+   }
+  const pythonPath = path.join(
+    __dirname,
+    "..",
+    "..",
+    ".venv",
+    "Scripts",
+    "python.exe"
+  );
 
-app.whenReady().then(createWindow)
+  console.log("Using Python:", pythonPath);
+
+  apiProcess = spawn(pythonPath, [
+    "-m",
+    "uvicorn",
+    "capstone.api.server:app",
+    "--reload",
+    "--port",
+    "8002"
+  ], {
+    cwd: path.join(__dirname, "..", ".."),
+    windowsHide: true
+  });
+
+  apiProcess.stdout.on("data", (data) => {
+    console.log(`API: ${data}`);
+  });
+
+  apiProcess.stderr.on("data", (data) => {
+    console.error(`API Error: ${data}`);
+  });
+
+  apiProcess.on("close", (code) => {
+    console.log(`API exited with code ${code}`);
+  });
+}
+
+app.whenReady().then(() => {
+  startAPI();
+  createWindow();
+});
+
+app.on("before-quit", () => {
+  if (apiProcess) {
+    console.log("Shutting down API...");
+
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", apiProcess.pid, "/f", "/t"]);
+    } else {
+      apiProcess.kill("SIGTERM");
+    }
+
+    apiProcess = null;
+  }
+});
+
+app.on("window-all-closed", () => {
+if (apiProcess) {
+    console.log("Shutting down API...");
+
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", apiProcess.pid, "/f", "/t"]);
+    } else {
+      apiProcess.kill("SIGTERM");
+    }
+
+    apiProcess = null;
+  }
+});

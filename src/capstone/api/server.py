@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from capstone.api.routes.system_metrics import get_system_metrics
 from capstone.system.monitor_manager import start_monitor, stop_monitor
 from capstone.api.routes.activity_log import router as activity_router
+from capstone.api.routes.recent_projects import router as dashboard_router
+from capstone.api.routes.errors import router as errors_router
 def _safe_import_job_match():
     """Attempt to import job_match router (optional)."""
     try:
@@ -86,7 +88,10 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
+    app.include_router(dashboard_router)
     app.include_router(activity_router)
+    app.include_router(errors_router)
+    app.include_router(projects_router)
     # Optional job-match routes (since routes/job_match.py may not exist in this branch)
     job_match_router, job_match_err = _safe_import_job_match()
     if job_match_router is not None:

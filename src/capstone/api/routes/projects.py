@@ -206,7 +206,7 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         "project_id": project_id,
         "skills": manifest.get("skills", {}),
         "root_name": manifest.get("root_name"),
-        "file_count": len(manifest.get("files", []))
+        "file_count": len(manifest.get("files", []))    
     }
     
     storage.store_analysis_snapshot(
@@ -214,7 +214,8 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         project_id=project_id,
         classification="unknown",
         primary_contributor=None,
-        snapshot=snapshot
+        snapshot=snapshot,
+        zip_path = stored["path"] 
     )
     log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
     message = "Upload stored successfully."

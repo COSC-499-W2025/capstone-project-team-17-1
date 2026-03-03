@@ -305,5 +305,216 @@ async function loadRecentActivity() {
   }
 }
 
+async function loadRecentProjects() {
+  try {
+    const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
+    const projects = await res.json();
+
+    const container = document.getElementById("recent-projects-container");
+    container.innerHTML = "";
+
+    projects.slice(0, 5).forEach(project => {
+      const card = document.createElement("div");
+      card.className = "recent-project-item";
+
+      card.innerHTML = `
+        <div class="project-header">
+          <span class="project-id">${project.project_id}</span>
+          <span class="project-date">${new Date(project.created_at).toLocaleString()}</span>
+        </div>
+
+        <div class="project-meta">
+          <span>Files: ${project.total_files}</span>
+          <span>Skills: ${project.total_skills}</span>
+          <span>Type: ${project.classification}</span>
+        </div>
+
+        <button class="project-button">View Project</button>
+      `;
+
+      container.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Failed to load recent projects:", err);
+  }
+}
+
+async function loadErrorAnalysis() {
+  const container = document.getElementById("error-analysis-container");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="error-loading">
+      Loading analysis...
+    </div>
+  `;
+
+  try {
+    const res = await fetch("http://127.0.0.1:8002/errors");
+    const data = await res.json();
+
+    container.innerHTML = "";
+
+    // -----------------------------
+    // CONSENT REQUIRED
+    // -----------------------------
+    if (data.status === "consent_required") {
+      container.innerHTML = `
+        <div class="error-empty-state">
+          <p>AI analysis is disabled.</p>
+          <button id="enable-ai-btn" class="ai-consent-btn">
+            Enable AI Analysis
+          </button>
+        </div>
+      `;
+
+      document.getElementById("enable-ai-btn")?.addEventListener("click", async () => {
+        await fetch("http://127.0.0.1:8002/privacy-consent/external", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ consent: true })
+        });
+
+        loadErrorAnalysis();
+      });
+
+      return;
+    }
+
+    // -----------------------------
+    // NO PROJECTS
+    // -----------------------------
+    if (data.status === "no_projects") {
+      container.innerHTML = `
+        <div class="error-empty-state">
+          <h3>No projects found 📁</h3>
+          <p>Upload a project to enable AI error analysis.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // -----------------------------
+    // NEVER ANALYZED
+    // -----------------------------
+    if (data.status === "not_analyzed") {
+      container.innerHTML = `
+        <div class="error-healthy-state">
+          <p>No AI analysis has been run yet.</p>
+          <button id="run-analysis-btn" class="ai-consent-btn">
+            Run AI Analysis
+          </button>
+        </div>
+      `;
+
+      document.getElementById("run-analysis-btn")?.addEventListener("click", async () => {
+        container.innerHTML = `
+          <div class="error-loading">
+            Running AI analysis...
+          </div>
+        `;
+
+        await fetch("http://127.0.0.1:8002/errors/analyze", {
+          method: "POST"
+        });
+
+        // Wait briefly to avoid race condition
+        setTimeout(loadErrorAnalysis, 500);
+      });
+
+      return;
+    }
+
+    // -----------------------------
+// ANALYZED (CLEAN OR WITH ERRORS)
+// -----------------------------
+if (data.status === "ok") {
+
+  // Header bar with re-run button
+  const headerBar = document.createElement("div");
+  headerBar.className = "error-header-bar";
+  headerBar.innerHTML = `
+    <button id="rerun-analysis-btn" class="ai-consent-btn small">
+      Re-run
+    </button>
+  `;
+  container.appendChild(headerBar);
+
+  document.getElementById("rerun-analysis-btn")?.addEventListener("click", async () => {
+    container.innerHTML = `
+      <div class="error-loading">
+        Running AI analysis...
+      </div>
+    `;
+
+    await fetch("http://127.0.0.1:8002/errors/analyze", { method: "POST" });
+
+    setTimeout(loadErrorAnalysis, 500);
+  });
+
+  // No issues found
+  if (!data.errors || data.errors.length === 0) {
+    const healthyBox = document.createElement("div");
+    healthyBox.className = "error-healthy-state";
+    healthyBox.innerHTML = `
+      ✓ No issues found. Projects look healthy.
+    `;
+    container.appendChild(healthyBox);
+    return;
+  }
+
+  // Render actual errors
+  data.errors.forEach(error => {
+    const box = document.createElement("div");
+    box.className = "error-item";
+
+    box.innerHTML = `
+      <div class="error-header">
+        <div class="severity-circle ${error.severity}"></div>
+        <div class="error-title">${error.title}</div>
+      </div>
+
+      <div class="error-project">Project: ${error.project_id}</div>
+      <div class="error-detail">${error.detail}</div>
+
+      <div class="error-actions">
+        <button class="fix-btn">Fix Issue</button>
+      </div>
+    `;
+
+    // Fake fix button behavior (future hook)
+    box.querySelector(".fix-btn")?.addEventListener("click", () => {
+      alert(`Opening fix flow for "${error.title}" 🚀`);
+    });
+
+    container.appendChild(box);
+  });
+
+  return;
+}
+
+    // -----------------------------
+    // FALLBACK
+    // -----------------------------
+    container.innerHTML = `
+      <div class="error-empty-state">
+        Unexpected response from server.
+      </div>
+    `;
+
+  } catch (err) {
+    container.innerHTML = `
+      <div class="error-empty-state">
+        Failed to load error analysis.
+      </div>
+    `;
+    console.error("Error loading analysis:", err);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", loadErrorAnalysis);
+document.addEventListener("DOMContentLoaded", loadRecentProjects);
+
 loadRecentActivity();
 setInterval(loadRecentActivity, 1000);

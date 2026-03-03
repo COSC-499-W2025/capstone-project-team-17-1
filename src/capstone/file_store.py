@@ -32,9 +32,8 @@ def hash_file_stream(path: Path | str, *, chunk_size: int = 64 * 1024) -> Tuple[
     return hasher.hexdigest(), size
 
 
-def _storage_path(root: Path, file_hash: str) -> Path:
-    """Return flat storage path for a given hash."""
-    return root / file_hash
+def _storage_path(root: Path, file_hash: str, ext: str = "") -> Path:
+    return root / f"{file_hash}{ext}"
 
 
 def ensure_file(
@@ -53,6 +52,9 @@ def ensure_file(
     root.mkdir(parents=True, exist_ok=True)
 
     file_hash, size_bytes = hash_file_stream(source_path)
+    ext = Path(original_name or "").suffix.lower()
+    if not ext:
+        ext = ""
     file_id = file_hash  # content-addressable
 
     # Reuse provided upload_id for incremental uploads; otherwise create new
@@ -113,7 +115,7 @@ def ensure_file(
         }
 
     # Not deduped: store new blob and insert file row
-    dest_path = _storage_path(root, file_hash)
+    dest_path = _storage_path(root, file_hash, ext)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dest_path.with_suffix(".tmp")
 
