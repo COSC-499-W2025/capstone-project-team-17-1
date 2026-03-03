@@ -21,6 +21,7 @@ config/user_config.json
 # databases
 demo_db/*
 data/files
+data/
 PATH_HERE
 .venv/
 env/
