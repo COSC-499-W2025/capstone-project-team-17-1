@@ -23,10 +23,26 @@ import json
 from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
+import os
+from pathlib import Path
+import sys
 
 logger = get_logger(__name__)
 
-DB_DIR = Path("data")
+
+
+def get_base_data_dir():
+    if getattr(sys, "frozen", False):
+        # Running as PyInstaller exe
+        base = Path(os.getenv("LOCALAPPDATA")) / "Loom"
+    else:
+        # Running in development
+        base = Path.cwd() / "runtime_data"
+
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
@@ -873,7 +889,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
 # DB lifecycle
 # -----------------------------
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
-    target_dir = base_dir or DB_DIR
+    target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = target_dir / "capstone.db"
 
@@ -1423,7 +1439,7 @@ def store_uploaded_file_bytes(
 
     # Where to store the file on disk
     # Keep it deterministic so dedupe is easy.
-    root = base_dir or DB_DIR
+    root = base_dir or BASE_DIR
     files_dir = root / "blobs"
     files_dir.mkdir(parents=True, exist_ok=True)
     blob_path = files_dir / f"{file_hash}.bin"
@@ -2775,7 +2791,7 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
 __all__ = [
     "open_db",
     "close_db",
-    "DB_DIR",
+    "BASE_DIR",
     # snapshots
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
