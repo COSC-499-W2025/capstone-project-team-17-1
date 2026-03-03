@@ -687,3 +687,61 @@ svg {
   font-weight: 600;
 }
 
+/* =========================================================
+    Data Quality 
+   ========================================================= */
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 15px;
+  margin-top: 10px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-height: 260px;       /* 👈 controls scroll height */
+  overflow-y: auto;        /* 👈 enables scrolling */
+  padding-right: 4px;      /* slight spacing */
+}
+
+/* Hide scrollbar for Chrome, Safari */
+.health-grid::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+
+
+.health-mini-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.health-mini-card:hover {
+  transform: translateY(-4px);
+}
+
+.health-score {
+  font-size: 26px;
+  font-weight: bold;
+}
+
+.health-emoji {
+  font-size: 28px;
+  margin: 6px 0;
+}
+
+.health-project {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+}
+
+.health-stats {
+  font-size: 12px;
+  opacity: 0.6;
+  display: flex;
+  justify-content: space-between;
+}
