@@ -104,7 +104,7 @@ def resume_list(
             return JSONResponse({"data": preview, "error": None})
         items = [entry.to_dict() for entry in result.entries]
     if fmt == "markdown":
-        payload = "\n\n".join([export_resume(item) for item in items])
+        payload = "\n\n".join([export_markdown(item) for item in items])
         return PlainTextResponse(payload)
     return JSONResponse(
         {
