@@ -2,20 +2,22 @@ from __future__ import annotations
 
 import os
 import json
-from typing import List, Dict
-from urllib import response
-from urllib import response
+from typing import List
 from zipfile import ZipFile
 from openai import OpenAI
 from pathlib import Path
 from capstone.code_bundle import bundle_code_from_zip
 from capstone.code_bundle import BundledFile
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
 MAX_FILES = 5
 MAX_CHARS_PER_FILE = 4000
+
+
+def _get_openai_client() -> OpenAI | None:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key)
 
 
 def _select_relevant_files(files: List[BundledFile]) -> List[BundledFile]:
@@ -47,6 +49,10 @@ def run_ai_error_analysis(
     """
     Real AI error analysis using extracted source files.
     """
+
+    client = _get_openai_client()
+    if client is None:
+        return []
 
     # 1️⃣ Bundle project files from snapshot
     zip_path = Path(zip_path)

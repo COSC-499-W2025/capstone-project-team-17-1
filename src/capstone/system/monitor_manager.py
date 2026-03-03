@@ -1,17 +1,13 @@
-import subprocess
 import os
 import requests
 import time
-import signal
-import ctypes
-import win32con
-import win32event
-import win32process
-import win32gui
-import win32api
-import win32com.client
-from win32com.shell import shell
-import win32com.shell.shellcon as shellcon
+import platform
+
+IS_WINDOWS = platform.system().lower() == "windows"
+if IS_WINDOWS:
+    import win32con
+    from win32com.shell import shell
+    import win32com.shell.shellcon as shellcon
 
 
 monitor_process = None
@@ -26,6 +22,9 @@ def is_monitor_running():
 
 
 def start_monitor():
+    if not IS_WINDOWS:
+        return
+
     if is_monitor_running():
         print("Hardware monitor already running.")
         return
@@ -66,6 +65,9 @@ def start_monitor():
 
 def stop_monitor():
     global monitor_process
+
+    if not IS_WINDOWS:
+        return
 
     if monitor_process:
         monitor_process.terminate()

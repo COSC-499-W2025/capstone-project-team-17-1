@@ -1,9 +1,10 @@
 import psutil
 import shutil
-import wmi
 import subprocess
-import pythoncom
 import requests
+import platform
+
+IS_WINDOWS = platform.system().lower() == "windows"
 
 def get_cpu_usage():
     return psutil.cpu_percent(interval=0.5)
@@ -27,6 +28,9 @@ def get_storage_metrics():
 
 
 def get_hardware_temperatures():
+    if not IS_WINDOWS:
+        return None, None
+
     cpu_temp = None
     gpu_temp = None
 
@@ -61,8 +65,9 @@ def get_hardware_temperatures():
 
         search_sensors(data)
 
-    except Exception as e:
-        print("HTTP temperature error:", e)
+    except Exception:
+        # Temperature source is optional; fall back silently.
+        return None, None
 
     return cpu_temp, gpu_temp
 

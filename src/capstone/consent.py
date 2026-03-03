@@ -6,10 +6,12 @@ Frontend controls consent state.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any
 
 from capstone.storage import open_db, close_db
+from .config import Config, ConsentState as ConfigConsentState, update_consent, load_config
 
 
 class ConsentError(RuntimeError):
@@ -18,6 +20,14 @@ class ConsentError(RuntimeError):
 
 class ExternalPermissionDenied(RuntimeError):
     """Raised when external AI usage is not allowed."""
+
+
+@dataclass
+class ConsentState:
+    granted: bool
+    decision: str
+    timestamp: str
+    source: str = "cli"
 
 
 # -------------------------------------------------------
@@ -141,3 +151,76 @@ def ensure_external_permission(service: str) -> None:
             )
     finally:
         close_db()
+
+
+def _as_legacy_state(local: bool, external: bool) -> ConsentState:
+    decision = "allow"
+    if not local:
+        decision = "deny"
+    elif external:
+        decision = "allow_external"
+    return ConsentState(
+        granted=local,
+        decision=decision,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        source="api",
+    )
+
+
+def export_consent() -> dict[str, Any]:
+    state = get_consent()
+    return {
+        "local_consent": state["local_consent"],
+        "external_consent": state["external_consent"],
+    }
+
+
+def ensure_consent(*, require_granted: bool = False) -> ConsentState:
+    state = get_consent()
+    consent = _as_legacy_state(state["local_consent"], state["external_consent"])
+    if require_granted and not consent.granted:
+        raise ConsentError("Local consent required.")
+    return consent
+
+
+def prompt_for_consent() -> str:
+    # API-first flow does not support interactive terminal prompts.
+    return "declined"
+
+
+def grant_consent(*, decision: str = "allow", source: str = "cli") -> Config:
+    set_local_consent(True)
+    return update_consent(granted=True, decision=decision, source=source)
+
+
+def revoke_consent(*, decision: str = "deny", source: str = "cli") -> Config:
+    set_local_consent(False)
+    return update_consent(granted=False, decision=decision, source=source)
+
+
+def grant_external_consent(*, decision: str = "allow") -> Config:
+    set_external_consent(True)
+    config = load_config()
+    # Keep existing local consent metadata untouched.
+    update_consent(
+        granted=config.consent.granted,
+        decision=(decision or "allow_external"),
+        source=config.consent.source,
+    )
+    return load_config()
+
+
+def revoke_external_consent(*, decision: str = "deny") -> Config:
+    set_external_consent(False)
+    config = load_config()
+    update_consent(
+        granted=config.consent.granted,
+        decision=(decision or "deny_external"),
+        source=config.consent.source,
+    )
+    return load_config()
+
+
+def show_external_consent_status() -> None:
+    state = get_consent()
+    print(f"external_consent={state['external_consent']}")
