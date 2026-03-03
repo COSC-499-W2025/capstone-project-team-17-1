@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from pathlib import Path
+from typing import Callable, Dict, Iterable, Sequence, Literal, Optional
 
 from capstone.storage import open_db, close_db
 
@@ -131,6 +133,10 @@ def ensure_external_permission(service: str) -> None:
     No CLI interaction.
     Raises if not allowed.
     """
+    if input_fn is None:
+        input_fn = input
+    if output_fn is None:
+        output_fn = print
 
     conn = open_db()
     try:

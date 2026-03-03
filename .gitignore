@@ -42,3 +42,13 @@ yarn-error.log*
 
 .DS_Store
 Thumbs.db
+# SQLite DB files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local runtime artifacts
+.memory/
+uploads/
+data/*.db
+data/capstone.db

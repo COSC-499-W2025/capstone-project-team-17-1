@@ -31,9 +31,9 @@ def legacy_portfolio_summary(user: str, request: Request, limit: int = 3):
 def legacy_portfolio_showcase_query(request: Request, projectId: str, user: str | None = None):
     return showcase_get_portfolio_showcase_query(request=request, projectId=projectId, user=user)
 
-@router.get("/portfolio/{project_id}")
-def legacy_portfolio_showcase(project_id: str, request: Request, user: str | None = None):
-    return showcase_get_portfolio_showcase(project_id=project_id, request=request, user=user)
+@router.get("/portfolio/{id}")
+def legacy_portfolio_showcase(id: str, request: Request, user: str | None = None):
+    return showcase_get_portfolio_showcase(id=id, request=request, user=user)
 
 @router.get("/portfolios/latest")
 def legacy_portfolios_latest(
