@@ -14,6 +14,7 @@ from capstone.job_matching import (
     matches_to_json,
 )
 from capstone.storage import open_db, close_db
+from capstone.activity_log import log_event
 
 router = APIRouter(prefix="/job-matching", tags=["job-matching"])
 
@@ -35,7 +36,17 @@ def match_single_project(payload: JobMatchRequest) -> Dict[str, Any]:
             project_id=payload.project_id,
             db_dir=None,
         )
+
+        log_event(
+            "SUCCESS",
+            f"Job match completed · Project: {payload.project_id}"
+        )
+
     except Exception as e:
+        log_event(
+            "ERROR",
+            f"Job match failed · Project: {payload.project_id} · {str(e)}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     snippet = build_resume_snippet(result)
@@ -83,5 +94,9 @@ def rank_projects(
     matches = rank_projects_for_job(jd_profile, project_snapshots)
 
     matches = matches[:top_k]
-
+    log_event(
+    "INFO",
+    f"Job ranking executed · Candidates: {len(project_snapshots)} · Returned: {len(matches)}"
+)
+    
     return matches_to_json(matches)

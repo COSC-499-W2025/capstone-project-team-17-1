@@ -1,11 +1,19 @@
 import os
 import traceback
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
 from capstone.api.routes.skills import router as skills_router
 from capstone.api.routes.legacy_aliases import router as legacy_aliases_router
+from fastapi.middleware.cors import CORSMiddleware
+from capstone.api.routes.system_metrics import get_system_metrics
+from capstone.system.monitor_manager import start_monitor, stop_monitor
+from capstone.api.routes.activity_log import router as activity_router
+from capstone.api.routes.recent_projects import router as dashboard_router
+from capstone.api.routes.errors import router as errors_router
+from capstone.api.routes.health import router as health_router
 
 
 def _safe_import_job_match():
@@ -45,8 +53,27 @@ def _safe_import_resumes():
 
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
-    app = FastAPI(title="Capstone API")
+    @asynccontextmanager
+    async def lifespan(app):
+        # Startup
+        start_monitor()
+        print("Application startup complete.")
+
+        yield
+
+        # Shutdown
+        stop_monitor()
+        print("Application shutdown complete.")
+    app = FastAPI(title="Capstone API", lifespan=lifespan)
     app.state.auth_token = auth_token
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # for development
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/")
     def root():
@@ -56,11 +83,18 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     def health():
         return {"status": "ok"}
 
+    @app.get("/system/system-metrics")
+    def system_metrics():
+        return get_system_metrics()
     # Always-available routers
     app.include_router(consent_router)
     app.include_router(projects_router)
     app.include_router(skills_router)
-
+    app.include_router(dashboard_router)
+    app.include_router(activity_router)
+    app.include_router(errors_router)
+    app.include_router(projects_router)
+    app.include_router(health_router)
     # Optional job-match routes (since routes/job_match.py may not exist in this branch)
     job_match_router, job_match_err = _safe_import_job_match()
     if job_match_router is not None:
@@ -118,7 +152,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
             "resumes_import_error": getattr(app.state, "resume_import_error", None),
             "resumes_mount_error": getattr(app.state, "resume_mount_error", None),
         }
-
+    
     return app
 
 

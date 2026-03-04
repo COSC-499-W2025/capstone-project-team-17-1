@@ -21,6 +21,7 @@ config/user_config.json
 # databases
 demo_db/*
 data/files
+data/
 PATH_HERE
 .venv/
 env/
@@ -28,7 +29,7 @@ pycache/
 *.pyc
 node_modules/
 frontend/node_modules/
-
+data/capstone.db
 dist/
 build/
 

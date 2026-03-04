@@ -11,6 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from capstone.activity_log import log_event
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
 from capstone.resume_retrieval import (
@@ -66,8 +67,10 @@ async def resume_render_pdf(request: Request):
         try:
             build_pdf_with_latex(resume_payload, out_path)
         except Exception as exc:
+            log_event("ERROR", f"Resume PDF render failed · {exc}")
             raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
         encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")
+        log_event("SUCCESS", "Resume PDF rendered successfully")
     return {"data": {"format": "pdf", "payload": encoded}, "error": None}
 
 @router.get("/resume")
@@ -134,6 +137,8 @@ async def resume_insert(request: Request):
             metadata=payload.get("metadata"),
         )
         entry = get_resume_entry(c, id)
+        log_event("SUCCESS", f"Resume entry created · ID: {id} · Section: {section}")
+        
     return JSONResponse({"data": entry.to_dict(), "error": None}, status_code=200)
 
 
@@ -144,6 +149,7 @@ def resume_get(id: str, request: Request):
         ensure_resume_schema(c)
         entry = get_resume_entry(c, id)
     if not entry:
+        log_event("ERROR", f"Resume Not found · ID: {id}")
         raise HTTPException(status_code=404, detail="Resume entry not found")
     return {"data": entry.to_dict(), "error": None}
 
@@ -167,7 +173,9 @@ async def resume_update(id: str, request: Request):
             metadata=payload.get("metadata"),
         )
     if not entry:
+        log_event("ERROR", f"Resume update failed · Not found · ID: {id}")
         raise HTTPException(status_code=404, detail="Resume entry not found")
+    log_event("SUCCESS", f"Resume entry updated · ID: {id}")
     return {"data": entry.to_dict(), "error": None}
 
 
@@ -187,8 +195,11 @@ def resume_delete(id: str, request: Request):
         ensure_resume_schema(c)
         ok = delete_resume_entry(c, id)
     if not ok:
+        log_event("ERROR", f"Resume delete failed · Not found · ID: {id}")
         raise HTTPException(status_code=404, detail="Resume entry not found")
+    log_event("WARNING", f"Resume entry deleted · ID: {id}")
     return {"data": {"deleted": True, "id": id}, "error": None}
+    
 
 
 @router.post("/resume/generate")
@@ -219,6 +230,7 @@ async def resume_generate(request: Request):
             offset=int(payload.get("offset", 0)),
         )
         if not result.entries:
+            log_event("ERROR", "Resume generation failed · No entries found")
             raise HTTPException(status_code=404, detail="No resume entries found")
         project_ids = sorted({pid for entry in result.entries for pid in entry.project_ids})
         description_map = {}
@@ -238,6 +250,7 @@ async def resume_generate(request: Request):
         return {"data": {"format": "pdf", "payload": encoded}, "error": None}
     if fmt == "markdown":
         return {"data": {"format": "markdown", "payload": data.decode("utf-8")}, "error": None}
+    log_event("SUCCESS", f"Resume generated · Format: {fmt} · Entries: {len(result.entries)}")
     return {"data": {"format": "json", "payload": json.loads(data.decode("utf-8"))}, "error": None}
 
 
@@ -263,6 +276,7 @@ def resume_projects_get(request: Request):
                 active_only=not q.get("includeInactive") == "true",
             )
             if not item:
+                log_event("ERROR", f"Resume project description failed · Project not found · {item.project_id}")
                 raise HTTPException(status_code=404, detail="No resume project found")
             return {"data": item.to_dict(), "error": None}
 
@@ -275,6 +289,7 @@ def resume_projects_get(request: Request):
         )
 
     payload = [item.to_dict() for item in items]
+    log_event("SUCCESS", f"Resume project description updated · Project: {id}")
     return {"data": payload, "meta": {"limit": limit, "offset": offset, "total": len(payload)}, "error": None}
 
 
@@ -338,6 +353,7 @@ async def resume_projects_generate(request: Request):
         latest_map = fetch_latest_snapshots_for_projects(c, ids)
         missing = [pid for pid, snap in latest_map.items() if snap is None]
         if missing:
+            log_event("ERROR", f"Resume project generation failed · Missing projects")
             raise HTTPException(status_code=404, detail="Project not found")
 
         items = generate_resume_project_descriptions(
@@ -347,4 +363,5 @@ async def resume_projects_generate(request: Request):
         )
 
     payload = [item.to_dict() for item in items]
+    log_event("SUCCESS", f"Resume project descriptions generated · Projects: {len(ids)}")
     return {"data": payload, "meta": {"total": len(payload)}, "error": None}
