@@ -19,13 +19,30 @@ import sqlite3
 import uuid
 from pathlib import Path
 from typing import Iterable, Optional
-
+import json
+from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
+import os
+from pathlib import Path
+import sys
 
 logger = get_logger(__name__)
 
-DB_DIR = Path("data")
+
+
+def get_base_data_dir():
+    if getattr(sys, "frozen", False):
+        # Running as PyInstaller exe
+        base = Path(os.getenv("LOCALAPPDATA")) / "Loom"
+    else:
+        # Running in development
+        base = Path.cwd() / "runtime_data"
+
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 
@@ -77,6 +94,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             snapshot JSON NOT NULL,
             repo_url TEXT,
             token_enc TEXT,
+            zip_path TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -97,6 +115,15 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    # stroring user consent
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS privacy_consent (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        local_consent INTEGER DEFAULT 0,
+        external_consent INTEGER DEFAULT 0,
+        updated_at TEXT
+    )
+    """)
 
     # Contributor stats history (append-only; we fetch latest per contributor)
     conn.execute("""
@@ -108,6 +135,14 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
     """)
     
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS error_analysis_results (
+            project_id TEXT PRIMARY KEY,
+            errors_json TEXT,
+            updated_at TEXT
+        )
+        """)
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS contributor_stats (
@@ -637,6 +672,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE project_analysis ADD COLUMN repo_url TEXT")
     if "token_enc" not in columns:
         conn.execute("ALTER TABLE project_analysis ADD COLUMN token_enc TEXT")
+    if "zip_path" not in columns:
+        conn.execute("ALTER TABLE project_analysis ADD COLUMN zip_path TEXT")
 
     if "project_name" in columns:
         # Copy project_name into project_id if project_id is NULL
@@ -654,8 +691,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         "SELECT name FROM sqlite_master WHERE type='table' AND name='github_sources'"
     ).fetchone()
     if legacy_source:
-        rows = conn.execute("SELECT project_id, repo_url, token_enc FROM github_sources").fetchall()
-        for project_id, repo_url, token_enc in rows:
+        rows = conn.execute("SELECT project_id, repo_url, token_enc, zip_path FROM github_sources").fetchall()
+        for project_id, repo_url, token_enc, zip_path in rows:
             existing = conn.execute(
                 "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
                 (project_id,),
@@ -678,11 +715,12 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
                         primary_contributor,
                         snapshot,
                         repo_url,
-                        token_enc
+                        token_enc,
+                        zip_path
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (project_id, "unknown", None, json.dumps({}), repo_url, token_enc),
+                    (project_id, "unknown", None, json.dumps({}), repo_url, token_enc, zip_path),
         )
         conn.execute("DROP TABLE github_sources")
         conn.commit()
@@ -729,6 +767,34 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     _repair_user_identity_links(conn)
     conn.commit()
 
+
+def save_error_results(conn, project_id: str, errors: list[dict]):
+    conn.execute("""
+        INSERT INTO error_analysis_results (project_id, errors_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(project_id)
+        DO UPDATE SET
+            errors_json = excluded.errors_json,
+            updated_at = excluded.updated_at
+    """, (project_id, json.dumps(errors), datetime.utcnow().isoformat()))
+    conn.commit()
+
+
+def fetch_error_results(conn):
+    rows = conn.execute("""
+        SELECT project_id, errors_json
+        FROM error_analysis_results
+    """).fetchall()
+
+    results = []
+    for row in rows:
+        project_id, errors_json = row
+        errors = json.loads(errors_json) if errors_json else []
+        for err in errors:
+            err["project_id"] = project_id
+        results.extend(errors)
+
+    return results
 
 def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
     """
@@ -823,37 +889,24 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
 # DB lifecycle
 # -----------------------------
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
-    """Open (or create) a sqlite database stored under the configured directory."""
-    global _DB_HANDLE, _DB_PATH
-
-    target_dir = base_dir or DB_DIR
+    target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = target_dir / "capstone.db"
 
-    if _DB_HANDLE is not None and _DB_PATH == db_path:
-        logger.debug("Reusing existing database handle at %s", db_path)
-        return _DB_HANDLE
-
-    if _DB_HANDLE is not None:
-        try:
-            _DB_HANDLE.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close previous database handle", exc_info=True)
-
     logger.info("Opening database at %s", db_path)
-    _DB_PATH = db_path
-    _DB_HANDLE = sqlite3.connect(db_path, check_same_thread=False)
 
-    # Reasonable defaults for sqlite usage
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+
     try:
-        _DB_HANDLE.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA foreign_keys = ON")
     except Exception:
         pass
 
-    _initialize_schema(_DB_HANDLE)
-    _migrate_uploads_table(_DB_HANDLE)
-    return _DB_HANDLE
+    _initialize_schema(conn)
+    _migrate_uploads_table(conn)
 
+    return conn
 
 def close_db() -> None:
     """Close the shared database handle if it exists."""
@@ -869,48 +922,71 @@ def close_db() -> None:
 
 # --- migration: allow multiple uploads per upload_id (incremental snapshots)
 def _migrate_uploads_table(conn: sqlite3.Connection) -> None:
+    # Check if uploads exists
+    uploads_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='uploads'"
+    ).fetchone()
+
+    if not uploads_exists:
+        return
+
+    # Check if uploads_old already exists
+    uploads_old_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='uploads_old'"
+    ).fetchone()
+
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='uploads'"
     ).fetchone()
+
     if not row or not row[0]:
         return
 
     sql = row[0].lower()
-    # If upload_id is a primary key/unique, we need to migrate
-    if "upload_id" in sql and ("primary key" in sql or "unique" in sql):
-        conn.execute("ALTER TABLE uploads RENAME TO uploads_old")
 
-        # New schema: autoincrement primary key, upload_id is NOT unique
-        conn.execute(
-            """
-            CREATE TABLE uploads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                upload_id TEXT NOT NULL,
-                original_name TEXT,
-                uploader TEXT,
-                source TEXT,
-                hash TEXT,
-                file_id TEXT NOT NULL,
-                created_at TEXT DEFAULT (datetime('now')),
-                FOREIGN KEY(file_id) REFERENCES files(file_id)
-            )
-            """
+    needs_migration = (
+        "upload_id" in sql and
+        ("primary key" in sql or "unique" in sql)
+    )
+
+    if not needs_migration:
+        return
+
+    # If uploads_old already exists, migration already ran
+    if uploads_old_exists:
+        return
+
+    # Safe migration
+    conn.execute("ALTER TABLE uploads RENAME TO uploads_old")
+
+    conn.execute(
+        """
+        CREATE TABLE uploads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            upload_id TEXT NOT NULL,
+            original_name TEXT,
+            uploader TEXT,
+            source TEXT,
+            hash TEXT,
+            file_id TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(file_id) REFERENCES files(file_id)
         )
+        """
+    )
 
-        # Copy old rows over (id will be auto-generated)
-        conn.execute(
-            """
-            INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id, created_at)
-            SELECT upload_id, original_name, uploader, source, hash, file_id, created_at
-            FROM uploads_old
-            """
-        )
+    conn.execute(
+        """
+        INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id, created_at)
+        SELECT upload_id, original_name, uploader, source, hash, file_id, created_at
+        FROM uploads_old
+        """
+    )
 
-        conn.execute("DROP TABLE uploads_old")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_upload_id ON uploads(upload_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
-        conn.commit()
-
+    conn.execute("DROP TABLE uploads_old")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_upload_id ON uploads(upload_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
+    conn.commit()
 # Snapshots
 
 def store_analysis_snapshot(
@@ -919,6 +995,7 @@ def store_analysis_snapshot(
     classification: str = "unknown",
     primary_contributor: str | None = None,
     snapshot: dict | None = None,
+    zip_path: str | None = None, 
 ) -> None:
     """Insert a new snapshot row for a project."""
     if not project_id:
@@ -931,12 +1008,24 @@ def store_analysis_snapshot(
 
     payload = json.dumps(doc)
     conn.execute(
-        """
-        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
-        VALUES (?, ?, ?, ?)
-        """,
-        (project_id, classification, primary_contributor, payload),
+    """
+    INSERT INTO project_analysis (
+        project_id,
+        classification,
+        primary_contributor,
+        snapshot,
+        zip_path
     )
+    VALUES (?, ?, ?, ?, ?)
+    """,
+    (
+        project_id,
+        classification,
+        primary_contributor,
+        payload,
+        zip_path,  # 👈 STORE IT HERE
+    ),
+)
     conn.commit()
 
 
@@ -970,6 +1059,46 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     row = cursor.fetchone()
     return json.loads(row[0]) if row else None
 
+def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
+    """
+    Returns the latest snapshot + zip_path for each project.
+    Used exclusively for AI error analysis.
+    """
+
+    rows = conn.execute(
+        """
+        SELECT pa.project_id,
+               pa.snapshot,
+               pa.zip_path,
+               pa.created_at
+        FROM project_analysis pa
+        JOIN (
+            SELECT project_id, MAX(datetime(created_at)) AS max_created
+            FROM project_analysis
+            GROUP BY project_id
+        ) latest
+          ON latest.project_id = pa.project_id
+         AND datetime(pa.created_at) = latest.max_created
+        ORDER BY datetime(pa.created_at) DESC
+        """
+    ).fetchall()
+
+    snapshots = []
+
+    for project_id, snapshot_json, zip_path, created_at in rows:
+        try:
+            snapshot = json.loads(snapshot_json)
+        except Exception:
+            snapshot = {}
+
+        snapshots.append({
+            "project_id": project_id,
+            "snapshot": snapshot,
+            "zip_path": zip_path,
+            "created_at": created_at,
+        })
+
+    return snapshots
 
 def fetch_project_snapshot_history(
     conn: sqlite3.Connection,
@@ -1310,7 +1439,7 @@ def store_uploaded_file_bytes(
 
     # Where to store the file on disk
     # Keep it deterministic so dedupe is easy.
-    root = base_dir or DB_DIR
+    root = base_dir or BASE_DIR
     files_dir = root / "blobs"
     files_dir.mkdir(parents=True, exist_ok=True)
     blob_path = files_dir / f"{file_hash}.bin"
@@ -2662,7 +2791,7 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
 __all__ = [
     "open_db",
     "close_db",
-    "DB_DIR",
+    "BASE_DIR",
     # snapshots
     "store_analysis_snapshot",
     "fetch_latest_snapshot",

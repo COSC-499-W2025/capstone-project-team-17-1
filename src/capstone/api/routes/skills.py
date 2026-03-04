@@ -3,7 +3,7 @@ from pathlib import Path
 import zipfile
 
 from capstone import storage, file_store
-
+from capstone.activity_log import log_event
 router = APIRouter(tags=["skills"])
 
 EXT_TO_SKILL = {
@@ -38,6 +38,7 @@ def skills_for_project(project_id: str):
         (project_id,),
     ).fetchone()
     if not row:
+        log_event("ERROR", f"Skills lookup failed · Project not found · {project_id}")
         raise HTTPException(status_code=404, detail="Project not found")
 
     file_id = row[0]
@@ -50,6 +51,7 @@ def skills_for_project(project_id: str):
                     skill = EXT_TO_SKILL[suffix]
                     skills[skill] = skills.get(skill, 0) + 1
     except zipfile.BadZipFile:
+        log_event("ERROR", f"Invalid zip during skills extraction · Project: {project_id}")
         raise HTTPException(status_code=400, detail="Stored file is not a valid zip")
 
     return {
@@ -96,7 +98,7 @@ def skills_all(limit: int = 200):
         except zipfile.BadZipFile:
             continue
         processed += 1
-
+    log_event("INFO", f"Global skills aggregation computed · Projects scanned: {processed}")
     return {
         "count": len(skills),
         "processed": processed,
