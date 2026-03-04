@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Request
+from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
 import tempfile
 import shutil
@@ -242,7 +242,10 @@ def _generate_project_id_from_zip(conn, tmp_zip_path: Path, filename: str) -> st
 
 
 @router.post("/upload")
-async def upload_project(file: UploadFile = File(...), project_id: str | None = None):
+async def upload_project(
+    file: UploadFile = File(...),
+    project_id: str | None = Form(None),
+):
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -258,6 +261,17 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         auto_detected = bool(project_id)
     if not project_id:
         project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
+
+    existing = conn.execute(
+        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project ID '{project_id}' already exists."
+        )
     try:
         stored = file_store.ensure_file(
             conn,

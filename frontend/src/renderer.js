@@ -2,7 +2,7 @@ const toggle = document.querySelector(".theme-toggle")
 const cpuFill = document.getElementById("cpu-fill");
 const memoryFill = document.getElementById("memory-fill");
 const gpuFill = document.getElementById("gpu-fill");
-
+const uploadBtn = document.getElementById("upload-project-btn");
 const cpuValue = document.getElementById("cpu-value");
 const memoryValue = document.getElementById("memory-value");
 const gpuValue = document.getElementById("gpu-value");
@@ -66,7 +66,7 @@ toggle.addEventListener("click", () => {
 document.getElementById("close").addEventListener("click", () => window.api.close())
 document.getElementById("minimize").addEventListener("click", () => window.api.minimize())
 document.getElementById("maximize").addEventListener("click", () => window.api.maximize())
-
+uploadBtn?.addEventListener("click", openUploadModal);
 function updateArc(element, value) {
   const circumference = 126;
   const offset = circumference - (value / 100) * circumference;
@@ -601,10 +601,185 @@ async function loadProjectHealth() {
   }
 }
 
+function switchPage(targetId) {
+  const pages = document.querySelectorAll(".page");
+
+  pages.forEach(page => {
+    page.classList.remove("active");
+  });
+
+  const target = document.getElementById(targetId);
+  if (target) {
+    target.classList.add("active");
+  }
+
+  
+}
+
+function renderProjects(projects) {
+  const container = document.getElementById("projects-list");
+  container.innerHTML = "";
+
+  if (!projects.length) {
+    container.innerHTML = "<p>No projects uploaded yet.</p>";
+    return;
+  }
+
+  projects.forEach(project => {
+    const card = document.createElement("div");
+    card.className = "project-card";
+
+    card.innerHTML = `
+      <h3>${project.name}</h3>
+      <p>Files: ${project.files}</p>
+      <button class="view-btn">View</button>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+function openUploadModal() {
+  const existing = document.getElementById("upload-modal");
+  if (existing) return;
+
+  const modal = document.createElement("div");
+  modal.id = "upload-modal";
+  modal.innerHTML = `
+    <div class="upload-overlay">
+      <div class="upload-window">
+        
+        <div class="upload-header">
+          <h2>Upload Project</h2>
+          <button id="close-upload">✕</button>
+        </div>
+
+        <div class="upload-tabs">
+          <button class="upload-tab active" data-tab="manual">Manual ZIP</button>
+          <button class="upload-tab" disabled>GitHub (Coming Soon)</button>
+        </div>
+
+        <div class="upload-content">
+          <div class="upload-section active">
+            <input type="text" id="project-id-input" placeholder="Project ID" />
+
+            <label class="file-upload-wrapper">
+              <input type="file" id="zip-input" accept=".zip" />
+              <span class="file-upload-btn">Choose ZIP File</span>
+              <span class="file-upload-name">No file chosen</span>
+            </label>
+
+            <button id="submit-upload" class="primary-btn">
+              Upload ZIP
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // NOW elements exist
+  const zipInput = document.getElementById("zip-input");
+  const fileNameDisplay = document.querySelector(".file-upload-name");
+
+  zipInput.addEventListener("change", () => {
+    if (zipInput.files.length > 0) {
+      fileNameDisplay.textContent = zipInput.files[0].name;
+    } else {
+      fileNameDisplay.textContent = "No file chosen";
+    }
+  });
+
+  document.getElementById("close-upload").onclick = () => modal.remove();
+  document.getElementById("submit-upload").onclick = submitZipUpload;
+}
+
+async function submitZipUpload() {
+  const projectId = document.getElementById("project-id-input").value.trim();
+  const fileInput = document.getElementById("zip-input");
+  const file = fileInput.files[0];
+
+  if (!projectId || !file) {
+    alert("Please provide project ID and ZIP file.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const url = `http://127.0.0.1:8002/projects/upload?project_id=${encodeURIComponent(projectId)}`;
+
+  console.log("Sending project_id:", projectId, "URL:", url);
+
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.detail || "Upload failed.");
+    return;
+  }
+
+  document.getElementById("upload-modal")?.remove();
+  loadProjects();
+}
+
+async function loadProjects() {
+  try {
+    const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
+    const projects = await res.json();
+
+    const container = document.getElementById("projects-list");
+    container.innerHTML = "";
+
+    if (!projects.length) {
+      container.innerHTML = "<p>No projects uploaded yet.</p>";
+      return;
+    }
+
+    projects.forEach(project => {
+      const card = document.createElement("div");
+      card.className = "project-card";
+
+      card.innerHTML = `
+        <h3>${project.project_id}</h3>
+        <p>Files: ${project.total_files}</p>
+        <p>Skills: ${project.total_skills}</p>
+        <button class="view-btn">View Project</button>
+      `;
+
+      container.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Failed to load projects:", err);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".nav-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+
+      const target = tab.dataset.page;
+      if (target) switchPage(target);
+    });
+  });
+});
+
 document.addEventListener("DOMContentLoaded", loadErrorAnalysis);
 document.addEventListener("DOMContentLoaded", loadRecentProjects);
 document.addEventListener("DOMContentLoaded", loadProjectHealth);
 
-
+loadProjects();
 loadRecentActivity();
 setInterval(loadRecentActivity, 1000);
+setInterval(loadProjects, 1000);
+setInterval(loadMostUsedSkills, 1000);
+setInterval(loadRecentProjects, 1000);
