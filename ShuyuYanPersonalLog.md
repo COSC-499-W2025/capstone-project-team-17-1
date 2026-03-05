@@ -388,5 +388,27 @@ To ensure consistency and clarity, I updated both `README.md` and `api.md` to re
 From a reliability standpoint, I added an automated test covering project ID auto-detection and diff display behavior. I also manually tested the full snapshot upload and update process, verifying correct ID extraction, diff visualization, and successful application of updates. All existing tests pass, ensuring no regressions were introduced.
 
 Beyond implementation, I discussed design and edge-case handling details with team members to ensure alignment with our milestone expectations. I also reviewed teammates’ pull requests, provided technical feedback, and helped resolve issues to maintain overall system stability and integration consistency.
-### Completed Tasks Week 6
+### Completed Tasks Week 8
 - complete [Auto-detect project ID (#227)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/227)
+
+## Term2 week9 Personal LOG (Feb23-Mar1, 2026)
+### 1. Type of Tasks Worked On
+
+
+### 2. Weekly Goals Recap
+- complete [login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263)\
+- design setting tab
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed the implementation of the authentication system and login/logout workflow for the dashboard. [Login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263) The update introduces a dedicated backend authentication router with endpoints for account registration, login, profile management, password updates, and logout. User credentials are now stored in the `auth_accounts` table and linked to the existing `users` profile table, while passwords are securely hashed using PBKDF2-HMAC-SHA256 with a per-user salt. In addition, an in-memory bearer session mechanism was implemented to manage authenticated sessions.
+
+On the frontend, the authentication flow was integrated into the dashboard interface to clearly separate Public and Private modes. The header now displays a Public/Private mode badge, and a login/register modal allows users to authenticate while still enabling public dashboard access. Once logged in, the interface switches to Private Mode, revealing the Customization tab and displaying a profile pill with logout controls. Private-only navigation behavior was also added so that accessing certain features, such as Settings, automatically triggers the login flow when the user is not authenticated.
+
+I also implemented the Settings page for Private Mode, allowing users to edit profile information and change their password with changes persisted to the database. Feedback messages are shown for successful or failed updates, and a placeholder section was added for future exported portfolio and resume functionality. This design establishes a clear separation between public dashboard exploration and authenticated customization features, laying the foundation for future private capabilities such as personalized portfolio generation and exports.
+
+During the process, I discussed implementation details and design decisions with team members to ensure consistency with the project architecture and milestone goals. I also reviewed teammates’ pull requests and helped resolve issues to maintain integration stability across the system.
+
+- ### Completed Tasks Week 9
+- complete [login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263)
+- design setting tab
