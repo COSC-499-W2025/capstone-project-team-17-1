@@ -16,15 +16,20 @@
     </div>
 
     <div class="nav">
-      <span class="active">Dashboard</span>
+      <span class="active" data-tab="dashboard">Dashboard</span>
       <span>Projects</span>
       <span>Analysis</span>
-      <span>Settings</span>
+      <span id="customization-tab" class="hidden" data-tab="customization">Customization</span>
+      <span data-tab="settings">Settings</span>
     </div>
 
     <div class="right-controls">
       <input type="text" placeholder="Search..." />
       <div class="theme-toggle"></div>
+      <span id="mode-badge" class="mode-badge public">Public Mode</span>
+      <button id="login-btn" class="auth-btn">Login</button>
+      <div id="profile-pill" class="profile-pill hidden"></div>
+      <button id="logout-btn" class="auth-btn hidden">Logout</button>
       <div class="profile"></div>
     </div>
 
@@ -37,94 +42,100 @@
     
   </div>
 
-  <!-- Dashboard Grid -->
-  <div class="dashboard">
+  <div id="dashboard-panel" class="dashboard">
     <div id="most-used-skills" class="card">Most Used Skills</div>
     <div class="card error-analysis-card">
       <h2 class="card-title">Error Analysis</h2>
-
-      <div id="error-analysis-container" class="error-analysis-container">
-        <!-- Injected by JS -->
-      </div>
+      <div id="error-analysis-container" class="error-analysis-container"></div>
     </div>
     <div class="card">
       <h3>Project Health</h3>
       <div id="project-health-container" class="health-grid"></div>
     </div>
     <div class="card recent-projects-card">
-    <h2 class="card-title">Recent Projects</h2>
-
-      <div id="recent-projects-container" class="recent-projects-container">
-        <!-- JS will inject projects here -->
-      </div>
+      <h2 class="card-title">Recent Projects</h2>
+      <div id="recent-projects-container" class="recent-projects-container"></div>
     </div>
     <div id="system-health-card" class="card">
-  <h3>System Health</h3>
-
-  <div class="status-row">
-    <span id="status-dot" class="status-dot"></span>
-    <span id="system-status">Checking...</span>
-  </div>
-
-  <div class="gauges">
-
-    <!-- CPU -->
-    <div class="gauge">
-      <svg viewBox="0 0 100 60">
-        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
-        <path id="cpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
-      </svg>
-
-      <div class="gauge-info">
-        <span id="cpu-value">0%</span>
-        <span id="cpu-temp">--°C</span>
+      <h3>System Health</h3>
+      <div class="status-row">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="system-status">Checking...</span>
       </div>
-
-      <p>CPU</p>
-
-      <canvas id="cpu-chart" class="mini-chart"></canvas>
-    </div>
-
-    <!-- Memory -->
-    <div class="gauge">
-      <svg viewBox="0 0 100 60">
-        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
-        <path id="memory-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
-      </svg>
-
-      <div class="gauge-info">
-        <span id="memory-value">0%</span>
-        <span>RAM</span>
+      <div class="gauges">
+        <div class="gauge">
+          <svg viewBox="0 0 100 60">
+            <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+            <path id="cpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+          </svg>
+          <div class="gauge-info">
+            <span id="cpu-value">0%</span>
+            <span id="cpu-temp">--°C</span>
+          </div>
+          <p>CPU</p>
+          <canvas id="cpu-chart" class="mini-chart"></canvas>
+        </div>
+        <div class="gauge">
+          <svg viewBox="0 0 100 60">
+            <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+            <path id="memory-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+          </svg>
+          <div class="gauge-info">
+            <span id="memory-value">0%</span>
+            <span>RAM</span>
+          </div>
+          <p>Memory</p>
+          <canvas id="memory-chart" class="mini-chart"></canvas>
+        </div>
+        <div class="gauge">
+          <svg viewBox="0 0 100 60">
+            <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
+            <path id="gpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
+          </svg>
+          <div class="gauge-info">
+            <span id="gpu-value">0%</span>
+            <span id="gpu-temp">--°C</span>
+          </div>
+          <p id="gpu-label">GPU</p>
+          <canvas id="gpu-chart" class="mini-chart"></canvas>
+        </div>
       </div>
-
-      <p>Memory</p>
-
-      <canvas id="memory-chart" class="mini-chart"></canvas>
     </div>
-
-    <!-- GPU -->
-    <div class="gauge">
-      <svg viewBox="0 0 100 60">
-        <path class="bg-arc" d="M10 50 A40 40 0 0 1 90 50" />
-        <path id="gpu-arc" class="progress-arc" d="M10 50 A40 40 0 0 1 90 50" />
-      </svg>
-
-      <div class="gauge-info">
-        <span id="gpu-value">0%</span>
-        <span id="gpu-temp">--°C</span>
-      </div>
-
-      <p id="gpu-label">GPU</p>
-
-      <canvas id="gpu-chart" class="mini-chart"></canvas>
-    </div>
-
-  </div>
-</div>
     <div class="card">
-  <h3 class="card-title">Activity Log</h3>
-  <div id="recent-activity" class="activity-container"></div>
-</div>
+      <h3 class="card-title">Activity Log</h3>
+      <div id="recent-activity" class="activity-container"></div>
+    </div>
+  </div>
+
+  <div id="tab-customization" class="tab-panel hidden">
+    <div class="customization-empty">
+      <h3>Customization</h3>
+      <p>Empty for now.</p>
+    </div>
+  </div>
+
+  <div id="tab-settings" class="tab-panel hidden">
+    <div id="settings-profile" class="settings-card">
+      <h3>User Profile</h3>
+      <p>Login to view your profile.</p>
+    </div>
+  </div>
+
+  <div id="auth-modal" class="auth-modal hidden">
+    <div class="auth-dialog">
+      <button id="auth-close" class="auth-close">×</button>
+      <h3 id="auth-title">Login</h3>
+      <p id="auth-subtitle">Enter Private Mode</p>
+      <input id="auth-username" type="text" placeholder="Username" />
+      <input id="auth-email" type="email" placeholder="Email (register only)" />
+      <input id="auth-password" type="password" placeholder="Password" />
+      <div id="auth-error" class="auth-error"></div>
+      <div class="auth-actions">
+        <button id="auth-submit" class="auth-primary">Login</button>
+        <button id="auth-toggle" class="auth-link">Need an account? Register</button>
+      </div>
+      <button id="auth-cancel" class="auth-cancel">Back to Public Mode</button>
+    </div>
   </div>
 
   <script src="renderer.js"></script>
