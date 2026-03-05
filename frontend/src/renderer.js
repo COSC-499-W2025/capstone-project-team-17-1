@@ -7,6 +7,7 @@ const cpuValue = document.getElementById("cpu-value");
 const memoryValue = document.getElementById("memory-value");
 const gpuValue = document.getElementById("gpu-value");
 const gpuLabel = document.getElementById("gpu-label");
+const API_BASE = "http://127.0.0.1:8002";
 const fakeProjects = [
 { name: "Loom Analyzer", skills: ["Python", "Flask", "SQLite"] },
 { name: "Portfolio Builder", skills: ["React", "Node", "SQLite"] },
@@ -608,3 +609,400 @@ document.addEventListener("DOMContentLoaded", loadProjectHealth);
 
 loadRecentActivity();
 setInterval(loadRecentActivity, 1000);
+
+// mode switching
+const AUTH_TOKEN_KEY = "loom_auth_token";
+let authMode = "login";
+let currentUser = null;
+
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+function setModeUI(isPrivate, user) {
+  const modeBadge = document.getElementById("mode-badge");
+  const loginBtn = document.getElementById("login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const profilePill = document.getElementById("profile-pill");
+  if (!modeBadge || !loginBtn || !logoutBtn || !profilePill) return;
+
+  modeBadge.textContent = isPrivate ? "Private Mode" : "Public Mode";
+  modeBadge.classList.toggle("private", isPrivate);
+  modeBadge.classList.toggle("public", !isPrivate);
+
+  loginBtn.classList.toggle("hidden", isPrivate);
+  logoutBtn.classList.toggle("hidden", !isPrivate);
+
+  if (isPrivate && user) {
+    profilePill.textContent = user.username || `User ${user.id || ""}`;
+    profilePill.classList.remove("hidden");
+    currentUser = user;
+  } else {
+    profilePill.classList.add("hidden");
+    currentUser = null;
+  }
+}
+
+function setActiveTab(label) {
+  const navItems = Array.from(document.querySelectorAll(".nav span"));
+  navItems.forEach((el) => {
+    const tabName = (el.getAttribute("data-tab") || "").trim().toLowerCase();
+    const textName = (el.textContent || "").trim().toLowerCase();
+    const target = String(label || "").trim().toLowerCase();
+    if (tabName === target || textName === target) {
+      el.classList.add("active");
+    } else {
+      el.classList.remove("active");
+    }
+  });
+}
+
+function switchTab(tabKey) {
+  // Tab switching only controls panel visibility
+  const dashboardPanel = document.getElementById("dashboard-panel");
+  const customizationPanel = document.getElementById("tab-customization");
+  const settingsPanel = document.getElementById("tab-settings");
+  if (!dashboardPanel || !customizationPanel || !settingsPanel) return;
+
+  if (tabKey === "customization") {
+    dashboardPanel.classList.add("hidden");
+    settingsPanel.classList.add("hidden");
+    customizationPanel.classList.remove("hidden");
+    setActiveTab("customization");
+  } else if (tabKey === "settings") {
+    dashboardPanel.classList.add("hidden");
+    customizationPanel.classList.add("hidden");
+    settingsPanel.classList.remove("hidden");
+    setActiveTab("settings");
+    renderSettingsProfile();
+  } else {
+    settingsPanel.classList.add("hidden");
+    customizationPanel.classList.add("hidden");
+    dashboardPanel.classList.remove("hidden");
+    setActiveTab("dashboard");
+  }
+}
+
+function renderSettingsProfile() {
+  const el = document.getElementById("settings-profile");
+  if (!el) return;
+  if (!currentUser) {
+    el.innerHTML = `
+      <h3>User Profile</h3>
+      <p>Login to view your profile.</p>
+    `;
+    return;
+  }
+  el.innerHTML = `
+    <h3>User Profile</h3>
+    <div class="profile-grid">
+      <div class="label">Username</div><div>${currentUser.username || "-"}</div>
+      <div class="label">Email</div><input id="pf-email" value="${currentUser.email || ""}" />
+      <div class="label">Full Name</div><input id="pf-full-name" value="${currentUser.full_name || ""}" />
+      <div class="label">Phone</div><input id="pf-phone" value="${currentUser.phone_number || ""}" />
+      <div class="label">City</div><input id="pf-city" value="${currentUser.city || ""}" />
+      <div class="label">State/Region</div><input id="pf-state" value="${currentUser.state_region || ""}" />
+      <div class="label">GitHub</div><input id="pf-github" value="${currentUser.github_url || ""}" />
+      <div class="label">Portfolio</div><input id="pf-portfolio" value="${currentUser.portfolio_url || ""}" />
+    </div>
+    <div class="profile-actions">
+      <button id="profile-save-btn" class="auth-btn">Save Profile</button>
+      <span id="profile-msg"></span>
+    </div>
+    <hr />
+    <h4>Change Password</h4>
+    <div class="profile-grid">
+      <div class="label">Current Password</div><input id="pw-current" type="password" />
+      <div class="label">New Password</div><input id="pw-new" type="password" />
+    </div>
+    <div class="profile-actions">
+      <button id="password-save-btn" class="auth-btn">Update Password</button>
+      <span id="password-msg"></span>
+    </div>
+    <hr />
+    <h4>Exported Portfolio & Resume</h4>
+    <div class="export-placeholder">
+      <p>Your exported portfolio and resume will appear here.</p>
+      <p>Status: Coming soon</p>
+    </div>
+  `;
+
+  // Re-bind listeners after re-render
+  document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
+  document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
+}
+
+async function saveProfile() {
+  const msg = document.getElementById("profile-msg");
+  if (msg) msg.textContent = "Saving...";
+  const payload = {
+    email: document.getElementById("pf-email")?.value.trim() || null,
+    full_name: document.getElementById("pf-full-name")?.value.trim() || null,
+    phone_number: document.getElementById("pf-phone")?.value.trim() || null,
+    city: document.getElementById("pf-city")?.value.trim() || null,
+    state_region: document.getElementById("pf-state")?.value.trim() || null,
+    github_url: document.getElementById("pf-github")?.value.trim() || null,
+    portfolio_url: document.getElementById("pf-portfolio")?.value.trim() || null,
+  };
+  try {
+    const res = await authFetch("/auth/me", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (msg) msg.textContent = `Failed: ${data.detail || "save failed"}`;
+      return;
+    }
+    currentUser = data.user || currentUser;
+    setModeUI(true, currentUser);
+    if (msg) msg.textContent = "Profile saved successfully.";
+  } catch (_) {
+    if (msg) msg.textContent = "Failed: network error";
+  }
+}
+
+async function changePassword() {
+  const msg = document.getElementById("password-msg");
+  if (msg) msg.textContent = "Saving...";
+  const currentPassword = document.getElementById("pw-current")?.value || "";
+  const newPassword = document.getElementById("pw-new")?.value || "";
+  try {
+    const res = await authFetch("/auth/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (msg) msg.textContent = `Failed: ${data.detail || "update failed"}`;
+      return;
+    }
+    const currentEl = document.getElementById("pw-current");
+    const newEl = document.getElementById("pw-new");
+    if (currentEl) currentEl.value = "";
+    if (newEl) newEl.value = "";
+    if (msg) msg.textContent = "Password updated successfully.";
+  } catch (_) {
+    if (msg) msg.textContent = "Failed: network error";
+  }
+}
+
+function setCustomizationTabVisible(visible) {
+  const tab = document.getElementById("customization-tab");
+  if (!tab) return;
+  tab.classList.toggle("hidden", !visible);
+}
+
+function showAuthModal(show) {
+  const modal = document.getElementById("auth-modal");
+  if (!modal) return;
+  modal.classList.toggle("hidden", !show);
+}
+
+function setAuthFormMode(mode) {
+  authMode = mode === "register" ? "register" : "login";
+  const title = document.getElementById("auth-title");
+  const subtitle = document.getElementById("auth-subtitle");
+  const emailInput = document.getElementById("auth-email");
+  const submit = document.getElementById("auth-submit");
+  const toggleBtn = document.getElementById("auth-toggle");
+  const error = document.getElementById("auth-error");
+  if (!title || !subtitle || !emailInput || !submit || !toggleBtn || !error) return;
+
+  error.textContent = "";
+  if (authMode === "register") {
+    title.textContent = "Register";
+    subtitle.textContent = "Create account to enter Private Mode";
+    emailInput.classList.remove("hidden");
+    submit.textContent = "Register";
+    toggleBtn.textContent = "Already have an account? Login";
+  } else {
+    title.textContent = "Login";
+    subtitle.textContent = "Enter Private Mode";
+    emailInput.classList.add("hidden");
+    submit.textContent = "Login";
+    toggleBtn.textContent = "Need an account? Register";
+  }
+}
+
+async function authFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetch(`${API_BASE}${path}`, { ...options, headers });
+}
+
+async function ensureCurrentUser() {
+  // Lazy-load current user from /auth/me when settings is opened after refresh
+  if (currentUser) return currentUser;
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const res = await authFetch("/auth/me");
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.user) {
+      currentUser = data.user;
+      setModeUI(true, data.user);
+      return data.user;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function backToPublicMode() {
+  showAuthModal(false);
+  setModeUI(false, null);
+  setCustomizationTabVisible(false);
+  switchTab("dashboard");
+}
+
+async function initAuthFlow() {
+  const loginBtn = document.getElementById("login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const submit = document.getElementById("auth-submit");
+  const toggleBtn = document.getElementById("auth-toggle");
+  const cancelBtn = document.getElementById("auth-cancel");
+  const closeBtn = document.getElementById("auth-close");
+  const modal = document.getElementById("auth-modal");
+  const error = document.getElementById("auth-error");
+  const usernameInput = document.getElementById("auth-username");
+  const emailInput = document.getElementById("auth-email");
+  const passwordInput = document.getElementById("auth-password");
+  if (!loginBtn || !logoutBtn || !submit || !toggleBtn || !cancelBtn || !modal || !error || !usernameInput || !passwordInput) return;
+
+  setModeUI(false, null);
+  setCustomizationTabVisible(false);
+  switchTab("dashboard");
+  setAuthFormMode("login");
+
+  const startLoginFlow = async () => {
+    const ok = window.confirm("Enter Private Mode?");
+    if (!ok) return;
+    let mode = "login";
+    try {
+      const res = await authFetch("/auth/bootstrap");
+      if (res.ok) {
+        const boot = await res.json();
+        mode = boot.has_users ? "login" : "register";
+      }
+    } catch (_) {}
+    setAuthFormMode(mode);
+    showAuthModal(true);
+  };
+
+  const tabButtons = Array.from(document.querySelectorAll(".nav [data-tab]"));
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const tab = btn.getAttribute("data-tab");
+      if (!tab) return;
+      if (tab === "customization" && btn.classList.contains("hidden")) return;
+      if (tab === "settings") {
+        const user = await ensureCurrentUser();
+        if (!user) {
+          startLoginFlow();
+          return;
+        }
+        switchTab(tab);
+        return;
+      }
+      switchTab(tab);
+    });
+  });
+
+  try {
+    const bootstrapRes = await authFetch("/auth/bootstrap");
+    if (bootstrapRes.ok) {
+      const boot = await bootstrapRes.json();
+      if (boot.authenticated && boot.user) {
+        setModeUI(true, boot.user);
+        setCustomizationTabVisible(true);
+        switchTab("customization");
+      } else {
+        setModeUI(false, null);
+        setCustomizationTabVisible(false);
+        switchTab("dashboard");
+      }
+    }
+  } catch (_) {}
+
+  loginBtn.addEventListener("click", startLoginFlow);
+
+  toggleBtn.addEventListener("click", () => {
+    setAuthFormMode(authMode === "login" ? "register" : "login");
+  });
+
+  const closeModalToPublic = () => {
+    usernameInput.value = "";
+    if (emailInput) emailInput.value = "";
+    passwordInput.value = "";
+    error.textContent = "";
+    backToPublicMode();
+  };
+  cancelBtn.addEventListener("click", closeModalToPublic);
+  if (closeBtn) closeBtn.addEventListener("click", closeModalToPublic);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModalToPublic();
+  });
+
+  submit.addEventListener("click", async () => {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    const email = emailInput ? emailInput.value.trim() : "";
+    error.textContent = "";
+
+    if (!username || !password) {
+      error.textContent = "Username and password are required.";
+      return;
+    }
+
+    const payload = authMode === "register"
+      ? { username, password, email: email || null }
+      : { username, password };
+    const path = authMode === "register" ? "/auth/register" : "/auth/login";
+
+    try {
+      const res = await authFetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        error.textContent = data.detail || "Authentication failed.";
+        return;
+      }
+
+      setAuthToken(data.token);
+      showAuthModal(false);
+      setModeUI(true, data.user);
+      setCustomizationTabVisible(true);
+      switchTab("customization");
+    } catch (e) {
+      error.textContent = "Unable to reach auth service.";
+    }
+  });
+
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      await authFetch("/auth/logout", { method: "POST" });
+    } catch (_) {}
+    setAuthToken(null);
+    backToPublicMode();
+  });
+}
+
+document.addEventListener("DOMContentLoaded", initAuthFlow);
