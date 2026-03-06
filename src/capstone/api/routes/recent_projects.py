@@ -47,10 +47,23 @@ ORDER BY pa.created_at DESC
 
         snapshot = json.loads(snapshot_raw)
 
-        total_files = snapshot.get("file_count", 0)
+        # --- FILE COUNT ---
+        file_summary = snapshot.get("file_summary")
 
-        skills = snapshot.get("skills", {})
-        total_skills = len(skills) if isinstance(skills, dict) else 0
+        if isinstance(file_summary, dict):
+            total_files = file_summary.get("file_count", 0)
+        else:
+            total_files = snapshot.get("file_count", 0)
+
+        # --- SKILL COUNT ---
+        skills = snapshot.get("skills", [])
+
+        if isinstance(skills, list):
+            total_skills = len(skills)
+        elif isinstance(skills, dict):
+            total_skills = len(skills.keys())
+        else:
+            total_skills = 0
 
         projects.append({
             "project_id": project_id,

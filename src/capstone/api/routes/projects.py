@@ -560,6 +560,11 @@ def delete_project(id: str):
     conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
     # delete file reference
     conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    # delete analysis snapshots for this project
+    conn.execute(
+        "DELETE FROM project_analysis WHERE project_id = ?",
+        (id,)
+    )
     conn.commit()
 
     # best-effort physical file removal

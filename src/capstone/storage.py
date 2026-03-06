@@ -227,6 +227,16 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS github_auth (
+        id INTEGER PRIMARY KEY,
+        access_token TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_user_projects_project
@@ -2787,6 +2797,39 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return len(payload)
 
+# -------------------------------
+# GitHub Authentication Storage
+# -------------------------------
+
+def save_github_token(token: str):
+    """Store GitHub access token."""
+    with open_db() as conn:
+        conn.execute("DELETE FROM github_auth")
+        conn.execute(
+            "INSERT INTO github_auth (access_token) VALUES (?)",
+            (token,)
+        )
+        conn.commit()
+
+
+def get_github_token():
+    """Return stored GitHub token if it exists."""
+    with open_db() as conn:
+        row = conn.execute(
+            "SELECT access_token FROM github_auth LIMIT 1"
+        ).fetchone()
+
+        if row:
+            return row[0]
+
+    return None
+
+
+def clear_github_token():
+    """Logout GitHub user."""
+    with open_db() as conn:
+        conn.execute("DELETE FROM github_auth")
+        conn.commit()
 
 __all__ = [
     "open_db",
