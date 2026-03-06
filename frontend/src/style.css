@@ -1418,3 +1418,23 @@ align-items: center;
   width: 20px;
   height: 20px;
 }
+
+.project-card.removing {
+opacity: 0;
+transform: scale(0.97);
+transition: all 0.2s ease;
+}
+
+.pull-btn {
+  background: #3a6df0;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.pull-btn:hover {
+  background: #2f57c5;
+}

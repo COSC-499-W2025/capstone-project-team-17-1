@@ -1111,7 +1111,11 @@ async function loadProjects() {
     projects.forEach(project => {
       const card = document.createElement("div");
       card.className = "project-card";
+let pullButton = "";
 
+if (project.is_github) {
+  pullButton = `<button class="pull-btn" data-project="${project.project_id}">Pull</button>`;
+}
       card.innerHTML = `
   <div class="project-delete" data-id="${project.project_id}">
     <svg viewBox="0 0 24 24" width="18" height="18">
@@ -1123,8 +1127,10 @@ async function loadProjects() {
   <h3>${project.project_id}</h3>
   <p>Files: ${project.total_files}</p>
   <p>Skills: ${project.total_skills}</p>
-
-  <button class="view-btn">View Project</button>
+  <div class="project-actions">
+    <button class="view-btn">View Project</button>
+     ${pullButton}
+  </div>
 `;
 
 const deleteBtn = card.querySelector(".project-delete");
@@ -1149,8 +1155,41 @@ deleteBtn?.addEventListener("click", async (e) => {
   } catch (err) {
     alert("Failed to delete project.");
   }
-
+  card.classList.add("removing");
+setTimeout(() => loadProjects(), 200);
 });
+
+const pullBtn = card.querySelector(".pull-btn");
+
+pullBtn?.addEventListener("click", async (e) => {
+  e.stopPropagation();
+
+  const projectId = pullBtn.dataset.project;
+
+  try {
+    pullBtn.innerText = "Pulling...";
+
+    const res = await fetch(`http://127.0.0.1:8002/github/pull?project_id=${encodeURIComponent(projectId)}`, {
+      method: "POST"
+    });
+
+    if (!res.ok) throw new Error("Pull failed");
+
+    pullBtn.innerText = "Updated ✓";
+    loadProjects();
+    loadRecentProjects();
+
+  } catch (err) {
+    console.error("Pull failed:", err);
+    pullBtn.innerText = "Failed";
+  }
+
+  setTimeout(() => {
+    pullBtn.innerText = "Pull";
+  }, 2000);
+});
+
+
 
       container.appendChild(card);
     });
@@ -1159,6 +1198,8 @@ deleteBtn?.addEventListener("click", async (e) => {
     console.error("Failed to load projects:", err);
   }
 }
+
+
 
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".nav-tab").forEach(tab => {

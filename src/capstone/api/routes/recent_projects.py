@@ -14,6 +14,7 @@ class RecentProject(BaseModel):
     total_skills: int
     classification: str | None
     primary_contributor: str | None
+    is_github: bool
 
 
 import json
@@ -22,19 +23,26 @@ import json
 def get_recent_projects():
     with _db_session(None) as db:
         rows = db.execute("""
-            SELECT pa.project_id,
-       pa.created_at,
-       pa.snapshot,
-       pa.classification,
-       pa.primary_contributor
+SELECT
+    pa.project_id,
+    pa.created_at,
+    pa.snapshot,
+    pa.classification,
+    pa.primary_contributor,
+    CASE
+        WHEN gp.project_id IS NOT NULL THEN 1
+        ELSE 0
+    END AS is_github
 FROM project_analysis pa
+LEFT JOIN github_projects gp
+ON pa.project_id = gp.project_id
 WHERE pa.rowid IN (
     SELECT MAX(rowid)
     FROM project_analysis
     GROUP BY project_id
 )
 ORDER BY pa.created_at DESC
-        """).fetchall()
+""").fetchall()
 
     projects = []
 
@@ -44,6 +52,7 @@ ORDER BY pa.created_at DESC
         snapshot_raw = row[2]
         classification = row[3]
         primary_contributor = row[4]
+        is_github = bool(row[5])
 
         snapshot = json.loads(snapshot_raw)
 
@@ -72,6 +81,7 @@ ORDER BY pa.created_at DESC
             "total_skills": total_skills,
             "classification": classification,
             "primary_contributor": primary_contributor,
+            "is_github": is_github
         })
 
     return projects

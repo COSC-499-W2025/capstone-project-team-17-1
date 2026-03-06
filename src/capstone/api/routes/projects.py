@@ -243,8 +243,8 @@ def _generate_project_id_from_zip(conn, tmp_zip_path: Path, filename: str) -> st
 
 @router.post("/upload")
 async def upload_project(
-    file: UploadFile = File(...),
-    project_id: str | None = Form(None),
+    project_id: str,
+    file: UploadFile = File(...),   
 ):
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
@@ -307,7 +307,6 @@ async def upload_project(
         zip_path = stored["path"] 
     )
     log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
-
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
     # Pass email alongside the git author name so upsert_user can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.

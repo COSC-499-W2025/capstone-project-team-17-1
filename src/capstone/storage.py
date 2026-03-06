@@ -237,6 +237,17 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS github_projects (
+            project_id TEXT PRIMARY KEY,
+            owner TEXT NOT NULL,
+            repo TEXT NOT NULL,
+            branch TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_user_projects_project

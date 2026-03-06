@@ -126,6 +126,15 @@ def import_repository(
                 project_id=project_id,
                 conn=conn
             )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO github_projects
+                (project_id, owner, repo, branch)
+                VALUES (?, ?, ?, ?)
+                """,
+                (project_id, owner, repo, branch)
+            )
+            conn.commit()
         finally:
             conn.close()
 
@@ -143,11 +152,26 @@ def import_repository(
 # 3. Pull latest version of repository
 # ------------------------------------------------
 
-@router.post("/github/pull")
-def pull_repository(project_id: str, owner: str, repo: str, branch: str):
+@router.post("/pull")
+def pull_repository(project_id: str):
 
     token = get_github_token()
+    if not token:
+        raise HTTPException(401, "GitHub token not configured")
+
     headers = {"Authorization": f"Bearer {token}"}
+
+    conn = open_db()
+
+    row = conn.execute(
+        "SELECT owner, repo, branch FROM github_projects WHERE project_id=?",
+        (project_id,)
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(404, "Project is not a GitHub project")
+
+    owner, repo, branch = row
 
     zip_url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{branch}"
 
@@ -162,7 +186,8 @@ def pull_repository(project_id: str, owner: str, repo: str, branch: str):
 
         with open(zip_path, "wb") as f:
             for chunk in response.iter_content(8192):
-                f.write(chunk)
+                if chunk:
+                    f.write(chunk)
 
         analyzer = ZipAnalyzer()
 
@@ -174,6 +199,8 @@ def pull_repository(project_id: str, owner: str, repo: str, branch: str):
             preferences=Preferences(),
             project_id=project_id
         )
+
+    conn.close()
 
     return {"status": "updated", "summary": summary}
 
