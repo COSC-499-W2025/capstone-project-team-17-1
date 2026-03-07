@@ -395,9 +395,8 @@ Beyond implementation, I discussed design and edge-case handling details with te
 ### 1. Type of Tasks Worked On
 <img width="1105" height="627" alt="Screenshot 2026-03-06 at 4 59 16 PM" src="https://github.com/user-attachments/assets/1f65ec4e-52c9-415b-8ed5-01e9ccf95d51" />
 
-
 ### 2. Weekly Goals Recap
-- complete [login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263)\
+- complete [login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263)
 - design setting tab
 - discussed the code details with members
 - review member's PR and help them
