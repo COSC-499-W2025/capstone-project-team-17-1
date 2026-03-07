@@ -211,6 +211,26 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON users (username, COALESCE(email, ''))
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS auth_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            user_id INTEGER NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_auth_accounts_user_id
+        ON auth_accounts (user_id)
+        """
+    )
 
     conn.execute(
         """
