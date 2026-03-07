@@ -11,16 +11,21 @@ export function switchPage(targetId) {
   }
 }
 
-export function initNavigation() {
+export function initNavigation(options = {}) {
+  const { onBeforeNavigate } = options;
 
-document.querySelectorAll(".nav-tab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
+  document.querySelectorAll(".nav-tab").forEach(tab => {
+    tab.addEventListener("click", async () => {
+      const target = tab.dataset.page;
+      const tabKey = tab.dataset.tab || "";
+      if (typeof onBeforeNavigate === "function") {
+        const allowed = await onBeforeNavigate({ tab, tabKey, target });
+        if (allowed === false) return;
+      }
 
-    const target = tab.dataset.page;
-    if (target) switchPage(target);
+      document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      if (target) switchPage(target);
+    });
   });
-});
-
 }

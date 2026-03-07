@@ -33,8 +33,12 @@ logger = get_logger(__name__)
 
 def get_base_data_dir():
     if getattr(sys, "frozen", False):
-        # Running as PyInstaller exe
-        base = Path(os.getenv("LOCALAPPDATA")) / "Loom"
+        # Running as packaged app: choose OS-safe writable user data directory.
+        local_appdata = os.getenv("LOCALAPPDATA")
+        appdata = os.getenv("APPDATA")
+        home = os.path.expanduser("~")
+        root = local_appdata or appdata or home
+        base = Path(root) / "Loom"
     else:
         # Running in development
         base = Path.cwd() / "runtime_data"

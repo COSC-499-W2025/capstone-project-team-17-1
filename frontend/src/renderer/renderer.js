@@ -7,7 +7,7 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadProjects } from "./projects.js";
-import { initNavigation } from "./navigation.js";
+import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
 
 
@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initWindowControls();
 
-  initNavigation();
+  initAuthFlow();
 
   startMetrics();
 
