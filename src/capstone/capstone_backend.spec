@@ -5,7 +5,7 @@ a = Analysis(
     ['run_server.py', 'system\\monitor_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[('tools\\system_metrics\\LibreHardwareMonitor', 'tools\\system_metrics\\LibreHardwareMonitor')],
+    datas=[('tools\\system_metrics\\LibreHardwareMonitor', 'capstone\\tools\\system_metrics\\LibreHardwareMonitor')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
