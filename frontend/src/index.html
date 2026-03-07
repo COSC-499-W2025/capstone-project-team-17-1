@@ -20,6 +20,7 @@
     <div class="nav">
       <span class="nav-tab active" data-tab="dashboard" data-page="dashboard-page">Dashboard</span>
       <span class="nav-tab" data-tab="projects" data-page="projects-page">Projects</span>
+      <span class="nav-tab" data-tab="portfolio-resume" data-page="portfolio-resume-page">Portfolio & Resume</span>
       <span id="customization-tab" class="nav-tab hidden" data-tab="customization" data-page="customization-page">Customization</span>
       <span class="nav-tab" data-tab="settings" data-page="settings-page">Settings</span>
     </div>
@@ -154,7 +155,39 @@
 
         </div>
       </div>
-
+      <div id="portfolio-resume-page" class="page">
+        <div class="portfolio-page-wrapper">
+      
+          <div class="portfolio-header">
+            <div>
+              <h1>Portfolio & Resume</h1>
+              <p class="portfolio-subtitle">
+                Showcase your strongest work, core skills, and one-page resume highlights.
+              </p>
+            </div>
+            <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
+          </div>
+      
+          <div class="portfolio-grid">
+      
+            <div class="card portfolio-hero-card">
+              <h2 class="card-title">Resume Snapshot</h2>
+              <div id="resume-summary-container" class="resume-summary-container"></div>
+            </div>
+      
+            <div class="card portfolio-projects-card">
+              <h2 class="card-title">Top 3 Project Showcase</h2>
+              <div id="top-projects-container" class="top-projects-container"></div>
+            </div>
+      
+            <div class="card portfolio-skills-card">
+              <h2 class="card-title">Skills by Expertise</h2>
+              <div id="skills-expertise-container" class="skills-expertise-container"></div>
+            </div>
+      
+          </div>
+        </div>
+      </div>
       <div id="customization-page" class="page">
         <div class="tab-panel">
           <div class="customization-empty">
