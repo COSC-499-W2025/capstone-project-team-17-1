@@ -165,7 +165,10 @@
                 Showcase your strongest work, core skills, and one-page resume highlights.
               </p>
             </div>
-            <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
+            <div class="portfolio-actions">
+              <button id="preview-resume-btn" class="secondary-btn">Preview Resume</button>
+              <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
+            </div>
           </div>
       
           <div class="portfolio-grid">
@@ -209,6 +212,16 @@
     </div>
   </div>
 
+  <div id="resume-preview-modal" class="resume-preview-modal hidden">
+    <div class="resume-preview-dialog">
+      <div class="resume-preview-header">
+        <h2>One-Page Resume Preview</h2>
+        <button id="resume-preview-close" class="resume-preview-close" aria-label="Close">×</button>
+      </div>
+  
+      <div id="resume-preview-body" class="resume-preview-body"></div>
+    </div>
+  </div>
   <div id="auth-modal" class="auth-modal hidden">
     <div class="auth-dialog">
       <button id="auth-close" class="auth-close" aria-label="Close">x</button>

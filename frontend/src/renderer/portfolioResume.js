@@ -9,6 +9,16 @@ function getStaticProfile() {
   };
 }
 
+function getTopProjects(projects) {
+  return [...projects]
+    .sort((a, b) => {
+      const skillDiff = (b.total_skills || 0) - (a.total_skills || 0);
+      if (skillDiff !== 0) return skillDiff;
+      return (b.total_files || 0) - (a.total_files || 0);
+    })
+    .slice(0, 3);
+}
+
 function renderResumeSummary(profile, projects) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
@@ -73,13 +83,7 @@ function renderTopProjects(projects) {
     return;
   }
 
-  const topProjects = [...projects]
-    .sort((a, b) => {
-      const skillDiff = (b.total_skills || 0) - (a.total_skills || 0);
-      if (skillDiff !== 0) return skillDiff;
-      return (b.total_files || 0) - (a.total_files || 0);
-    })
-    .slice(0, 3);
+  const topProjects = getTopProjects(projects);
 
   container.innerHTML = topProjects
     .map(
@@ -146,6 +150,104 @@ function renderPortfolioStats(projects) {
   `;
 }
 
+function buildResumePreviewHtml(profile, projects) {
+  const totalProjects = projects.length;
+  const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
+  const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
+  const topProjects = getTopProjects(projects);
+
+  return `
+    <div class="resume-preview-sheet">
+      <div class="resume-preview-hero">
+        <h1>${profile.name}</h1>
+        <p class="resume-preview-role">${profile.title}</p>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Professional Summary</h3>
+        <p>
+          Computer Science student with hands-on experience building portfolio-focused software,
+          working across frontend, backend, systems programming, and project analysis workflows.
+          Current portfolio includes ${totalProjects} uploaded project${totalProjects === 1 ? "" : "s"},
+          ${totalFiles} analyzed file${totalFiles === 1 ? "" : "s"}, and ${totalSkills} detected skill signal${totalSkills === 1 ? "" : "s"}.
+        </p>
+      </div>
+
+      <div class="resume-preview-grid">
+        <div class="resume-preview-section">
+          <h3>Education</h3>
+          <p>${profile.education}</p>
+        </div>
+
+        <div class="resume-preview-section">
+          <h3>Awards</h3>
+          <ul>
+            ${profile.awards.map(item => `<li>${item}</li>`).join("")}
+          </ul>
+        </div>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Selected Projects</h3>
+        ${
+          topProjects.length
+            ? topProjects
+                .map(
+                  project => `
+                    <div class="resume-preview-project">
+                      <div class="resume-preview-project-title">${project.project_id}</div>
+                      <div class="resume-preview-project-meta">
+                        ${project.total_files} files analyzed • ${project.total_skills} skill signals • ${project.is_github ? "GitHub import" : "ZIP upload"}
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")
+            : `<p>No projects uploaded yet.</p>`
+        }
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Portfolio Highlights</h3>
+        <ul>
+          <li>${totalProjects} uploaded project${totalProjects === 1 ? "" : "s"} tracked in the desktop app</li>
+          <li>${totalFiles} total analyzed file${totalFiles === 1 ? "" : "s"} across portfolio entries</li>
+          <li>${totalSkills} total detected skill signal${totalSkills === 1 ? "" : "s"} from project analysis</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+async function openResumePreview() {
+  const modal = document.getElementById("resume-preview-modal");
+  const body = document.getElementById("resume-preview-body");
+  if (!modal || !body) return;
+
+  const profile = getStaticProfile();
+
+  body.innerHTML = `<p class="resume-summary-text">Loading resume preview...</p>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const projects = await fetchProjects();
+    body.innerHTML = buildResumePreviewHtml(profile, projects);
+  } catch (err) {
+    console.error("Failed to open resume preview:", err);
+    body.innerHTML = `
+      <div class="skills-group-card">
+        <h3>Preview unavailable</h3>
+        <p class="resume-summary-text">Unable to load live project data for the resume preview.</p>
+      </div>
+    `;
+  }
+}
+
+function closeResumePreview() {
+  const modal = document.getElementById("resume-preview-modal");
+  modal?.classList.add("hidden");
+}
+
 export async function loadPortfolioResume() {
   const profile = getStaticProfile();
 
@@ -156,7 +258,6 @@ export async function loadPortfolioResume() {
     renderPortfolioStats(projects);
   } catch (err) {
     console.error("Failed to load portfolio/resume data:", err);
-
     renderResumeSummary(profile, []);
     renderTopProjects([]);
     renderPortfolioStats([]);
@@ -168,4 +269,23 @@ export function initPortfolioResume() {
 
   const refreshBtn = document.getElementById("refresh-portfolio-btn");
   refreshBtn?.addEventListener("click", loadPortfolioResume);
+
+  const previewBtn = document.getElementById("preview-resume-btn");
+  previewBtn?.addEventListener("click", openResumePreview);
+
+  const closeBtn = document.getElementById("resume-preview-close");
+  closeBtn?.addEventListener("click", closeResumePreview);
+
+  const modal = document.getElementById("resume-preview-modal");
+  modal?.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeResumePreview();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeResumePreview();
+    }
+  });
 }

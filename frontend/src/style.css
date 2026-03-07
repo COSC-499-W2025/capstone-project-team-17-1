@@ -1820,3 +1820,146 @@ transition: all 0.2s ease;
     grid-template-columns: 1fr;
   }
 }
+
+.portfolio-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.secondary-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.resume-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(4, 10, 24, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.resume-preview-modal.hidden {
+  display: none;
+}
+
+.resume-preview-dialog {
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 24px;
+  background: #f7f9fc;
+  color: #0f172a;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.resume-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  position: sticky;
+  top: 0;
+  background: #f7f9fc;
+}
+
+.resume-preview-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.resume-preview-close {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: #334155;
+}
+
+.resume-preview-body {
+  padding: 24px;
+}
+
+.resume-preview-sheet {
+  background: white;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.resume-preview-hero h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #0f172a;
+}
+
+.resume-preview-role {
+  margin: 6px 0 0;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.resume-preview-section {
+  margin-top: 22px;
+}
+
+.resume-preview-section h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+}
+
+.resume-preview-section p,
+.resume-preview-section li,
+.resume-preview-project-meta {
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.resume-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.resume-preview-project {
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.resume-preview-project-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 700px) {
+  .resume-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-actions {
+    flex-wrap: wrap;
+  }
+}
