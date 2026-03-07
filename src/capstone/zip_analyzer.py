@@ -105,6 +105,7 @@ class ZipAnalyzer:
         preferences: Preferences,
         project_id: str | None = None,
         db_dir: Path | None = None,
+        conn: sqlite3.Connection | None = None,
     ) -> dict[str, object]:
         start = perf_counter()
         zip_path = zip_path.expanduser().resolve()
@@ -113,7 +114,8 @@ class ZipAnalyzer:
             self._logger.error("Invalid input format for %s", zip_path)
             raise InvalidArchiveError(detail)
 
-        conn = open_db(db_dir)
+        if conn is None:
+            conn = open_db(db_dir)
         try:
             stored = file_store.ensure_file(
                 conn,
@@ -122,6 +124,8 @@ class ZipAnalyzer:
                 source="zip_analyzer",
                 upload_id=project_id,
             )
+            conn.commit()
+
         except sqlite3.OperationalError as exc:
             if "readonly" not in str(exc).lower():
                 raise

@@ -2,15 +2,15 @@
 
 
 a = Analysis(
-    ['run_server.py'],
+    ['run_server.py', 'system/monitor_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('tools/system_metrics/LibreHardwareMonitor', 'capstone/tools/system_metrics/LibreHardwareMonitor')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['torch', 'torchvision', 'torchaudio'],
+    excludes=[],
     noarchive=False,
     optimize=0,
 )

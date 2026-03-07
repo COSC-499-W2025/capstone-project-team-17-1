@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Request
+from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
 import tempfile
 import shutil
@@ -242,7 +242,10 @@ def _generate_project_id_from_zip(conn, tmp_zip_path: Path, filename: str) -> st
 
 
 @router.post("/upload")
-async def upload_project(file: UploadFile = File(...), project_id: str | None = None):
+async def upload_project(
+    project_id: str,
+    file: UploadFile = File(...),   
+):
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -258,6 +261,17 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         auto_detected = bool(project_id)
     if not project_id:
         project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
+
+    existing = conn.execute(
+        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project ID '{project_id}' already exists."
+        )
     try:
         stored = file_store.ensure_file(
             conn,
@@ -293,7 +307,6 @@ async def upload_project(file: UploadFile = File(...), project_id: str | None = 
         zip_path = stored["path"] 
     )
     log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
-
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
     # Pass email alongside the git author name so upsert_user can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
@@ -546,6 +559,11 @@ def delete_project(id: str):
     conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
     # delete file reference
     conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    # delete analysis snapshots for this project
+    conn.execute(
+        "DELETE FROM project_analysis WHERE project_id = ?",
+        (id,)
+    )
     conn.commit()
 
     # best-effort physical file removal
