@@ -5,6 +5,7 @@ const os = require("os");
 const fs = require("fs");
 
 let apiProcess = null;
+let apiProcessMode = "binary";
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -34,43 +35,44 @@ function startAPI() {
     return;
   }
 
-  const backendName =
-    process.platform === "win32"
-      ? "capstone_backend.exe"
-      : "capstone_backend";
-
-  let backendPath;
-
   if (app.isPackaged) {
-    backendPath = path.join(
+    const backendName =
+      process.platform === "win32"
+        ? "capstone_backend.exe"
+        : "capstone_backend";
+    const backendPath = path.join(
       process.resourcesPath,
       "backend",
       backendName
     );
+    console.log("Backend path:", backendPath);
+    console.log("Exists:", fs.existsSync(backendPath));
+    if (!fs.existsSync(backendPath)) {
+      console.error("Backend executable not found.");
+      return;
+    }
+    apiProcessMode = "binary";
+    apiProcess = spawn(backendPath, [], {
+      windowsHide: false,
+      stdio: "pipe"
+    });
   } else {
-    backendPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "src",
-      "capstone",
-      "dist",
-      backendName
-    );
+    const repoRoot = path.join(__dirname, "..", "..");
+    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+    const env = {
+      ...process.env,
+      PYTHONPATH: [path.join(repoRoot, "src"), process.env.PYTHONPATH || ""]
+        .filter(Boolean)
+        .join(path.delimiter)
+    };
+    apiProcessMode = "python";
+    apiProcess = spawn(pythonCmd, ["-m", "capstone.run_server"], {
+      cwd: repoRoot,
+      windowsHide: false,
+      stdio: "pipe",
+      env
+    });
   }
-
-  console.log("Backend path:", backendPath);
-  console.log("Exists:", fs.existsSync(backendPath));
-
-  if (!fs.existsSync(backendPath)) {
-    console.error("Backend executable not found.");
-    return;
-  }
-
-  apiProcess = spawn(backendPath, [], {
-    windowsHide: false,
-    stdio: "pipe"
-  });
 
   apiProcess.stdout.on("data", data => {
     console.log("API:", data.toString());
@@ -81,7 +83,7 @@ function startAPI() {
   });
 
   apiProcess.on("error", err => {
-    console.error("Failed to start backend:", err);
+    console.error(`Failed to start backend (${apiProcessMode}):`, err);
   });
 }
 

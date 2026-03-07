@@ -16,24 +16,34 @@
 
 /* =========================================================
    GLOBAL LAYOUT
+   Key fixes:
+   1) Lock app to viewport and kill page scrolling
+   2) Use min-height: 0 on flex children so grids can shrink
+   3) Use correct titlebar height in the remaining space calc
 ========================================================= */
 
-html, body {
+html,
+body {
+  width: 100%;
+  height: 100%;
   margin: 0;
   overflow: hidden;
-  height: 100vh;
-
-  display: flex;
-  flex-direction: column;
 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text-dark);
 }
 
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 body.dark {
   background:
     radial-gradient(circle at top right,
-      rgba(30,144,255,0.08),
+      rgba(30, 144, 255, 0.08),
       transparent 60%),
     #0b1120;
 }
@@ -43,17 +53,30 @@ body.light {
   color: var(--text-light);
 }
 
+/* The titlebar is 70px, so subtract 70px, not 60px */
+.main-container {
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* =========================================================
    TITLE BAR
 ========================================================= */
 
 .titlebar {
+  position: relative;
   height: 70px;
+  flex: 0 0 70px;
   display: flex;
   align-items: center;
   padding: 0 30px;
   gap: 30px;
   -webkit-app-region: drag;
+  z-index: 1000;
 }
 
 /* Disable drag where needed */
@@ -111,7 +134,7 @@ input,
 .logo-img {
   height: 52px;
   width: auto;
-  filter: drop-shadow(0 0 6px rgba(30,144,255,0.4));
+  filter: drop-shadow(0 0 6px rgba(30, 144, 255, 0.4));
 }
 
 .logo-text {
@@ -186,14 +209,14 @@ input {
   border: none;
   outline: none;
   width: 180px;
-  background: rgba(255,255,255,0.07);
+  background: rgba(255, 255, 255, 0.07);
   color: inherit;
   transition: all 0.3s ease;
 }
 
 input:focus {
   width: 260px;
-  box-shadow: 0 0 15px rgba(30,144,255,0.4);
+  box-shadow: 0 0 15px rgba(30, 144, 255, 0.4);
 }
 
 /* =========================================================
@@ -231,16 +254,86 @@ body.light .theme-toggle::before {
 }
 
 /* =========================================================
+   PAGE CONTAINER
+   Important: min-height: 0 so children can shrink in flex
+========================================================= */
+
+#page-container {
+  position: relative;
+  flex: 1;
+  z-index: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  visibility: hidden;      /* ADD THIS */
+}
+
+.page.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+  visibility: visible;     /* ADD THIS */
+}
+
+.page:not(.active) {
+  z-index: -1;
+}
+
+.page.active {
+  z-index: 1;
+}
+
+/* =========================================================
    DASHBOARD GRID
+   Key fixes:
+   1) Give the grid a real height and allow shrinking
+   2) Use minmax(0, 1fr) so rows do not overflow
+   3) Clamp padding on short windows so it does not push content out
 ========================================================= */
 
 .dashboard {
-  flex: 1;
+  height: 100%;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+
   gap: 20px;
+
   padding: 40px 30px;
+  box-sizing: border-box;
+
   overflow: hidden;
+  align-content: stretch;
+}
+
+@media (max-height: 900px) {
+  .dashboard {
+    padding: 28px 26px;
+  }
+}
+
+@media (max-height: 760px) {
+  .dashboard {
+    padding: 18px 18px;
+    gap: 14px;
+  }
 }
 
 .tab-panel {
@@ -302,22 +395,56 @@ body.light .theme-toggle::before {
 
 /* Responsive breakpoints */
 @media (max-width: 1400px) {
-  .dashboard { grid-template-columns: repeat(3, 1fr); }
+  .dashboard {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
 }
+
 @media (max-width: 1100px) {
-  .dashboard { grid-template-columns: repeat(2, 1fr); }
+  .dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+
+    /* On small widths the number of cards grows taller than the screen.
+       Keep the app itself non scrollable, but allow dashboard to scroll
+       with hidden scrollbar so layout never breaks. */
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
 }
+
 @media (max-width: 700px) {
-  .dashboard { grid-template-columns: 1fr; }
+  .dashboard {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
 }
 
 /* =========================================================
    CARD BASE
+   Key fixes:
+   1) min-height: 0 lets inner scroll areas work
 ========================================================= */
 
 .card {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 
   padding: 28px;
@@ -336,9 +463,10 @@ body.light .theme-toggle::before {
 
   box-shadow:
     0 15px 40px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255,255,255,0.05);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 
   transition: all 0.35s ease;
+  box-sizing: border-box;
 }
 
 .card:hover {
@@ -375,9 +503,10 @@ body.light .card {
 
 .gauges {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   align-items: center;
+  min-height: 0;
 }
 
 .gauge {
@@ -387,6 +516,7 @@ body.light .card {
   justify-content: center;
   text-align: center;
   min-width: 0;
+  min-height: 0;
 }
 
 svg {
@@ -425,7 +555,7 @@ svg {
 }
 
 /* =========================================================
-   MOST USED SKILLS (MODERN LAYOUT)
+   MOST USED SKILLS
 ========================================================= */
 
 .skills-title {
@@ -441,6 +571,7 @@ svg {
   gap: 12px;
   padding: 6px 0;
   font-size: 14px;
+  min-width: 0;
 }
 
 .skill-left-modern {
@@ -451,13 +582,14 @@ svg {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .skill-bar-modern {
   flex: 1;
   min-width: 60px;
   height: 6px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -499,12 +631,13 @@ svg {
 
 /* =========================================================
    ACTIVITY LOG
+   Key fix: remove max-height so it can shrink inside card
 ========================================================= */
 
 .activity-container {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  max-height: 260px;
   overflow-y: auto;
   margin-top: 12px;
 
@@ -513,6 +646,9 @@ svg {
   line-height: 1.6;
 
   background: transparent;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .activity-container::-webkit-scrollbar {
@@ -531,7 +667,7 @@ svg {
   font-weight: 600;
 }
 
-.level-info { color: rgba(255,255,255,0.85); }
+.level-info { color: rgba(255, 255, 255, 0.85); }
 .level-warning { color: #f5c542; }
 .level-error { color: #ff4c4c; }
 .level-success { color: #00ff88; }
@@ -551,30 +687,44 @@ svg {
 }
 
 /* =========================================================
-    Recent Projects Card 
-   ========================================================= */
-
-/* Hide scrollbar but keep scroll functionality */
-.recent-projects-container::-webkit-scrollbar {
-  width: 0px;
-  background: transparent;
-}
+   RECENT PROJECTS CARD
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
 
 .recent-projects-container {
   display: flex;
   flex-direction: column;
   gap: 14px;
   margin-top: 16px;
+
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 320px;
-  scrollbar-width: none;      /* Firefox */
-  -ms-overflow-style: none;   /* IE / Edge */
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.projects-page-wrapper {
+  flex: 1;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 40px 30px;
+  box-sizing: border-box;
+}
+
+.recent-projects-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
 }
 
 .recent-project-item {
   padding: 14px 16px;
   border-radius: 14px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(10px);
   transition: all 0.25s ease;
   display: flex;
@@ -583,7 +733,7 @@ svg {
 }
 
 .recent-project-item:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   transform: translateY(-2px);
 }
 
@@ -591,6 +741,8 @@ svg {
   display: flex;
   justify-content: space-between;
   font-weight: 600;
+  gap: 10px;
+  min-width: 0;
 }
 
 .project-id {
@@ -600,6 +752,7 @@ svg {
 .project-date {
   font-size: 12px;
   opacity: 0.6;
+  white-space: nowrap;
 }
 
 .project-meta {
@@ -607,6 +760,7 @@ svg {
   gap: 14px;
   font-size: 12px;
   opacity: 0.75;
+  flex-wrap: wrap;
 }
 
 .project-button {
@@ -628,31 +782,33 @@ svg {
 }
 
 /* =========================================================
-    Error Analysis 
-   ========================================================= */
+   ERROR ANALYSIS
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
 
 .error-analysis-container {
   display: flex;
   flex-direction: column;
   gap: 14px;
   margin-top: 16px;
-  max-height: 320px;
-  overflow-y: auto;
-}
 
-/* Hide scrollbar */
-.error-analysis-container::-webkit-scrollbar {
-  width: 0px;
-}
-.error-analysis-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.error-analysis-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
 }
 
 .error-item {
   padding: 16px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
@@ -661,7 +817,7 @@ svg {
 }
 
 .error-item:hover {
-  background: rgba(255,255,255,0.09);
+  background: rgba(255, 255, 255, 0.09);
   transform: translateY(-2px);
 }
 
@@ -831,17 +987,9 @@ svg {
   border-radius: 50%;
 }
 
-.severity-circle.high {
-  background: #ff4d4d;
-}
-
-.severity-circle.medium {
-  background: #ffcc00;
-}
-
-.severity-circle.low {
-  background: #4da6ff;
-}
+.severity-circle.high { background: #ff4d4d; }
+.severity-circle.medium { background: #ffcc00; }
+.severity-circle.low { background: #4da6ff; }
 
 /* Empty States */
 
@@ -849,7 +997,7 @@ svg {
 .error-healthy-state {
   padding: 20px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   text-align: center;
   font-size: 13px;
 }
@@ -865,28 +1013,30 @@ svg {
 }
 
 /* =========================================================
-    Data Quality 
-   ========================================================= */
+   DATA QUALITY
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
 
 .health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 15px;
   margin-top: 10px;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  padding-right: 4px;
+
   scrollbar-width: none;
   -ms-overflow-style: none;
-  max-height: 260px;       /* 👈 controls scroll height */
-  overflow-y: auto;        /* 👈 enables scrolling */
-  padding-right: 4px;      /* slight spacing */
 }
 
-/* Hide scrollbar for Chrome, Safari */
 .health-grid::-webkit-scrollbar {
   width: 0px;
   background: transparent;
 }
-
-
 
 .health-mini-card {
   background: rgba(255, 255, 255, 0.04);
@@ -921,4 +1071,547 @@ svg {
   opacity: 0.6;
   display: flex;
   justify-content: space-between;
+  gap: 10px;
+}
+
+/* =========================================================
+   PROJECT TAB
+========================================================= */
+
+.projects-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.primary-btn {
+  background: linear-gradient(90deg, #00f5a0, #00d9f5);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: #0b132b;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.projects-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.projects-list::-webkit-scrollbar {
+  width: 0px;
+}
+
+.project-card {
+  background: #162447;
+  padding: 20px;
+  border-radius: 12px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.project-card:hover {
+  transform: translateY(-3px);
+  background: #1f4068;
+}
+
+.view-btn {
+  margin-top: 10px;
+  background: #00f5a0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* =========================================================
+  UPLOAD PAGE 
+========================================================= */
+
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.upload-window {
+  width: 500px;
+  background: linear-gradient(145deg, rgba(25,35,70,0.95), rgba(15,22,45,0.95));
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.upload-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-header button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.upload-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.upload-tab {
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: none;
+  color: white;
+}
+
+.upload-tab.active {
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+}
+
+.upload-section {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-section.active {
+  display: flex;
+}
+
+/* =========================================
+   CUSTOM FILE INPUT
+========================================= */
+
+.file-upload-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.file-upload-wrapper input[type="file"] {
+  display: none;
+}
+
+.file-upload-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.file-upload-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.file-upload-name {
+  font-size: 12px;
+  opacity: 0.7;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   GITHUB UPLOAD UI
+   Additive styles only
+========================================================= */
+
+.github-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.github-loading,
+.github-empty {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.github-login {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.github-login-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.github-login-sub {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.github-token-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  font-size: 13px;
+}
+
+.github-login-btn {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.github-login-hint {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.github-repo-toolbar {
+  display: flex;
+  gap: 10px;
+}
+
+.github-search {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  font-size: 13px;
+}
+
+.github-repo-list {
+  flex: 1;
+  min-height: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.github-repo-list::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.github-repo-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.github-repo-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.github-repo-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.github-repo-name {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.github-repo-updated {
+  font-size: 11px;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.github-repo-desc {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.4;
+}
+
+.github-repo-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.github-repo-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.github-upload-btn {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  transition: all 0.2s ease;
+}
+
+.github-upload-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   PROGRESS MODAL
+========================================================= */
+
+.progress-window {
+  width: 420px;
+  background: linear-gradient(145deg, rgba(25,35,70,0.95), rgba(15,22,45,0.95));
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.progress-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.progress-text {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  transition: width 0.25s ease;
+}
+
+.progress-percent {
+  font-size: 12px;
+  opacity: 0.75;
+  text-align: right;
+}
+
+.github-panel input {
+  pointer-events: auto;
+}
+
+.github-panel {
+  pointer-events: auto;
+}
+
+.branch-modal {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(0,0,0,0.55);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 9999;
+}
+
+.branch-modal-box {
+background: #1b2336;
+padding: 28px;
+border-radius: 12px;
+width: 380px;
+box-shadow: 0 15px 40px rgba(0,0,0,.45);
+color: white;
+}
+
+.branch-modal-box h3 {
+margin-bottom: 18px;
+font-weight: 600;
+}
+
+#branch-select {
+width: 100%;
+padding: 10px;
+border-radius: 8px;
+border: none;
+background: #0f1629;
+color: white;
+margin-bottom: 18px;
+outline: none;
+font-size: 14px;
+}
+
+.branch-modal-buttons {
+display: flex;
+justify-content: space-between;
+gap: 10px;
+}
+
+.branch-modal-buttons button {
+flex: 1;
+padding: 10px;
+border-radius: 8px;
+border: none;
+cursor: pointer;
+}
+
+#branch-confirm {
+background: linear-gradient(90deg,#00e5ff,#00ffa6);
+color: black;
+font-weight: 600;
+}
+
+#branch-cancel {
+background: #2a3350;
+color: white;
+}
+
+#branch-select::-webkit-scrollbar {
+width: 8px;
+}
+
+#branch-select::-webkit-scrollbar-track {
+background: transparent;
+}
+
+#branch-select::-webkit-scrollbar-thumb {
+background: linear-gradient(180deg,#00e5ff,#00ffa6);
+border-radius: 6px;
+}
+
+#branch-select::-webkit-scrollbar-thumb:hover {
+background: #00ffa6;
+}
+
+/* =========================================================
+   Delete project
+========================================================= */
+
+.project-card {
+position: relative;
+}
+
+.project-card-top {
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.project-delete {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff5a5a;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.project-delete:hover {
+  background: rgba(255, 90, 90, 0.12);
+  color: #ff2b2b;
+  transform: scale(1.05);
+}
+
+.project-delete svg {
+  width: 20px;
+  height: 20px;
+}
+
+.project-card.removing {
+opacity: 0;
+transform: scale(0.97);
+transition: all 0.2s ease;
+}
+
+.pull-btn {
+  background: #3a6df0;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.pull-btn:hover {
+  background: #2f57c5;
 }
