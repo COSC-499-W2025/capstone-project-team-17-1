@@ -1,3 +1,7 @@
+// THIS FILE IS NOW DEPREICATED PLEASE USE THE RENDERER.JS INSIDE RENDERER/RENDERER.JS
+
+
+
 const toggle = document.querySelector(".theme-toggle")
 const cpuFill = document.getElementById("cpu-fill");
 const memoryFill = document.getElementById("memory-fill");
