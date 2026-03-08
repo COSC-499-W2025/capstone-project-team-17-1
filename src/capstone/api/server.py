@@ -68,6 +68,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         print("Application shutdown complete.")
     app = FastAPI(title="Capstone API", lifespan=lifespan)
     app.state.auth_token = auth_token
+    app.state.db_dir = db_dir
 
     app.add_middleware(
         CORSMiddleware,
