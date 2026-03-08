@@ -10,7 +10,8 @@ from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
 from capstone.storage import open_db, save_github_token, get_github_token
-
+import capstone.storage as storage_module
+from capstone.system.cloud_storage import upload_database, upload_project_zip
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -135,6 +136,14 @@ def import_repository(
                 (project_id, owner, repo, branch)
             )
             conn.commit()
+            if storage_module.CURRENT_USER:
+                upload_project_zip(
+                    storage_module.CURRENT_USER,
+                    project_id,
+                    zip_path,
+                    zip_path.name,
+                )
+                upload_database(storage_module.CURRENT_USER)
         finally:
             conn.close()
 
@@ -200,6 +209,15 @@ def pull_repository(project_id: str):
             project_id=project_id
         )
 
+        if storage_module.CURRENT_USER:
+            upload_project_zip(
+                storage_module.CURRENT_USER,
+                project_id,
+                zip_path,
+                zip_path.name,
+            )
+            upload_database(storage_module.CURRENT_USER)
+
     conn.close()
 
     return {"status": "updated", "summary": summary}
@@ -222,6 +240,9 @@ def github_auth_status():
 @router.post("/login")
 def github_login(token: str):
     save_github_token(token)
+
+    if storage_module.CURRENT_USER:
+        upload_database(storage_module.CURRENT_USER)
 
     return {
         "status": "authenticated"

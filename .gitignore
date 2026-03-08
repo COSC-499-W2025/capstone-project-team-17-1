@@ -32,10 +32,10 @@ frontend/node_modules/
 data/capstone.db
 dist/
 build/
-
+src/capstone/capstone_backend.spec
 .env
 .env.local
-
+src/capstone/api/routes/auth_sessions.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

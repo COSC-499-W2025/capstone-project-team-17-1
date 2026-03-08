@@ -56,6 +56,45 @@ export async function loadProjects() {
 
       container.appendChild(card);
     });
+    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+      method: "POST"
+    });
+    loadProjects();
+    loadRecentProjects(); // also refresh dashboard widget if it is visible
+  });
+
+  const pullBtn = card.querySelector(".pull-btn");
+
+pullBtn?.addEventListener("click", async (e) => {
+
+  e.stopPropagation();
+
+  const projectId = pullBtn.dataset.project;
+
+  try {
+
+    pullBtn.innerText = "Pulling...";
+    pullBtn.disabled = true;
+
+    const res = await fetch(
+      `http://127.0.0.1:8002/github/pull?project_id=${encodeURIComponent(projectId)}`,
+      { method: "POST" }
+    );
+
+    if (!res.ok) {
+      throw new Error("Pull failed");
+    }
+    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+      method: "POST"
+    });
+
+    pullBtn.innerText = "Updated ✓";
+
+    loadProjects();
+    loadRecentProjects();
+    loadProjectHealth();
+    loadErrorAnalysis();
+
   } catch (err) {
     console.error("Failed to load projects:", err);
 

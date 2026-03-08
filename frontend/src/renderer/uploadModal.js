@@ -235,24 +235,24 @@ export function renderGithubLogin(container) {
   });
 
   document.getElementById("github-save-token")?.addEventListener("click", async () => {
-    const token = document.getElementById("github-token-input")?.value?.trim();
+  const token = document.getElementById("github-token-input")?.value?.trim();
 
-    if (!token) {
-      alert("Please paste a token.");
-      return;
-    }
+  if (!token) {
+    alert("Please paste a token.");
+    return;
+  }
 
-    const res = await fetch(`http://127.0.0.1:8002/github/login?token=${encodeURIComponent(token)}`, {
-  method: "POST"
-});
-
-    if (!res.ok) {
-      alert("Login failed.");
-      return;
-    }
-
-    initGithubSection();
+  const res = await fetch(`http://127.0.0.1:8002/github/login?token=${encodeURIComponent(token)}`, {
+    method: "POST"
   });
+
+  if (!res.ok) {
+    alert("Login failed.");
+    return;
+  }
+
+  setUploadTab("github");
+});
 }
 
 export function renderRepoCards(repos) {

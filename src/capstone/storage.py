@@ -29,19 +29,25 @@ import sys
 
 logger = get_logger(__name__)
 
+def get_user_db_path():
 
+    global CURRENT_USER
+
+    if CURRENT_USER is None:
+        return BASE_DIR / "guest_capstone.db"
+
+    path = BASE_DIR / "users" / CURRENT_USER
+    path.mkdir(parents=True, exist_ok=True)
+
+    return path / "capstone.db"
 
 def get_base_data_dir():
-    if getattr(sys, "frozen", False):
-        # Running as packaged app: choose OS-safe writable user data directory.
-        local_appdata = os.getenv("LOCALAPPDATA")
-        appdata = os.getenv("APPDATA")
-        home = os.path.expanduser("~")
-        root = local_appdata or appdata or home
-        base = Path(root) / "Loom"
-    else:
-        # Running in development
-        base = Path.cwd() / "runtime_data"
+    
+    local_appdata = os.getenv("LOCALAPPDATA")
+    appdata = os.getenv("APPDATA")
+    home = os.path.expanduser("~")
+    root = local_appdata or appdata or home
+    base = Path(root) / "Loom"
 
     base.mkdir(parents=True, exist_ok=True)
     return base
@@ -49,7 +55,7 @@ def get_base_data_dir():
 BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
-
+CURRENT_USER = None
 
 def _is_noreply_email(email: str | None) -> bool:
     if not email:
@@ -190,51 +196,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON contributor_stats (project_id, contributor, created_at)
         """
     )
+    
+    
 
-    # Users derived from contribution data (GitHub or local logs)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            email TEXT,
-            full_name TEXT,
-            phone_number TEXT,
-            city TEXT,
-            state_region TEXT,
-            github_url TEXT,
-            portfolio_url TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
-        ON users (username, COALESCE(email, ''))
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS auth_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            user_id INTEGER NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_auth_accounts_user_id
-        ON auth_accounts (user_id)
-        """
-    )
 
     conn.execute(
         """
@@ -349,6 +313,26 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         ON resume_items (section_id, sort_order)
         """
     )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT,
+            full_name TEXT,
+            phone_number TEXT,
+            city TEXT,
+            state_region TEXT,
+            github_url TEXT,
+            portfolio_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+
 
     # Evidence of success (metrics/feedback/evaluations), append-only
     conn.execute(
@@ -929,6 +913,19 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
                 (contributor, project_id, canonical_user_id),
             )
 
+def set_current_user(user_id: str | None):
+    global CURRENT_USER
+    CURRENT_USER = user_id
+
+def get_database_path():
+    if CURRENT_USER:
+        path = BASE_DIR / "data" / "users" / CURRENT_USER
+        path.mkdir(parents=True, exist_ok=True)
+        return path / "capstone.db"
+
+    path = BASE_DIR / "data" / "guest"
+    path.mkdir(parents=True, exist_ok=True)
+    return path / "capstone.db"
 
 # -----------------------------
 # DB lifecycle
@@ -936,7 +933,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
 def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
     target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
-    db_path = target_dir / "capstone.db"
+    db_path = get_database_path()
 
     logger.info("Opening database at %s", db_path)
 

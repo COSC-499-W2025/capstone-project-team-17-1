@@ -1,4 +1,9 @@
 import { initNavigation, switchPage } from "./navigation.js";
+import { loadProjects } from "./projects.js";
+import { loadRecentProjects } from "./recentProjects.js";
+import { loadProjectHealth } from "./projectHealth.js";
+import { loadErrorAnalysis } from "./errors.js";
+import { loadMostUsedSkills } from "./skills.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
@@ -196,6 +201,17 @@ async function changePassword() {
   const msg = document.getElementById("password-msg");
   const currentPassword = document.getElementById("pw-current")?.value || "";
   const newPassword = document.getElementById("pw-new")?.value || "";
+
+  if (!currentPassword || !newPassword) {
+    if (msg) msg.textContent = "Please fill in both password fields.";
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    if (msg) msg.textContent = "New password must be at least 6 characters.";
+    return;
+  }
+
   if (msg) msg.textContent = "Saving...";
 
   try {
@@ -207,15 +223,19 @@ async function changePassword() {
         new_password: newPassword,
       }),
     });
+
     const data = await res.json();
+
     if (!res.ok) {
       if (msg) msg.textContent = `Failed: ${data.detail || "update failed"}`;
       return;
     }
+
     const currentEl = document.getElementById("pw-current");
     const newEl = document.getElementById("pw-new");
     if (currentEl) currentEl.value = "";
     if (newEl) newEl.value = "";
+
     if (msg) msg.textContent = "Password updated successfully.";
   } catch (_) {
     if (msg) msg.textContent = "Failed: network error";
@@ -234,6 +254,28 @@ function closeModalToPublic() {
   showAuthModal(false);
   if (!currentUser) goToPage("dashboard", "dashboard-page");
 }
+
+async function syncCloudDbAndRefresh() {
+  try {
+    await authFetch("/cloud/db/download", {
+      method: "POST"
+    });
+
+    await authFetch("/cloud/projects/download-all", {
+      method: "POST"
+    });
+  } catch (_) {
+    // ignore if user has no cloud data yet
+  }
+
+  await Promise.all([
+    loadProjects(),
+    loadRecentProjects(),
+    loadProjectHealth(),
+    loadErrorAnalysis(),
+    loadMostUsedSkills(),
+  ]);
+}  
 
 export async function initAuthFlow() {
   const loginBtn = document.getElementById("login-btn");
@@ -279,17 +321,23 @@ export async function initAuthFlow() {
     },
   });
 
-  try {
-    const bootstrapRes = await authFetch("/auth/bootstrap");
-    if (bootstrapRes.ok) {
-      const boot = await bootstrapRes.json();
-      if (boot.authenticated && boot.user) {
-        setAuthToken(getAuthToken());
-        setModeUI(true, boot.user);
-        goToPage("customization", "customization-page");
-      }
+    try {
+    const user = await ensureCurrentUser();
+
+    if (user) {
+      setModeUI(true, user);
+      await syncCloudDbAndRefresh();
+      goToPage("customization", "customization-page");
+    } else {
+      setAuthToken(null);
+      setModeUI(false, null);
+      goToPage("dashboard", "dashboard-page");
     }
-  } catch (_) {}
+  } catch (_) {
+    setAuthToken(null);
+    setModeUI(false, null);
+    goToPage("dashboard", "dashboard-page");
+  }
 
   loginBtn.addEventListener("click", startLoginFlow);
   toggleBtn.addEventListener("click", () => {
@@ -302,46 +350,67 @@ export async function initAuthFlow() {
   });
 
   submit.addEventListener("click", async () => {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    const email = emailInput ? emailInput.value.trim() : "";
-    error.textContent = "";
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  const email = emailInput ? emailInput.value.trim() : "";
+  error.textContent = "";
 
-    if (!username || !password) {
-      error.textContent = "Username and password are required.";
+  if (!username || !password) {
+    error.textContent = "Username and password are required.";
+    return;
+  }
+
+  const payload =
+    authMode === "register"
+      ? { username, password, email: email || null }
+      : { username, password };
+
+  const path = authMode === "register" ? "/auth/register" : "/auth/login";
+
+  try {
+    const res = await authFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      error.textContent = data.detail || "Authentication failed.";
       return;
     }
 
-    const payload = authMode === "register" ? { username, password, email: email || null } : { username, password };
-    const path = authMode === "register" ? "/auth/register" : "/auth/login";
+    setAuthToken(data.token);
+    setModeUI(true, data.user);
 
-    try {
-      const res = await authFetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error.textContent = data.detail || "Authentication failed.";
-        return;
-      }
+    await authFetch("/cloud/db/download", { method: "POST" });
+    await authFetch("/cloud/projects/download-all", { method: "POST" });
 
-      setAuthToken(data.token);
-      setModeUI(true, data.user);
-      showAuthModal(false);
-      goToPage("customization", "customization-page");
-    } catch (_) {
-      error.textContent = "Unable to reach auth service.";
-    }
-  });
+    await syncCloudDbAndRefresh();
 
-  logoutBtn.addEventListener("click", async () => {
-    try {
-      await authFetch("/auth/logout", { method: "POST" });
-    } catch (_) {}
-    setAuthToken(null);
-    setModeUI(false, null);
-    goToPage("dashboard", "dashboard-page");
-  });
+    showAuthModal(false);
+    goToPage("customization", "customization-page");
+  } catch (_) {
+    error.textContent = "Unable to reach auth service.";
+  }
+});
+
+ logoutBtn.addEventListener("click", async () => {
+  try {
+    await authFetch("/auth/logout", { method: "POST" });
+  } catch (_) {}
+
+  setAuthToken(null);
+  setModeUI(false, null);
+  goToPage("dashboard", "dashboard-page");
+
+  await Promise.all([
+    loadProjects(),
+    loadRecentProjects(),
+    loadProjectHealth(),
+    loadErrorAnalysis(),
+    loadMostUsedSkills(),
+  ]);
+});
 }
