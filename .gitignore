@@ -35,7 +35,7 @@ build/
 src/capstone/capstone_backend.spec
 .env
 .env.local
-
+src/capsone/api/routes/auth_sessions.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
