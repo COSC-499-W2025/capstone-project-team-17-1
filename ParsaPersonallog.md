@@ -1268,3 +1268,179 @@ Several frontend and backend integration issues surfaced and were resolved.
 ### Reflection
 
 This week significantly improved the professionalism and technical depth of the project. The System Health card evolved from a placeholder UI element into a fully functional real time monitoring panel powered by custom backend hardware integration and dynamic frontend visualization. The combination of background hardware monitoring, structured API design, SVG animation, and gradient based usage indicators demonstrates strong full stack integration and attention to detail. The result is a responsive and production quality dashboard component that enhances both usability and technical sophistication of the application.
+
+---
+
+## Week 9 Personal Log [Mar 2 – Mar 8, 2026]
+
+This week I focused on three major areas of progress in the capstone project. The first was completing and polishing the Projects tab so it behaves like a real functional project management view rather than a mockup. The second was moving the application away from a purely local desktop only state by introducing a server based account and session flow so user data and authentication can persist across environments. The third was creating and deploying a web version of the application, including hosting the Python backend on Render and the browser frontend on Cloudflare Pages. This ended up being one of the most important full stack weeks so far because it pushed the project from a local Electron prototype toward an actually hosted product.
+
+
+### PR Hyperlink
+
+[PR #280](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/280)
+[PR #272](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/272)
+[PR #265](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/265)
+[PR #250](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/250)
+
+**Peer Eval**  
+>
+> ![Week 9 — peer eval]
+> <img width="1066" height="623" alt="image" src="https://github.com/user-attachments/assets/f0275bb4-7fb4-4749-bd52-d3e5a09835ef" />
+> _Figure 0. peer evaluation._
+>
+---
+
+### Completing the Projects tab
+
+A major portion of this week was spent finishing the Projects tab and making it behave like a real user facing feature instead of a partial interface. The UI structure had already been started earlier, but this week I focused on functionality, correctness, and the interactions required to make project management feel complete.
+
+* Finalized the layout and styling of the Projects page so it properly displays uploaded projects in a large card based format.
+* Verified that project metadata such as file count, skill count, and type appear correctly in the project card.
+* Added support for viewing a project directly from the project card.
+* Added the delete icon and wired it up so deleting a project now works from the frontend.
+* Integrated pull support for GitHub backed projects so repositories can be refreshed from the UI.
+* Confirmed the Upload Project button opens the modal correctly and supports both manual ZIP upload and GitHub based upload.
+* Refined the visual consistency of the page so the final layout matches the rest of the dashboard design.
+
+This part of the work was especially important because the Projects tab is one of the most visible parts of the app. It now acts as a real project hub rather than just a placeholder page.
+
+---
+
+### Server based database and account persistence
+
+Another major milestone this week was shifting parts of the system away from purely local state and toward a server based account model. Before this work, login and account behavior were mostly tied to local desktop usage. I worked on making the system remember the logged in user and behave more consistently across sessions.
+
+* Implemented persistent auth session storage so the application can remember logged in users after restart.
+* Fixed the desktop automatic login flow by identifying that sessions were being kept only in memory and were lost when the backend restarted.
+* Added session persistence through `auth_sessions.json` so tokens survive application restarts.
+* Updated login, registration, and logout logic so sessions are saved and deleted properly.
+* Fixed the auth startup flow to validate saved credentials correctly.
+* Restored the missing `/auth/me` route when automatic login stopped working.
+* Ensured the desktop app now reopens in the authenticated state when valid sessions exist.
+* Cleaned up Git tracking issues by removing `auth_sessions.json` from version control and adding it to `.gitignore`.
+
+This work laid the foundation for a server based identity system rather than a purely temporary local session. Although there is still more work to do for full user isolation of data, this week established the core session persistence needed for both desktop and hosted flows.
+
+---
+
+### Profile and password management
+
+The Settings page originally existed mostly as a mock frontend. This week I connected that UI to real backend and database behavior so users can now update their account data.
+
+* Added profile fields support such as full name, phone number, city, state or region, GitHub URL, and portfolio URL.
+* Updated the Cloudflare auth worker to support profile updates and password change requests.
+* Extended the D1 user schema by adding profile related columns directly into the existing `users` table.
+* Implemented backend forwarding from FastAPI auth routes to the auth worker for updating profile information.
+* Implemented password change logic with current password validation and hash regeneration.
+* Updated frontend settings logic so the Save Profile and Update Password actions now hit real endpoints and return real results.
+* Verified that user profile changes persist correctly and reload into the interface.
+
+This was a significant step because it converted the settings page from a visual shell into a real account management feature.
+
+---
+
+### Creating a browser safe web app version
+
+A large technical challenge this week was separating the Electron specific application from a browser deployable frontend. Since the desktop version depends on `main.js`, `preload.js`, and Electron only APIs, I had to create a clean web app variant that could run in a normal browser environment.
+
+* Created a separate `web-app` folder to isolate the browser deployable frontend from the Electron desktop app.
+* Removed `main.js` and `preload.js` from the web version since they are Electron only and not usable in the browser.
+* Identified and removed dependencies on Electron injected globals such as `window.skillsAPI` and window controls.
+* Replaced Electron only functionality with direct browser based fetch calls.
+* Introduced a shared `config.js` for API base URL configuration in the web build.
+* Updated frontend modules to stop relying on localhost and instead point to hosted backend URLs.
+* Fixed browser specific issues such as missing script/module paths and invalid asset directory structure.
+* Cleaned up module loading so the web app could run correctly through Cloudflare Pages without MIME type failures.
+
+This part of the work was essential because it changed the application from something that only works inside Electron to something that can now be opened as a real hosted website.
+
+---
+
+### Rebuilding the Most Used Skills logic for the web app
+
+One of the biggest frontend logic issues after moving to the browser was that the Most Used Skills card stopped working correctly. The desktop version had relied on Electron preload logic that transformed skill data before it reached the frontend, but the web app no longer had that bridge.
+
+* Investigated why the web version showed `NaN%` even though the desktop version displayed correct percentages.
+* Traced the issue back to a mismatch in data shape between the desktop aggregator and the raw web API response.
+* Compared the original Electron `mostUsedSkills.js`, the preload layer, and the direct web `skills.js` flow.
+* Rebuilt the web version of `skills.js` so it now reproduces the original desktop aggregation logic directly in browser safe JavaScript.
+* Restored support for confidence style percentages and `topProject` display using direct fetches rather than the Electron bridge.
+* Verified that the skill bar visualization now renders correctly again in the hosted version.
+
+This debugging process was important because it exposed a hidden dependency on desktop specific transformation logic and forced me to properly reimplement that logic for the hosted web app.
+
+---
+
+### Deploying the Python backend to Render
+
+Once the frontend was separated into a browser safe version, I needed a hosted backend to support it. Since most of the application logic is in Python and tightly coupled to the existing backend code, the most practical approach was to deploy the backend source directly to Render.
+
+* Created a new Render Web Service for the Python backend.
+* Connected the repository and configured the service to deploy from source rather than using the packaged `.exe`.
+* Corrected an incorrect build command that originally attempted to install a package literally called `install`.
+* Simplified the build command to use `pip install -r requirements.txt`.
+* Added missing dependencies such as `psutil`.
+* Removed invalid editable install remnants from the requirements configuration.
+* Diagnosed silent startup failures by testing module imports separately on Render.
+* Discovered that the project required `PYTHONPATH=src` due to the repository structure.
+* Updated the start command to `PYTHONPATH=src uvicorn capstone.api.server:app --host 0.0.0.0 --port $PORT --log-level debug`.
+* Verified that the FastAPI backend starts successfully and is live through the Render production URL.
+
+This was a major milestone because it meant the backend no longer had to be launched only through Electron. The application now has a hosted Python API available on the public internet.
+
+---
+
+### Deploying the frontend to Cloudflare Pages
+
+After the backend was live on Render, I deployed the browser version of the frontend to Cloudflare Pages.
+
+* Created a Pages project using direct upload.
+* Prepared the upload structure so `index.html` sits at the correct root level for Cloudflare.
+* Fixed asset folder placement and image path issues so static resources load correctly in production.
+* Updated frontend configuration to use the hosted Render API instead of localhost.
+* Removed bad module references such as `windowControls.js` that were no longer valid in the browser build.
+* Reuploaded the corrected frontend after each deployment fix using Wrangler.
+* Verified that the live site loads correctly from the Cloudflare `pages.dev` URL.
+
+This step effectively created the first publicly hosted version of the application frontend.
+
+---
+
+### Authentication and login only behavior in the web app
+
+Because the web app is publicly accessible, I needed to make the authentication flow much stricter than before. The original app still contained remnants of guest or public mode behavior that made sense for an earlier prototype but not for a hosted product.
+
+* Rewrote `auth.js` for the web app so guest mode is removed entirely.
+* Changed the startup flow so login is required and protected tabs cannot be entered without authentication.
+* Added a `requireLogin()` helper so components such as upload can enforce authentication before opening or submitting.
+* Updated upload flow behavior so users must log in before uploading a project.
+* Added a simple auth state helper that renderer code can check before performing protected polling actions.
+* Updated recent activity polling so it only runs when a user is authenticated.
+* Ensured that login state is handled through auth checks rather than always relying on unconditional renderer startup behavior.
+
+This made the hosted application safer and more consistent, even though further backend isolation still needs to be completed.
+
+---
+
+### Web app debugging and integration fixes
+
+A large amount of this week also involved handling smaller integration issues that surfaced only once the app was running across hosted services.
+
+* Fixed project deletion in the web app by restoring the missing delete event handler in `projects.js`.
+* Corrected startup logic issues caused by stale authentication checks in the renderer.
+* Fixed the Cloudflare direct upload structure when the wrong folder level was uploaded.
+* Diagnosed and corrected module loading errors where a missing file caused HTML to be served instead of JavaScript.
+* Verified that hosted login, project view, skills, project health, and settings all load correctly after deployment.
+* Investigated shared activity and shared account data behavior across devices and identified that some backend routes still rely on shared server side state.
+* Logged this remaining issue for future work since it requires a larger per user data ownership refactor.
+
+These fixes were not always large individually, but together they were essential for making the hosted app usable.
+
+---
+
+### Reflection
+
+This week was one of the most impactful weeks of the project so far because it pushed the system beyond a local Electron prototype and into a real hosted product architecture. I completed the Projects tab and turned it into a functional project management interface with upload, delete, pull, and project viewing behavior. I also extended the authentication and account system so the application supports persistent sessions and real profile management. Most importantly, I built and deployed a working web version of the app by separating browser safe frontend logic from Electron specific code, deploying the Python backend to Render, and deploying the frontend to Cloudflare Pages.
+
+A lot of the work this week was not just implementing new code, but carefully tracing how assumptions from the desktop version broke when moved into a hosted browser environment. Fixing those mismatches forced me to understand the architecture more deeply, especially around auth flow, deployment, data loading, and Electron only dependencies. By the end of the week, the application was no longer limited to local desktop execution and now exists as a publicly accessible full stack web deployment, which is a major milestone for the capstone.
