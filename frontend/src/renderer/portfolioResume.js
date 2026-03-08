@@ -9,6 +9,23 @@ function getStaticProfile() {
   };
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function dedupeStrings(values) {
+  return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -21,22 +38,68 @@ function getTopProjects(projects) {
 
 async function fetchSkillsTimeline() {
   const res = await fetch("http://127.0.0.1:8002/skills/timeline");
-
   if (!res.ok) {
     throw new Error(`Failed to fetch skills timeline: ${res.status}`);
   }
-
   const payload = await res.json();
   return Array.isArray(payload.timeline) ? payload.timeline : [];
 }
 
-function renderResumeSummary(profile, projects) {
+async function fetchPortfolioResumeSummary() {
+  try {
+    const res = await fetch("http://127.0.0.1:8002/portfolio/latest/summary");
+    if (!res.ok) {
+      console.warn("Portfolio summary endpoint unavailable:", res.status);
+      return null;
+    }
+    const payload = await res.json();
+    return payload?.data || null;
+  } catch (err) {
+    console.warn("Failed to fetch portfolio summary:", err);
+    return null;
+  }
+}
+
+function buildProfile(summaryData) {
+  const fallback = getStaticProfile();
+  return {
+    name: summaryData?.owner || fallback.name,
+    title: fallback.title,
+    education: summaryData?.education || fallback.education,
+    awards: dedupeStrings(summaryData?.awards).length
+      ? dedupeStrings(summaryData.awards)
+      : fallback.awards,
+  };
+}
+
+function getPortfolioProjects(summaryData) {
+  return asArray(summaryData?.projects).map((project) => ({
+    project_id: String(project.project_id || "").trim(),
+    title: String(project.title || project.project_id || "").trim(),
+    summary: String(project.summary || "").trim(),
+    technologies: dedupeStrings(project.technologies),
+    highlights: dedupeStrings(project.highlights),
+  }));
+}
+
+function getProjectDetailsMap(summaryData) {
+  const map = new Map();
+  getPortfolioProjects(summaryData).forEach((project) => {
+    if (project.project_id) map.set(project.project_id, project);
+  });
+  return map;
+}
+
+function renderResumeSummary(profile, projects, summaryData) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
   const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
+
+  const backendSkills = dedupeStrings(summaryData?.skills);
+  const highlights = dedupeStrings(summaryData?.highlights).slice(0, 4);
 
   const summary =
     totalProjects > 0
@@ -47,23 +110,23 @@ function renderResumeSummary(profile, projects) {
     <div class="resume-summary-card">
       <div class="resume-summary-top">
         <div>
-          <h3>${profile.name}</h3>
-          <p class="resume-role">${profile.title}</p>
+          <h3>${escapeHtml(profile.name)}</h3>
+          <p class="resume-role">${escapeHtml(profile.title)}</p>
         </div>
       </div>
 
-      <p class="resume-summary-text">${summary}</p>
+      <p class="resume-summary-text">${escapeHtml(summary)}</p>
 
       <div class="resume-meta-grid">
         <div class="resume-meta-box">
           <span class="resume-meta-label">Education</span>
-          <span class="resume-meta-value">${profile.education}</span>
+          <span class="resume-meta-value">${escapeHtml(profile.education)}</span>
         </div>
 
         <div class="resume-meta-box">
           <span class="resume-meta-label">Awards</span>
           <ul class="resume-awards-list">
-            ${profile.awards.map(item => `<li>${item}</li>`).join("")}
+            ${profile.awards.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </div>
 
@@ -77,11 +140,40 @@ function renderResumeSummary(profile, projects) {
           <span class="resume-meta-value">${totalFiles} files • ${totalSkills} skill signals</span>
         </div>
       </div>
+
+      ${
+        backendSkills.length
+          ? `
+            <div class="resume-meta-box">
+              <span class="resume-meta-label">Core Skills</span>
+              <div class="skills-pill-row">
+                ${backendSkills
+                  .slice(0, 10)
+                  .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                  .join("")}
+              </div>
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        highlights.length
+          ? `
+            <div class="resume-meta-box">
+              <span class="resume-meta-label">Portfolio Highlights</span>
+              <ul class="resume-awards-list">
+                ${highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+              </ul>
+            </div>
+          `
+          : ""
+      }
     </div>
   `;
 }
 
-function renderTopProjects(projects) {
+function renderTopProjects(projects, summaryData) {
   const container = document.getElementById("top-projects-container");
   if (!container) return;
 
@@ -94,42 +186,60 @@ function renderTopProjects(projects) {
     return;
   }
 
+  const projectDetailsMap = getProjectDetailsMap(summaryData);
   const topProjects = getTopProjects(projects);
 
   container.innerHTML = topProjects
-    .map(
-      (project, index) => `
+    .map((project, index) => {
+      const details = projectDetailsMap.get(project.project_id);
+      const title = details?.title || project.project_id;
+      const summary =
+        details?.summary ||
+        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+
+      const technologies = dedupeStrings(details?.technologies).slice(0, 4);
+      const highlights = dedupeStrings(details?.highlights).slice(0, 2);
+
+      return `
         <div class="top-project-card">
           <div class="top-project-rank">#${index + 1}</div>
           <div class="top-project-body">
-            <h3>${project.project_id}</h3>
-            <p>
-              ${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed •
-              ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}
-            </p>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(summary)}</p>
+
+            ${
+              highlights.length
+                ? `
+                  <ul class="resume-awards-list">
+                    ${highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+                  </ul>
+                `
+                : ""
+            }
+
             <div class="project-stack">
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
               <span class="stack-pill">${project.total_files} Files</span>
               <span class="stack-pill">${project.total_skills} Skills</span>
+              ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
             </div>
           </div>
         </div>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
-function renderPortfolioStats(projects) {
+function renderPortfolioStats(projects, summaryData) {
   const container = document.getElementById("skills-expertise-container");
   if (!container) return;
 
   if (!projects.length) {
     container.innerHTML = `
       <div class="skills-group-card">
-        <h3>No skill breakdown yet</h3>
+        <h3>No portfolio data yet</h3>
         <p class="resume-summary-text">
-          The current API only returns total skill counts, not skill names or expertise levels.
-          This section can be upgraded once a skill-detail endpoint is available.
+          Upload projects to generate skills, highlights, and portfolio statistics.
         </p>
       </div>
     `;
@@ -139,7 +249,10 @@ function renderPortfolioStats(projects) {
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
   const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
-  const githubCount = projects.filter(p => p.is_github).length;
+  const githubCount = projects.filter((p) => p.is_github).length;
+
+  const backendSkills = dedupeStrings(summaryData?.skills);
+  const backendHighlights = dedupeStrings(summaryData?.highlights);
 
   container.innerHTML = `
     <div class="skills-group-card">
@@ -149,15 +262,30 @@ function renderPortfolioStats(projects) {
         <span class="skills-pill">${totalFiles} Files</span>
         <span class="skills-pill">${totalSkills} Skill Signals</span>
         <span class="skills-pill">${githubCount} GitHub Imports</span>
+        <span class="skills-pill">${backendSkills.length} Core Skills</span>
+        <span class="skills-pill">${backendHighlights.length} Highlights</span>
       </div>
     </div>
 
-    <div class="skills-group-card">
-      <h3>Next backend improvement</h3>
-      <p class="resume-summary-text">
-        Replace aggregate counts with real extracted skills grouped by expertise once the API exposes skill names.
-      </p>
-    </div>
+    ${
+      backendSkills.length
+        ? `
+          <div class="skills-group-card">
+            <h3>Detected Skills</h3>
+            <div class="skills-pill-row">
+              ${backendSkills.map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`).join("")}
+            </div>
+          </div>
+        `
+        : `
+          <div class="skills-group-card">
+            <h3>Next backend improvement</h3>
+            <p class="resume-summary-text">
+              Replace aggregate counts with real extracted skills grouped by expertise once the API exposes skill levels.
+            </p>
+          </div>
+        `
+    }
   `;
 }
 
@@ -183,7 +311,7 @@ function renderSkillsTimeline(timeline) {
 
       return `
         <div class="timeline-year-row">
-          <div class="timeline-year">${entry.year}</div>
+          <div class="timeline-year">${escapeHtml(entry.year)}</div>
           <div class="timeline-track">
             <div class="timeline-skill-pills">
               ${
@@ -198,7 +326,7 @@ function renderSkillsTimeline(timeline) {
 
                         return `
                           <span class="timeline-skill-pill">
-                            ${name} ${weight}
+                            ${escapeHtml(name)} ${weight}
                           </span>
                         `;
                       })
@@ -213,17 +341,19 @@ function renderSkillsTimeline(timeline) {
     .join("");
 }
 
-function buildResumePreviewHtml(profile, projects) {
+function buildResumePreviewHtml(profile, projects, summaryData) {
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
   const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
   const topProjects = getTopProjects(projects);
+  const projectDetailsMap = getProjectDetailsMap(summaryData);
+  const backendSkills = dedupeStrings(summaryData?.skills);
 
   return `
     <div class="resume-preview-sheet">
       <div class="resume-preview-hero">
-        <h1>${profile.name}</h1>
-        <p class="resume-preview-role">${profile.title}</p>
+        <h1>${escapeHtml(profile.name)}</h1>
+        <p class="resume-preview-role">${escapeHtml(profile.title)}</p>
       </div>
 
       <div class="resume-preview-section">
@@ -239,32 +369,47 @@ function buildResumePreviewHtml(profile, projects) {
       <div class="resume-preview-grid">
         <div class="resume-preview-section">
           <h3>Education</h3>
-          <p>${profile.education}</p>
+          <p>${escapeHtml(profile.education)}</p>
         </div>
 
         <div class="resume-preview-section">
           <h3>Awards</h3>
           <ul>
-            ${profile.awards.map(item => `<li>${item}</li>`).join("")}
+            ${profile.awards.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </div>
       </div>
+
+      ${
+        backendSkills.length
+          ? `
+            <div class="resume-preview-section">
+              <h3>Core Skills</h3>
+              <p>${escapeHtml(backendSkills.join(", "))}</p>
+            </div>
+          `
+          : ""
+      }
 
       <div class="resume-preview-section">
         <h3>Selected Projects</h3>
         ${
           topProjects.length
             ? topProjects
-                .map(
-                  project => `
+                .map((project) => {
+                  const details = projectDetailsMap.get(project.project_id);
+                  const title = details?.title || project.project_id;
+                  const summary =
+                    details?.summary ||
+                    `${project.total_files} files analyzed • ${project.total_skills} skill signals • ${project.is_github ? "GitHub import" : "ZIP upload"}`;
+
+                  return `
                     <div class="resume-preview-project">
-                      <div class="resume-preview-project-title">${project.project_id}</div>
-                      <div class="resume-preview-project-meta">
-                        ${project.total_files} files analyzed • ${project.total_skills} skill signals • ${project.is_github ? "GitHub import" : "ZIP upload"}
-                      </div>
+                      <div class="resume-preview-project-title">${escapeHtml(title)}</div>
+                      <div class="resume-preview-project-meta">${escapeHtml(summary)}</div>
                     </div>
-                  `
-                )
+                  `;
+                })
                 .join("")
             : `<p>No projects uploaded yet.</p>`
         }
@@ -287,20 +432,23 @@ async function openResumePreview() {
   const body = document.getElementById("resume-preview-body");
   if (!modal || !body) return;
 
-  const profile = getStaticProfile();
-
   body.innerHTML = `<p class="resume-summary-text">Loading resume preview...</p>`;
   modal.classList.remove("hidden");
 
   try {
-    const projects = await fetchProjects();
-    body.innerHTML = buildResumePreviewHtml(profile, projects);
+    const [projects, summaryData] = await Promise.all([
+      fetchProjects(),
+      fetchPortfolioResumeSummary(),
+    ]);
+
+    const profile = buildProfile(summaryData);
+    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
     body.innerHTML = `
       <div class="skills-group-card">
         <h3>Preview unavailable</h3>
-        <p class="resume-summary-text">Unable to load live project data for the resume preview.</p>
+        <p class="resume-summary-text">Unable to load live portfolio/resume data for the preview.</p>
       </div>
     `;
   }
@@ -312,15 +460,16 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolioResume() {
-  const profile = getStaticProfile();
-
-  const [projectsResult, timelineResult] = await Promise.allSettled([
+  const [projectsResult, timelineResult, summaryResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
+    fetchPortfolioResumeSummary(),
   ]);
 
   const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
   const timeline = timelineResult.status === "fulfilled" ? timelineResult.value : [];
+  const summaryData = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+  const profile = buildProfile(summaryData);
 
   if (projectsResult.status === "rejected") {
     console.error("Failed to load portfolio/resume project data:", projectsResult.reason);
@@ -330,9 +479,13 @@ export async function loadPortfolioResume() {
     console.error("Failed to load skills timeline:", timelineResult.reason);
   }
 
-  renderResumeSummary(profile, projects);
-  renderTopProjects(projects);
-  renderPortfolioStats(projects);
+  if (summaryResult.status === "rejected") {
+    console.error("Failed to load portfolio summary data:", summaryResult.reason);
+  }
+
+  renderResumeSummary(profile, projects, summaryData);
+  renderTopProjects(projects, summaryData);
+  renderPortfolioStats(projects, summaryData);
   renderSkillsTimeline(timeline);
 }
 
