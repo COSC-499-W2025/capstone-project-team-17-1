@@ -1,4 +1,9 @@
 import { initNavigation, switchPage } from "./navigation.js";
+import { loadProjects } from "./projects.js";
+import { loadRecentProjects } from "./recentProjects.js";
+import { loadProjectHealth } from "./projectHealth.js";
+import { loadErrorAnalysis } from "./errors.js";
+import { loadMostUsedSkills } from "./skills.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
@@ -235,6 +240,24 @@ function closeModalToPublic() {
   if (!currentUser) goToPage("dashboard", "dashboard-page");
 }
 
+async function syncCloudDbAndRefresh() {
+  try {
+    await authFetch("/cloud/db/download", {
+      method: "POST"
+    });
+  } catch (_) {
+    // ignore if user has no cloud db yet
+  }
+
+  await Promise.all([
+    loadProjects(),
+    loadRecentProjects(),
+    loadProjectHealth(),
+    loadErrorAnalysis(),
+    loadMostUsedSkills(),
+  ]);
+}
+
 export async function initAuthFlow() {
   const loginBtn = document.getElementById("login-btn");
   const logoutBtn = document.getElementById("logout-btn");
@@ -286,6 +309,9 @@ export async function initAuthFlow() {
       if (boot.authenticated && boot.user) {
         setAuthToken(getAuthToken());
         setModeUI(true, boot.user);
+
+        await syncCloudDbAndRefresh();
+
         goToPage("customization", "customization-page");
       }
     }
@@ -329,6 +355,9 @@ export async function initAuthFlow() {
 
       setAuthToken(data.token);
       setModeUI(true, data.user);
+
+      await syncCloudDbAndRefresh();
+
       showAuthModal(false);
       goToPage("customization", "customization-page");
     } catch (_) {
@@ -336,12 +365,21 @@ export async function initAuthFlow() {
     }
   });
 
-  logoutBtn.addEventListener("click", async () => {
-    try {
-      await authFetch("/auth/logout", { method: "POST" });
-    } catch (_) {}
-    setAuthToken(null);
-    setModeUI(false, null);
-    goToPage("dashboard", "dashboard-page");
-  });
+ logoutBtn.addEventListener("click", async () => {
+  try {
+    await authFetch("/auth/logout", { method: "POST" });
+  } catch (_) {}
+
+  setAuthToken(null);
+  setModeUI(false, null);
+  goToPage("dashboard", "dashboard-page");
+
+  await Promise.all([
+    loadProjects(),
+    loadRecentProjects(),
+    loadProjectHealth(),
+    loadErrorAnalysis(),
+    loadMostUsedSkills(),
+  ]);
+});
 }

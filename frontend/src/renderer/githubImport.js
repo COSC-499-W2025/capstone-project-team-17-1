@@ -101,7 +101,10 @@ async function initGithubSection() {
   try {
 
     await startGithubImport(owner, name, projectId, branch);
-
+    
+    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+      method: "POST"
+    });
     setProgress(100, "Done. Refreshing projects...");
 
     setTimeout(() => {

@@ -64,7 +64,9 @@ export async function loadProjects() {
     await fetch(`http://127.0.0.1:8002/projects/${project.project_id}`, {
       method: "DELETE"
     });
-
+    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+      method: "POST"
+    });
     loadProjects();
     loadRecentProjects(); // also refresh dashboard widget if it is visible
   });
@@ -90,6 +92,9 @@ pullBtn?.addEventListener("click", async (e) => {
     if (!res.ok) {
       throw new Error("Pull failed");
     }
+    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+      method: "POST"
+    });
 
     pullBtn.innerText = "Updated ✓";
 

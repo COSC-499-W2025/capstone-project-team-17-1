@@ -11,6 +11,8 @@ from collections import Counter
 from capstone.activity_log import log_event
 from capstone import file_store, storage
 from capstone.resume_retrieval import build_resume_project_summary
+from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
+import capstone.storage as storage_module
 class ProjectEdit(BaseModel):
     key_role: Optional[str] = None
     evidence: Optional[str] = None
@@ -327,6 +329,14 @@ async def upload_project(
         message = "Upload stored and matched to existing project automatically."
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
+    if storage_module.CURRENT_USER:
+        upload_project_zip(
+            storage_module.CURRENT_USER,
+            project_id,
+            Path(stored["path"]),
+            filename,
+        )
+        upload_database(storage_module.CURRENT_USER)
     return {
         "message": message,
         "project_id": project_id,
@@ -450,6 +460,13 @@ async def upload_project_bundle(file: UploadFile = File(...)):
                         "skills": snapshot["skills"],
                     }
                 )
+                if storage_module.CURRENT_USER:
+                    upload_project_zip(
+                        storage_module.CURRENT_USER,
+                        project_id,
+                        Path(stored["path"]),
+                        sub_filename,
+                    )
             finally:
                 try:
                     sub_tmp_path.unlink(missing_ok=True)
@@ -458,9 +475,15 @@ async def upload_project_bundle(file: UploadFile = File(...)):
 
     finally:
         try:
-            tmp_path.unlink(missing_ok=True)
+            tmp_path.unlink(missing_ok=True)          
         except Exception:
             pass
+
+        if storage_module.CURRENT_USER:
+            try:
+                upload_database(storage_module.CURRENT_USER)
+            except Exception:
+                pass
 
     return {
         "message": f"Bundle split into {len(results)} project(s).",
@@ -541,7 +564,7 @@ def delete_project(id: str):
 
     row = conn.execute(
         """
-        SELECT u.file_id, f.path
+        SELECT u.file_id, f.path, u.original_name
         FROM uploads u
         JOIN files f ON f.file_id = u.file_id
         WHERE u.upload_id = ?
@@ -553,7 +576,7 @@ def delete_project(id: str):
         log_event("ERROR", "Project not found · Project: ")
         raise HTTPException(status_code=404, detail="Project not found")
 
-    file_id, file_path = row
+    file_id, file_path, original_name = row
 
     # delete upload reference
     conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
@@ -566,12 +589,30 @@ def delete_project(id: str):
     )
     conn.commit()
 
-    # best-effort physical file removal
+    # best effort local physical file removal
     try:
         Path(file_path).unlink(missing_ok=True)
     except Exception:
         pass
+
+    # best effort cloud zip removal
+    if storage_module.CURRENT_USER:
+        try:
+            delete_project_zip(
+                storage_module.CURRENT_USER,
+                id,
+                original_name or "project.zip",
+            )
+        except Exception:
+            pass
+
+        try:
+            upload_database(storage_module.CURRENT_USER)
+        except Exception:
+            pass
+
     log_event("WARNING", f"Project deleted · Project: {id}")
+
     return {
         "data": {
             "deleted": True,
