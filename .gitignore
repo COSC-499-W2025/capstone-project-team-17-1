@@ -32,7 +32,7 @@ frontend/node_modules/
 data/capstone.db
 dist/
 build/
-
+src/capstone/capstone_backend.spec
 .env
 .env.local
 
