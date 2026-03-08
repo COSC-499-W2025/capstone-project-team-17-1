@@ -179,10 +179,15 @@ def open_file(conn: sqlite3.Connection, file_id: str, *, files_root: Path | None
         raise FileNotFoundError(f"file_id not found: {file_id}")
 
     path = Path(row[0])
+    root = files_root or DEFAULT_FILES_ROOT
 
-    if files_root:
-        alt_path = _storage_path(files_root, file_id)
-        if alt_path.exists():
-            path = alt_path
+    if not path.exists():
+        # Recover from cross-machine paths (e.g. Windows absolute path synced into DB).
+        candidates = list(root.glob(f"{file_id}*"))
+        if candidates:
+            path = candidates[0]
+            conn.execute("UPDATE files SET path = ? WHERE file_id = ?", (str(path), file_id))
+        else:
+            raise FileNotFoundError(f"stored file path does not exist for file_id={file_id}: {row[0]}")
 
     return open(path, "rb")

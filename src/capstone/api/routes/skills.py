@@ -53,6 +53,12 @@ def skills_for_project(project_id: str):
     except zipfile.BadZipFile:
         log_event("ERROR", f"Invalid zip during skills extraction · Project: {project_id}")
         raise HTTPException(status_code=400, detail="Stored file is not a valid zip")
+    except FileNotFoundError:
+        log_event("ERROR", f"Missing stored file during skills extraction · Project: {project_id}")
+        raise HTTPException(
+            status_code=409,
+            detail="Stored upload file not found on this machine. Re-upload the project zip.",
+        )
 
     return {
         "project_id": project_id,
@@ -95,7 +101,7 @@ def skills_all(limit: int = 200):
                 for skill in seen:
                     bucket = skills.setdefault(skill, {"files": 0, "projects": 0})
                     bucket["projects"] += 1
-        except zipfile.BadZipFile:
+        except (zipfile.BadZipFile, FileNotFoundError):
             continue
         processed += 1
     log_event("INFO", f"Global skills aggregation computed · Projects scanned: {processed}")

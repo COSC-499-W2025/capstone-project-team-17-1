@@ -1,16 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
+ROOT = Path(SPECPATH)
 
 a = Analysis(
-    ['run_server.py', 'system\\monitor_manager.py'],
-    pathex=[],
+    [str(ROOT / 'run_server.py'), str(ROOT / 'system' / 'monitor_manager.py')],
+    pathex=[str(ROOT)],
     binaries=[],
-    datas=[('tools\\system_metrics\\LibreHardwareMonitor', 'capstone\\tools\\system_metrics\\LibreHardwareMonitor')],
+    datas=[(str(ROOT / 'tools' / 'system_metrics' / 'LibreHardwareMonitor'), 'capstone/tools/system_metrics/LibreHardwareMonitor')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['torch', 'torchvision', 'torchaudio'],
     noarchive=False,
     optimize=0,
 )
