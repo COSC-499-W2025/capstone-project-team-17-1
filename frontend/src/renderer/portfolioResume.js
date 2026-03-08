@@ -19,6 +19,17 @@ function getTopProjects(projects) {
     .slice(0, 3);
 }
 
+async function fetchSkillsTimeline() {
+  const res = await fetch("http://127.0.0.1:8002/skills/timeline");
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch skills timeline: ${res.status}`);
+  }
+
+  const payload = await res.json();
+  return Array.isArray(payload.timeline) ? payload.timeline : [];
+}
+
 function renderResumeSummary(profile, projects) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
@@ -30,7 +41,7 @@ function renderResumeSummary(profile, projects) {
   const summary =
     totalProjects > 0
       ? `Built a portfolio with ${totalProjects} uploaded project${totalProjects === 1 ? "" : "s"}, covering ${totalFiles} analyzed file${totalFiles === 1 ? "" : "s"} and ${totalSkills} detected skill signal${totalSkills === 1 ? "" : "s"}.`
-      : "Upload projects to generate a stronger one-page resume summary and portfolio showcase.";
+      : "Upload projects to generate a one-page resume summary and portfolio showcase.";
 
   container.innerHTML = `
     <div class="resume-summary-card">
@@ -150,6 +161,58 @@ function renderPortfolioStats(projects) {
   `;
 }
 
+function renderSkillsTimeline(timeline) {
+  const container = document.getElementById("skills-timeline-container");
+  if (!container) return;
+
+  if (!timeline.length) {
+    container.innerHTML = `
+      <div class="skills-group-card">
+        <h3>No timeline data yet</h3>
+        <p class="resume-summary-text">
+          Upload projects with detected skills to generate a year-by-year skills timeline.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = timeline
+    .map((entry) => {
+      const skills = Array.isArray(entry.skills) ? entry.skills : [];
+
+      return `
+        <div class="timeline-year-row">
+          <div class="timeline-year">${entry.year}</div>
+          <div class="timeline-track">
+            <div class="timeline-skill-pills">
+              ${
+                skills.length
+                  ? skills
+                      .map((skill) => {
+                        const name = skill.name || skill.skill || "unknown";
+                        const weight =
+                          skill.weight !== undefined && skill.weight !== null
+                            ? `<span class="timeline-weight">${Number(skill.weight).toFixed(1)}</span>`
+                            : "";
+
+                        return `
+                          <span class="timeline-skill-pill">
+                            ${name} ${weight}
+                          </span>
+                        `;
+                      })
+                      .join("")
+                  : `<span class="timeline-empty">No skills recorded</span>`
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function buildResumePreviewHtml(profile, projects) {
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -251,17 +314,26 @@ function closeResumePreview() {
 export async function loadPortfolioResume() {
   const profile = getStaticProfile();
 
-  try {
-    const projects = await fetchProjects();
-    renderResumeSummary(profile, projects);
-    renderTopProjects(projects);
-    renderPortfolioStats(projects);
-  } catch (err) {
-    console.error("Failed to load portfolio/resume data:", err);
-    renderResumeSummary(profile, []);
-    renderTopProjects([]);
-    renderPortfolioStats([]);
+  const [projectsResult, timelineResult] = await Promise.allSettled([
+    fetchProjects(),
+    fetchSkillsTimeline(),
+  ]);
+
+  const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
+  const timeline = timelineResult.status === "fulfilled" ? timelineResult.value : [];
+
+  if (projectsResult.status === "rejected") {
+    console.error("Failed to load portfolio/resume project data:", projectsResult.reason);
   }
+
+  if (timelineResult.status === "rejected") {
+    console.error("Failed to load skills timeline:", timelineResult.reason);
+  }
+
+  renderResumeSummary(profile, projects);
+  renderTopProjects(projects);
+  renderPortfolioStats(projects);
+  renderSkillsTimeline(timeline);
 }
 
 export function initPortfolioResume() {
