@@ -1,3 +1,7 @@
+import { loadRecentProjects } from "./recentProjects.js";
+import { loadProjectHealth } from "./projectHealth.js";
+import { loadErrorAnalysis } from "./errors.js";
+
 export async function fetchProjects() {
   const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
 
@@ -23,7 +27,7 @@ export async function loadProjects() {
       return;
     }
 
-    projects.forEach(project => {
+    projects.forEach((project) => {
       const card = document.createElement("div");
       card.className = "project-card";
 
@@ -33,14 +37,17 @@ export async function loadProjects() {
         pullButton = `
           <button class="pull-btn" data-project="${project.project_id}">
             Pull
-          </button>`;
+          </button>
+        `;
       }
 
       card.innerHTML = `
         <div class="project-delete" data-id="${project.project_id}">
           <svg viewBox="0 0 24 24" width="18" height="18">
-            <path fill="currentColor"
-              d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"/>
+            <path
+              fill="currentColor"
+              d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"
+            />
           </svg>
         </div>
 
@@ -54,47 +61,46 @@ export async function loadProjects() {
         </div>
       `;
 
+      const pullBtn = card.querySelector(".pull-btn");
+
+      pullBtn?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const projectId = pullBtn.dataset.project;
+
+        try {
+          pullBtn.innerText = "Pulling...";
+          pullBtn.disabled = true;
+
+          const res = await fetch(
+            `http://127.0.0.1:8002/github/pull?project_id=${encodeURIComponent(projectId)}`,
+            { method: "POST" }
+          );
+
+          if (!res.ok) {
+            throw new Error("Pull failed");
+          }
+
+          await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+            method: "POST",
+          });
+
+          pullBtn.innerText = "Updated ✓";
+
+          await loadProjects();
+
+          if (typeof loadRecentProjects === "function") await loadRecentProjects();
+          if (typeof loadProjectHealth === "function") await loadProjectHealth();
+          if (typeof loadErrorAnalysis === "function") await loadErrorAnalysis();
+        } catch (err) {
+          console.error("Pull failed:", err);
+          pullBtn.innerText = "Pull";
+          pullBtn.disabled = false;
+        }
+      });
+
       container.appendChild(card);
     });
-    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
-      method: "POST"
-    });
-    loadProjects();
-    loadRecentProjects(); // also refresh dashboard widget if it is visible
-  });
-
-  const pullBtn = card.querySelector(".pull-btn");
-
-pullBtn?.addEventListener("click", async (e) => {
-
-  e.stopPropagation();
-
-  const projectId = pullBtn.dataset.project;
-
-  try {
-
-    pullBtn.innerText = "Pulling...";
-    pullBtn.disabled = true;
-
-    const res = await fetch(
-      `http://127.0.0.1:8002/github/pull?project_id=${encodeURIComponent(projectId)}`,
-      { method: "POST" }
-    );
-
-    if (!res.ok) {
-      throw new Error("Pull failed");
-    }
-    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
-      method: "POST"
-    });
-
-    pullBtn.innerText = "Updated ✓";
-
-    loadProjects();
-    loadRecentProjects();
-    loadProjectHealth();
-    loadErrorAnalysis();
-
   } catch (err) {
     console.error("Failed to load projects:", err);
 
