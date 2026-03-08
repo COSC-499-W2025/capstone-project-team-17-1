@@ -1684,6 +1684,17 @@ transition: all 0.2s ease;
   grid-column: 1 / -1;
 }
 
+.portfolio-timeline-card {
+  grid-column: 1 / -1;
+}
+
+.skills-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 120px;
+}
+
 .resume-summary-card {
   display: flex;
   flex-direction: column;
