@@ -9,6 +9,8 @@ import { loadErrorAnalysis } from "./errors.js";
 import { loadProjects } from "./projects.js";
 import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
+import { initNavigation } from "./navigation.js";
+import { initPortfolioResume } from "./portfolioResume.js";
 
 
 // -----------------------------
@@ -32,6 +34,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initAuthFlow();
 
+  // these are for portfolio/resume feature 
+  initNavigation();
+  
+  initPortfolioResume();
+
   startMetrics();
 
   loadMostUsedSkills();
@@ -47,6 +54,9 @@ document.addEventListener("DOMContentLoaded", () => {
   loadRecentActivity();
 
 
+
+
   setInterval(loadRecentActivity, 1000);
+
 
 });
