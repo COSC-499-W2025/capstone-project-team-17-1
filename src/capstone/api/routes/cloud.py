@@ -1,9 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import capstone.storage as storage
+import capstone.api.routes.auth as auth_routes
 from capstone.system.cloud_storage import (
     test_connection,
     test_upload,
@@ -11,6 +12,7 @@ from capstone.system.cloud_storage import (
     download_database,
     upload_project_zip,
     download_project_zip,
+    download_all_project_zips,
 )
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -20,6 +22,21 @@ class ProjectZipPayload(BaseModel):
     project_id: str
     zip_path: str
     filename: str | None = None
+
+
+def _get_current_username(request: Request) -> str:
+    token = auth_routes._extract_bearer(request)
+    session = auth_routes._SESSIONS.get(token) if token else None
+
+    if session and session.get("user") and session["user"].get("username"):
+        username = session["user"]["username"]
+        storage.CURRENT_USER = username
+        return username
+
+    if storage.CURRENT_USER:
+        return storage.CURRENT_USER
+
+    raise HTTPException(status_code=401, detail="no authenticated user")
 
 
 @router.get("/test")
@@ -46,32 +63,33 @@ def debug_db():
 
 
 @router.post("/db/upload")
-def cloud_db_upload():
-    if not storage.CURRENT_USER:
-        raise HTTPException(status_code=400, detail="no logged in user")
-
-    return upload_database(storage.CURRENT_USER)
+def cloud_db_upload(request: Request):
+    username = _get_current_username(request)
+    return upload_database(username)
 
 
 @router.post("/db/download")
-def cloud_db_download():
-    if not storage.CURRENT_USER:
-        raise HTTPException(status_code=400, detail="no logged in user")
+def cloud_db_download(request: Request):
+    username = _get_current_username(request)
+    return download_database(username)
 
-    return download_database(storage.CURRENT_USER)
+
+@router.post("/projects/download-all")
+def cloud_projects_download_all(request: Request):
+    username = _get_current_username(request)
+    return download_all_project_zips(username)
 
 
 @router.post("/project/upload")
-def cloud_project_upload(payload: ProjectZipPayload):
-    if not storage.CURRENT_USER:
-        raise HTTPException(status_code=400, detail="no logged in user")
+def cloud_project_upload(payload: ProjectZipPayload, request: Request):
+    username = _get_current_username(request)
 
     zip_path = Path(payload.zip_path)
     if not zip_path.exists():
         raise HTTPException(status_code=404, detail="zip file not found")
 
     return upload_project_zip(
-        storage.CURRENT_USER,
+        username,
         payload.project_id,
         zip_path,
         payload.filename,
@@ -79,16 +97,14 @@ def cloud_project_upload(payload: ProjectZipPayload):
 
 
 @router.post("/project/download")
-def cloud_project_download(payload: ProjectZipPayload):
-    if not storage.CURRENT_USER:
-        raise HTTPException(status_code=400, detail="no logged in user")
+def cloud_project_download(payload: ProjectZipPayload, request: Request):
+    username = _get_current_username(request)
 
     target_path = Path(payload.zip_path)
-
     filename = payload.filename or "project.zip"
 
     return download_project_zip(
-        storage.CURRENT_USER,
+        username,
         payload.project_id,
         target_path,
         filename,

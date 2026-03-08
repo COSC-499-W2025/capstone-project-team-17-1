@@ -245,8 +245,12 @@ async function syncCloudDbAndRefresh() {
     await authFetch("/cloud/db/download", {
       method: "POST"
     });
+
+    await authFetch("/cloud/projects/download-all", {
+      method: "POST"
+    });
   } catch (_) {
-    // ignore if user has no cloud db yet
+    // ignore if user has no cloud data yet
   }
 
   await Promise.all([
@@ -256,7 +260,7 @@ async function syncCloudDbAndRefresh() {
     loadErrorAnalysis(),
     loadMostUsedSkills(),
   ]);
-}
+}  
 
 export async function initAuthFlow() {
   const loginBtn = document.getElementById("login-btn");
@@ -328,42 +332,51 @@ export async function initAuthFlow() {
   });
 
   submit.addEventListener("click", async () => {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    const email = emailInput ? emailInput.value.trim() : "";
-    error.textContent = "";
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  const email = emailInput ? emailInput.value.trim() : "";
+  error.textContent = "";
 
-    if (!username || !password) {
-      error.textContent = "Username and password are required.";
+  if (!username || !password) {
+    error.textContent = "Username and password are required.";
+    return;
+  }
+
+  const payload =
+    authMode === "register"
+      ? { username, password, email: email || null }
+      : { username, password };
+
+  const path = authMode === "register" ? "/auth/register" : "/auth/login";
+
+  try {
+    const res = await authFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      error.textContent = data.detail || "Authentication failed.";
       return;
     }
 
-    const payload = authMode === "register" ? { username, password, email: email || null } : { username, password };
-    const path = authMode === "register" ? "/auth/register" : "/auth/login";
+    setAuthToken(data.token);
+    setModeUI(true, data.user);
 
-    try {
-      const res = await authFetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error.textContent = data.detail || "Authentication failed.";
-        return;
-      }
+    await authFetch("/cloud/db/download", { method: "POST" });
+    await authFetch("/cloud/projects/download-all", { method: "POST" });
 
-      setAuthToken(data.token);
-      setModeUI(true, data.user);
+    await syncCloudDbAndRefresh();
 
-      await syncCloudDbAndRefresh();
-
-      showAuthModal(false);
-      goToPage("customization", "customization-page");
-    } catch (_) {
-      error.textContent = "Unable to reach auth service.";
-    }
-  });
+    showAuthModal(false);
+    goToPage("customization", "customization-page");
+  } catch (_) {
+    error.textContent = "Unable to reach auth service.";
+  }
+});
 
  logoutBtn.addEventListener("click", async () => {
   try {

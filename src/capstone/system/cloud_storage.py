@@ -4,6 +4,7 @@ from pathlib import Path
 from botocore.exceptions import ClientError
 
 import capstone.storage as storage
+from capstone import file_store
 
 ACCOUNT_ID = "86d88cc4dc44fe96fa122040e6eff0dd"
 ACCESS_KEY = "6616152c724e55cca30ef9a406bb6085"
@@ -43,6 +44,7 @@ def test_upload():
 def delete_file(bucket: str, key: str):
     s3.delete_object(Bucket=bucket, Key=key)
 
+
 def upload_file(bucket: str, key: str, local_path: Path):
     s3.upload_file(str(local_path), bucket, key)
 
@@ -58,6 +60,10 @@ def object_exists(bucket: str, key: str) -> bool:
         return True
     except ClientError:
         return False
+
+
+def list_objects(bucket: str, prefix: str):
+    return s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
 
 
 # ------------------------------------------------
@@ -81,6 +87,11 @@ def get_cloud_project_key(user_id: str, project_id: str, filename: str = "projec
     return f"users/{user_id}/projects/{project_id}/{filename}"
 
 
+def get_local_blob_path(file_id: str, original_name: str | None = None) -> Path:
+    ext = Path(original_name or "").suffix.lower()
+    return file_store.DEFAULT_FILES_ROOT / f"{file_id}{ext}"
+
+
 # ------------------------------------------------
 # DATABASE SYNC
 # ------------------------------------------------
@@ -97,6 +108,7 @@ def delete_project_zip(user_id: str, project_id: str, filename: str = "project.z
         "status": "deleted",
         "key": key,
     }
+
 
 def upload_database(user_id: str):
     local_db = get_local_db_path(user_id)
@@ -167,4 +179,72 @@ def download_project_zip(user_id: str, project_id: str, target_path: Path, filen
         "status": "downloaded",
         "key": key,
         "target_path": str(target_path),
+    }
+
+
+def download_all_project_zips(user_id: str):
+    """
+    Downloads all project blobs referenced by the user's local capstone.db
+    into the current machine's local file store and rewrites files.path.
+    """
+    conn = storage.open_db()
+
+    rows = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        ORDER BY datetime(u.created_at) DESC
+        """
+    ).fetchall()
+
+    downloaded = []
+    skipped = []
+
+    for upload_id, original_name, file_id, _old_path in rows:
+        filename = original_name or "project.zip"
+        key = get_cloud_project_key(user_id, upload_id, filename)
+
+        if not object_exists(BUCKET_NAME, key):
+            skipped.append({"project_id": upload_id, "reason": "missing in cloud"})
+            continue
+
+        local_blob_path = get_local_blob_path(file_id, filename)
+        tmp_path = local_blob_path.with_suffix(local_blob_path.suffix + ".tmp")
+
+        try:
+            download_file(BUCKET_NAME, key, tmp_path)
+            local_blob_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(tmp_path, local_blob_path)
+
+            conn.execute(
+                """
+                UPDATE files
+                SET path = ?
+                WHERE file_id = ?
+                """,
+                (str(local_blob_path), file_id),
+            )
+
+            downloaded.append(
+                {
+                    "project_id": upload_id,
+                    "file_id": file_id,
+                    "path": str(local_blob_path),
+                }
+            )
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    conn.commit()
+
+    return {
+        "status": "ok",
+        "downloaded_count": len(downloaded),
+        "skipped_count": len(skipped),
+        "downloaded": downloaded,
+        "skipped": skipped,
     }
