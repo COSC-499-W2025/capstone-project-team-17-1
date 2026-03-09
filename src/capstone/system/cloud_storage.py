@@ -15,8 +15,11 @@ SECRET_KEY = os.getenv("CLOUDFLARE_R2_SECRET_KEY")
 # bucket name set via CLOUDFLARE_R2_BUCKET env var, defaults to "loom-storage" for easier setup
 BUCKET_NAME = os.getenv("CLOUDFLARE_R2_BUCKET", "loom-storage")
 
+<<<<<<< testing/cloud
 s3_client = None
 
+=======
+>>>>>>> develop
 # check all required secrets exist before cloud ops to prevent error later
 def validate_cloud_config() -> None:
     missing = []
@@ -45,7 +48,11 @@ def get_client():
     global s3_client
     if s3_client is None:
         s3_client = create_client()
+<<<<<<< testing/cloud
     return s3_client
+=======
+    return s3_client()
+>>>>>>> develop
 
 # ------------------------------------------------
 # BASIC CLOUD TESTING
@@ -94,7 +101,11 @@ def object_exists(bucket: str, key: str) -> bool:
         err_code = e.response.get("Error", {}).get("Code", "")
         if err_code in ("404", "NoSuchKey", "NotFound"):
             return False
+<<<<<<< testing/cloud
         raise   # reraise if unexpected cloud err
+=======
+        raise   # resend if error is other than not found 
+>>>>>>> develop
 
 def list_objects(bucket: str, prefix: str):
     s3 = get_client()
