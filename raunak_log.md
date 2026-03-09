@@ -1277,10 +1277,7 @@ This PR completed the core Milestone 2 API requirements around incremental uploa
 ### TERM 2 WEEK 9 PERSONAL LOG
 This includes all merged PR's :
 
-### TERM 2 WEEK 9 PERSONAL LOG
 
-#### Summary
-This week I focused on improving the **Portfolio & Resume** experience for Milestone 3 in the Capstone desktop app. My work centered on building out the portfolio-facing frontend, connecting it to available backend data, and improving how user work is presented through résumé-style and portfolio-style views.
 
 ---
 
