@@ -20,7 +20,7 @@ from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 # global variables
-_DB_DIR: Optional[str] = None   # SQLite db path
+_DB_DIR: Optional[str] = None  # SQLite db path
 _TOKEN: Optional[str] = None   # optional auth token to protect endpoints
 
 # for server startup
@@ -331,6 +331,57 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         )
         
     raise HTTPException(status_code=400, detail="Unsupported format")
+
+
+@router.get("/latest/summary")
+def portfolio_latest_summary(request: Request) -> dict[str, Any]:
+    _check_auth(request)
+
+    if not _DB_DIR:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(_DB_DIR) as c:
+        rows = fetch_latest_snapshots(c)
+
+    projects: list[PortfolioProject] = []
+    technologies: list[str] = []
+    highlights: list[str] = []
+
+    for row in rows:
+        project_id = row.get("project_id")
+        snapshot = row.get("snapshot")
+        if not project_id or not isinstance(snapshot, dict):
+            continue
+
+        project = _project_from_snapshot(str(project_id), snapshot)
+        projects.append(project)
+        technologies.extend(project.technologies)
+        highlights.extend(project.highlights)
+
+    technologies = _dedupe_strings(technologies)
+    highlights = _dedupe_strings(highlights)[:8]
+
+    return {
+        "data": {
+            "owner": None,
+            "education": "UBC Okanagan — BSc Computer Science",
+            "awards": ["Capstone Team Contributor"],
+            "skills": technologies,
+            "projects": [
+                {
+                    "project_id": p.project_id,
+                    "title": p.title,
+                    "summary": p.summary,
+                    "technologies": p.technologies,
+                    "highlights": p.highlights,
+                }
+                for p in projects
+            ],
+            "highlights": highlights,
+        },
+        "error": None,
+    }
+
 
 @router.post("/showcase/edit")
 async def edit_portfolio_showcase(request: Request, payload: dict[str, Any] = Body(...)):
