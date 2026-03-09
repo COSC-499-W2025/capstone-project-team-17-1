@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from pathlib import Path
 import zipfile
+import json
+from tempfile import NamedTemporaryFile
+from capstone.timeline import write_top_skills_by_year
 
 from capstone import storage, file_store
 from capstone.activity_log import log_event
@@ -117,3 +120,44 @@ def skills_all(limit: int = 200):
             for name, stats in sorted(skills.items(), key=lambda it: (-it[1]["projects"], it[0]))
         ],
     }
+
+@router.get("/skills/timeline")
+def skills_timeline(top_n: int = 5):
+    """
+    Return a year-by-year skills timeline using the existing timeline export logic.
+    """
+    tmp_path = None
+
+    try:
+        with NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        write_top_skills_by_year(None, tmp_path, top_n=top_n)
+
+        if not tmp_path.exists() or tmp_path.stat().st_size == 0:
+            return {"timeline": []}
+
+        payload = json.loads(tmp_path.read_text(encoding="utf-8"))
+
+        timeline = []
+        if isinstance(payload, dict):
+            for year, skills in sorted(payload.items(), key=lambda item: item[0]):
+                timeline.append({
+                    "year": str(year),
+                    "skills": skills if isinstance(skills, list) else [],
+                })
+
+        log_event("INFO", f"Skills timeline generated · Years: {len(timeline)}")
+
+        return {
+            "count": len(timeline),
+            "timeline": timeline,
+        }
+
+    except Exception as exc:
+        log_event("ERROR", f"Skills timeline generation failed · {exc}")
+        raise HTTPException(status_code=500, detail="Failed to generate skills timeline")
+
+    finally:
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)

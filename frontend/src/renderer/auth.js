@@ -201,6 +201,17 @@ async function changePassword() {
   const msg = document.getElementById("password-msg");
   const currentPassword = document.getElementById("pw-current")?.value || "";
   const newPassword = document.getElementById("pw-new")?.value || "";
+
+  if (!currentPassword || !newPassword) {
+    if (msg) msg.textContent = "Please fill in both password fields.";
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    if (msg) msg.textContent = "New password must be at least 6 characters.";
+    return;
+  }
+
   if (msg) msg.textContent = "Saving...";
 
   try {
@@ -212,15 +223,19 @@ async function changePassword() {
         new_password: newPassword,
       }),
     });
+
     const data = await res.json();
+
     if (!res.ok) {
       if (msg) msg.textContent = `Failed: ${data.detail || "update failed"}`;
       return;
     }
+
     const currentEl = document.getElementById("pw-current");
     const newEl = document.getElementById("pw-new");
     if (currentEl) currentEl.value = "";
     if (newEl) newEl.value = "";
+
     if (msg) msg.textContent = "Password updated successfully.";
   } catch (_) {
     if (msg) msg.textContent = "Failed: network error";
@@ -306,20 +321,23 @@ export async function initAuthFlow() {
     },
   });
 
-  try {
-    const bootstrapRes = await authFetch("/auth/bootstrap");
-    if (bootstrapRes.ok) {
-      const boot = await bootstrapRes.json();
-      if (boot.authenticated && boot.user) {
-        setAuthToken(getAuthToken());
-        setModeUI(true, boot.user);
+    try {
+    const user = await ensureCurrentUser();
 
-        await syncCloudDbAndRefresh();
-
-        goToPage("customization", "customization-page");
-      }
+    if (user) {
+      setModeUI(true, user);
+      await syncCloudDbAndRefresh();
+      goToPage("customization", "customization-page");
+    } else {
+      setAuthToken(null);
+      setModeUI(false, null);
+      goToPage("dashboard", "dashboard-page");
     }
-  } catch (_) {}
+  } catch (_) {
+    setAuthToken(null);
+    setModeUI(false, null);
+    goToPage("dashboard", "dashboard-page");
+  }
 
   loginBtn.addEventListener("click", startLoginFlow);
   toggleBtn.addEventListener("click", () => {

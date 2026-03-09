@@ -1615,3 +1615,362 @@ transition: all 0.2s ease;
 .pull-btn:hover {
   background: #2f57c5;
 }
+
+/* =========================================================
+   PORTFOLIO / RESUME PAGE
+========================================================= */
+
+#page-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page {
+  display: none;
+  height: 100%;
+  overflow: auto;
+  padding: 24px 28px 28px;
+  box-sizing: border-box;
+}
+
+.page.active {
+  display: block;
+}
+
+.portfolio-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.portfolio-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.portfolio-subtitle {
+  margin-top: 8px;
+  opacity: 0.8;
+  max-width: 720px;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+}
+
+.portfolio-hero-card,
+.portfolio-projects-card,
+.portfolio-skills-card {
+  background: var(--card-dark);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+}
+
+.portfolio-hero-card {
+  grid-column: 1 / -1;
+}
+
+.portfolio-timeline-card {
+  grid-column: 1 / -1;
+}
+
+.skills-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 120px;
+}
+
+.resume-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resume-summary-top h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.resume-role {
+  margin: 6px 0 0;
+  color: #8ec5ff;
+  font-weight: 500;
+}
+
+.resume-summary-text {
+  margin: 0;
+  line-height: 1.6;
+  opacity: 0.92;
+}
+
+.resume-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.resume-meta-box {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.resume-meta-label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.resume-meta-value {
+  font-weight: 600;
+}
+
+.resume-awards-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.top-projects-container,
+.skills-expertise-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top-project-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.top-project-rank {
+  min-width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: rgba(30, 144, 255, 0.2);
+  color: #9ecfff;
+}
+
+.top-project-body h3 {
+  margin: 0 0 6px;
+}
+
+.top-project-body p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.project-stack,
+.skills-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stack-pill,
+.skills-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(30, 144, 255, 0.14);
+  color: #b8dcff;
+}
+
+.skills-group-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.skills-group-card h3 {
+  margin: 0 0 10px;
+}
+
+.primary-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1e90ff, #00b7ff);
+  color: white;
+}
+
+@media (max-width: 1000px) {
+  .portfolio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portfolio-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.secondary-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.resume-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(4, 10, 24, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.resume-preview-modal.hidden {
+  display: none;
+}
+
+.resume-preview-dialog {
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 24px;
+  background: #f7f9fc;
+  color: #0f172a;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.resume-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  position: sticky;
+  top: 0;
+  background: #f7f9fc;
+}
+
+.resume-preview-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.resume-preview-close {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: #334155;
+}
+
+.resume-preview-body {
+  padding: 24px;
+}
+
+.resume-preview-sheet {
+  background: white;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.resume-preview-hero h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #0f172a;
+}
+
+.resume-preview-role {
+  margin: 6px 0 0;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.resume-preview-section {
+  margin-top: 22px;
+}
+
+.resume-preview-section h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+}
+
+.resume-preview-section p,
+.resume-preview-section li,
+.resume-preview-project-meta {
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.resume-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.resume-preview-project {
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.resume-preview-project-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 700px) {
+  .resume-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-actions {
+    flex-wrap: wrap;
+  }
+}
