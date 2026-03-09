@@ -7,6 +7,7 @@
 - [T2 Week 3 Personal Log](#T2-week-3-personal-log)
 - [T2 Week 5 Personal Log](#T2-week-5-personal-log)
 - [T2 Week 8 Personal Log](#T2-week-8-personal-log)
+- [T2 Week 9 Personal Log](#T2-week-9-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -226,7 +227,7 @@ Milestone #1 Deliverables
 
 ## T2 Week 1 Personal Log
 
-- (Jan 5 - Jan 11, 2025)<br />
+- (Jan 5 - Jan 11, 2026)<br />
 
 <img width="969" height="565" alt="image" src="https://github.com/user-attachments/assets/a84a3419-0b93-4039-9575-55973d83fe2c" />
 
@@ -266,7 +267,7 @@ The primary blocked for this week was inconsistent snapshot schemas across the p
 
 ## T2 Week 3 Personal Log
 
-- (Jan 19 - Jan 25, 2025)<br />
+- (Jan 19 - Jan 25, 2026)<br />
 
 <img width="972" height="571" alt="image" src="https://github.com/user-attachments/assets/0c530656-2fa9-4d0c-b57b-f25d12c6f651" />
 
@@ -288,7 +289,7 @@ This week's main blocker was the interaction between persisted configuration sta
 
 ## T2 Week 5 Personal Log
 
-- (Jan 26 - Feb 08, 2025)<br />
+- (Jan 26 - Feb 08, 2026)<br />
 
 <img width="971" height="570" alt="image" src="https://github.com/user-attachments/assets/780451ca-e297-4063-ab69-89a7da9e9348" />
 
@@ -315,7 +316,7 @@ Next week, I plan to focus on integrating portfolio and resume generation more t
 
 ## T2 Week 8 Personal Log
 
-- (Feb 09 - Mar 01, 2025)<br />
+- (Feb 09 - Mar 01, 2026)<br />
 
 <img width="971" height="571" alt="image" src="https://github.com/user-attachments/assets/9d0097a5-ca05-4f15-84b3-9db7e2e5277a" />
 
@@ -331,10 +332,33 @@ This week involved significant debugging and stabilization work. Issues included
 Both mocked endpoint tests and integration tests using isolated SQLite db were added to validate real system behaviour. All endpoints now return stable and predictable responses.
 
 Reviewing or collaboration tasks<br />
-I reviewed and provided feedback on teammate pull requests related to backend storage improvements, including a content addressable file storage and deduplication layer. I also tested related changes locally to ensure compatibility with existing analysis and retrieval workflows. In parallel, I collaborated with teammates by aligning API design decisions with the broader project architecture and ensuring the new FastAPI endpoints fit cleanly alongside the existing APIs.
-
 I reviewed and provided feedback on teammate prs related to a deep ai analysis, which allows users to select specific files and request a targeted analysis. I evaluated the architectural flow to ensure it respects our external permission design and cleanly integrates with our snapshot system. I also provided feedback related to our github commit metadata capture feature, focused on improving consistency and resume generation reliability. I verifed that these changes maintain metric consistency and improve downstream behaviour in resume generation.
 
 ### Additionally:<br />
 Moving forward my focus will shift towards refractoring complex or confusing backend logic and improving code clarity. I will also be supporting frontend development and improving data output presentation (final exports). The goal is to polish the system and making sure everything works together seamlessly for our target audience.
+
+## T2 Week 9 Personal Log
+
+- (Mar 02 - Mar 08, 2026)<br />
+
+<img width="966" height="569" alt="image" src="https://github.com/user-attachments/assets/f45b6d22-0a1d-43e1-8ae9-99fbd673ab4c" />
+
+### Weekly Recap:
+This week focused on refractoring and stabilizing the cloud sync layer, specifically the authenticated cloud routes and Cloudflare R2 storage helpers. The main goal was to improve security, reliability, and maintainability without changing core cloud functionalities. A major portion of the work involved removing unsafe hardcoded materials and moving configuration into environment variables. This in turn improved authenticated route handling using bearer token session lookup. The other portion of work consisted of testing cloud sync routing and storage through automated tests.
+
+Coding tasks<br />
+I refractored cloud_storage.py ([PR #283](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/283)) to remove hardcoded credentials and replace them with environment variable based configuration. This was important security improvement because the previous implementation stored access keys directly in the source code. This was unsafe and difficult to manage across environments. The storage layer now validates required cloud configuration prior to creating a client. It also uses a shared cached client retriever to remove redundant operations. I also enhanced object_exists() so that it only returns False for real true missing object cases. It also reraises other cloud errors instead of stashing them. These changes ensure storage failures are easier to debug in the future and prevents permission/service errors from thrown as missing file errors.
+
+cloud.py was improved for routing level authentication and error handling. Protected cloud routes now resolve the user through bearer token backed session lookup using the current auth session instead of a global user value. This change makes cloud operations much more reliable. I also implemented a shared cloud error handling for configuration issues and cloud failures. They now return simple, clean and predictable HTTP responses.
+
+Testing or Debugging Tasks<br />
+A large portion of work this week involved debugging encironment, authentication, and testing various issues ([PR #284](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/284)). I implemented automated tests for cloud_storage.py using mocked tests to cover cloud configuration validation, object existence checks, db upload/download behaviour, project zip upload/download, and deletion handling.
+
+I also implemented automated tests for cloud.py, focusing on authenticated route behaviour, bearer token session resolution, protected cloud route access, and cloud operation response handling. Much of the debugging involved aligning the tests with the refractored implementation (correct names, cached client behaviour, expected response formats). The addition of these tests provide stronger evidence that the refractored cloud sync layer behaves properly without relying on live Cloudflare R2 calls.
+
+Reviewing or collaboration tasks<br />
+This week involved reviewing and aligning cloud related implementation details with our backend. I verified that cloud routes fit properly with the existing auth flow and db storage design. I also checked that the cloud helper structure was compatible with the upload, download, and restore workflow. I coordinated the refractor work with parsa with the existing frontend and auth flow by making sure the cloud endpoints continued to behave correctly when called from the electron app following user login.
+
+### Additionally:<br />
+Moving forward my focus will continue on stabilizing and polishing the codebase. I will also shift towards connecting backend features with our electron dashboard and making sure the backend functionalities is surfaced clearly and reliably in the UI. I will also be helping with frontend development, specifically portfolio data and presentation.
 
