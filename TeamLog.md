@@ -8,6 +8,8 @@
 - [Week 5 Team Log (Term2)](#week-5-team-log-term2)
 - [Week 6 Team Log (Term2)](#week-6-team-log-term2)
 - [Week 7 Team Log (Term2)](#week-7-team-log-term2)
+- [Week 8 Team Log (Term2)](#week-8-team-log-term2)
+- [Week 9 Team Log (Term2)](#week-9-team-log-term2)
 
 - [Week 3 Team Log](#week-3-team-log)
 - [Week 4 Team Log](#week-4-team-log)
@@ -573,7 +575,7 @@ Overall, this week’s work strengthened the structural integrity of the portfol
 ### Recap of Milestone Goal - Week 7
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
 
-### Burnup chart - Week  7
+### Burnup chart - Week 7
 <img width="1634" height="900" alt="image" src="https://github.com/user-attachments/assets/4ec862fe-9b2d-4411-8e49-7f97c40d57cb" />
 
 ### Completed Tasks - Week 7
@@ -595,6 +597,7 @@ System stability under pytest was significantly improved. All failing CLI and me
 AI-based insight functionality continued to mature with the deep AI analysis feature. Users can now select specific files for targeted review, and the system constructs structured prompts using snapshot context. Focused unit tests were added to ensure bundling, filtering, and redaction logic remain stable. [Feature/deep ai analysis (#216)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/216)
 
 Overall, this week’s progress improved system robustness, reduced regression risk through stronger test coverage, and aligned core data flows across storage, API, and CLI layers as the project moves closer to full milestone completion.
+
 
 ## WEEK 8 TEAM LOG (Term2)
 (Feb 23 - Mar 01, 2026)
@@ -630,3 +633,49 @@ Milestone 2 feature integration was completed by connecting the ZIP analysis wor
 In parallel, initial Milestone 3 development began with frontend initialization and mock dashboard design, establishing the structural foundation for an interactive human-in-the-loop interface that will generate a one-page résumé and web portfolio. [Feature/frontend initialization (#234)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/234) [Feature/mocket frontend design (#236)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/236)
 
 Overall, this week marked the completion of Milestone 2’s core architecture and the transition toward a full-stack system with a user-facing dashboard in Milestone 3.
+
+
+## WEEK 9 TEAM LOG (Term2)
+(Mar 2 - Mar 8, 2026)
+
+### Recap of Milestone Goal - Week 9
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Burnup chart - Week 9
+<img width="1626" height="944" alt="image" src="https://github.com/user-attachments/assets/a3e1158e-d79b-4d90-a936-d888a25e161a" />
+
+### Completed Tasks - Week 9
+<img width="1920" height="915" alt="image" src="https://github.com/user-attachments/assets/f85ff4dd-6ec6-4596-a1fd-6897d71cd822" />
+<img width="1920" height="409" alt="image" src="https://github.com/user-attachments/assets/de224a81-e21e-465f-a625-55240909e1f9" />
+
+### In Progress Tasks - Week 9
+<img width="1176" height="1279" alt="image" src="https://github.com/user-attachments/assets/7fbd153d-f869-4336-8273-4a1d424d184d" />
+
+### Test Report - Week 9
+This week, the team made strong progress on frontend development, backend integration, cloud synchronization, and automated testing. Most of the work focused on polishing Milestone 3 deliverables, improving usability, and making the system more stable and deployment-ready.
+
+[Feature/dashboard design (#250)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/250) completed the Dashboard tab implementation by connecting backend analytics to the Electron frontend. It introduced several major dashboard components, including skill usage, AI-based error analysis, project health, recent projects, system health, and activity logs, giving users a much more complete project overview.
+
+[login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263) added login and logout functionality. It introduced backend authentication routes, secure password handling, session support, and frontend flows for login, registration, profile editing, password updates, and public/private mode switching.
+
+[Feature/project tab design (#265)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/265) completed the Projects tab design and integration in the desktop app. It added support for ZIP uploads, GitHub import, branch selection, project pulling, and project deletion, making project management much more convenient from the frontend.
+
+[Feature/resume portfolio UI (#271)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/271) added the initial Portfolio & Resume page to the Electron frontend. It introduced résumé snapshot content, a Top 3 project showcase, portfolio statistics, and a one-page résumé preview modal, all connected to live backend project data.
+
+[added a remote server functionality (#272)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/272) added remote server and cloud-backed database functionality. Authentication was moved to a Cloudflare Worker/D1 flow, and R2 support was expanded for syncing per-user databases and project ZIP files, improving persistence across devices.
+
+[Add skills timeline to portfolio resume page (#273)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/273) added a Skills Timeline feature to the Portfolio & Resume page. It also introduced a backend API endpoint to support this view, allowing the portfolio to better reflect skill growth over time.
+
+[Polish portfolio resume page and add skills timeline view (#278)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/278) further polished the Portfolio & Resume page. It improved layout stability, refined the Skills Timeline section, and added cleaner empty-state handling so the page feels more complete and reliable.
+
+[Feature/activity heatmap (#281)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/281) added an Activity Heatmap to the Portfolio & Resume page. This feature visualizes project activity over time and strengthens the portfolio by showing evidence of ongoing work and engagement.
+
+[Feature/add server database (#283)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/283) refactored the cloud sync and server database layer. It removed hardcoded Cloudflare credentials, improved authentication handling, cleaned up route logic, and added shared error handling to make cloud-related functionality safer and more maintainable.
+
+[added a seperate folder for the web-app version (#280)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/280) is still in progress and adds a separate web app version of the project. It adapts the frontend to run in the browser instead of Electron and includes deployment support for both the frontend and backend.
+
+[Test cloud routes and storage (#284)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/284) is also in progress and adds automated tests for cloud routes and storage helpers. These tests use mocked cloud clients to validate core sync behavior without requiring real Cloudflare requests.
+
+[Add Storage & Project CRUD Test Coverage (#288)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/288) is currently in progress and adds 60 new tests for storage and project CRUD functionality. It expands coverage for previously untested areas and also documents several infrastructure issues discovered during testing, helping improve overall project stability.
+
+Overall, this week’s work significantly improved the completeness of the product by strengthening the dashboard, project management, authentication flow, portfolio/resume experience, cloud sync support, and automated test coverage. Going into next week, the team is in a much stronger position to continue frontend integration, stabilize remaining features, and prepare the system for final milestone delivery.

@@ -9,6 +9,7 @@
 - [Milestone 2 - Week 6 [Feb 9 – Feb 15, 2026]](#week-6-m2)
 - [Milestone 2 - Week 7 [Feb 16 – Feb 22, 2026]](#week-7-m2)
 - [Milestone 2 - Week 8 [Feb 23 – Mar 1, 2026]](#week-8-m2)
+- [Milestone 2 - Week 9 [Mar 2 – Mar 8, 2026]](#week-9-m2)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -218,6 +219,16 @@ In addition, I migrated the resume API from the deprecated routes/resume.py to r
 I also recorded the demo video this week to showcase the system workflow and API route.
 
 <img width="1399" height="820" alt="3c51c2a0c776c26e6093ac50e41006b2" src="https://github.com/user-attachments/assets/7925ee37-4047-48f4-8a92-e9690a8fcbf0" />
+
+[Back](#table-of-contents)
+
+
+## Week 9 (M2)
+[Mar 2 – Mar 8, 2026]
+This week, I did not make corresponding changes to the new features or frontend development, since those parts were being handled by my teammates. Having multiple people modify the frontend at the same time is not an ideal choice, so I decided to carefully review and revise the existing tests, improve coverage, and refactor necessary parts to make our project more stable. In particular, I added 60 new tests covering previously untested storage and project CRUD functionality, including GitHub token handling, project overrides and evidence, database backup and snapshot export, as well as the main project management endpoints for listing, retrieving, updating, deleting, and reading overrides. During this process, I also identified and documented several infrastructure issues, such as storage.open_db(base_dir) ignoring its base_dir argument, Windows SQLite file locks requiring additional cleanup handling, and identical ZIP uploads sharing the same file_id, so the tests were adjusted to use unique ZIP content to avoid foreign key conflicts. [Add Storage & Project CRUD Test Coverage
+ (#288)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/288) Next week, I will start working on the development and integration of the new frontend features, alternating tasks with my teammates and coordinating closely with them.
+
+<img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
 
 [Back](#table-of-contents)
 

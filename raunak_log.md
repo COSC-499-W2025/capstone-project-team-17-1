@@ -17,6 +17,7 @@
 - [Term 2 Week 3 Personal Log](#term-2-week-3-personal-log)
 - [Term 2 Week 5 Personal Log](#term-2-week-5-personal-log)
 - [Term 2 Week 8 Personal Log](#term-2-week-8-personal-log)
+- [Term 2 Week 9 Personal Log](#term-2-week-9-personal-log)
 
 ---
 
@@ -1272,5 +1273,122 @@ This PR completed the core Milestone 2 API requirements around incremental uploa
 
 
 <img width="1080" height="626" alt="Screenshot 2026-03-01 at 1 21 15 PM" src="https://github.com/user-attachments/assets/b45eaf54-b1f2-455d-9668-a16b43041c4f" />
+
+### TERM 2 WEEK 9 PERSONAL LOG
+This includes all merged PR's :
+
+
+
+---
+
+#### PRs Worked On
+
+##### PR #271 — Feature/resume portfolio UI
+- Built the initial **Portfolio & Resume** tab UI in the Electron frontend.
+- Added the base page structure for résumé-style presentation inside the app.
+- Implemented major sections such as:
+  - Resume snapshot
+  - Portfolio showcase area
+  - Portfolio stats
+  - Resume preview modal
+- Established the core styling and layout foundation for later milestone features.
+
+**Contribution impact:**  
+This created the initial user-facing portfolio/resume experience and gave the team a structured frontend area for Milestone 3 features.
+
+---
+
+##### PR #273 — Add skills timeline to portfolio resume page
+- Added a **Skills Timeline** section to the Portfolio & Resume page.
+- Built rendering logic to show skills progression over time.
+- Added stable empty-state handling when no timeline data is available.
+- Integrated the section cleanly into the portfolio page layout without breaking other tabs.
+
+**Contribution impact:**  
+This improved the quality of the web portfolio view and aligned the project more closely with the milestone requirement of showing learning progression and evidence of skill development over time.
+
+---
+
+##### PR #278 — Polish portfolio resume page and add skills timeline view
+- Refined and polished the overall **Portfolio & Resume** layout after initial implementation.
+- Improved section placement, spacing, and consistency across cards.
+- Stabilized rendering behavior so portfolio elements appeared in the correct tab and with the intended layout.
+- Improved the usability and presentation of the skills timeline view.
+- Cleaned up empty-state messaging to make the page feel more complete even when certain data is unavailable.
+
+**Contribution impact:**  
+This PR moved the work from “feature exists” to “feature is polished and demo-ready,” which is important for milestone evaluation and final product usability.
+
+---
+
+##### PR #281 — Feature/activity heatmap
+- Added an **Activity Heatmap** section to the Portfolio & Resume page.
+- Connected the frontend to a backend activity heatmap endpoint.
+- Integrated activity-over-time visualization into the portfolio experience.
+- Implemented a fallback empty state when no activity timeline data exists yet.
+- Continued backend/frontend integration for portfolio summary and heatmap data flow.
+
+**Contribution impact:**  
+This helped surface project productivity over time and strengthened the portfolio as a richer evidence-based representation of user work.
+
+---
+
+#### Technical Work Completed
+- Worked extensively in the Electron frontend (`index.html`, renderer files, styling).
+- Built new UI sections and integrated them into existing navigation.
+- Connected frontend components to backend portfolio/timeline/heatmap endpoints.
+- Debugged backend route issues related to:
+  - database configuration
+  - route mounting
+  - port mismatches
+  - snapshot loading assumptions
+- Improved fault tolerance by designing clean empty states instead of letting missing data break the page.
+- Reused existing project data and snapshot structure instead of inventing placeholder data paths.
+
+---
+
+#### Challenges / Problems Solved
+- Resolved issues caused by backend port mismatches during frontend testing.
+- Investigated failures in portfolio summary and heatmap endpoints.
+- Diagnosed a database path issue where the backend expected a directory path rather than a direct `.db` file path.
+- Debugged problems caused by assumptions about snapshot row structure.
+- Verified that features rendered safely even when underlying timeline/activity data was not yet populated.
+
+---
+
+#### Collaboration / Workflow
+- Opened, reviewed, and iterated through multiple PRs instead of bundling everything into one large change.
+- Structured work into smaller milestone-aligned contributions:
+  - base portfolio UI
+  - skills timeline
+  - portfolio polish
+  - activity heatmap
+- This made the work easier to review and easier to justify as separate contributions.
+
+---
+
+#### What I Learned
+- Building a feature is only part of the work getting it into a clean, reviewable, milestone-aligned state takes additional refinement.
+- Frontend/backend integration often fails due to environment/configuration issues rather than purely logic bugs.
+- Empty states and graceful fallback behavior matter a lot in making a feature feel stable and professional.
+- Splitting features into focused PRs creates a clearer contribution history and better review process.
+
+---
+
+#### Next Steps
+- Continue improving backend/frontend integration for richer portfolio summary data.
+- Expand the portfolio sections so more résumé content is driven by real extracted backend data instead of only aggregate counts.
+- Improve testing coverage for portfolio-related routes and UI rendering behavior.
+- Keep polishing the Milestone 3 user-facing product so it is both functional and presentation-ready.
+
+---
+
+#### Reflection
+Overall, this was a productive week with visible progress on Milestone 3. I contributed multiple portfolio-related PRs that improved both the technical functionality and the polish of the user-facing application. The main value of my work this week was not just adding new features, but also making the portfolio experience more coherent, more stable, and more aligned with the final expectations of the capstone project.
+
+
+<img width="1077" height="628" alt="Screenshot 2026-03-08 at 5 29 04 PM" src="https://github.com/user-attachments/assets/541a3254-2cb2-446f-8a95-ff2955cda6fa" />
+
+
 
 
