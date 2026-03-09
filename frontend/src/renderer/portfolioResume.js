@@ -1,5 +1,7 @@
 import { fetchProjects } from "./projects.js";
 
+const API_BASE = "http://127.0.0.1:8002"; // change to 8003 only if you keep backend on 8003
+
 function getStaticProfile() {
   return {
     name: "Raunak Khanna",
@@ -37,7 +39,7 @@ function getTopProjects(projects) {
 }
 
 async function fetchSkillsTimeline() {
-  const res = await fetch("http://127.0.0.1:8002/skills/timeline");
+  const res = await fetch(`${API_BASE}/skills/timeline`);
   if (!res.ok) {
     throw new Error(`Failed to fetch skills timeline: ${res.status}`);
   }
@@ -46,18 +48,21 @@ async function fetchSkillsTimeline() {
 }
 
 async function fetchPortfolioResumeSummary() {
-  try {
-    const res = await fetch("http://127.0.0.1:8002/portfolio/latest/summary");
-    if (!res.ok) {
-      console.warn("Portfolio summary endpoint unavailable:", res.status);
-      return null;
-    }
-    const payload = await res.json();
-    return payload?.data || null;
-  } catch (err) {
-    console.warn("Failed to fetch portfolio summary:", err);
-    return null;
+  const res = await fetch(`${API_BASE}/portfolio/latest/summary`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch portfolio summary: ${res.status}`);
   }
+  const payload = await res.json();
+  return payload?.data || null;
+}
+
+async function fetchActivityHeatmap() {
+  const res = await fetch(`${API_BASE}/portfolio/activity-heatmap`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch activity heatmap: ${res.status}`);
+  }
+  const payload = await res.json();
+  return payload?.data || { cells: [], maxCount: 0, projectCount: 0 };
 }
 
 function buildProfile(summaryData) {
@@ -88,6 +93,30 @@ function getProjectDetailsMap(summaryData) {
     if (project.project_id) map.set(project.project_id, project);
   });
   return map;
+}
+
+function formatPeriodLabel(period) {
+  const raw = String(period || "").trim();
+
+  if (/^\d{4}-\d{2}$/.test(raw)) {
+    const [year, month] = raw.split("-");
+    const monthIndex = Number(month) - 1;
+    const date = new Date(Number(year), monthIndex, 1);
+
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString("en-US", { month: "short", year: "numeric" });
+    }
+  }
+
+  return raw || "Unknown";
+}
+
+function getHeatmapBucket(intensity) {
+  if (intensity >= 0.8) return 4;
+  if (intensity >= 0.6) return 3;
+  if (intensity >= 0.35) return 2;
+  if (intensity > 0) return 1;
+  return 0;
 }
 
 function renderResumeSummary(profile, projects, summaryData) {
@@ -341,6 +370,51 @@ function renderSkillsTimeline(timeline) {
     .join("");
 }
 
+function renderActivityHeatmap(heatmapData) {
+  const container = document.getElementById("activity-heatmap-container");
+  if (!container) return;
+
+  const cells = Array.isArray(heatmapData?.cells) ? heatmapData.cells : [];
+  const projectCount = Number(heatmapData?.projectCount || 0);
+
+  if (!cells.length) {
+    container.innerHTML = `
+      <div class="skills-group-card">
+        <h3>No activity data yet</h3>
+        <p class="resume-summary-text">
+          Upload projects with timeline or file activity data to generate a project activity heatmap.
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="heatmap-summary">
+      <p class="resume-summary-text">
+        Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
+      </p>
+    </div>
+
+    <div class="heatmap-grid">
+      ${cells
+        .map((cell) => {
+          const period = formatPeriodLabel(cell.period);
+          const count = Number(cell.count || 0);
+          const bucket = getHeatmapBucket(Number(cell.intensity || 0));
+
+          return `
+            <div class="heatmap-cell bucket-${bucket}" title="${escapeHtml(period)} · ${count} activity event${count === 1 ? "" : "s"}">
+              <span class="heatmap-period">${escapeHtml(period)}</span>
+              <span class="heatmap-count">${count}</span>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function buildResumePreviewHtml(profile, projects, summaryData) {
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -460,15 +534,21 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolioResume() {
-  const [projectsResult, timelineResult, summaryResult] = await Promise.allSettled([
+  const [projectsResult, timelineResult, summaryResult, heatmapResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
     fetchPortfolioResumeSummary(),
+    fetchActivityHeatmap(),
   ]);
 
   const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
   const timeline = timelineResult.status === "fulfilled" ? timelineResult.value : [];
   const summaryData = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+  const heatmapData =
+    heatmapResult.status === "fulfilled"
+      ? heatmapResult.value
+      : { cells: [], maxCount: 0, projectCount: 0 };
+
   const profile = buildProfile(summaryData);
 
   if (projectsResult.status === "rejected") {
@@ -483,10 +563,15 @@ export async function loadPortfolioResume() {
     console.error("Failed to load portfolio summary data:", summaryResult.reason);
   }
 
+  if (heatmapResult.status === "rejected") {
+    console.error("Failed to load activity heatmap:", heatmapResult.reason);
+  }
+
   renderResumeSummary(profile, projects, summaryData);
   renderTopProjects(projects, summaryData);
   renderPortfolioStats(projects, summaryData);
   renderSkillsTimeline(timeline);
+  renderActivityHeatmap(heatmapData);
 }
 
 export function initPortfolioResume() {

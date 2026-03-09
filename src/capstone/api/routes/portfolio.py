@@ -1,52 +1,59 @@
 from __future__ import annotations
 
-from fastapi import Body
-from typing import Any
-from fastapi import APIRouter, HTTPException, Response, Request
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Any
-from datetime import datetime, UTC
-from enum import Enum
-from pathlib import Path
+import traceback
 import tempfile
 
+from datetime import UTC, datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import APIRouter, Body, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
+
+from capstone.activity_log import log_event
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
-from capstone.storage import fetch_latest_snapshot
-from capstone.activity_log import log_event
 from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
 
-# main router for all portfolio endpoints
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
-# global variables
-_DB_DIR: Optional[str] = None  # SQLite db path
-_TOKEN: Optional[str] = None   # optional auth token to protect endpoints
+_DB_DIR: Optional[str] = None
+_TOKEN: Optional[str] = None
 
-# for server startup
+
 def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
     global _DB_DIR, _TOKEN
     _DB_DIR = db_dir
     _TOKEN = auth_token
 
-# token check for if auth is required
+
+def _resolve_db_dir(request: Request) -> Optional[str]:
+    return getattr(request.app.state, "db_dir", None) or _DB_DIR
+
+
+def _resolve_auth_token(request: Request) -> Optional[str]:
+    return getattr(request.app.state, "auth_token", None) or _TOKEN
+
+
 def _check_auth(request: Request) -> None:
-    # skip auth
-    if not _TOKEN:
+    token = _resolve_auth_token(request)
+    if not token:
         return
-    # auth header check
-    h = request.headers.get("Authorization", "")
-    if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
+
+    auth_header = request.headers.get("Authorization", "")
+    if not (auth_header.startswith("Bearer ") and auth_header.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-# project entry
+
 class PortfolioProject(BaseModel):
     project_id: str
     title: str
     summary: Optional[str] = None
     technologies: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
-    
+
+
 class Portfolio(BaseModel):
     id: str
     owner: Optional[str] = None
@@ -54,29 +61,33 @@ class Portfolio(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-# request payload
+
 class GeneratePortfolioRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     project_ids: Optional[list[str]] = Field(None, alias="projectIds")
     owner: Optional[str] = None
-    
+
+
 class EditPortfolioRequest(BaseModel):
     owner: Optional[str] = None
     projects: Optional[list[PortfolioProject]] = None
     summary: Optional[str] = None
-    
+
+
 class PortfolioResponse(BaseModel):
     portfolio: Portfolio
-    
+
+
 class ExportFormat(str, Enum):
     json = "json"
     markdown = "markdown"
     pdf = "pdf"
-    
+
+
 def _now_utc() -> datetime:
     return datetime.now(UTC)
 
-# normalizes unknown fields into list
+
 def _as_list(value: Any) -> list[Any]:
     if value is None:
         return []
@@ -86,10 +97,11 @@ def _as_list(value: Any) -> list[Any]:
         return list(value)
     return [value]
 
-# convert to valid strings
+
 def _dedupe_strings(items: list[Any]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
+
     for item in items:
         if item is None:
             continue
@@ -98,9 +110,10 @@ def _dedupe_strings(items: list[Any]) -> list[str]:
             continue
         seen.add(s)
         result.append(s)
+
     return result
 
-# helper for snapshot parsing -> pick first valid string from list of possible keys
+
 def _pick_first_str(d: dict[str, Any], keys: list[str]) -> Optional[str]:
     for key in keys:
         value = d.get(key)
@@ -108,27 +121,60 @@ def _pick_first_str(d: dict[str, Any], keys: list[str]) -> Optional[str]:
             return value.strip()
     return None
 
-# normalizes snapshot for frontend 
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _extract_skill_names(value: Any) -> list[str]:
+    names: list[Any] = []
+
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                name = _pick_first_str(item, ["skill", "name", "label"])
+                if name:
+                    names.append(name)
+            else:
+                names.append(item)
+
+    elif isinstance(value, dict):
+        categorized_keys = ("technical", "tools", "frameworks", "languages")
+        used_categorized = False
+
+        for key in categorized_keys:
+            if key in value:
+                used_categorized = True
+                names.extend(_as_list(value.get(key)))
+
+        if not used_categorized:
+            names.extend(list(value.keys()))
+
+    elif value is not None:
+        names.append(value)
+
+    return _dedupe_strings(names)
+
+
 def _extract_technologies(snapshot: dict[str, Any]) -> list[str]:
     tech: list[Any] = []
-    
+
     langs = snapshot.get("languages")
     if isinstance(langs, dict):
         tech.extend(list(langs.keys()))
     elif isinstance(langs, list):
         tech.extend(langs)
-        
-    skills = snapshot.get("skills")
-    if isinstance(skills, dict):
-        tech.extend(skills.get("technical", []))
-        tech.extend(skills.get("tools", []))
-        tech.extend(skills.get("frameworks", []))
-    else:
-        tech.extend(_as_list(skills))
-        
+
+    tech.extend(_as_list(snapshot.get("frameworks")))
+    tech.extend(_extract_skill_names(snapshot.get("skills")))
     tech.extend(_as_list(snapshot.get("tech_stack")))
     tech.extend(_as_list(snapshot.get("technologies")))
+
     return _dedupe_strings(tech)
+
 
 def _extract_highlights(snapshot: dict[str, Any]) -> list[str]:
     highlights: list[Any] = []
@@ -137,22 +183,15 @@ def _extract_highlights(snapshot: dict[str, Any]) -> list[str]:
     highlights.extend(_as_list(snapshot.get("notable_points")))
     return _dedupe_strings(highlights)[:6]
 
+
 def _extract_summary(snapshot: dict[str, Any]) -> Optional[str]:
-    return _pick_first_str(
-        snapshot, 
-        [
-            "summary", "description", "overview", "abstract"
-            ]
-        )
-    
+    return _pick_first_str(snapshot, ["summary", "description", "overview", "abstract"])
+
+
 def _extract_title(project_id: str, snapshot: dict[str, Any]) -> str:
-    title = _pick_first_str(
-        snapshot,
-        [
-            "title", "project_name", "name", "repo_name", "repository"
-        ]
-    )
+    title = _pick_first_str(snapshot, ["title", "project_name", "name", "repo_name", "repository"])
     return title or project_id
+
 
 def _project_from_snapshot(project_id: str, snapshot: dict[str, Any]) -> PortfolioProject:
     return PortfolioProject(
@@ -160,79 +199,122 @@ def _project_from_snapshot(project_id: str, snapshot: dict[str, Any]) -> Portfol
         title=_extract_title(project_id, snapshot),
         summary=_extract_summary(snapshot),
         technologies=_extract_technologies(snapshot),
-        highlights=_extract_highlights(snapshot)
+        highlights=_extract_highlights(snapshot),
     )
-    
+
+
 def build_portfolio(portfolio_id: str, owner: Optional[str], projects: list[PortfolioProject]) -> Portfolio:
-    now = datetime.now(UTC)
-    
+    now = _now_utc()
     return Portfolio(
-        id = portfolio_id,
-        owner = owner,
-        projects = projects,
-        created_at = now,
-        updated_at = now
+        id=portfolio_id,
+        owner=owner,
+        projects=projects,
+        created_at=now,
+        updated_at=now,
     )
 
 
-def _load_export_projects(portfolio_id: str) -> list[PortfolioProject]:
-    if not _DB_DIR:
-        raise HTTPException(status_code=500, detail="Database not configured")
-    with _db_session(_DB_DIR) as c:
+def _default_portfolio_summary() -> dict[str, Any]:
+    return {
+        "owner": None,
+        "education": "UBC Okanagan — BSc Computer Science",
+        "awards": ["Capstone Team Contributor"],
+        "skills": [],
+        "projects": [],
+        "highlights": [],
+    }
+
+
+def _load_export_projects(portfolio_id: str, db_dir: str) -> list[PortfolioProject]:
+    with _db_session(db_dir) as c:
         if portfolio_id == "latest":
-            rows = fetch_latest_snapshots(c)
+            rows = fetch_latest_snapshots(c) or []
             projects: list[PortfolioProject] = []
+
             for row in rows:
                 project_id = row.get("project_id")
                 snapshot = row.get("snapshot")
                 if project_id and isinstance(snapshot, dict):
                     projects.append(_project_from_snapshot(str(project_id), snapshot))
+
             return projects
 
         snapshot = fetch_latest_snapshot(c, portfolio_id)
-        if not snapshot:
+        if not snapshot or not isinstance(snapshot, dict):
             return []
-        return [_project_from_snapshot(portfolio_id, snapshot)]
-    
-# Endpoints    
 
-# POST /portfolio/generate to create portfolio from newly analyzed projects
-# pulls project snapshots from db
-# ranks and generates project summaries
+        return [_project_from_snapshot(portfolio_id, snapshot)]
+
+def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional[dict[str, Any]]]:
+    """
+    Normalize rows returned by fetch_latest_snapshots().
+
+    Supports:
+    - dict-like rows with keys: project_id, snapshot
+    - tuple/list rows like: (project_id, snapshot, ...)
+    """
+    project_id: Optional[str] = None
+    snapshot: Optional[dict[str, Any]] = None
+
+    if isinstance(row, dict):
+        raw_project_id = row.get("project_id")
+        raw_snapshot = row.get("snapshot")
+
+        if raw_project_id is not None:
+            project_id = str(raw_project_id)
+
+        if isinstance(raw_snapshot, dict):
+            snapshot = raw_snapshot
+
+        return project_id, snapshot
+
+    if isinstance(row, (tuple, list)):
+        if len(row) >= 1 and row[0] is not None:
+            project_id = str(row[0])
+
+        if len(row) >= 2 and isinstance(row[1], dict):
+            snapshot = row[1]
+
+        return project_id, snapshot
+
+    return None, None
+
 @router.post("/generate")
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
-    
-    if not _DB_DIR:
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
         raise HTTPException(status_code=500, detail="Database not configured")
+
     if not payload.project_ids:
         raise HTTPException(status_code=400, detail="projectIds/project_ids must be a non-empty list")
-    
+
     projects: list[PortfolioProject] = []
-    
-    with _db_session(_DB_DIR) as c:
+
+    with _db_session(db_dir) as c:
         for pid in payload.project_ids:
-            snap = fetch_latest_snapshot(c, str(pid))
-            if not snap:
+            snapshot = fetch_latest_snapshot(c, str(pid))
+
+            if not snapshot:
                 log_event("ERROR", f"Snapshot missing during portfolio generation · Project: {pid}")
                 raise HTTPException(status_code=404, detail=f"No snapshot found for project ID {pid}")
-            if not isinstance(snap, dict):
+
+            if not isinstance(snapshot, dict):
                 raise HTTPException(status_code=500, detail=f"Invalid snapshot format for project ID {pid}")
-            project = _project_from_snapshot(str(pid), snap)
-            projects.append(project)
-            
+
+            projects.append(_project_from_snapshot(str(pid), snapshot))
+
     portfolio = build_portfolio(
         portfolio_id="latest",
         owner=payload.owner,
-        projects=projects
+        projects=projects,
     )
 
     log_event("SUCCESS", f"Portfolio generated · Owner: {payload.owner or 'N/A'} · Projects: {len(projects)}")
-    
-    # Compatibility: some tests/clients expect showcase-style `{data: [...]}` while
-    # others expect the portfolio object envelope.
+
     return {
-        "portfolio": portfolio,
+        "portfolio": portfolio.model_dump(),
         "data": [
             {
                 "project_id": p.project_id,
@@ -244,151 +326,9 @@ def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> d
         "error": None,
     }
 
-# POST /portfolio/{id}/edit to modify existing portfolio contents
-@router.post("/{id}/edit")
-def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
-    _check_auth(request)
-    # Avoid swallowing the legacy static route `/portfolio/showcase/edit` via the dynamic
-    # `/{portfolio_id}/edit` matcher when clients omit required legacy fields.
-    if id == "showcase":
-        raise HTTPException(status_code=400, detail="Use /portfolio/showcase/edit with projectId and summary")
-
-    # Compatibility path used by endpoint tests: treat a simple `{summary: "..."}`
-    # payload as a showcase-summary edit and return `{data, error}`.
-    if payload.summary is not None and not payload.projects:
-        summary = str(payload.summary).strip()
-        if not summary:
-            raise HTTPException(status_code=400, detail="summary is required")
-        return {"data": {"projectId": id, "summary": summary}, "error": None}
-
-    if payload.summary is None and payload.projects is None and payload.owner is None:
-        raise HTTPException(status_code=400, detail="No changes provided")
-    
-    projects = payload.projects or []
-    portfolio = build_portfolio(
-        portfolio_id=id,
-        owner=payload.owner,
-        projects=projects
-    )
-    
-    log_event("INFO", f"Portfolio edited · Portfolio ID: {id}")
-    return {"portfolio": portfolio}
-
-# GET /portfolio/{id}/export to return exportable portfolio
-@router.get("/{id}/export")
-def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
-    _check_auth(request)
-    log_event("INFO", f"Portfolio export requested · ID: {id} · Format: {format.value}")
-    if format == ExportFormat.json:
-        return {
-            "portfolio_id": id,
-            "exported_at": _now_utc().isoformat()
-        }
-    
-    if format == ExportFormat.markdown:
-        content = f"# Portfolio {id}\n\nExport generated at {_now_utc().isoformat()}\n"
-        log_event("SUCCESS", f"Portfolio exported · ID: {id} · Format: {format.value}")
-        content = f"# Portfolio {id}\n\nExport generated at {_now_utc().isoformat()}\n"
-        return {
-            "content": content
-        }
-        
-    if format == ExportFormat.pdf:
-        projects = _load_export_projects(id)
-        entries = [
-            {
-                "project_id": p.project_id,
-                "name": p.title,
-                "summary": p.summary
-                or ("Highlights: " + "; ".join(p.highlights) if p.highlights else ""),
-                "source": "latest_snapshot",
-            }
-            for p in projects
-        ]
-        if not entries:
-            entries = [{"project_id": id, "name": id, "summary": "No snapshot data available.", "source": "placeholder"}]
-
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                out_path = Path(tmpdir) / f"portfolio_{id}.pdf"
-                build_portfolio_pdf_with_pandoc(entries, out_path, title=f"Portfolio {id}")
-                pdf_bytes = out_path.read_bytes()
-        except Exception:
-            # Keep endpoint behavior stable when optional system deps are missing.
-            pdf_bytes = (
-                b"%PDF-1.4\n"
-                b"1 0 obj<<>>\n"
-                b"trailer<<>>\n"
-                b"%%EOF"
-            )
-        
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="portfolio_{id}.pdf"'
-            }
-        )
-        
-    raise HTTPException(status_code=400, detail="Unsupported format")
-
-
-@router.get("/latest/summary")
-def portfolio_latest_summary(request: Request) -> dict[str, Any]:
-    _check_auth(request)
-
-    if not _DB_DIR:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(_DB_DIR) as c:
-        rows = fetch_latest_snapshots(c)
-
-    projects: list[PortfolioProject] = []
-    technologies: list[str] = []
-    highlights: list[str] = []
-
-    for row in rows:
-        project_id = row.get("project_id")
-        snapshot = row.get("snapshot")
-        if not project_id or not isinstance(snapshot, dict):
-            continue
-
-        project = _project_from_snapshot(str(project_id), snapshot)
-        projects.append(project)
-        technologies.extend(project.technologies)
-        highlights.extend(project.highlights)
-
-    technologies = _dedupe_strings(technologies)
-    highlights = _dedupe_strings(highlights)[:8]
-
-    return {
-        "data": {
-            "owner": None,
-            "education": "UBC Okanagan — BSc Computer Science",
-            "awards": ["Capstone Team Contributor"],
-            "skills": technologies,
-            "projects": [
-                {
-                    "project_id": p.project_id,
-                    "title": p.title,
-                    "summary": p.summary,
-                    "technologies": p.technologies,
-                    "highlights": p.highlights,
-                }
-                for p in projects
-            ],
-            "highlights": highlights,
-        },
-        "error": None,
-    }
-
 
 @router.post("/showcase/edit")
 async def edit_portfolio_showcase(request: Request, payload: dict[str, Any] = Body(...)):
-    """
-    Legacy endpoint expected by tests: POST /portfolio/showcase/edit
-    Validates that both projectId and summary are present.
-    """
     _check_auth(request)
 
     project_id = (payload.get("projectId") or "").strip()
@@ -397,6 +337,225 @@ async def edit_portfolio_showcase(request: Request, payload: dict[str, Any] = Bo
     if not project_id or not summary:
         raise HTTPException(status_code=400, detail="projectId and summary are required")
 
-    # If you don't yet support storing showcase in this router, return a simple success payload.
-    # (If later you want to persist, wire it to your resume_showcase storage like in portfolio_showcase.py)
     return {"data": {"projectId": project_id, "summary": summary}, "error": None}
+
+
+@router.post("/{id}/edit")
+def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
+    _check_auth(request)
+
+    if id == "showcase":
+        raise HTTPException(status_code=400, detail="Use /portfolio/showcase/edit with projectId and summary")
+
+    if payload.summary is not None and not payload.projects:
+        summary = str(payload.summary).strip()
+        if not summary:
+            raise HTTPException(status_code=400, detail="summary is required")
+        return {"data": {"projectId": id, "summary": summary}, "error": None}
+
+    if payload.summary is None and payload.projects is None and payload.owner is None:
+        raise HTTPException(status_code=400, detail="No changes provided")
+
+    projects = payload.projects or []
+    portfolio = build_portfolio(
+        portfolio_id=id,
+        owner=payload.owner,
+        projects=projects,
+    )
+
+    log_event("INFO", f"Portfolio edited · Portfolio ID: {id}")
+    return {"portfolio": portfolio.model_dump(), "error": None}
+
+
+@router.get("/latest/summary")
+def latest_portfolio_summary(request: Request) -> dict[str, Any]:
+    try:
+        _check_auth(request)
+
+        db_dir = _resolve_db_dir(request)
+        if not db_dir:
+            raise HTTPException(status_code=500, detail="Database not configured")
+
+        with _db_session(db_dir) as c:
+            rows = fetch_latest_snapshots(c) or []
+
+        if not rows:
+            return {"data": _default_portfolio_summary(), "error": None}
+
+        projects: list[PortfolioProject] = []
+        all_skills: list[str] = []
+        all_highlights: list[str] = []
+
+        for row in rows:
+            project_id, snapshot = _extract_row_project_and_snapshot(row)
+
+            if not project_id or not isinstance(snapshot, dict):
+                continue
+
+            project = _project_from_snapshot(project_id, snapshot)
+            projects.append(project)
+            all_skills.extend(project.technologies)
+            all_highlights.extend(project.highlights)
+
+        summary = _default_portfolio_summary()
+        summary["projects"] = [project.model_dump() for project in projects]
+        summary["skills"] = _dedupe_strings(all_skills)
+        summary["highlights"] = _dedupe_strings(all_highlights)[:10]
+
+        log_event("SUCCESS", f"Portfolio summary generated · Projects: {len(projects)}")
+        return {"data": summary, "error": None}
+
+    except Exception as exc:
+        return {
+            "data": None,
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        }
+
+@router.get("/activity-heatmap")
+def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
+    try:
+        _check_auth(request)
+
+        db_dir = _resolve_db_dir(request)
+        if not db_dir:
+            raise HTTPException(status_code=500, detail="Database not configured")
+
+        with _db_session(db_dir) as c:
+            rows = fetch_latest_snapshots(c) or []
+
+        period_counts: dict[str, int] = {}
+        project_count = 0
+
+        for row in rows:
+            _, snapshot = _extract_row_project_and_snapshot(row)
+
+            if not isinstance(snapshot, dict):
+                continue
+
+            file_summary = snapshot.get("file_summary") or {}
+            timeline = file_summary.get("timeline") or {}
+
+            if not isinstance(timeline, dict):
+                continue
+
+            project_count += 1
+
+            for period, count in timeline.items():
+                key = str(period).strip()
+                if not key:
+                    continue
+                period_counts[key] = period_counts.get(key, 0) + _safe_int(count)
+
+        if not period_counts:
+            return {
+                "data": {
+                    "cells": [],
+                    "maxCount": 0,
+                    "projectCount": project_count,
+                },
+                "error": None,
+            }
+
+        ordered_periods = sorted(period_counts.items(), key=lambda item: item[0])
+        max_count = max(period_counts.values()) if period_counts else 0
+
+        cells = []
+        for period, count in ordered_periods:
+            intensity = 0.0
+            if max_count > 0:
+                intensity = round(count / max_count, 3)
+
+            cells.append(
+                {
+                    "period": period,
+                    "count": count,
+                    "intensity": intensity,
+                }
+            )
+
+        log_event(
+            "SUCCESS",
+            f"Portfolio activity heatmap generated · Periods: {len(cells)} · Projects: {project_count}",
+        )
+
+        return {
+            "data": {
+                "cells": cells,
+                "maxCount": max_count,
+                "projectCount": project_count,
+            },
+            "error": None,
+        }
+
+    except Exception as exc:
+        return {
+            "data": None,
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        }
+
+
+@router.get("/{id}/export")
+def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
+    _check_auth(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    log_event("INFO", f"Portfolio export requested · ID: {id} · Format: {format.value}")
+
+    if format == ExportFormat.json:
+        return {
+            "portfolio_id": id,
+            "exported_at": _now_utc().isoformat(),
+        }
+
+    if format == ExportFormat.markdown:
+        content = f"# Portfolio {id}\n\nExport generated at {_now_utc().isoformat()}\n"
+        log_event("SUCCESS", f"Portfolio exported · ID: {id} · Format: {format.value}")
+        return {"content": content}
+
+    if format == ExportFormat.pdf:
+        projects = _load_export_projects(id, db_dir)
+        entries = [
+            {
+                "project_id": p.project_id,
+                "name": p.title,
+                "summary": p.summary or ("Highlights: " + "; ".join(p.highlights) if p.highlights else ""),
+                "source": "latest_snapshot",
+            }
+            for p in projects
+        ]
+
+        if not entries:
+            entries = [
+                {
+                    "project_id": id,
+                    "name": id,
+                    "summary": "No snapshot data available.",
+                    "source": "placeholder",
+                }
+            ]
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                out_path = Path(tmpdir) / f"portfolio_{id}.pdf"
+                build_portfolio_pdf_with_pandoc(entries, out_path, title=f"Portfolio {id}")
+                pdf_bytes = out_path.read_bytes()
+        except Exception:
+            pdf_bytes = (
+                b"%PDF-1.4\n"
+                b"1 0 obj<<>>\n"
+                b"trailer<<>>\n"
+                b"%%EOF"
+            )
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="portfolio_{id}.pdf"'},
+        )
+
+    raise HTTPException(status_code=400, detail="Unsupported format")
