@@ -37,7 +37,7 @@ function getUsageColor(value) {
 function updateMiniChart(chart, data) {
   chart.data.labels = data.map((_, i) => i)
   chart.data.datasets[0].data = data
-  chart.update()
+  chart.update("none")
 }
 
 async function fetchMetrics() {
@@ -110,12 +110,6 @@ if (cpuHistory.length > 40) {
   cpuHistory.shift();
   memoryHistory.shift();
   gpuHistory.shift();
-}
-
-function updateMiniChart(chart, data) {
-  chart.data.labels = data.map((_, i) => i);
-  chart.data.datasets[0].data = data;
-  chart.update();
 }
 
 updateMiniChart(cpuChart, cpuHistory);
