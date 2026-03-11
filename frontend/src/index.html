@@ -65,12 +65,6 @@
               <option value="system">System</option>
               <option value="activity">Activity</option>
             </select>
-            <div id="dashboard-selection-wrapper" class="dashboard-selection-wrapper hidden">
-              <button id="dashboard-selection-toggle" class="secondary-btn dashboard-selection-toggle" type="button">
-                Selection
-              </button>
-              <div id="dashboard-selection-panel" class="dashboard-selection-panel hidden"></div>
-            </div>
           </div>
         </div>
         <div class="dashboard">
@@ -185,6 +179,20 @@
               <h1>Portfolio & Resume</h1>
             </div>
             <div class="portfolio-actions">
+              <input id="portfolio-search-input" class="dashboard-search-input" type="text" placeholder="Search portfolio sections..." />
+              <select id="portfolio-filter-select" class="dashboard-filter-select">
+                <option value="all">All sections</option>
+                <option value="summary">Summary</option>
+                <option value="projects">Projects</option>
+                <option value="insights">Insights</option>
+                <option value="activity">Activity</option>
+              </select>
+              <div id="portfolio-selection-wrapper" class="dashboard-selection-wrapper hidden">
+                <button id="portfolio-selection-toggle" class="secondary-btn dashboard-selection-toggle" type="button">
+                  Selection
+                </button>
+                <div id="portfolio-selection-panel" class="dashboard-selection-panel hidden"></div>
+              </div>
               <button id="preview-resume-btn" class="secondary-btn">Preview Resume</button>
               <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
             </div>
@@ -192,26 +200,26 @@
       
           <div class="portfolio-grid">
       
-            <div class="card portfolio-hero-card">
+            <div class="card portfolio-hero-card portfolio-section" data-portfolio-section="resume-summary" data-portfolio-label="Resume Snapshot" data-portfolio-category="summary">
               <h2 class="card-title">Resume Snapshot</h2>
               <div id="resume-summary-container" class="resume-summary-container"></div>
             </div>
       
-            <div class="card portfolio-projects-card">
+            <div class="card portfolio-projects-card portfolio-section" data-portfolio-section="top-projects" data-portfolio-label="Top 3 Project Showcase" data-portfolio-category="projects">
               <h2 class="card-title">Top 3 Project Showcase</h2>
               <div id="top-projects-container" class="top-projects-container"></div>
             </div>
       
-            <div class="card portfolio-skills-card">
+            <div class="card portfolio-skills-card portfolio-section" data-portfolio-section="portfolio-stats" data-portfolio-label="Portfolio Stats" data-portfolio-category="insights">
               <h2 class="card-title">Portfolio Stats</h2>
               <div id="skills-expertise-container" class="skills-expertise-container"></div>
             </div>
       
-            <div class="card portfolio-timeline-card">
+            <div class="card portfolio-timeline-card portfolio-section" data-portfolio-section="skills-timeline" data-portfolio-label="Skills Timeline" data-portfolio-category="insights">
               <h2 class="card-title">Skills Timeline</h2>
               <div id="skills-timeline-container" class="skills-timeline-container"></div>
             </div>
-            <div class="card portfolio-heatmap-card">
+            <div class="card portfolio-heatmap-card portfolio-section" data-portfolio-section="activity-heatmap" data-portfolio-label="Activity Heatmap" data-portfolio-category="activity">
               <h2 class="card-title">Activity Heatmap</h2>
               <div id="activity-heatmap-container" class="activity-heatmap-container"></div>
             </div>

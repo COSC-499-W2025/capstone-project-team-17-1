@@ -1,5 +1,6 @@
 import { fetchProjects } from "./projects.js";
 import { applyDisplayPreferences } from "./displayPreferences.js";
+import { isPrivateMode } from "./auth.js";
 
 const API_BASE = "http://127.0.0.1:8002"; // change to 8003 only if you keep backend on 8003
 
@@ -120,6 +121,40 @@ function getHeatmapBucket(intensity) {
   return 0;
 }
 
+function getProjectThumbnailUrl(projectId) {
+  const safeId = encodeURIComponent(String(projectId || "").trim());
+  return `${API_BASE}/projects/${safeId}/thumbnail`;
+}
+
+function buildProjectProcess(project, details, rank) {
+  const sourceLabel = project.is_github ? "Imported the working repository from GitHub" : "Uploaded the project source as a ZIP snapshot";
+  const analysisLabel = `Analyzed ${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} to surface implementation signals`;
+  const refinementLabel = details?.highlights?.length
+    ? `Captured improvement highlights such as ${details.highlights.slice(0, 2).join(" and ")}`
+    : `Ranked this project in the top ${rank + 1} based on portfolio depth and detected skills`;
+
+  return [sourceLabel, analysisLabel, refinementLabel];
+}
+
+function buildProjectEvolution(project, details) {
+  const technologies = dedupeStrings(details?.technologies);
+  const highlights = dedupeStrings(details?.highlights);
+
+  if (technologies.length && highlights.length) {
+    return `Started with ${technologies.slice(0, 2).join(" and ")}, then evolved through ${highlights[0]}.`;
+  }
+
+  if (technologies.length) {
+    return `Expanded implementation breadth across ${technologies.slice(0, 3).join(", ")} as the project matured.`;
+  }
+
+  if (highlights.length) {
+    return `Project evolution is reflected by ${highlights[0]}.`;
+  }
+
+  return `Evolution is inferred from ${project.total_files || 0} analyzed files and ${project.total_skills || 0} detected skill signals.`;
+}
+
 function renderResumeSummary(profile, projects, summaryData) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
@@ -130,6 +165,7 @@ function renderResumeSummary(profile, projects, summaryData) {
 
   const backendSkills = dedupeStrings(summaryData?.skills);
   const highlights = dedupeStrings(summaryData?.highlights).slice(0, 4);
+  const featuredProjects = getTopProjects(projects).slice(0, 3);
 
   const summary =
     totalProjects > 0
@@ -138,14 +174,37 @@ function renderResumeSummary(profile, projects, summaryData) {
 
   container.innerHTML = `
     <div class="resume-summary-card">
-      <div class="resume-summary-top">
-        <div>
+      <div class="resume-hero-shell">
+        <div class="resume-summary-top">
           <h3>${escapeHtml(profile.name)}</h3>
           <p class="resume-role">${escapeHtml(profile.title)}</p>
+          <p class="resume-summary-text">${escapeHtml(summary)}</p>
+          <div class="resume-hero-actions">
+            <span class="hero-stat-chip">${totalProjects} Project${totalProjects === 1 ? "" : "s"}</span>
+            <span class="hero-stat-chip">${totalSkills} Skill Signal${totalSkills === 1 ? "" : "s"}</span>
+            <span class="hero-stat-chip">${totalFiles} Files Analyzed</span>
+          </div>
+        </div>
+        <div class="resume-hero-spotlight">
+          <span class="resume-meta-label">Featured Build Set</span>
+          <div class="hero-project-list">
+            ${
+              featuredProjects.length
+                ? featuredProjects
+                    .map(
+                      (project) => `
+                        <div class="hero-project-item">
+                          <span class="hero-project-name">${escapeHtml(project.project_id)}</span>
+                          <span class="hero-project-meta">${project.total_files || 0} files • ${project.total_skills || 0} skills</span>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<div class="hero-project-item"><span class="hero-project-name">No featured projects yet</span></div>`
+            }
+          </div>
         </div>
       </div>
-
-      <p class="resume-summary-text">${escapeHtml(summary)}</p>
 
       <div class="resume-meta-grid">
         <div class="resume-meta-box">
@@ -229,10 +288,29 @@ function renderTopProjects(projects, summaryData) {
 
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const highlights = dedupeStrings(details?.highlights).slice(0, 2);
+      const processSteps = buildProjectProcess(project, details, index);
+      const evolutionSummary = buildProjectEvolution(project, details);
+      const privateMode = isPrivateMode();
 
       return `
         <div class="top-project-card">
-          <div class="top-project-rank">#${index + 1}</div>
+          <div class="top-project-media">
+            <div class="top-project-rank">#${index + 1}</div>
+            <img
+              class="top-project-thumbnail"
+              src="${escapeHtml(getProjectThumbnailUrl(project.project_id))}"
+              alt="${escapeHtml(title)} thumbnail"
+              loading="lazy"
+              onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+            />
+            <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
+              <div class="thumbnail-placeholder-art">
+                <span class="thumbnail-placeholder-sun"></span>
+                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+              </div>
+            </div>
+          </div>
           <div class="top-project-body">
             <h3>${escapeHtml(title)}</h3>
             <p>${escapeHtml(summary)}</p>
@@ -243,6 +321,32 @@ function renderTopProjects(projects, summaryData) {
                   <ul class="resume-awards-list">
                     ${highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
                   </ul>
+                `
+                : ""
+            }
+
+            ${
+              privateMode
+                ? `
+                  <div class="project-details">
+                    <button class="project-details-toggle" type="button" data-project-details="${escapeHtml(project.project_id)}">
+                      View Details
+                    </button>
+                    <div class="project-details-panel hidden" data-project-details-panel="${escapeHtml(project.project_id)}">
+                      <div class="project-story-grid">
+                        <div class="project-story-block">
+                          <span class="project-story-label">Process</span>
+                          <ol class="project-process-list">
+                            ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+                          </ol>
+                        </div>
+                        <div class="project-story-block">
+                          <span class="project-story-label">Evolution</span>
+                          <p class="project-evolution-text">${escapeHtml(evolutionSummary)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 `
                 : ""
             }
@@ -258,6 +362,16 @@ function renderTopProjects(projects, summaryData) {
       `;
     })
     .join("");
+
+  container.querySelectorAll(".project-details-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.getAttribute("data-project-details");
+      const panel = container.querySelector(`[data-project-details-panel="${projectId}"]`);
+      const isHidden = panel?.classList.contains("hidden");
+      panel?.classList.toggle("hidden", !isHidden);
+      button.textContent = isHidden ? "Hide Details" : "View Details";
+    });
+  });
 }
 
 function renderPortfolioStats(projects, summaryData) {

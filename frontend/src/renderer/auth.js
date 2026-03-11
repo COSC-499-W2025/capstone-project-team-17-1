@@ -1,4 +1,4 @@
-import { initNavigation, switchPage } from "./navigation.js";
+import { getLastPage, initNavigation, switchPage } from "./navigation.js";
 import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
@@ -109,6 +109,7 @@ function setActiveTabByKey(tabKey) {
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
+  localStorage.setItem("loom_last_page", JSON.stringify({ tabKey, pageId }));
 }
 
 async function authFetch(path, options = {}) {
@@ -317,7 +318,6 @@ export async function initAuthFlow() {
   }
 
   setModeUI(false, null);
-  goToPage("dashboard", "dashboard-page");
   setAuthFormMode("login");
 
   initNavigation({
@@ -345,14 +345,24 @@ export async function initAuthFlow() {
     try {
     const user = await ensureCurrentUser();
 
+    const lastPage = getLastPage();
+
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      goToPage("customization", "customization-page");
+      if (lastPage?.tabKey === "customization" || lastPage?.tabKey === "settings" || lastPage?.tabKey === "projects" || lastPage?.tabKey === "portfolio-resume" || lastPage?.tabKey === "dashboard") {
+        goToPage(lastPage.tabKey, lastPage.pageId);
+      } else {
+        goToPage("dashboard", "dashboard-page");
+      }
     } else {
       setAuthToken(null);
       setModeUI(false, null);
-      goToPage("dashboard", "dashboard-page");
+      if (lastPage?.tabKey && lastPage.tabKey !== "customization" && lastPage.tabKey !== "settings") {
+        goToPage(lastPage.tabKey, lastPage.pageId);
+      } else {
+        goToPage("dashboard", "dashboard-page");
+      }
     }
   } catch (_) {
     setAuthToken(null);

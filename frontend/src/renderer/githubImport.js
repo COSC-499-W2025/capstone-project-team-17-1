@@ -101,10 +101,16 @@ async function initGithubSection() {
   try {
 
     await startGithubImport(owner, name, projectId, branch);
-    
-    await fetch("http://127.0.0.1:8002/cloud/db/upload", {
-      method: "POST"
-    });
+
+    // Cloud sync is a follow-up step. If it fails, keep the import successful locally.
+    try {
+      await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+        method: "POST"
+      });
+    } catch (syncError) {
+      console.warn("Cloud sync after GitHub import failed:", syncError);
+    }
+
     setProgress(100, "Done. Refreshing projects...");
 
     setTimeout(() => {
@@ -119,6 +125,7 @@ async function initGithubSection() {
 }, 600);
 
   } catch (e) {
+    console.error("GitHub import failed:", e);
     closeProgressModal();
     alert("GitHub import failed.");
   }

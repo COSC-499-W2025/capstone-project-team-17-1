@@ -61,7 +61,39 @@ export async function loadProjects() {
         </div>
       `;
 
+      const deleteBtn = card.querySelector(".project-delete");
       const pullBtn = card.querySelector(".pull-btn");
+
+      deleteBtn?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        const projectId = deleteBtn.dataset.id;
+        if (!projectId) return;
+
+        if (!confirm(`Delete project "${projectId}"?`)) return;
+
+        try {
+          const res = await fetch(`http://127.0.0.1:8002/projects/${encodeURIComponent(projectId)}`, {
+            method: "DELETE",
+          });
+
+          if (!res.ok) {
+            throw new Error(`Delete failed: ${res.status}`);
+          }
+
+          card.classList.add("removing");
+
+          await Promise.all([
+            loadProjects(),
+            typeof loadRecentProjects === "function" ? loadRecentProjects() : Promise.resolve(),
+            typeof loadProjectHealth === "function" ? loadProjectHealth() : Promise.resolve(),
+            typeof loadErrorAnalysis === "function" ? loadErrorAnalysis() : Promise.resolve(),
+          ]);
+        } catch (err) {
+          console.error("Delete failed:", err);
+          alert("Failed to delete project.");
+        }
+      });
 
       pullBtn?.addEventListener("click", async (e) => {
         e.stopPropagation();
