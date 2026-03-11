@@ -9,6 +9,7 @@ const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
+let privateModeEnabled = false;
 
 function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -47,10 +48,30 @@ function setModeUI(isPrivate, user) {
     profilePill.textContent = user.username || `User ${user.id || ""}`;
     profilePill.classList.remove("hidden");
     currentUser = user;
+    privateModeEnabled = true;
   } else {
     profilePill.classList.add("hidden");
     currentUser = null;
+    privateModeEnabled = false;
   }
+
+  // Let other UI modules react 
+  document.dispatchEvent(
+    new CustomEvent("auth:mode-changed", {
+      detail: {
+        isPrivate: privateModeEnabled,
+        user: currentUser,
+      },
+    })
+  );
+}
+
+export function isPrivateMode() {
+  return privateModeEnabled;
+}
+
+export function getCurrentUser() {
+  return currentUser;
 }
 
 function setAuthFormMode(mode) {

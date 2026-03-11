@@ -1,4 +1,5 @@
 import { fetchProjects } from "./projects.js";
+import { applyDisplayPreferences } from "./displayPreferences.js";
 
 const API_BASE = "http://127.0.0.1:8002"; // change to 8003 only if you keep backend on 8003
 
@@ -572,6 +573,7 @@ export async function loadPortfolioResume() {
   renderPortfolioStats(projects, summaryData);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
+  applyDisplayPreferences();
 }
 
 export function initPortfolioResume() {
