@@ -8,6 +8,7 @@ import {
 } from "./portfolioResumeShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002"; // change to 8003 only if you keep backend on 8003
+const THUMBNAIL_CACHE_KEY = "loom_project_thumbnail_versions";
 
 function getStaticProfile() {
   return {
@@ -118,7 +119,83 @@ function getHeatmapBucket(intensity) {
 
 function getProjectThumbnailUrl(projectId) {
   const safeId = encodeURIComponent(String(projectId || "").trim());
-  return `${API_BASE}/projects/${safeId}/thumbnail`;
+  const versions = getThumbnailVersions();
+  const version = versions[String(projectId || "").trim()];
+  return version
+    ? `${API_BASE}/projects/${safeId}/thumbnail?v=${encodeURIComponent(version)}`
+    : `${API_BASE}/projects/${safeId}/thumbnail`;
+}
+
+function getThumbnailVersions() {
+  try {
+    const raw = window.localStorage.getItem(THUMBNAIL_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setThumbnailVersion(projectId, version) {
+  const versions = getThumbnailVersions();
+  versions[String(projectId || "").trim()] = version;
+  window.localStorage.setItem(THUMBNAIL_CACHE_KEY, JSON.stringify(versions));
+}
+
+async function uploadProjectThumbnail(projectId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/thumbnail`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Thumbnail upload failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+function bindProjectThumbnailUploads(container) {
+  container.querySelectorAll("[data-project-thumbnail-trigger]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.getAttribute("data-project-thumbnail-trigger");
+      if (!projectId) return;
+
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.accept = "image/*";
+
+      picker.addEventListener("change", async () => {
+        const file = picker.files?.[0];
+        if (!file) return;
+
+        try {
+          button.disabled = true;
+          await uploadProjectThumbnail(projectId, file);
+          const version = String(Date.now());
+          setThumbnailVersion(projectId, version);
+
+          const image = button.querySelector(".top-project-thumbnail");
+          const fallback = button.querySelector(".top-project-thumbnail-fallback");
+          if (image instanceof HTMLImageElement) {
+            image.src = getProjectThumbnailUrl(projectId);
+            image.style.display = "";
+          }
+          fallback?.classList.add("hidden");
+        } catch (error) {
+          console.error("Failed to upload project thumbnail:", error);
+          alert("Failed to upload thumbnail.");
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      picker.click();
+    });
+  });
 }
 
 function renderResumeSummary(profile, projects, summaryData) {
@@ -248,6 +325,8 @@ function renderTopProjects(projects, summaryData) {
       button.textContent = isHidden ? "Hide Details" : "View Details";
     });
   });
+
+  bindProjectThumbnailUploads(container);
 }
 
 function renderPortfolioStats(projects, summaryData) {

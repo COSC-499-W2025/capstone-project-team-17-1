@@ -159,7 +159,12 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
 
       return `
         <div class="top-project-card">
-          <div class="top-project-media">
+          <button
+            class="top-project-media top-project-thumbnail-button"
+            type="button"
+            data-project-thumbnail-trigger="${escapeHtml(project.project_id)}"
+            aria-label="Upload thumbnail for ${escapeHtml(title)}"
+          >
             <div class="top-project-rank">#${index + 1}</div>
             <img
               class="top-project-thumbnail"
@@ -175,7 +180,8 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
                 <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
               </div>
             </div>
-          </div>
+            <span class="top-project-thumbnail-overlay">Upload thumbnail</span>
+          </button>
           <div class="top-project-body">
             <h3>${escapeHtml(title)}</h3>
             <p>${escapeHtml(summary)}</p>

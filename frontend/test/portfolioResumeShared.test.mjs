@@ -60,6 +60,8 @@ test("buildTopProjectsMarkup renders private-mode details for the top 3 projects
   assert.match(markup, /Process/);
   assert.match(markup, /Evolution/);
   assert.match(markup, /\/thumbs\/proj-b\.png/);
+  assert.match(markup, /data-project-thumbnail-trigger="proj-b"/);
+  assert.match(markup, /Upload thumbnail/);
   assert.match(markup, /ZIP Upload/);
   assert.match(markup, /GitHub Import/);
   assert.ok(!markup.includes("proj-d"), "fourth-ranked project should not be rendered");
