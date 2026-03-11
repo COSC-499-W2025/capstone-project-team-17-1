@@ -207,8 +207,8 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
 
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const highlights = dedupeStrings(details?.highlights).slice(0, 2);
-      const processSteps = buildProjectProcess(project, details, index);
-      const evolutionSummary = buildProjectEvolution(project, details);
+      const processSteps = isPrivateMode ? buildProjectProcess(project, details, index) : [];
+      const evolutionSummary = isPrivateMode ? buildProjectEvolution(project, details) : "";
 
       return `
         <div class="top-project-card">
@@ -249,25 +249,31 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
                 : ""
             }
 
-            <div class="project-details">
-              <button class="project-details-toggle" type="button" data-project-details="${escapeHtml(project.project_id)}">
-                View Details
-              </button>
-              <div class="project-details-panel hidden" data-project-details-panel="${escapeHtml(project.project_id)}">
-                <div class="project-story-grid">
-                  <div class="project-story-block">
-                    <span class="project-story-label">Process</span>
-                    <ol class="project-process-list">
-                      ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
-                    </ol>
+            ${
+              isPrivateMode
+                ? `
+                  <div class="project-details">
+                    <button class="project-details-toggle" type="button" data-project-details="${escapeHtml(project.project_id)}">
+                      View Details
+                    </button>
+                    <div class="project-details-panel hidden" data-project-details-panel="${escapeHtml(project.project_id)}">
+                      <div class="project-story-grid">
+                        <div class="project-story-block">
+                          <span class="project-story-label">Process</span>
+                          <ol class="project-process-list">
+                            ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+                          </ol>
+                        </div>
+                        <div class="project-story-block">
+                          <span class="project-story-label">Evolution</span>
+                          <p class="project-evolution-text">${escapeHtml(evolutionSummary)}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="project-story-block">
-                    <span class="project-story-label">Evolution</span>
-                    <p class="project-evolution-text">${escapeHtml(evolutionSummary)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+                `
+                : ""
+            }
 
             <div class="project-stack">
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
