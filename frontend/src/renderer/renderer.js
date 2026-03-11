@@ -51,15 +51,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadProjectHealth();
 
   loadErrorAnalysis();
-
   loadProjects();
 
   loadRecentActivity();
 
-
-
-
   setInterval(loadRecentActivity, 1000);
-
 
 });

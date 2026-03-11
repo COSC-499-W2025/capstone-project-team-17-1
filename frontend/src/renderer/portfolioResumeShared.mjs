@@ -95,27 +95,79 @@ function getTimelineSkillName(skill) {
   return String(skill?.name || skill?.skill || "unknown").trim() || "unknown";
 }
 
+function getTimelineSkillWeight(skill) {
+  const rawWeight = Number(skill?.weight ?? skill?.score ?? skill?.confidence ?? 0);
+  if (!Number.isFinite(rawWeight)) return 0;
+  return Math.max(0, rawWeight);
+}
+
+function getSkillDepthLevel(depthScore) {
+  if (depthScore >= 2.5) return "Advanced";
+  if (depthScore >= 1.75) return "Proficient";
+  if (depthScore >= 1.1) return "Developing";
+  return "Foundation";
+}
+
+function getSkillGrowthLabel(previousWeight, currentWeight, appearanceCount) {
+  if (appearanceCount <= 1) return "Baseline established";
+
+  const delta = currentWeight - previousWeight;
+  if (delta >= 0.08) return "Depth increasing";
+  if (delta <= -0.08) return "Applying in lighter scope";
+  return "Depth sustained";
+}
+
 function buildTimelineEntries(timeline) {
   const seenCounts = new Map();
+  const previousWeights = new Map();
+  const cumulativeWeights = new Map();
 
   return timeline.map((entry) => {
-    const skills = Array.isArray(entry.skills) ? entry.skills : [];
-    const uniqueNames = [...new Set(skills.map(getTimelineSkillName))];
+    const rawSkills = Array.isArray(entry.skills) ? entry.skills : [];
+    const aggregatedSkills = new Map();
+
+    rawSkills.forEach((skill) => {
+      const name = getTimelineSkillName(skill);
+      const weight = getTimelineSkillWeight(skill);
+      const current = aggregatedSkills.get(name) || { name, weight: 0 };
+      current.weight += weight;
+      aggregatedSkills.set(name, current);
+    });
+
+    const normalizedSkills = [...aggregatedSkills.values()].sort((a, b) => {
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      return a.name.localeCompare(b.name);
+    });
 
     let recurringCount = 0;
     let newCount = 0;
+    let growthCount = 0;
 
-    const decoratedSkills = uniqueNames.map((name) => {
+    const decoratedSkills = normalizedSkills.map(({ name, weight }) => {
       const previousCount = seenCounts.get(name) || 0;
       const nextCount = previousCount + 1;
+      const previousWeight = previousWeights.get(name) || 0;
+      const cumulativeWeight = (cumulativeWeights.get(name) || 0) + weight;
+      const depthScore = cumulativeWeight + nextCount * 0.35;
+      const growthLabel = getSkillGrowthLabel(previousWeight, weight, nextCount);
+
       seenCounts.set(name, nextCount);
+      previousWeights.set(name, weight);
+      cumulativeWeights.set(name, cumulativeWeight);
 
       if (previousCount > 0) recurringCount += 1;
       else newCount += 1;
+      if (previousCount > 0 && weight > previousWeight + 0.08) growthCount += 1;
 
       return {
         name,
         appearanceCount: nextCount,
+        weight,
+        previousWeight,
+        cumulativeWeight,
+        depthScore,
+        level: getSkillDepthLevel(depthScore),
+        growthLabel,
         status: previousCount > 0 ? "Recurring" : "First seen",
       };
     });
@@ -124,9 +176,10 @@ function buildTimelineEntries(timeline) {
       ...entry,
       skills: decoratedSkills,
       meta: {
-        totalSkills: uniqueNames.length,
+        totalSkills: normalizedSkills.length,
         recurringCount,
         newCount,
+        growthCount,
       },
     };
   });
@@ -196,31 +249,25 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
                 : ""
             }
 
-            ${
-              isPrivateMode
-                ? `
-                  <div class="project-details">
-                    <button class="project-details-toggle" type="button" data-project-details="${escapeHtml(project.project_id)}">
-                      View Details
-                    </button>
-                    <div class="project-details-panel hidden" data-project-details-panel="${escapeHtml(project.project_id)}">
-                      <div class="project-story-grid">
-                        <div class="project-story-block">
-                          <span class="project-story-label">Process</span>
-                          <ol class="project-process-list">
-                            ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
-                          </ol>
-                        </div>
-                        <div class="project-story-block">
-                          <span class="project-story-label">Evolution</span>
-                          <p class="project-evolution-text">${escapeHtml(evolutionSummary)}</p>
-                        </div>
-                      </div>
-                    </div>
+            <div class="project-details">
+              <button class="project-details-toggle" type="button" data-project-details="${escapeHtml(project.project_id)}">
+                View Details
+              </button>
+              <div class="project-details-panel hidden" data-project-details-panel="${escapeHtml(project.project_id)}">
+                <div class="project-story-grid">
+                  <div class="project-story-block">
+                    <span class="project-story-label">Process</span>
+                    <ol class="project-process-list">
+                      ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+                    </ol>
                   </div>
-                `
-                : ""
-            }
+                  <div class="project-story-block">
+                    <span class="project-story-label">Evolution</span>
+                    <p class="project-evolution-text">${escapeHtml(evolutionSummary)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="project-stack">
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
@@ -277,6 +324,11 @@ function buildSkillsTimelineMarkup(timeline) {
                   ? `<span class="timeline-meta-pill">${entry.meta.recurringCount} recurring</span>`
                   : ""
               }
+              ${
+                entry.meta.growthCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.growthCount} growing in depth</span>`
+                  : ""
+              }
             </div>
             <div class="timeline-skill-pills">
               ${
@@ -286,7 +338,8 @@ function buildSkillsTimelineMarkup(timeline) {
                         return `
                           <span class="timeline-skill-pill">
                             <span class="timeline-skill-name">${escapeHtml(skill.name)}</span>
-                            <span class="timeline-skill-meta">${escapeHtml(skill.status)} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(skill.level)} · ${escapeHtml(skill.growthLabel)}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(skill.status)} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"} · weight ${skill.weight.toFixed(2)}</span>
                           </span>
                         `;
                       })

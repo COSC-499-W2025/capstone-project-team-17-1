@@ -3,6 +3,7 @@ import { cpuChart, memoryChart, gpuChart } from "./chart.js"
 let cpuHistory = []
 let memoryHistory = []
 let gpuHistory = []
+let metricsIntervalId = null
 
 function updateArc(element, value) {
   const circumference = 126;
@@ -119,6 +120,13 @@ updateMiniChart(gpuChart, gpuHistory);
 
 
 export function startMetrics() {
+  if (metricsIntervalId) return
   fetchMetrics()
-  setInterval(fetchMetrics, 1000)
+  metricsIntervalId = setInterval(fetchMetrics, 1000)
+}
+
+export function stopMetrics() {
+  if (!metricsIntervalId) return
+  clearInterval(metricsIntervalId)
+  metricsIntervalId = null
 }

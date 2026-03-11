@@ -16,8 +16,9 @@ SECRET_KEY = os.getenv("CLOUDFLARE_R2_SECRET_KEY")
 BUCKET_NAME = os.getenv("CLOUDFLARE_R2_BUCKET", "loom-storage")
 
 s3_client = None
-# check all required secrets exist before cloud ops to prevent error later
-def validate_cloud_config() -> None:
+
+
+def get_missing_cloud_config() -> list[str]:
     missing = []
     if not ACCOUNT_ID:
         missing.append("CLOUDFLARE_R2_ACCOUNT_ID")
@@ -25,6 +26,21 @@ def validate_cloud_config() -> None:
         missing.append("CLOUDFLARE_R2_ACCESS_KEY")
     if not SECRET_KEY:
         missing.append("CLOUDFLARE_R2_SECRET_KEY")
+    return missing
+
+
+def cloud_config_unavailable_status() -> dict[str, object]:
+    missing = get_missing_cloud_config()
+    return {
+        "status": "cloud_unconfigured",
+        "detail": f"Missing required environment variables for cloud storage: {', '.join(missing)}",
+        "missing": missing,
+    }
+
+
+# check all required secrets exist before cloud ops to prevent error later
+def validate_cloud_config() -> None:
+    missing = get_missing_cloud_config()
     
     if missing:
         raise RuntimeError(f"Missing required environment variables for cloud storage: {', '.join(missing)}")
@@ -51,10 +67,14 @@ def get_client():
 # ------------------------------------------------
 
 def test_connection():
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     s3 = get_client()
     return s3.list_objects_v2(Bucket=BUCKET_NAME)
 
 def test_upload():
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     s3 = get_client()
     s3.put_object(
         Bucket=BUCKET_NAME,
@@ -129,6 +149,8 @@ def get_local_blob_path(file_id: str, original_name: str | None = None) -> Path:
 # ------------------------------------------------
 
 def delete_project_zip(user_id: str, project_id: str, filename: str = "project.zip"):
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     key = get_cloud_project_key(user_id, project_id, filename)
 
     if not object_exists(BUCKET_NAME, key):
@@ -142,6 +164,8 @@ def delete_project_zip(user_id: str, project_id: str, filename: str = "project.z
     }
 
 def upload_database(user_id: str):
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     local_db = get_local_db_path(user_id)
 
     if not local_db.exists():
@@ -157,6 +181,8 @@ def upload_database(user_id: str):
     }
 
 def download_database(user_id: str):
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     local_db = get_local_db_path(user_id)
     key = get_cloud_db_key(user_id)
 
@@ -178,6 +204,8 @@ def download_database(user_id: str):
 # ------------------------------------------------
 
 def upload_project_zip(user_id: str, project_id: str, local_zip_path: Path, filename: str | None = None):
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     local_zip_path = Path(local_zip_path)
 
     if not local_zip_path.exists():
@@ -195,6 +223,8 @@ def upload_project_zip(user_id: str, project_id: str, local_zip_path: Path, file
     }
 
 def download_project_zip(user_id: str, project_id: str, target_path: Path, filename: str = "project.zip"):
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
     target_path = Path(target_path)
     key = get_cloud_project_key(user_id, project_id, filename)
 
@@ -215,6 +245,9 @@ def download_all_project_zips(user_id: str):
     Downloads all project blobs referenced by the user's local capstone.db
     into the current machine's local file store and rewrites files.path.
     """
+    if get_missing_cloud_config():
+        return cloud_config_unavailable_status()
+
     conn = storage.open_db()
     try: 
         rows = conn.execute(
