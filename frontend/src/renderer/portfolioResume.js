@@ -1,6 +1,14 @@
 import { fetchProjects } from "./projects.js";
+import { applyDisplayPreferences } from "./displayPreferences.js";
+import { isPrivateMode } from "./auth.js";
+import {
+  buildSkillsTimelineMarkup,
+  buildTopProjectsMarkup,
+  getTopProjects,
+} from "./portfolioResumeShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002"; // change to 8003 only if you keep backend on 8003
+const THUMBNAIL_CACHE_KEY = "loom_project_thumbnail_versions";
 
 function getStaticProfile() {
   return {
@@ -26,16 +34,6 @@ function asArray(value) {
 
 function dedupeStrings(values) {
   return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
-}
-
-function getTopProjects(projects) {
-  return [...projects]
-    .sort((a, b) => {
-      const skillDiff = (b.total_skills || 0) - (a.total_skills || 0);
-      if (skillDiff !== 0) return skillDiff;
-      return (b.total_files || 0) - (a.total_files || 0);
-    })
-    .slice(0, 3);
 }
 
 async function fetchSkillsTimeline() {
@@ -119,6 +117,87 @@ function getHeatmapBucket(intensity) {
   return 0;
 }
 
+function getProjectThumbnailUrl(projectId) {
+  const safeId = encodeURIComponent(String(projectId || "").trim());
+  const versions = getThumbnailVersions();
+  const version = versions[String(projectId || "").trim()];
+  return version
+    ? `${API_BASE}/projects/${safeId}/thumbnail?v=${encodeURIComponent(version)}`
+    : `${API_BASE}/projects/${safeId}/thumbnail`;
+}
+
+function getThumbnailVersions() {
+  try {
+    const raw = window.localStorage.getItem(THUMBNAIL_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setThumbnailVersion(projectId, version) {
+  const versions = getThumbnailVersions();
+  versions[String(projectId || "").trim()] = version;
+  window.localStorage.setItem(THUMBNAIL_CACHE_KEY, JSON.stringify(versions));
+}
+
+async function uploadProjectThumbnail(projectId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/thumbnail`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Thumbnail upload failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+function bindProjectThumbnailUploads(container) {
+  container.querySelectorAll("[data-project-thumbnail-trigger]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.getAttribute("data-project-thumbnail-trigger");
+      if (!projectId) return;
+
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.accept = "image/*";
+
+      picker.addEventListener("change", async () => {
+        const file = picker.files?.[0];
+        if (!file) return;
+
+        try {
+          button.disabled = true;
+          await uploadProjectThumbnail(projectId, file);
+          const version = String(Date.now());
+          setThumbnailVersion(projectId, version);
+
+          const image = button.querySelector(".top-project-thumbnail");
+          const fallback = button.querySelector(".top-project-thumbnail-fallback");
+          if (image instanceof HTMLImageElement) {
+            image.src = getProjectThumbnailUrl(projectId);
+            image.style.display = "";
+          }
+          fallback?.classList.add("hidden");
+        } catch (error) {
+          console.error("Failed to upload project thumbnail:", error);
+          alert("Failed to upload thumbnail.");
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      picker.click();
+    });
+  });
+}
+
 function renderResumeSummary(profile, projects, summaryData) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
@@ -129,6 +208,7 @@ function renderResumeSummary(profile, projects, summaryData) {
 
   const backendSkills = dedupeStrings(summaryData?.skills);
   const highlights = dedupeStrings(summaryData?.highlights).slice(0, 4);
+  const featuredProjects = getTopProjects(projects).slice(0, 3);
 
   const summary =
     totalProjects > 0
@@ -137,14 +217,37 @@ function renderResumeSummary(profile, projects, summaryData) {
 
   container.innerHTML = `
     <div class="resume-summary-card">
-      <div class="resume-summary-top">
-        <div>
+      <div class="resume-hero-shell">
+        <div class="resume-summary-top">
           <h3>${escapeHtml(profile.name)}</h3>
           <p class="resume-role">${escapeHtml(profile.title)}</p>
+          <p class="resume-summary-text">${escapeHtml(summary)}</p>
+          <div class="resume-hero-actions">
+            <span class="hero-stat-chip">${totalProjects} Project${totalProjects === 1 ? "" : "s"}</span>
+            <span class="hero-stat-chip">${totalSkills} Skill Signal${totalSkills === 1 ? "" : "s"}</span>
+            <span class="hero-stat-chip">${totalFiles} Files Analyzed</span>
+          </div>
+        </div>
+        <div class="resume-hero-spotlight">
+          <span class="resume-meta-label">Featured Build Set</span>
+          <div class="hero-project-list">
+            ${
+              featuredProjects.length
+                ? featuredProjects
+                    .map(
+                      (project) => `
+                        <div class="hero-project-item">
+                          <span class="hero-project-name">${escapeHtml(project.project_id)}</span>
+                          <span class="hero-project-meta">${project.total_files || 0} files • ${project.total_skills || 0} skills</span>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<div class="hero-project-item"><span class="hero-project-name">No featured projects yet</span></div>`
+            }
+          </div>
         </div>
       </div>
-
-      <p class="resume-summary-text">${escapeHtml(summary)}</p>
 
       <div class="resume-meta-grid">
         <div class="resume-meta-box">
@@ -206,57 +309,24 @@ function renderTopProjects(projects, summaryData) {
   const container = document.getElementById("top-projects-container");
   if (!container) return;
 
-  if (!projects.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        Upload a project to populate your top project showcase.
-      </div>
-    `;
-    return;
-  }
+  container.innerHTML = buildTopProjectsMarkup({
+    projects,
+    summaryData,
+    isPrivateMode: isPrivateMode(),
+    getProjectThumbnailUrl,
+  });
 
-  const projectDetailsMap = getProjectDetailsMap(summaryData);
-  const topProjects = getTopProjects(projects);
+  container.querySelectorAll(".project-details-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.getAttribute("data-project-details");
+      const panel = container.querySelector(`[data-project-details-panel="${projectId}"]`);
+      const isHidden = panel?.classList.contains("hidden");
+      panel?.classList.toggle("hidden", !isHidden);
+      button.textContent = isHidden ? "Hide Details" : "View Details";
+    });
+  });
 
-  container.innerHTML = topProjects
-    .map((project, index) => {
-      const details = projectDetailsMap.get(project.project_id);
-      const title = details?.title || project.project_id;
-      const summary =
-        details?.summary ||
-        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
-
-      const technologies = dedupeStrings(details?.technologies).slice(0, 4);
-      const highlights = dedupeStrings(details?.highlights).slice(0, 2);
-
-      return `
-        <div class="top-project-card">
-          <div class="top-project-rank">#${index + 1}</div>
-          <div class="top-project-body">
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(summary)}</p>
-
-            ${
-              highlights.length
-                ? `
-                  <ul class="resume-awards-list">
-                    ${highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-                  </ul>
-                `
-                : ""
-            }
-
-            <div class="project-stack">
-              <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
-              <span class="stack-pill">${project.total_files} Files</span>
-              <span class="stack-pill">${project.total_skills} Skills</span>
-              ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  bindProjectThumbnailUploads(container);
 }
 
 function renderPortfolioStats(projects, summaryData) {
@@ -322,52 +392,7 @@ function renderSkillsTimeline(timeline) {
   const container = document.getElementById("skills-timeline-container");
   if (!container) return;
 
-  if (!timeline.length) {
-    container.innerHTML = `
-      <div class="skills-group-card">
-        <h3>No timeline data yet</h3>
-        <p class="resume-summary-text">
-          Upload projects with detected skills to generate a year-by-year skills timeline.
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = timeline
-    .map((entry) => {
-      const skills = Array.isArray(entry.skills) ? entry.skills : [];
-
-      return `
-        <div class="timeline-year-row">
-          <div class="timeline-year">${escapeHtml(entry.year)}</div>
-          <div class="timeline-track">
-            <div class="timeline-skill-pills">
-              ${
-                skills.length
-                  ? skills
-                      .map((skill) => {
-                        const name = skill.name || skill.skill || "unknown";
-                        const weight =
-                          skill.weight !== undefined && skill.weight !== null
-                            ? `<span class="timeline-weight">${Number(skill.weight).toFixed(1)}</span>`
-                            : "";
-
-                        return `
-                          <span class="timeline-skill-pill">
-                            ${escapeHtml(name)} ${weight}
-                          </span>
-                        `;
-                      })
-                      .join("")
-                  : `<span class="timeline-empty">No skills recorded</span>`
-              }
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  container.innerHTML = buildSkillsTimelineMarkup(timeline);
 }
 
 function renderActivityHeatmap(heatmapData) {
@@ -572,6 +597,7 @@ export async function loadPortfolioResume() {
   renderPortfolioStats(projects, summaryData);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
+  applyDisplayPreferences();
 }
 
 export function initPortfolioResume() {

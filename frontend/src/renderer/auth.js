@@ -1,4 +1,4 @@
-import { initNavigation, switchPage } from "./navigation.js";
+import { getLastPage, initNavigation, switchPage } from "./navigation.js";
 import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
@@ -9,6 +9,7 @@ const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
+let privateModeEnabled = false;
 
 function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -47,10 +48,30 @@ function setModeUI(isPrivate, user) {
     profilePill.textContent = user.username || `User ${user.id || ""}`;
     profilePill.classList.remove("hidden");
     currentUser = user;
+    privateModeEnabled = true;
   } else {
     profilePill.classList.add("hidden");
     currentUser = null;
+    privateModeEnabled = false;
   }
+
+  // Let other UI modules react 
+  document.dispatchEvent(
+    new CustomEvent("auth:mode-changed", {
+      detail: {
+        isPrivate: privateModeEnabled,
+        user: currentUser,
+      },
+    })
+  );
+}
+
+export function isPrivateMode() {
+  return privateModeEnabled;
+}
+
+export function getCurrentUser() {
+  return currentUser;
 }
 
 function setAuthFormMode(mode) {
@@ -88,6 +109,7 @@ function setActiveTabByKey(tabKey) {
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
+  localStorage.setItem("loom_last_page", JSON.stringify({ tabKey, pageId }));
 }
 
 async function authFetch(path, options = {}) {
@@ -296,7 +318,6 @@ export async function initAuthFlow() {
   }
 
   setModeUI(false, null);
-  goToPage("dashboard", "dashboard-page");
   setAuthFormMode("login");
 
   initNavigation({
@@ -324,14 +345,24 @@ export async function initAuthFlow() {
     try {
     const user = await ensureCurrentUser();
 
+    const lastPage = getLastPage();
+
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      goToPage("customization", "customization-page");
+      if (lastPage?.tabKey === "customization" || lastPage?.tabKey === "settings" || lastPage?.tabKey === "projects" || lastPage?.tabKey === "portfolio-resume" || lastPage?.tabKey === "dashboard") {
+        goToPage(lastPage.tabKey, lastPage.pageId);
+      } else {
+        goToPage("dashboard", "dashboard-page");
+      }
     } else {
       setAuthToken(null);
       setModeUI(false, null);
-      goToPage("dashboard", "dashboard-page");
+      if (lastPage?.tabKey && lastPage.tabKey !== "customization" && lastPage.tabKey !== "settings") {
+        goToPage(lastPage.tabKey, lastPage.pageId);
+      } else {
+        goToPage("dashboard", "dashboard-page");
+      }
     }
   } catch (_) {
     setAuthToken(null);

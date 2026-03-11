@@ -1,10 +1,17 @@
+import { isPrivateMode } from "./auth.js";
+
 export async function loadMostUsedSkills() {
 
   const container = document.getElementById("most-used-skills");
   if (!container) return;
 
   console.log("Loading most used skills...");
-  const result = await window.skillsAPI.loadMostUsedSkills();
+  let result = await window.skillsAPI.loadMostUsedSkills();
+
+  if (isPrivateMode() && (!result || result.empty)) {
+    result = await buildPrivateTimelineSkills();
+  }
+
   console.log("Skills result:", result);
 
   if (!result || result.empty) {
@@ -73,4 +80,59 @@ bars.forEach(bar => {
   bar.style.width = targetWidth;
 });
 
+}
+
+async function buildPrivateTimelineSkills() {
+  try {
+    const res = await fetch("http://127.0.0.1:8002/skills/timeline");
+    if (!res.ok) {
+      return { empty: true };
+    }
+
+    const payload = await res.json();
+    const timeline = Array.isArray(payload.timeline) ? payload.timeline : [];
+    if (!timeline.length) {
+      return { empty: true };
+    }
+
+    const totals = new Map();
+    const topProjects = new Map();
+
+    timeline.forEach((entry) => {
+      const projectId = entry?.project_id || "-";
+      const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+
+      skills.forEach((skill) => {
+        const name = String(skill?.skill || skill?.name || "").trim().toLowerCase();
+        if (!name) return;
+
+        const weight = Number(skill?.weight ?? skill?.score ?? 1) || 1;
+        totals.set(name, (totals.get(name) || 0) + weight);
+
+        const currentTop = topProjects.get(name);
+        if (!currentTop || weight > currentTop.weight) {
+          topProjects.set(name, { projectId, weight });
+        }
+      });
+    });
+
+    if (!totals.size) {
+      return { empty: true };
+    }
+
+    const totalWeight = [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
+    const skills = [...totals.entries()]
+      .map(([skill, weight]) => ({
+        skill,
+        confidence: weight / totalWeight,
+        topProject: topProjects.get(skill)?.projectId || "-",
+      }))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5);
+
+    return skills.length ? { empty: false, skills } : { empty: true };
+  } catch (err) {
+    console.error("Failed to build private timeline skills:", err);
+    return { empty: true };
+  }
 }

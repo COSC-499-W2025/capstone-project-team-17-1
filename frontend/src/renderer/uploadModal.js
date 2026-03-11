@@ -49,16 +49,21 @@ deleteBtn?.addEventListener("click", async (e) => {
   if (!confirm(`Delete project "${projectId}"?`)) return;
 
   try {
-
-    await fetch(`http://127.0.0.1:8002/projects/${projectId}`, {
+    const res = await fetch(`http://127.0.0.1:8002/projects/${encodeURIComponent(projectId)}`, {
       method: "DELETE"
     });
+
+    if (!res.ok) {
+      throw new Error(`Delete failed: ${res.status}`);
+    }
 
     loadProjects();
     loadRecentProjects(); // also refresh dashboard widget if it is visible
 
   } catch (err) {
+    console.error("Failed to delete project from upload modal:", err);
     alert("Failed to delete project.");
+    return;
   }
   card.classList.add("removing");
 setTimeout(() => loadProjects(), 200);
@@ -191,19 +196,23 @@ async function submitZipUpload() {
 
   console.log("Sending project_id:", projectId, "URL:", url);
 
-  const res = await fetch(url, {
-    method: "POST",
-    body: formData
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      body: formData
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    alert(err.detail || "Upload failed.");
-    return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Upload failed: ${res.status}`);
+    }
+
+    document.getElementById("upload-modal")?.remove();
+    loadProjects();
+  } catch (err) {
+    console.error("ZIP upload failed:", err);
+    alert(err.message || "Upload failed.");
   }
-
-  document.getElementById("upload-modal")?.remove();
-  loadProjects();
 }
 
 export function renderGithubLogin(container) {
@@ -419,4 +428,3 @@ startImport(owner, name, projectId, selectedBranch);
     draw(filtered);
   });
 }
-

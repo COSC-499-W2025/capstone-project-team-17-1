@@ -11,6 +11,7 @@ import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
 import { initNavigation } from "./navigation.js";
 import { initPortfolioResume } from "./portfolioResume.js";
+import { initDisplayPreferences } from "./displayPreferences.js";
 
 
 // -----------------------------
@@ -39,6 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
   
   initPortfolioResume();
 
+  initDisplayPreferences();
+
   startMetrics();
 
   loadMostUsedSkills();
@@ -48,15 +51,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadProjectHealth();
 
   loadErrorAnalysis();
-
   loadProjects();
 
   loadRecentActivity();
 
-
-
-
   setInterval(loadRecentActivity, 1000);
-
 
 });

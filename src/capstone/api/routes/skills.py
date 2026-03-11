@@ -2,8 +2,6 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path
 import zipfile
 import json
-from tempfile import NamedTemporaryFile
-from capstone.timeline import write_top_skills_by_year
 
 from capstone import storage, file_store
 from capstone.activity_log import log_event
@@ -124,30 +122,59 @@ def skills_all(limit: int = 200):
 @router.get("/skills/timeline")
 def skills_timeline(top_n: int = 5):
     """
-    Return a year-by-year skills timeline using the existing timeline export logic.
+    Return one skills timeline node per stored analysis snapshot.
+    Each node is timestamped using project_analysis.created_at so the frontend can
+    render exact analysis times instead of coarse yearly buckets.
     """
-    tmp_path = None
+    conn = storage.open_db()
 
     try:
-        with NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-
-        write_top_skills_by_year(None, tmp_path, top_n=top_n)
-
-        if not tmp_path.exists() or tmp_path.stat().st_size == 0:
-            return {"timeline": []}
-
-        payload = json.loads(tmp_path.read_text(encoding="utf-8"))
+        rows = conn.execute(
+            """
+            SELECT project_id, snapshot, created_at
+            FROM project_analysis
+            ORDER BY datetime(created_at) ASC, id ASC
+            """
+        ).fetchall()
 
         timeline = []
-        if isinstance(payload, dict):
-            for year, skills in sorted(payload.items(), key=lambda item: item[0]):
-                timeline.append({
-                    "year": str(year),
-                    "skills": skills if isinstance(skills, list) else [],
-                })
+        for project_id, snapshot_raw, created_at in rows:
+            try:
+                snapshot = json.loads(snapshot_raw) if isinstance(snapshot_raw, str) else snapshot_raw
+            except Exception:
+                continue
 
-        log_event("INFO", f"Skills timeline generated · Years: {len(timeline)}")
+            snapshot = snapshot or {}
+            raw_skills = snapshot.get("skills") or []
+            skills = []
+
+            if isinstance(raw_skills, dict):
+                ranked = sorted(raw_skills.items(), key=lambda item: (-float(item[1] or 0), item[0]))
+                skills = [
+                    {"skill": name, "weight": float(weight or 0.0)}
+                    for name, weight in ranked[: max(1, top_n)]
+                ]
+            elif isinstance(raw_skills, list):
+                normalized = []
+                for skill in raw_skills:
+                    if isinstance(skill, dict):
+                        name = skill.get("skill") or skill.get("name")
+                        weight = skill.get("score", skill.get("weight", 0.0))
+                        if name:
+                            normalized.append((str(name), float(weight or 0.0)))
+                normalized.sort(key=lambda item: (-item[1], item[0]))
+                skills = [
+                    {"skill": name, "weight": weight}
+                    for name, weight in normalized[: max(1, top_n)]
+                ]
+
+            timeline.append({
+                "project_id": str(project_id),
+                "timestamp": str(created_at),
+                "skills": skills,
+            })
+
+        log_event("INFO", f"Skills timeline generated · Nodes: {len(timeline)}")
 
         return {
             "count": len(timeline),
@@ -157,7 +184,3 @@ def skills_timeline(top_n: int = 5):
     except Exception as exc:
         log_event("ERROR", f"Skills timeline generation failed · {exc}")
         raise HTTPException(status_code=500, detail="Failed to generate skills timeline")
-
-    finally:
-        if tmp_path and tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)

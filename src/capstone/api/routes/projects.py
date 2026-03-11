@@ -330,13 +330,16 @@ async def upload_project(
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
     if storage_module.CURRENT_USER:
-        upload_project_zip(
-            storage_module.CURRENT_USER,
-            project_id,
-            Path(stored["path"]),
-            filename,
-        )
-        upload_database(storage_module.CURRENT_USER)
+        try:
+            upload_project_zip(
+                storage_module.CURRENT_USER,
+                project_id,
+                Path(stored["path"]),
+                filename,
+            )
+            upload_database(storage_module.CURRENT_USER)
+        except Exception:
+            log_event("WARNING", f"Cloud sync failed after upload · Project: {project_id}")
     return {
         "message": message,
         "project_id": project_id,
@@ -461,12 +464,15 @@ async def upload_project_bundle(file: UploadFile = File(...)):
                     }
                 )
                 if storage_module.CURRENT_USER:
-                    upload_project_zip(
-                        storage_module.CURRENT_USER,
-                        project_id,
-                        Path(stored["path"]),
-                        sub_filename,
-                    )
+                    try:
+                        upload_project_zip(
+                            storage_module.CURRENT_USER,
+                            project_id,
+                            Path(stored["path"]),
+                            sub_filename,
+                        )
+                    except Exception:
+                        log_event("WARNING", f"Cloud zip sync failed after bundle upload · Project: {project_id}")
             finally:
                 try:
                     sub_tmp_path.unlink(missing_ok=True)
@@ -578,22 +584,33 @@ def delete_project(id: str):
 
     file_id, file_path, original_name = row
 
-    # delete upload reference
+    # Remove project-level records first, then decide whether the shared file blob can be deleted.
     conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
-    # delete file reference
-    conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
-    # delete analysis snapshots for this project
-    conn.execute(
-        "DELETE FROM project_analysis WHERE project_id = ?",
-        (id,)
-    )
+    conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
+
+    remaining_refs = conn.execute(
+        "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
+        (file_id,),
+    ).fetchone()[0]
+
+    should_delete_blob = remaining_refs == 0
+
+    if should_delete_blob:
+        conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    else:
+        conn.execute(
+            "UPDATE files SET ref_count = CASE WHEN ref_count > 0 THEN ref_count - 1 ELSE 0 END WHERE file_id = ?",
+            (file_id,),
+        )
+
     conn.commit()
 
-    # best effort local physical file removal
-    try:
-        Path(file_path).unlink(missing_ok=True)
-    except Exception:
-        pass
+    # Only remove the physical blob when no uploads reference it anymore.
+    if should_delete_blob:
+        try:
+            Path(file_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
     # best effort cloud zip removal
     if storage_module.CURRENT_USER:
