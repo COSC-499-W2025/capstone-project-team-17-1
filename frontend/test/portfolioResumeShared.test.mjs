@@ -95,15 +95,31 @@ test("buildSkillsTimelineMarkup renders timeline nodes with timestamps, project 
     {
       timestamp: "2026-03-09T09:00:00Z",
       project_id: "proj-b",
-      skills: [],
+      skills: [{ name: "Python" }],
     },
   ]);
 
   assert.match(markup, /timeline-time-label/);
   assert.match(markup, /timeline-project-label/);
+  assert.match(markup, /timeline-meta-pill/);
   assert.match(markup, /Python/);
   assert.match(markup, /FastAPI/);
   assert.match(markup, /proj-a/);
+  assert.match(markup, /First seen/);
+  assert.match(markup, /Recurring/);
+  assert.match(markup, /2 snapshots/);
+});
+
+test("buildSkillsTimelineMarkup renders empty rows without inventing progression data", () => {
+  const markup = buildSkillsTimelineMarkup([
+    {
+      timestamp: "2026-03-09T09:00:00Z",
+      project_id: "proj-b",
+      skills: [],
+    },
+  ]);
+
+  assert.match(markup, /0 skills/);
   assert.match(markup, /No skills recorded/);
 });
 

@@ -91,6 +91,47 @@ function getProjectDetailsMap(summaryData) {
   return map;
 }
 
+function getTimelineSkillName(skill) {
+  return String(skill?.name || skill?.skill || "unknown").trim() || "unknown";
+}
+
+function buildTimelineEntries(timeline) {
+  const seenCounts = new Map();
+
+  return timeline.map((entry) => {
+    const skills = Array.isArray(entry.skills) ? entry.skills : [];
+    const uniqueNames = [...new Set(skills.map(getTimelineSkillName))];
+
+    let recurringCount = 0;
+    let newCount = 0;
+
+    const decoratedSkills = uniqueNames.map((name) => {
+      const previousCount = seenCounts.get(name) || 0;
+      const nextCount = previousCount + 1;
+      seenCounts.set(name, nextCount);
+
+      if (previousCount > 0) recurringCount += 1;
+      else newCount += 1;
+
+      return {
+        name,
+        appearanceCount: nextCount,
+        status: previousCount > 0 ? "Recurring" : "First seen",
+      };
+    });
+
+    return {
+      ...entry,
+      skills: decoratedSkills,
+      meta: {
+        totalSkills: uniqueNames.length,
+        recurringCount,
+        newCount,
+      },
+    };
+  });
+}
+
 function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl }) {
   if (!projects.length) {
     return `
@@ -200,7 +241,7 @@ function buildSkillsTimelineMarkup(timeline) {
     `;
   }
 
-  return timeline
+  return buildTimelineEntries(timeline)
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
 
@@ -218,16 +259,28 @@ function buildSkillsTimelineMarkup(timeline) {
             </div>
           </div>
           <div class="timeline-track">
+            <div class="timeline-meta-row">
+              <span class="timeline-meta-pill">${entry.meta.totalSkills} skill${entry.meta.totalSkills === 1 ? "" : "s"}</span>
+              ${
+                entry.meta.newCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.newCount} first seen</span>`
+                  : ""
+              }
+              ${
+                entry.meta.recurringCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.recurringCount} recurring</span>`
+                  : ""
+              }
+            </div>
             <div class="timeline-skill-pills">
               ${
                 skills.length
                   ? skills
                       .map((skill) => {
-                        const name = skill.name || skill.skill || "unknown";
-
                         return `
                           <span class="timeline-skill-pill">
-                            ${escapeHtml(name)}
+                            <span class="timeline-skill-name">${escapeHtml(skill.name)}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(skill.status)} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"}</span>
                           </span>
                         `;
                       })
