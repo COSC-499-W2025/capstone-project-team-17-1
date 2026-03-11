@@ -113,6 +113,26 @@ function formatPeriodLabel(period) {
   return raw || "Unknown";
 }
 
+function formatTimelineTimestamp(timestamp) {
+  const raw = String(timestamp || "").trim();
+  if (!raw) return "Unknown";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return raw;
+  }
+
+  return date.toLocaleString("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 function getHeatmapBucket(intensity) {
   if (intensity >= 0.8) return 4;
   if (intensity >= 0.6) return 3;
@@ -442,7 +462,7 @@ function renderSkillsTimeline(timeline) {
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
         <p class="resume-summary-text">
-          Upload projects with detected skills to generate a year-by-year skills timeline.
+          Upload projects with detected skills to generate a skills timeline.
         </p>
       </div>
     `;
@@ -455,7 +475,17 @@ function renderSkillsTimeline(timeline) {
 
       return `
         <div class="timeline-year-row">
-          <div class="timeline-year">${escapeHtml(entry.year)}</div>
+          <div class="timeline-year">
+            <span class="timeline-dot" aria-hidden="true"></span>
+            <div class="timeline-time-block">
+              <span class="timeline-time-label">${escapeHtml(formatTimelineTimestamp(entry.timestamp || entry.year))}</span>
+              ${
+                entry.project_id
+                  ? `<span class="timeline-project-label">${escapeHtml(entry.project_id)}</span>`
+                  : ""
+              }
+            </div>
+          </div>
           <div class="timeline-track">
             <div class="timeline-skill-pills">
               ${
@@ -463,14 +493,10 @@ function renderSkillsTimeline(timeline) {
                   ? skills
                       .map((skill) => {
                         const name = skill.name || skill.skill || "unknown";
-                        const weight =
-                          skill.weight !== undefined && skill.weight !== null
-                            ? `<span class="timeline-weight">${Number(skill.weight).toFixed(1)}</span>`
-                            : "";
 
                         return `
                           <span class="timeline-skill-pill">
-                            ${escapeHtml(name)} ${weight}
+                            ${escapeHtml(name)}
                           </span>
                         `;
                       })

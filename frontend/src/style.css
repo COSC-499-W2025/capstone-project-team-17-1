@@ -1920,44 +1920,106 @@ transition: all 0.2s ease;
 .skills-timeline-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   min-height: 120px;
 }
 
 .timeline-year-row {
   display: grid;
-  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  gap: 18px;
   align-items: start;
 }
 
 .timeline-year {
-  font-size: 24px;
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+.timeline-year::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 30px;
+  bottom: -22px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(125, 182, 255, 0.4), rgba(125, 182, 255, 0.08));
+}
+
+.timeline-year-row:last-child .timeline-year::after {
+  display: none;
+}
+
+.timeline-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #eef7ff 0%, #8dc2ff 48%, #2d83d5 100%);
+  box-shadow: 0 0 0 4px rgba(54, 122, 194, 0.16);
+  flex: 0 0 auto;
+}
+
+.timeline-time-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timeline-time-label {
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.02em;
   color: #f4f9ff;
+}
+
+.timeline-project-label {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(141, 194, 255, 0.16);
+  color: rgba(218, 234, 252, 0.76);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.timeline-track {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(141, 194, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
+    rgba(7, 19, 35, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .timeline-skill-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .timeline-skill-pill {
-  padding: 8px 12px;
+  padding: 9px 13px;
   border-radius: 999px;
-  background: rgba(30, 144, 255, 0.14);
-  color: #b8dcff;
+  background: linear-gradient(180deg, rgba(56, 132, 211, 0.22), rgba(56, 132, 211, 0.12));
+  border: 1px solid rgba(123, 181, 255, 0.14);
+  color: #d9ecff;
   font-size: 13px;
-}
-
-.timeline-weight {
-  margin-left: 4px;
+  line-height: 1;
 }
 
 .timeline-empty {
   font-size: 13px;
-  opacity: 0.72;
+  color: rgba(217, 236, 255, 0.6);
 }
 
 .resume-summary-card {
@@ -2296,6 +2358,10 @@ transition: all 0.2s ease;
 
   .timeline-year-row {
     grid-template-columns: 1fr;
+  }
+
+  .timeline-year::after {
+    display: none;
   }
 
   .top-project-card {
