@@ -1,0 +1,1 @@
+export const API_BASE = "https://capstone-backend-tsz5.onrender.com";

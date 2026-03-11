@@ -1,0 +1,1976 @@
+/* =========================================================
+   ROOT VARIABLES
+========================================================= */
+
+:root {
+  --bg-dark: #0b1120;
+  --bg-light: #f5f7fa;
+
+  --card-dark: rgba(20, 30, 60, 0.7);
+  --card-light: rgba(255, 255, 255, 0.8);
+
+  --accent: #1e90ff;
+  --text-dark: #ffffff;
+  --text-light: #111111;
+}
+
+/* =========================================================
+   GLOBAL LAYOUT
+   Key fixes:
+   1) Lock app to viewport and kill page scrolling
+   2) Use min-height: 0 on flex children so grids can shrink
+   3) Use correct titlebar height in the remaining space calc
+========================================================= */
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-dark);
+}
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+body.dark {
+  background:
+    radial-gradient(circle at top right,
+      rgba(30, 144, 255, 0.08),
+      transparent 60%),
+    #0b1120;
+}
+
+body.light {
+  background: var(--bg-light);
+  color: var(--text-light);
+}
+
+/* The titlebar is 70px, so subtract 70px, not 60px */
+.main-container {
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* =========================================================
+   TITLE BAR
+========================================================= */
+
+.titlebar {
+  position: relative;
+  height: 70px;
+  flex: 0 0 70px;
+  display: flex;
+  align-items: center;
+  padding: 0 30px;
+  gap: 30px;
+  -webkit-app-region: drag;
+  z-index: 1000;
+}
+
+/* Disable drag where needed */
+.window-controls,
+.window-controls *,
+.nav,
+.nav *,
+.right-controls,
+.right-controls *,
+input,
+.theme-toggle,
+.profile {
+  -webkit-app-region: no-drag;
+}
+
+/* =========================================================
+   WINDOW CONTROLS
+========================================================= */
+
+.window-controls {
+  position: relative;
+  z-index: 999;
+  display: flex;
+  gap: 8px;
+  top: -20px;
+  right: -20px;
+}
+
+.dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dot:hover {
+  transform: scale(1.15);
+  filter: brightness(1.1);
+}
+
+.red { background: #ff5f56; }
+.yellow { background: #ffbd2e; }
+.green { background: #27c93f; }
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.logo-img {
+  height: 52px;
+  width: auto;
+  filter: drop-shadow(0 0 6px rgba(30, 144, 255, 0.4));
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+
+  background: linear-gradient(90deg, #1e90ff, #00e0ff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.logo-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #1e90ff, #00e0ff);
+}
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+.nav {
+  display: flex;
+  gap: 40px;
+  font-size: 15px;
+  font-weight: 500;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nav span {
+  position: relative;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.nav span:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.nav .active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+/* =========================================================
+   RIGHT CONTROLS
+========================================================= */
+
+.right-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+input {
+  padding: 10px 18px;
+  border-radius: 24px;
+  border: none;
+  outline: none;
+  width: 180px;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  transition: all 0.3s ease;
+}
+
+input:focus {
+  width: 260px;
+  box-shadow: 0 0 15px rgba(30, 144, 255, 0.4);
+}
+
+/* =========================================================
+   THEME TOGGLE
+========================================================= */
+
+.theme-toggle {
+  width: 40px;
+  height: 20px;
+  border-radius: 20px;
+  background: var(--accent);
+  position: relative;
+  cursor: pointer;
+  transition: 0.4s;
+}
+
+.theme-toggle::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: 0.4s;
+}
+
+body.light .theme-toggle {
+  background: #ccc;
+}
+
+body.light .theme-toggle::before {
+  transform: translateX(20px);
+}
+
+/* =========================================================
+   PAGE CONTAINER
+   Important: min-height: 0 so children can shrink in flex
+========================================================= */
+
+#page-container {
+  position: relative;
+  flex: 1;
+  z-index: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  visibility: hidden;      /* ADD THIS */
+}
+
+.page.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+  visibility: visible;     /* ADD THIS */
+}
+
+.page:not(.active) {
+  z-index: -1;
+}
+
+.page.active {
+  z-index: 1;
+}
+
+/* =========================================================
+   DASHBOARD GRID
+   Key fixes:
+   1) Give the grid a real height and allow shrinking
+   2) Use minmax(0, 1fr) so rows do not overflow
+   3) Clamp padding on short windows so it does not push content out
+========================================================= */
+
+.dashboard {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+
+  gap: 20px;
+
+  padding: 40px 30px;
+  box-sizing: border-box;
+
+  overflow: hidden;
+  align-content: stretch;
+}
+
+@media (max-height: 900px) {
+  .dashboard {
+    padding: 28px 26px;
+  }
+}
+
+@media (max-height: 760px) {
+  .dashboard {
+    padding: 18px 18px;
+    gap: 14px;
+  }
+}
+
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.customization-empty {
+  margin: 40px 30px;
+  padding: 28px;
+  border-radius: 18px;
+  background: rgba(25, 35, 70, 0.6);
+}
+
+.settings-card {
+  margin: 40px 30px;
+  padding: 28px;
+  border-radius: 18px;
+  background: rgba(25, 35, 70, 0.6);
+}
+
+#tab-settings {
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px 14px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.profile-grid .label {
+  opacity: 0.75;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+#profile-msg,
+#password-msg {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.export-placeholder {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1400px) {
+  .dashboard {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+
+    /* On small widths the number of cards grows taller than the screen.
+       Keep the app itself non scrollable, but allow dashboard to scroll
+       with hidden scrollbar so layout never breaks. */
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+}
+
+@media (max-width: 700px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+}
+
+/* =========================================================
+   CARD BASE
+   Key fixes:
+   1) min-height: 0 lets inner scroll areas work
+========================================================= */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  padding: 28px;
+  border-radius: 18px;
+
+  font-size: 18px;
+  font-weight: 500;
+  color: inherit;
+
+  backdrop-filter: blur(30px);
+  background: linear-gradient(
+    145deg,
+    rgba(25, 35, 70, 0.85),
+    rgba(15, 22, 45, 0.85)
+  );
+
+  box-shadow:
+    0 15px 40px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  transition: all 0.35s ease;
+  box-sizing: border-box;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(30, 144, 255, 0.3);
+}
+
+body.light .card {
+  background: var(--card-light);
+}
+
+/* =========================================================
+   SYSTEM HEALTH
+========================================================= */
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: gray;
+}
+
+.status-dot.active { background: #00ff88; }
+.status-dot.inactive { background: #ff4d4d; }
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: center;
+  min-height: 0;
+}
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+svg {
+  width: 100%;
+  height: 70px;
+  max-height: 80px;
+}
+
+.bg-arc {
+  fill: none;
+  stroke: #1f2e4d;
+  stroke-width: 8;
+}
+
+.progress-arc {
+  fill: none;
+  stroke: #4da6ff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 126;
+  stroke-dashoffset: 126;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.gauge-info {
+  margin-top: -45px;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+
+.mini-chart {
+  width: 100%;
+  height: 50px !important;
+  margin-top: 8px;
+}
+
+/* =========================================================
+   MOST USED SKILLS
+========================================================= */
+
+.skills-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.skill-row-modern {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.skill-left-modern {
+  font-weight: 500;
+}
+
+.skill-middle-modern {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.skill-bar-modern {
+  flex: 1;
+  min-width: 60px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.skill-bar-fill-modern {
+  width: 0;
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  transition: width 0.8s ease;
+}
+
+.skill-percentage-modern {
+  font-size: 12px;
+  opacity: 0.8;
+  min-width: 40px;
+  text-align: right;
+}
+
+.skill-left-modern,
+.skill-right-modern {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  opacity: 0.6;
+  text-align: right;
+}
+
+.project-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #4da6ff;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* =========================================================
+   ACTIVITY LOG
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
+
+.activity-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  margin-top: 12px;
+
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+
+  background: transparent;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.activity-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.activity-line {
+  display: block;
+  width: 100%;
+  word-break: break-word;
+  text-align: left !important;
+}
+
+.activity-tag {
+  font-weight: 600;
+}
+
+.level-info { color: rgba(255, 255, 255, 0.85); }
+.level-warning { color: #f5c542; }
+.level-error { color: #ff4c4c; }
+.level-success { color: #00ff88; }
+
+/* =========================================================
+   MISC
+========================================================= */
+
+.empty-state {
+  text-align: center;
+  padding: 30px;
+  opacity: 0.75;
+}
+
+.empty-state h3 {
+  margin-bottom: 10px;
+}
+
+/* =========================================================
+   RECENT PROJECTS CARD
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
+
+.recent-projects-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.projects-page-wrapper {
+  flex: 1;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 40px 30px;
+  box-sizing: border-box;
+}
+
+.recent-projects-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.recent-project-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recent-project-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  gap: 10px;
+  min-width: 0;
+}
+
+.project-id {
+  color: #4da6ff;
+}
+
+.project-date {
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.project-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  opacity: 0.75;
+  flex-wrap: wrap;
+}
+
+.project-button {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  font-weight: 600;
+  transition: all 0.25s ease;
+}
+
+.project-button:hover {
+  opacity: 0.85;
+}
+
+/* =========================================================
+   ERROR ANALYSIS
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
+
+.error-analysis-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.error-analysis-container::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.error-item {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: 0.25s ease;
+}
+
+.error-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+  transform: translateY(-2px);
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.mode-badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mode-badge.public {
+  background: rgba(255, 255, 255, 0.1);
+  color: #dbeafe;
+}
+
+.mode-badge.private {
+  background: rgba(0, 255, 136, 0.15);
+  color: #88ffcb;
+}
+
+.auth-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b1120;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  cursor: pointer;
+}
+
+.profile-pill {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.auth-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 10, 20, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.auth-dialog {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  border-radius: 16px;
+  padding: 22px;
+  background: rgba(12, 18, 36, 0.96);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.auth-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  color: #dbeafe;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.auth-dialog h3 {
+  margin: 0 0 6px;
+}
+
+.auth-dialog p {
+  margin: 0 0 14px;
+  opacity: 0.8;
+  font-size: 13px;
+}
+
+.auth-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-primary,
+.auth-link,
+.auth-cancel {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.auth-primary {
+  color: #0b1120;
+  font-weight: 700;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+}
+
+.auth-link,
+.auth-cancel {
+  color: #dbeafe;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 14px;
+}
+
+.auth-error {
+  min-height: 18px;
+  color: #ff8f8f;
+  font-size: 12px;
+}
+
+.error-project {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.error-detail {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.fix-btn {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(90deg, #ff6b6b, #ffb347);
+  color: #0b1120;
+  transition: 0.25s ease;
+}
+
+.error-fix-btn:hover {
+  opacity: 0.85;
+}
+
+/* Severity circles */
+
+.severity-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.severity-circle.high { background: #ff4d4d; }
+.severity-circle.medium { background: #ffcc00; }
+.severity-circle.low { background: #4da6ff; }
+
+/* Empty States */
+
+.error-empty-state,
+.error-healthy-state {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+  font-size: 13px;
+}
+
+.ai-consent-btn {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  font-weight: 600;
+}
+
+/* =========================================================
+   DATA QUALITY
+   Key fix: remove max-height so it can shrink inside card
+========================================================= */
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 15px;
+  margin-top: 10px;
+
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  padding-right: 4px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.health-grid::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.health-mini-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.health-mini-card:hover {
+  transform: translateY(-4px);
+}
+
+.health-score {
+  font-size: 26px;
+  font-weight: bold;
+}
+
+.health-emoji {
+  font-size: 28px;
+  margin: 6px 0;
+}
+
+.health-project {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+}
+
+.health-stats {
+  font-size: 12px;
+  opacity: 0.6;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* =========================================================
+   PROJECT TAB
+========================================================= */
+
+.projects-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.primary-btn {
+  background: linear-gradient(90deg, #00f5a0, #00d9f5);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: #0b132b;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.projects-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.projects-list::-webkit-scrollbar {
+  width: 0px;
+}
+
+.project-card {
+  background: #162447;
+  padding: 20px;
+  border-radius: 12px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.project-card:hover {
+  transform: translateY(-3px);
+  background: #1f4068;
+}
+
+.view-btn {
+  margin-top: 10px;
+  background: #00f5a0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* =========================================================
+  UPLOAD PAGE 
+========================================================= */
+
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.upload-window {
+  width: 500px;
+  background: linear-gradient(145deg, rgba(25,35,70,0.95), rgba(15,22,45,0.95));
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.upload-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-header button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.upload-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.upload-tab {
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: none;
+  color: white;
+}
+
+.upload-tab.active {
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+}
+
+.upload-section {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-section.active {
+  display: flex;
+}
+
+/* =========================================
+   CUSTOM FILE INPUT
+========================================= */
+
+.file-upload-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.file-upload-wrapper input[type="file"] {
+  display: none;
+}
+
+.file-upload-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.file-upload-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.file-upload-name {
+  font-size: 12px;
+  opacity: 0.7;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   GITHUB UPLOAD UI
+   Additive styles only
+========================================================= */
+
+.github-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.github-loading,
+.github-empty {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.github-login {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.github-login-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.github-login-sub {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.github-token-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  font-size: 13px;
+}
+
+.github-login-btn {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.github-login-hint {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.github-repo-toolbar {
+  display: flex;
+  gap: 10px;
+}
+
+.github-search {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  font-size: 13px;
+}
+
+.github-repo-list {
+  flex: 1;
+  min-height: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.github-repo-list::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+.github-repo-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.github-repo-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.github-repo-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.github-repo-name {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.github-repo-updated {
+  font-size: 11px;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.github-repo-desc {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.4;
+}
+
+.github-repo-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.github-repo-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.github-upload-btn {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  transition: all 0.2s ease;
+}
+
+.github-upload-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   PROGRESS MODAL
+========================================================= */
+
+.progress-window {
+  width: 420px;
+  background: linear-gradient(145deg, rgba(25,35,70,0.95), rgba(15,22,45,0.95));
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.progress-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.progress-text {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  transition: width 0.25s ease;
+}
+
+.progress-percent {
+  font-size: 12px;
+  opacity: 0.75;
+  text-align: right;
+}
+
+.github-panel input {
+  pointer-events: auto;
+}
+
+.github-panel {
+  pointer-events: auto;
+}
+
+.branch-modal {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(0,0,0,0.55);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 9999;
+}
+
+.branch-modal-box {
+background: #1b2336;
+padding: 28px;
+border-radius: 12px;
+width: 380px;
+box-shadow: 0 15px 40px rgba(0,0,0,.45);
+color: white;
+}
+
+.branch-modal-box h3 {
+margin-bottom: 18px;
+font-weight: 600;
+}
+
+#branch-select {
+width: 100%;
+padding: 10px;
+border-radius: 8px;
+border: none;
+background: #0f1629;
+color: white;
+margin-bottom: 18px;
+outline: none;
+font-size: 14px;
+}
+
+.branch-modal-buttons {
+display: flex;
+justify-content: space-between;
+gap: 10px;
+}
+
+.branch-modal-buttons button {
+flex: 1;
+padding: 10px;
+border-radius: 8px;
+border: none;
+cursor: pointer;
+}
+
+#branch-confirm {
+background: linear-gradient(90deg,#00e5ff,#00ffa6);
+color: black;
+font-weight: 600;
+}
+
+#branch-cancel {
+background: #2a3350;
+color: white;
+}
+
+#branch-select::-webkit-scrollbar {
+width: 8px;
+}
+
+#branch-select::-webkit-scrollbar-track {
+background: transparent;
+}
+
+#branch-select::-webkit-scrollbar-thumb {
+background: linear-gradient(180deg,#00e5ff,#00ffa6);
+border-radius: 6px;
+}
+
+#branch-select::-webkit-scrollbar-thumb:hover {
+background: #00ffa6;
+}
+
+/* =========================================================
+   Delete project
+========================================================= */
+
+.project-card {
+position: relative;
+}
+
+.project-card-top {
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.project-delete {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff5a5a;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.project-delete:hover {
+  background: rgba(255, 90, 90, 0.12);
+  color: #ff2b2b;
+  transform: scale(1.05);
+}
+
+.project-delete svg {
+  width: 20px;
+  height: 20px;
+}
+
+.project-card.removing {
+opacity: 0;
+transform: scale(0.97);
+transition: all 0.2s ease;
+}
+
+.pull-btn {
+  background: #3a6df0;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.pull-btn:hover {
+  background: #2f57c5;
+}
+
+/* =========================================================
+   PORTFOLIO / RESUME PAGE
+========================================================= */
+
+#page-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page {
+  display: none;
+  height: 100%;
+  overflow: auto;
+  padding: 24px 28px 28px;
+  box-sizing: border-box;
+}
+
+.page.active {
+  display: block;
+}
+
+.portfolio-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.portfolio-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.portfolio-subtitle {
+  margin-top: 8px;
+  opacity: 0.8;
+  max-width: 720px;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+}
+
+.portfolio-hero-card,
+.portfolio-projects-card,
+.portfolio-skills-card {
+  background: var(--card-dark);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+}
+
+.portfolio-hero-card {
+  grid-column: 1 / -1;
+}
+
+.portfolio-timeline-card {
+  grid-column: 1 / -1;
+}
+
+.skills-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 120px;
+}
+
+.resume-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resume-summary-top h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.resume-role {
+  margin: 6px 0 0;
+  color: #8ec5ff;
+  font-weight: 500;
+}
+
+.resume-summary-text {
+  margin: 0;
+  line-height: 1.6;
+  opacity: 0.92;
+}
+
+.resume-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.resume-meta-box {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.resume-meta-label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.resume-meta-value {
+  font-weight: 600;
+}
+
+.resume-awards-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.top-projects-container,
+.skills-expertise-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top-project-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.top-project-rank {
+  min-width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: rgba(30, 144, 255, 0.2);
+  color: #9ecfff;
+}
+
+.top-project-body h3 {
+  margin: 0 0 6px;
+}
+
+.top-project-body p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.project-stack,
+.skills-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stack-pill,
+.skills-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(30, 144, 255, 0.14);
+  color: #b8dcff;
+}
+
+.skills-group-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.skills-group-card h3 {
+  margin: 0 0 10px;
+}
+
+.primary-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1e90ff, #00b7ff);
+  color: white;
+}
+
+@media (max-width: 1000px) {
+  .portfolio-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portfolio-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.secondary-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.resume-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(4, 10, 24, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.resume-preview-modal.hidden {
+  display: none;
+}
+
+.resume-preview-dialog {
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 24px;
+  background: #f7f9fc;
+  color: #0f172a;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.resume-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  position: sticky;
+  top: 0;
+  background: #f7f9fc;
+}
+
+.resume-preview-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.resume-preview-close {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: #334155;
+}
+
+.resume-preview-body {
+  padding: 24px;
+}
+
+.resume-preview-sheet {
+  background: white;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.resume-preview-hero h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #0f172a;
+}
+
+.resume-preview-role {
+  margin: 6px 0 0;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.resume-preview-section {
+  margin-top: 22px;
+}
+
+.resume-preview-section h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+}
+
+.resume-preview-section p,
+.resume-preview-section li,
+.resume-preview-project-meta {
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.resume-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.resume-preview-project {
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.resume-preview-project-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 700px) {
+  .resume-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portfolio-actions {
+    flex-wrap: wrap;
+  }
+}
