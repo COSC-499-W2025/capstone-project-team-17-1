@@ -13,6 +13,9 @@ export function createMiniChart(ctx, color) {
       }]
     },
     options: {
+      animation: false,
+      parsing: false,
+      normalized: true,
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
