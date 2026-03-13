@@ -412,3 +412,26 @@ During the process, I discussed implementation details and design decisions with
 - ### Completed Tasks Week 9
 - complete [login and logout (#263)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/263)
 - design setting tab
+
+## Term2 week10 Personal LOG (Mar09 -Mar15, 2026)
+### 1. Type of Tasks Worked On
+
+### 2. Weekly Goals Recap
+- complete [Enhance Web Portfolio Presentation and Fix Project Deletion (#292](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292)
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed enhancements to the Web Portfolio presentation and fixed a backend project deletion issue. [Enhance Web Portfolio Presentation and Fix Project Deletion (#292)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292). The update improves how projects and learning progression are presented in the Portfolio & Resume view while ensuring that the dashboard behavior aligns with the intended Public and Private mode design.
+
+In the portfolio interface, the system now highlights the top three projects with stronger visual presentation, including project thumbnails and expandable details showing Process and Evolution information in private mode. The skills timeline was also refined to use actual analysis timestamps and to display progression indicators such as first-seen skills, recurring skills, and repeated snapshot appearances. These improvements better illustrate how a student’s skills evolve over time and strengthen the portfolio’s ability to demonstrate learning progression.
+
+On the dashboard side, public mode behavior was clarified so that dashboard content changes only through search and filter operations, with those selections persisting after refresh. Private-mode portfolio controls were moved into a collapsible Selection panel within the portfolio tab, keeping customization features accessible for authenticated users while maintaining consistent public dashboard behavior.
+
+In addition, I fixed a backend project deletion bug that previously occurred due to foreign key constraints when removing shared file records. The deletion logic was updated to safely handle shared file references before removing stored file data, ensuring that project deletion now works reliably.
+
+To verify these changes, I ran the frontend test suite and confirmed that all tests pass, including coverage for dashboard selection logic, project rendering, and skills timeline behavior. I also manually tested the system by switching between public and private modes and verifying the updated portfolio presentation and project deletion workflow.
+
+During the process, I discussed implementation details with team members to ensure alignment with the project architecture and milestone goals. I also reviewed teammates’ pull requests and helped resolve issues to maintain integration stability across the system.
+
+- ### Completed Tasks Week 10
+- complete [Enhance Web Portfolio Presentation and Fix Project Deletion (#292](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292)
