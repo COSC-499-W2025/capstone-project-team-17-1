@@ -2728,3 +2728,95 @@ transition: all 0.2s ease;
 .danger-btn:hover {
   background: rgba(239,68,68,0.25);
 }
+
+/* ===================== */
+/* NEW RESUME MODAL      */
+/* ===================== */
+
+.resume-modal-section {
+  margin-bottom: 20px;
+}
+
+.resume-modal-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+  margin-bottom: 10px;
+}
+
+.resume-modal-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  font-size: 0.875rem;
+}
+
+.resume-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.resume-modal-radio-row,
+.resume-modal-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.resume-modal-radio-row:hover,
+.resume-modal-checkbox-row:hover {
+  background: rgba(255,255,255,0.09);
+}
+
+.resume-modal-radio-row input,
+.resume-modal-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.resume-modal-checkbox-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resume-modal-item-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.resume-modal-item-meta {
+  font-size: 0.78rem;
+  opacity: 0.5;
+}
+
+.resume-modal-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: rgba(239,68,68,0.1);
+  border-radius: 6px;
+}
+
+.resume-modal-error.hidden {
+  display: none;
+}

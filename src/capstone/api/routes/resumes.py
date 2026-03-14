@@ -195,14 +195,18 @@ async def generate_resume(request: Request):
     user_id = int(user_id)
     create_new = bool(payload.get("create_new", False))
     resume_title = payload.get("resume_title") or None
+    selected_project_ids = payload.get("project_ids") or None
 
     with _db_session(_require_db()) as conn:
-        # --- collect all projects linked to this user ---
-        rows = conn.execute(
-            "SELECT project_id FROM user_projects WHERE user_id = ?",
-            (user_id,),
-        ).fetchall()
-        project_ids = [r[0] for r in rows]
+        # --- collect projects: use selected list if provided, else all linked ---
+        if selected_project_ids:
+            project_ids = [str(p) for p in selected_project_ids]
+        else:
+            rows = conn.execute(
+                "SELECT project_id FROM user_projects WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            project_ids = [r[0] for r in rows]
 
         # --- aggregate skills and project summaries ---
         seen_skills: set[str] = set()
