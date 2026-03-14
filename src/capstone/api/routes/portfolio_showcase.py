@@ -53,9 +53,13 @@ async def _get_payload(request: Request) -> dict:
 def list_users(request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
-        rows = c.execute(
-            "SELECT id, username FROM users ORDER BY LOWER(username)"
-        ).fetchall()
+        rows = c.execute("""
+            SELECT DISTINCT u.id, u.username
+            FROM users u
+            INNER JOIN user_projects up ON u.id = up.user_id
+            INNER JOIN project_analysis pa ON up.project_id = pa.project_id
+            ORDER BY LOWER(u.username)
+        """).fetchall()
     users = [{"id": r[0], "username": r[1]} for r in rows if r and r[1] and "[bot]" not in r[1].lower()]
     return {"data": users, "error": None}
 

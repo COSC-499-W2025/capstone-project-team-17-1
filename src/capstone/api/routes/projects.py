@@ -587,6 +587,7 @@ def delete_project(id: str):
     # Remove project-level records first, then decide whether the shared file blob can be deleted.
     conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
     conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
 
     remaining_refs = conn.execute(
         "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
