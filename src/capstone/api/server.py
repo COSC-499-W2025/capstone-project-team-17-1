@@ -17,6 +17,7 @@ from capstone.api.routes.health import router as health_router
 from capstone.api.routes.github_endpoints import router as github_router
 from capstone.api.routes.auth import router as auth_router, configure as configure_auth
 from capstone.api.routes.cloud import router as cloud_router
+from capstone.api.routes.project_viewer import router as project_viewer_router
 
 def _safe_import_job_match():
     """Attempt to import job_match router (optional)."""
@@ -100,6 +101,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(health_router)
     app.include_router(github_router)
     app.include_router(cloud_router)
+    app.include_router(project_viewer_router)
     configure_auth(db_dir)
     app.include_router(auth_router)
     # Optional job-match routes (since routes/job_match.py may not exist in this branch)
