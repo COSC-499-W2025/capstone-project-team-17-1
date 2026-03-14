@@ -1684,9 +1684,14 @@ transition: all 0.2s ease;
   min-height: 44px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: inherit;
+  background: #1e293b;
+  color: #e2e8f0;
   padding: 0 14px;
+}
+
+.dashboard-filter-select option {
+  background: #1e293b;
+  color: #e2e8f0;
 }
 
 .dashboard-search-input {
@@ -2658,10 +2663,15 @@ transition: all 0.2s ease;
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.07);
-  color: inherit;
+  background: #1e293b;
+  color: #e2e8f0;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.contributor-select option {
+  background: #1e293b;
+  color: #e2e8f0;
 }
 
 .resume-list-container {
