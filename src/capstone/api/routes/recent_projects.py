@@ -15,6 +15,7 @@ class RecentProject(BaseModel):
     classification: str | None
     primary_contributor: str | None
     is_github: bool
+    contributor_count: int
 
 
 import json
@@ -32,10 +33,16 @@ SELECT
     CASE
         WHEN gp.project_id IS NOT NULL THEN 1
         ELSE 0
-    END AS is_github
+    END AS is_github,
+    COALESCE(uc.cnt, 0) AS contributor_count
 FROM project_analysis pa
 LEFT JOIN github_projects gp
-ON pa.project_id = gp.project_id
+    ON pa.project_id = gp.project_id
+LEFT JOIN (
+    SELECT project_id, COUNT(DISTINCT user_id) AS cnt
+    FROM user_projects
+    GROUP BY project_id
+) uc ON pa.project_id = uc.project_id
 WHERE pa.rowid IN (
     SELECT MAX(rowid)
     FROM project_analysis
@@ -53,6 +60,7 @@ ORDER BY pa.created_at DESC
         classification = row[3]
         primary_contributor = row[4]
         is_github = bool(row[5])
+        contributor_count = int(row[6])
 
         snapshot = json.loads(snapshot_raw)
 
@@ -81,7 +89,8 @@ ORDER BY pa.created_at DESC
             "total_skills": total_skills,
             "classification": classification,
             "primary_contributor": primary_contributor,
-            "is_github": is_github
+            "is_github": is_github,
+            "contributor_count": contributor_count
         })
 
     return projects

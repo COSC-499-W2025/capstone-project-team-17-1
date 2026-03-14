@@ -2820,3 +2820,28 @@ transition: all 0.2s ease;
 .resume-modal-error.hidden {
   display: none;
 }
+
+/* ===================== */
+/* CLASSIFICATION BADGES */
+/* ===================== */
+
+.project-classification-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.badge-individual {
+  background: rgba(99,102,241,0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,0.3);
+}
+
+.badge-collaborative {
+  background: rgba(34,197,94,0.12);
+  color: #86efac;
+  border: 1px solid rgba(34,197,94,0.3);
+}

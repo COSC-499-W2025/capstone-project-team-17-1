@@ -129,6 +129,38 @@ async function openNewResumeModal() {
 
   const [contributors, projects] = await Promise.all([fetchContributors(), fetchProjects()]);
 
+  const projectListHtml = projects.length
+    ? projects.map((p) => {
+        const isCollab = (p.contributor_count || 0) > 1;
+        const badgeClass = isCollab ? "badge-collaborative" : "badge-individual";
+        const badgeLabel = isCollab ? "Collaborative" : "Individual";
+        return `
+          <label class="resume-modal-checkbox-row">
+            <input type="checkbox" class="project-checkbox"
+              value="${p.project_id}"
+              data-label="${p.project_id.toLowerCase()}"
+              data-collaborative="${isCollab}" />
+            <span class="resume-modal-checkbox-label">
+              <span class="resume-modal-item-name">
+                ${p.project_id}
+                <span class="project-classification-badge ${badgeClass}" style="margin-left:6px">${badgeLabel}</span>
+              </span>
+              <span class="resume-modal-item-meta">${p.total_files} files · ${p.total_skills} skills</span>
+            </span>
+          </label>
+        `;
+      }).join("")
+    : `<p class="resume-summary-text">No projects found. Upload a project first.</p>`;
+
+  const contributorListHtml = contributors.length
+    ? contributors.map((c) => `
+        <label class="resume-modal-radio-row">
+          <input type="radio" name="contributor" value="${c.id}" data-label="${c.username.toLowerCase()}" />
+          <span class="resume-modal-item-name">${c.username}</span>
+        </label>
+      `).join("")
+    : `<p class="resume-summary-text">No contributors found for these projects.</p>`;
+
   const modal = document.createElement("div");
   modal.id = "new-resume-modal";
   modal.innerHTML = `
@@ -142,42 +174,25 @@ async function openNewResumeModal() {
 
         <div class="upload-content">
 
-          <!-- Step 1: Contributor -->
+          <!-- Projects -->
           <div class="resume-modal-section">
-            <div class="resume-modal-section-title">Step 1 — Who are you?</div>
-            ${contributors.length ? `
-              <input id="contributor-search" type="text" class="resume-modal-search" placeholder="Search contributors..." />
-              <div class="resume-modal-list" id="contributor-list">
-                ${contributors.map((c) => `
-                  <label class="resume-modal-radio-row">
-                    <input type="radio" name="contributor" value="${c.id}" data-label="${c.username.toLowerCase()}" />
-                    <span class="resume-modal-item-name">${c.username}</span>
-                  </label>
-                `).join("")}
-              </div>
-            ` : `<p class="resume-summary-text">No contributors found. Upload a project with git history first.</p>`}
+            <div class="resume-modal-section-title">Select projects to include</div>
+            <input id="project-search" type="text" class="resume-modal-search" placeholder="Search projects..." />
+            <div class="resume-modal-list" id="project-list">
+              ${projectListHtml}
+            </div>
           </div>
 
-          <!-- Step 2: Projects -->
-          <div class="resume-modal-section">
-            <div class="resume-modal-section-title">Step 2 — Select projects to include</div>
-            ${projects.length ? `
-              <input id="project-search" type="text" class="resume-modal-search" placeholder="Search projects..." />
-              <div class="resume-modal-list" id="project-list">
-                ${projects.map((p) => `
-                  <label class="resume-modal-checkbox-row">
-                    <input type="checkbox" class="project-checkbox" value="${p.project_id}" data-label="${p.project_id.toLowerCase()}" checked />
-                    <span class="resume-modal-checkbox-label">
-                      <span class="resume-modal-item-name">${p.project_id}</span>
-                      <span class="resume-modal-item-meta">${p.total_files} files · ${p.total_skills} skills</span>
-                    </span>
-                  </label>
-                `).join("")}
-              </div>
-            ` : `<p class="resume-summary-text">No projects found. Upload a project first.</p>`}
+          <!-- Contributor — hidden until a collaborative project is selected -->
+          <div class="resume-modal-section hidden" id="contributor-section">
+            <div class="resume-modal-section-title">Who are you?</div>
+            <input id="contributor-search" type="text" class="resume-modal-search" placeholder="Search contributors..." />
+            <div class="resume-modal-list" id="contributor-list">
+              ${contributorListHtml}
+            </div>
           </div>
 
-          <!-- Step 3: Title -->
+          <!-- Title -->
           <div class="resume-modal-section">
             <div class="resume-modal-section-title">Resume title (optional)</div>
             <input id="resume-title-input" type="text" class="resume-modal-search" placeholder="e.g. Backend Developer Resume" />
@@ -196,43 +211,56 @@ async function openNewResumeModal() {
 
   document.body.appendChild(modal);
 
-  // Close handlers
+  // Close
   document.getElementById("close-resume-modal").onclick = () => modal.remove();
   modal.querySelector(".upload-overlay").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) modal.remove();
   });
 
-  // Contributor search filter
-  document.getElementById("contributor-search")?.addEventListener("input", (e) => {
-    const q = e.target.value.toLowerCase();
-    modal.querySelectorAll("#contributor-list .resume-modal-radio-row").forEach((row) => {
-      const label = row.querySelector("input").dataset.label;
-      row.style.display = label.includes(q) ? "" : "none";
-    });
+  // Show/hide contributor section based on whether any checked project is collaborative
+  function updateContributorSection() {
+    const checkedBoxes = [...modal.querySelectorAll(".project-checkbox:checked")];
+    const hasCollaborative = checkedBoxes.some((cb) => cb.dataset.collaborative === "true");
+    const section = document.getElementById("contributor-section");
+    section.classList.toggle("hidden", !hasCollaborative);
+  }
+
+  modal.addEventListener("change", (e) => {
+    if (e.target.classList.contains("project-checkbox")) updateContributorSection();
   });
 
-  // Project search filter
+  // Project search
   document.getElementById("project-search")?.addEventListener("input", (e) => {
     const q = e.target.value.toLowerCase();
     modal.querySelectorAll("#project-list .resume-modal-checkbox-row").forEach((row) => {
-      const label = row.querySelector("input").dataset.label;
-      row.style.display = label.includes(q) ? "" : "none";
+      row.style.display = row.querySelector("input").dataset.label.includes(q) ? "" : "none";
+    });
+  });
+
+  // Contributor search
+  document.getElementById("contributor-search")?.addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    modal.querySelectorAll("#contributor-list .resume-modal-radio-row").forEach((row) => {
+      row.style.display = row.querySelector("input").dataset.label.includes(q) ? "" : "none";
     });
   });
 
   // Generate
   document.getElementById("resume-generate-btn").addEventListener("click", async () => {
     const errorEl = document.getElementById("resume-modal-error");
-    const selectedContributor = modal.querySelector("input[name='contributor']:checked");
-    if (!selectedContributor) {
-      errorEl.textContent = "Please select a contributor.";
+    const checkedProjects = [...modal.querySelectorAll(".project-checkbox:checked")];
+
+    if (!checkedProjects.length) {
+      errorEl.textContent = "Please select at least one project.";
       errorEl.classList.remove("hidden");
       return;
     }
 
-    const checkedProjects = [...modal.querySelectorAll(".project-checkbox:checked")];
-    if (!checkedProjects.length) {
-      errorEl.textContent = "Please select at least one project.";
+    const hasCollaborative = checkedProjects.some((cb) => cb.dataset.collaborative === "true");
+    const selectedContributor = modal.querySelector("input[name='contributor']:checked");
+
+    if (hasCollaborative && !selectedContributor) {
+      errorEl.textContent = "Please select who you are for the collaborative project(s).";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -242,7 +270,8 @@ async function openNewResumeModal() {
     generateBtn.disabled = true;
     generateBtn.textContent = "Generating...";
 
-    const userId = selectedContributor.value;
+    // For individual-only resumes, use the first available contributor or a fallback
+    const userId = selectedContributor?.value || contributors[0]?.id;
     const projectIds = checkedProjects.map((cb) => cb.value);
     const title = document.getElementById("resume-title-input")?.value.trim() || "";
 

@@ -41,6 +41,10 @@ export async function loadProjects() {
         `;
       }
 
+      const isCollaborative = (project.contributor_count || 0) > 1;
+      const classLabel = isCollaborative ? "Collaborative" : "Individual";
+      const classClass = isCollaborative ? "badge-collaborative" : "badge-individual";
+
       card.innerHTML = `
         <div class="project-delete" data-id="${project.project_id}">
           <svg viewBox="0 0 24 24" width="18" height="18">
@@ -52,8 +56,8 @@ export async function loadProjects() {
         </div>
 
         <h3>${project.project_id}</h3>
-        <p>Files: ${project.total_files}</p>
-        <p>Skills: ${project.total_skills}</p>
+        <p>Files: ${project.total_files} · Skills: ${project.total_skills}</p>
+        <span class="project-classification-badge ${classClass}">${classLabel}</span>
 
         <div class="project-actions">
           <button class="view-btn">View Project</button>
