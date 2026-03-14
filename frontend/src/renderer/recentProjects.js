@@ -1,3 +1,5 @@
+import { openProjectViewer } from "./projectViewer.js";
+
 export async function loadRecentProjects() {
   try {
     const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
@@ -24,6 +26,12 @@ export async function loadRecentProjects() {
 
         <button class="project-button">View Project</button>
       `;
+
+      const viewBtn = card.querySelector(".project-button");
+      viewBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openProjectViewer(project.project_id);
+      });
 
       container.appendChild(card);
     });

@@ -1,6 +1,7 @@
 import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
+import { openProjectViewer } from "./projectViewer.js";
 
 export async function fetchProjects() {
   const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
@@ -129,6 +130,12 @@ export async function loadProjects() {
           pullBtn.innerText = "Pull";
           pullBtn.disabled = false;
         }
+      });
+
+      const viewBtn = card.querySelector(".view-btn");
+      viewBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openProjectViewer(project.project_id);
       });
 
       container.appendChild(card);

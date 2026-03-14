@@ -1,4 +1,5 @@
 import {setUploadTab, startImport} from "./githubImport.js";
+import { openProjectViewer } from "./projectViewer.js";
 
 async function loadProjects() {
   try {
@@ -99,7 +100,11 @@ pullBtn?.addEventListener("click", async (e) => {
   }, 2000);
 });
 
-
+const viewBtn = card.querySelector(".view-btn");
+viewBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openProjectViewer(project.project_id);
+});
 
       container.appendChild(card);
     });
