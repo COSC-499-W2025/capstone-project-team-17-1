@@ -11,6 +11,7 @@ import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
 import { initNavigation } from "./navigation.js";
 import { initPortfolioResume } from "./portfolioResume.js";
+import { initResumeManager } from "./resumeManager.js";
 import { initDisplayPreferences } from "./displayPreferences.js";
 
 
@@ -39,6 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initNavigation();
   
   initPortfolioResume();
+  initResumeManager();
 
   initDisplayPreferences();
 

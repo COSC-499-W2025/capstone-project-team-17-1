@@ -2623,3 +2623,98 @@ transition: all 0.2s ease;
     flex-wrap: wrap;
   }
 }
+
+/* ===================== */
+/* RESUME MANAGER        */
+/* ===================== */
+
+.resume-manager-card {
+  margin-bottom: 24px;
+}
+
+.resume-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.resume-manager-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.contributor-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contributor-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07);
+  color: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.resume-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resume-list-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resume-list-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-list-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.resume-list-meta {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.resume-list-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.danger-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(239,68,68,0.4);
+  background: rgba(239,68,68,0.1);
+  color: #f87171;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.danger-btn:hover {
+  background: rgba(239,68,68,0.25);
+}
