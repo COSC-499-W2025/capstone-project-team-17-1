@@ -83,26 +83,69 @@ async function renderResumeList() {
       : r.created_at ? new Date(r.created_at).toLocaleDateString() : "—";
     const sectionCount = Array.isArray(r.sections) ? r.sections.length : 0;
     return `
-      <div class="resume-list-card">
-        <div class="resume-list-card-body">
-          <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
-          <div class="resume-list-meta">
-            ${r.target_role ? `<span>${r.target_role}</span> · ` : ""}
-            <span>${sectionCount} section${sectionCount !== 1 ? "s" : ""}</span> ·
-            <span>Updated ${date}</span>
+      <div class="resume-list-card" data-resume-id="${r.id}">
+        <div class="resume-list-card-header">
+          <div class="resume-list-card-body">
+            <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
+            <div class="resume-list-meta">
+              ${r.target_role ? `<span>${r.target_role}</span> · ` : ""}
+              <span>${sectionCount} section${sectionCount !== 1 ? "s" : ""}</span> ·
+              <span>Updated ${date}</span>
+            </div>
+          </div>
+          <div class="resume-list-actions">
+            <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
+            <span class="resume-expand-chevron">▾</span>
           </div>
         </div>
-        <div class="resume-list-actions">
-          <button class="secondary-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
-          <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
+        <div class="resume-list-expand">
+          <div class="resume-list-expand-inner"></div>
         </div>
       </div>
     `;
   }).join("");
 
-  container.querySelectorAll(".resume-preview-action").forEach((btn) => {
-    btn.addEventListener("click", () => openResumePreview(btn.dataset.resumeId));
+  container.querySelectorAll(".resume-list-card").forEach((card) => {
+    const header = card.querySelector(".resume-list-card-header");
+    const expandEl = card.querySelector(".resume-list-expand");
+    const inner = card.querySelector(".resume-list-expand-inner");
+    const chevron = card.querySelector(".resume-expand-chevron");
+    const resumeId = card.dataset.resumeId;
+    let loaded = false;
+
+    header.addEventListener("click", async (e) => {
+      if (e.target.closest(".resume-delete-action")) return;
+
+      const isOpen = card.classList.contains("expanded");
+      if (isOpen) {
+        card.classList.remove("expanded");
+        expandEl.style.maxHeight = "0";
+        chevron.style.transform = "";
+        return;
+      }
+
+      card.classList.add("expanded");
+      chevron.style.transform = "rotate(180deg)";
+
+      if (!loaded) {
+        inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Loading...</p>`;
+        expandEl.style.maxHeight = "200px";
+        try {
+          const resume = await fetchResumeDetail(resumeId);
+          inner.innerHTML = buildResumeHtml(resume);
+          loaded = true;
+        } catch (_) {
+          inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Failed to load.</p>`;
+        }
+      }
+
+      // Let the DOM paint before measuring real height
+      requestAnimationFrame(() => {
+        expandEl.style.maxHeight = inner.scrollHeight + 32 + "px";
+      });
+    });
   });
+
   container.querySelectorAll(".resume-delete-action").forEach((btn) => {
     btn.addEventListener("click", () => confirmDeleteResume(btn.dataset.resumeId));
   });
@@ -290,23 +333,6 @@ async function confirmDeleteResume(resumeId) {
   }
 }
 
-async function openResumePreview(resumeId) {
-  const modal = document.getElementById("resume-preview-modal");
-  const body = document.getElementById("resume-preview-body");
-  const titleEl = modal?.querySelector("h2");
-  if (!modal || !body) return;
-
-  if (titleEl) titleEl.textContent = "Resume Preview";
-  body.innerHTML = `<p class="resume-summary-text">Loading...</p>`;
-  modal.classList.remove("hidden");
-
-  try {
-    const resume = await fetchResumeDetail(resumeId);
-    body.innerHTML = buildResumeHtml(resume);
-  } catch (_) {
-    body.innerHTML = `<p class="resume-summary-text">Failed to load resume.</p>`;
-  }
-}
 
 function buildResumeHtml(resume) {
   const sections = (resume.sections || []).filter((s) => s.is_enabled !== false);
