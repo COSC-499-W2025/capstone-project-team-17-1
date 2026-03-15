@@ -356,13 +356,66 @@ class ResumeItemTestCase(_ResumeAPIBase):
 
 
 # ---------------------------------------------------------------------------
+# section_count in list response
+# ---------------------------------------------------------------------------
+
+
+class ResumeSectionCountTestCase(_ResumeAPIBase):
+
+    def test_list_resumes_includes_section_count(self):
+        resume = self._create_resume("Counted Resume")
+        self._create_section(resume["id"], key="experience", label="Experience")
+        self._create_section(resume["id"], key="education", label="Education")
+        r = self.client.get(f"/resumes?user_id={self.user_id}")
+        self.assertEqual(r.status_code, 200)
+        found = next(d for d in r.json()["data"] if d["id"] == resume["id"])
+        self.assertEqual(found["section_count"], 2)
+
+    def test_list_resumes_section_count_zero_for_empty_resume(self):
+        resume = self._create_resume("Empty Resume")
+        r = self.client.get(f"/resumes?user_id={self.user_id}")
+        self.assertEqual(r.status_code, 200)
+        found = next(d for d in r.json()["data"] if d["id"] == resume["id"])
+        self.assertEqual(found["section_count"], 0)
+
+    def test_list_resumes_section_count_excludes_disabled_sections(self):
+        resume = self._create_resume("Mixed Resume")
+        s1 = self._create_section(resume["id"], key="experience", label="Experience")
+        s2 = self._create_section(resume["id"], key="education", label="Education")
+        # Disable one section
+        self.client.patch(
+            f"/resumes/{resume['id']}/sections/{s2['id']}",
+            json={"is_enabled": False},
+        )
+        r = self.client.get(f"/resumes?user_id={self.user_id}")
+        self.assertEqual(r.status_code, 200)
+        found = next(d for d in r.json()["data"] if d["id"] == resume["id"])
+        # Only the enabled section should be counted
+        self.assertEqual(found["section_count"], 1)
+
+
+# ---------------------------------------------------------------------------
 # Auto-generate resume from user's projects
 # ---------------------------------------------------------------------------
 
 
 class ResumeGenerateTestCase(_ResumeAPIBase):
 
+    def setUp(self) -> None:
+        super().setUp()
+        # Inject a fake session so generate endpoint can resolve owner_id from Bearer token
+        from capstone.api.routes.auth import _SESSIONS
+        _SESSIONS["test-token"] = {
+            "contributor_id": self.user_id,
+            "user": {"username": "testuser", "email": "test@example.com"},
+        }
+        self.addCleanup(lambda: _SESSIONS.pop("test-token", None))
+        self.auth_headers = {"Authorization": "Bearer test-token"}
+
     def _seed_project_for_user(self, project_id: str) -> None:
+        self._seed_project_for_user_id(self.user_id, project_id)
+
+    def _seed_project_for_user_id(self, user_id: int, project_id: str) -> None:
         conn = storage.open_db(self.tmp_path)
         snapshot = {
             "project_name": "Cool Project",
@@ -379,27 +432,29 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             primary_contributor="testuser",
             snapshot=snapshot,
         )
-        storage.link_user_to_project(conn, self.user_id, project_id, contributor_name="testuser")
+        storage.link_user_to_project(conn, user_id, project_id, contributor_name="testuser")
+
+    # --- fixed existing tests (now pass Bearer token) ---
 
     def test_generate_creates_resume_with_sections(self):
         self._seed_project_for_user("gen-proj-1")
-        r = self.client.post("/resumes/generate", json={"user_id": self.user_id})
+        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
         self.assertIsNotNone(data.get("id"))
         section_keys = [s["key"] for s in (data.get("sections") or [])]
         self.assertTrue(len(section_keys) > 0)
 
-    def test_generate_missing_user_id_returns_400(self):
+    def test_generate_without_auth_returns_400(self):
+        # No Bearer token → owner_id cannot be resolved → 400
         r = self.client.post("/resumes/generate", json={})
         self.assertEqual(r.status_code, 400)
 
     def test_generate_includes_skills_from_snapshot(self):
         self._seed_project_for_user("gen-proj-2")
-        r = self.client.post("/resumes/generate", json={"user_id": self.user_id})
+        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         resume_json = json.dumps(r.json()["data"])
-        # Skills section should contain languages/frameworks from the snapshot
         self.assertTrue(
             any(skill in resume_json for skill in ["Python", "python", "fastapi", "pytest"]),
             "Expected at least one skill from the project snapshot in the generated resume",
@@ -407,17 +462,65 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_create_new_flag_makes_fresh_resume(self):
         self._seed_project_for_user("gen-proj-3")
-        r1 = self.client.post("/resumes/generate", json={"user_id": self.user_id})
+        r1 = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
         self.assertEqual(r1.status_code, 201)
         id1 = r1.json()["data"]["id"]
 
         r2 = self.client.post(
             "/resumes/generate",
-            json={"user_id": self.user_id, "create_new": True, "resume_title": "New Resume"},
+            json={"create_new": True, "resume_title": "New Resume"},
+            headers=self.auth_headers,
         )
         self.assertEqual(r2.status_code, 201)
         id2 = r2.json()["data"]["id"]
         self.assertNotEqual(id1, id2)
+
+    # --- new tests for owner_id / data_user_id separation ---
+
+    def test_generate_without_user_id_defaults_to_session_owner(self):
+        # Omitting user_id → data_user_id defaults to owner; resume stored under owner
+        self._seed_project_for_user("gen-proj-self")
+        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertEqual(r.json()["data"]["user_id"], self.user_id)
+
+    def test_generate_for_other_contributor_owned_by_session_user(self):
+        # user_id in body = other contributor → resume.user_id must still equal session owner
+        conn = storage.open_db(self.tmp_path)
+        other_id = storage.upsert_user(conn, "otheruser", email="other@example.com")
+        self._seed_project_for_user_id(other_id, "other-proj-1")
+
+        r = self.client.post(
+            "/resumes/generate",
+            json={"user_id": other_id},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertEqual(
+            r.json()["data"]["user_id"],
+            self.user_id,
+            "Resume must be owned by the session user, not the data contributor",
+        )
+
+    def test_generate_for_other_not_in_target_users_resume_list(self):
+        # After generating for another user, their resume list should remain empty
+        conn = storage.open_db(self.tmp_path)
+        other_id = storage.upsert_user(conn, "otheruser2", email="other2@example.com")
+        self._seed_project_for_user_id(other_id, "other-proj-2")
+
+        self.client.post(
+            "/resumes/generate",
+            json={"user_id": other_id},
+            headers=self.auth_headers,
+        )
+
+        r = self.client.get(f"/resumes?user_id={other_id}")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            len(r.json()["data"]),
+            0,
+            "Target contributor's resume list must stay empty when someone else generated for them",
+        )
 
 
 if __name__ == "__main__":
