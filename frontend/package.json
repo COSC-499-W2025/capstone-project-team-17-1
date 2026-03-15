@@ -23,6 +23,16 @@
   "build": {
   "appId": "com.capstone.team17",
   "productName": "Loom",
+  "win": {
+    "icon": "assets/icon.ico",
+    "target": "nsis"
+  },
+  "mac": {
+    "icon": "assets/icon.icns"
+  },
+  "linux": {
+    "icon": "assets/icon.png"
+  },
   "forceCodeSigning": false,
   "files": [
     "src/**/*",
@@ -37,9 +47,6 @@
       "filter": ["**/*"]
     }
   ],
-  "win": {
-    "target": "nsis"
-  },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
