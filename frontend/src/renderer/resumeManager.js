@@ -69,17 +69,110 @@ async function fetchResumeDetail(resumeId) {
 // Resume list
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Resume list order persistence (localStorage)
+// ---------------------------------------------------------------------------
+
+function getSavedResumeOrder() {
+  try { return JSON.parse(localStorage.getItem("resume_list_order") || "[]"); }
+  catch { return []; }
+}
+
+function saveResumeOrder(ids) {
+  localStorage.setItem("resume_list_order", JSON.stringify(ids));
+}
+
+function applySavedOrder(resumes) {
+  const saved = getSavedResumeOrder();
+  if (!saved.length) return resumes;
+  const rank = new Map(saved.map((id, i) => [String(id), i]));
+  return [...resumes].sort((a, b) => {
+    const ai = rank.has(String(a.id)) ? rank.get(String(a.id)) : Infinity;
+    const bi = rank.has(String(b.id)) ? rank.get(String(b.id)) : Infinity;
+    return ai - bi;
+  });
+}
+
+function setupListDragDrop(container) {
+  let dragEl = null;
+
+  container.addEventListener("mousedown", (e) => {
+    const handle = e.target.closest(".resume-card-drag");
+    if (handle) handle.closest(".resume-list-card").setAttribute("draggable", "true");
+  });
+
+  container.addEventListener("mouseup", () => {
+    container.querySelectorAll(".resume-list-card[draggable]").forEach((el) => {
+      if (!el.classList.contains("resume-card-dragging")) el.removeAttribute("draggable");
+    });
+  });
+
+  container.addEventListener("dragstart", (e) => {
+    dragEl = e.target.closest(".resume-list-card[draggable]");
+    if (!dragEl) return;
+    e.dataTransfer.effectAllowed = "move";
+    setTimeout(() => dragEl.classList.add("resume-card-dragging"), 0);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    const over = e.target.closest(".resume-list-card:not(.resume-card-dragging)");
+    if (!over || over === dragEl) return;
+    container.querySelectorAll(".resume-drop-above, .resume-drop-below").forEach((el) => {
+      el.classList.remove("resume-drop-above", "resume-drop-below");
+    });
+    const rect = over.getBoundingClientRect();
+    over.classList.add(e.clientY < rect.top + rect.height / 2 ? "resume-drop-above" : "resume-drop-below");
+  });
+
+  container.addEventListener("dragleave", (e) => {
+    const el = e.target.closest(".resume-list-card");
+    if (el && !el.contains(e.relatedTarget)) {
+      el.classList.remove("resume-drop-above", "resume-drop-below");
+    }
+  });
+
+  container.addEventListener("drop", (e) => {
+    e.preventDefault();
+    container.querySelectorAll(".resume-drop-above, .resume-drop-below").forEach((el) => {
+      el.classList.remove("resume-drop-above", "resume-drop-below");
+    });
+    if (!dragEl) return;
+    const over = e.target.closest(".resume-list-card:not(.resume-card-dragging)");
+    if (!over || over === dragEl) return;
+    const rect = over.getBoundingClientRect();
+    e.clientY < rect.top + rect.height / 2 ? over.before(dragEl) : over.after(dragEl);
+    const ids = [...container.querySelectorAll(".resume-list-card")].map((c) => c.dataset.resumeId);
+    saveResumeOrder(ids);
+  });
+
+  container.addEventListener("dragend", () => {
+    dragEl?.classList.remove("resume-card-dragging");
+    dragEl?.removeAttribute("draggable");
+    container.querySelectorAll(".resume-drop-above, .resume-drop-below").forEach((el) => {
+      el.classList.remove("resume-drop-above", "resume-drop-below");
+    });
+    dragEl = null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Resume list rendering
+// ---------------------------------------------------------------------------
+
 async function renderResumeList() {
   const container = document.getElementById("resume-list-container");
   if (!container) return;
 
   container.innerHTML = `<p class="resume-summary-text">Loading...</p>`;
-  const resumes = await fetchResumes();
+  const rawResumes = await fetchResumes();
 
-  if (!resumes.length) {
+  if (!rawResumes.length) {
     container.innerHTML = `<p class="resume-summary-text">No resumes yet. Click "New Resume" to generate one.</p>`;
     return;
   }
+
+  const resumes = applySavedOrder(rawResumes);
 
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -90,6 +183,7 @@ async function renderResumeList() {
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
         <div class="resume-list-card-header">
+          <span class="resume-card-drag" title="Drag to reorder">⠿</span>
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -111,6 +205,8 @@ async function renderResumeList() {
     `;
   }).join("");
 
+  setupListDragDrop(container);
+
   container.querySelectorAll(".resume-list-card").forEach((card) => {
     const header = card.querySelector(".resume-list-card-header");
     const expandEl = card.querySelector(".resume-list-expand");
@@ -120,7 +216,11 @@ async function renderResumeList() {
     let loaded = false;
 
     header.addEventListener("click", async (e) => {
-      if (e.target.closest(".resume-delete-action") || e.target.closest(".resume-export-action")) return;
+      if (
+        e.target.closest(".resume-delete-action") ||
+        e.target.closest(".resume-export-action") ||
+        e.target.closest(".resume-card-drag")
+      ) return;
 
       const isOpen = card.classList.contains("expanded");
       if (isOpen) {

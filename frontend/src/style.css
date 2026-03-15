@@ -2701,6 +2701,37 @@ transition: all 0.2s ease;
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.resume-list-card.resume-card-dragging {
+  opacity: 0.4;
+  transform: scale(1.01);
+}
+
+.resume-list-card.resume-drop-above {
+  border-top: 2px solid #6366f1;
+}
+
+.resume-list-card.resume-drop-below {
+  border-bottom: 2px solid #6366f1;
+}
+
+.resume-card-drag {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.15);
+  cursor: grab;
+  padding-right: 8px;
+  flex-shrink: 0;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.resume-list-card:hover .resume-card-drag {
+  color: rgba(255,255,255,0.45);
+}
+
+.resume-card-drag:active {
+  cursor: grabbing;
+}
+
 .resume-list-card-header {
   display: flex;
   align-items: center;
