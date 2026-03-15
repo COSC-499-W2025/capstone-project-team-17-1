@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -7,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone.resume_pdf_builder import render_latex_from_template
+from capstone.resume_pdf_builder import _pick_tex_engine, render_latex_from_template
 
 
 def test_render_latex_skips_placeholder_replacement_in_comments(tmp_path):
@@ -65,3 +66,9 @@ def test_render_latex_default_education_experience_labels(tmp_path):
     assert r"\ResumeEntry{University}{Date}{Degree Program}{Location}" in rendered
     assert r"\ResumeEntry{Event}{Date}{Company}{Location}" in rendered
     assert r"\item Content..." in rendered
+
+
+def test_pick_tex_engine_prefers_tectonic():
+    with patch("capstone.resume_pdf_builder.shutil.which") as which_mock:
+        which_mock.side_effect = lambda name: "/usr/local/bin/tectonic" if name == "tectonic" else None
+        assert _pick_tex_engine() == "tectonic"
