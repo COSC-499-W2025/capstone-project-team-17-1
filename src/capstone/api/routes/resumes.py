@@ -218,12 +218,36 @@ async def generate_resume(request: Request):
     selected_project_ids = payload.get("project_ids") or None
 
     with _db_session(_require_db()) as conn:
+        from capstone.api.routes.auth import _SESSIONS, _extract_bearer, _save_sessions
+
+        auth_token = _extract_bearer(request)
+        auth_user = (_SESSIONS.get(auth_token) or {}).get("user") or {} if auth_token else {}
+
+        # Contributor ids can go stale if the local users table was rebuilt or reset.
+        # Recreate the local user from the current auth profile before inserting rows
+        # that reference users.id.
+        owner_profile = storage.get_user_profile(conn, owner_id)
+        if not owner_profile and auth_user:
+            auth_username = (auth_user.get("username") or "").strip()
+            github_url = (auth_user.get("github_url") or "").strip()
+            github_handle = github_url.rstrip("/").split("/")[-1].strip() if github_url else ""
+            identity = github_handle or auth_username
+            if identity:
+                owner_id = storage.upsert_user(
+                    conn,
+                    identity,
+                    email=(auth_user.get("email") or "").strip() or None,
+                )
+                owner_profile = storage.get_user_profile(conn, owner_id)
+                if auth_token and auth_token in _SESSIONS:
+                    _SESSIONS[auth_token]["contributor_id"] = owner_id
+                    _save_sessions()
+        if not owner_profile:
+            raise HTTPException(status_code=404, detail=f"Local user {owner_id} was not found")
+
         # --- default title: auth_username_yyyymmddhhmmss (guestuser if not logged in) ---
         if not resume_title:
-            from capstone.api.routes.auth import _SESSIONS, _extract_bearer
-            auth_token = _extract_bearer(request)
-            auth_user = (_SESSIONS.get(auth_token) or {}).get("user") if auth_token else None
-            username = (auth_user.get("username") if auth_user else None) or "guestuser"
+            username = auth_user.get("username") or "guestuser"
             resume_title = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         # --- collect projects: use selected list if provided, else all linked to data_user_id ---
@@ -275,12 +299,6 @@ async def generate_resume(request: Request):
         # --- build header ---
         # Auth profile is only used when generating for the logged-in user themselves.
         # When generating for another contributor, use only their local profile.
-        from capstone.api.routes.auth import _SESSIONS, _extract_bearer
-        auth_token = _extract_bearer(request)
-        session_data = (_SESSIONS.get(auth_token) or {}) if auth_token else {}
-        auth_user = session_data.get("user") or {}
-        session_contributor_id = session_data.get("contributor_id")
-
         is_self = (data_user_id == owner_id)
 
         # Header data: use auth profile for self, local git profile for others
