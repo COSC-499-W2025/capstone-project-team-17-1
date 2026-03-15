@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json as _json
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -114,9 +115,7 @@ def _check_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
 
-def _require_db() -> str:
-    if not _DB_DIR:
-        raise HTTPException(status_code=500, detail="Database not configured")
+def _require_db() -> Optional[str]:
     return _DB_DIR
 
 
@@ -131,11 +130,24 @@ async def _get_payload(request: Request) -> dict:
 # Resumes collection
 # ---------------------------------------------------------------------------
 
+def _get_session_contributor_id(request: Request) -> Optional[int]:
+    """Resolve contributor_id from Bearer token via auth sessions."""
+    from capstone.api.routes.auth import _SESSIONS, _extract_bearer
+    token = _extract_bearer(request)
+    if not token or token not in _SESSIONS:
+        return None
+    return _SESSIONS[token].get("contributor_id")
+
+
 @router.get("")
-def list_resumes(request: Request, user_id: int):
+def list_resumes(request: Request, user_id: Optional[int] = None):
     _check_auth(request)
+    # Prefer resolving user_id from session; fall back to explicit query param
+    resolved_id = _get_session_contributor_id(request) or user_id
+    if not resolved_id:
+        raise HTTPException(status_code=400, detail="user_id is required (or login to auto-resolve)")
     with _db_session(_require_db()) as conn:
-        resumes = storage.fetch_resumes(conn, user_id)
+        resumes = storage.fetch_resumes(conn, resolved_id)
     return {"data": resumes, "meta": {"total": len(resumes)}, "error": None}
 
 
@@ -189,20 +201,64 @@ async def generate_resume(request: Request):
     """
     _check_auth(request)
     payload = await _get_payload(request)
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id is required")
-    user_id = int(user_id)
+
+    # owner_id: who the resume belongs to — always the logged-in user
+    owner_id = _get_session_contributor_id(request)
+    if not owner_id:
+        raise HTTPException(status_code=400, detail="user_id is required (or login to auto-resolve)")
+    owner_id = int(owner_id)
+
+    # data_user_id: whose project data / skills / profile to aggregate
+    # defaults to owner (generating for yourself), can be overridden for collaborative projects
+    data_user_id = payload.get("user_id")
+    data_user_id = int(data_user_id) if data_user_id else owner_id
+
     create_new = bool(payload.get("create_new", False))
     resume_title = payload.get("resume_title") or None
+    selected_project_ids = payload.get("project_ids") or None
 
     with _db_session(_require_db()) as conn:
-        # --- collect all projects linked to this user ---
-        rows = conn.execute(
-            "SELECT project_id FROM user_projects WHERE user_id = ?",
-            (user_id,),
-        ).fetchall()
-        project_ids = [r[0] for r in rows]
+        from capstone.api.routes.auth import _SESSIONS, _extract_bearer, _save_sessions
+
+        auth_token = _extract_bearer(request)
+        auth_user = (_SESSIONS.get(auth_token) or {}).get("user") or {} if auth_token else {}
+
+        # Contributor ids can go stale if the local users table was rebuilt or reset.
+        # Recreate the local user from the current auth profile before inserting rows
+        # that reference users.id.
+        owner_profile = storage.get_user_profile(conn, owner_id)
+        if not owner_profile and auth_user:
+            auth_username = (auth_user.get("username") or "").strip()
+            github_url = (auth_user.get("github_url") or "").strip()
+            github_handle = github_url.rstrip("/").split("/")[-1].strip() if github_url else ""
+            identity = github_handle or auth_username
+            if identity:
+                owner_id = storage.upsert_user(
+                    conn,
+                    identity,
+                    email=(auth_user.get("email") or "").strip() or None,
+                )
+                owner_profile = storage.get_user_profile(conn, owner_id)
+                if auth_token and auth_token in _SESSIONS:
+                    _SESSIONS[auth_token]["contributor_id"] = owner_id
+                    _save_sessions()
+        if not owner_profile:
+            raise HTTPException(status_code=404, detail=f"Local user {owner_id} was not found")
+
+        # --- default title: auth_username_yyyymmddhhmmss (guestuser if not logged in) ---
+        if not resume_title:
+            username = auth_user.get("username") or "guestuser"
+            resume_title = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+        # --- collect projects: use selected list if provided, else all linked to data_user_id ---
+        if selected_project_ids:
+            project_ids = [str(p) for p in selected_project_ids]
+        else:
+            rows = conn.execute(
+                "SELECT project_id FROM user_projects WHERE user_id = ?",
+                (data_user_id,),
+            ).fetchall()
+            project_ids = [r[0] for r in rows]
 
         # --- aggregate skills and project summaries ---
         seen_skills: set[str] = set()
@@ -240,24 +296,41 @@ async def generate_resume(request: Request):
             title = snap.get("project_name") or snap.get("root_name") or pid
             project_items.append({"title": title, "content": summary})
 
-        # --- build header from user profile ---
-        user_profile = storage.get_user_profile(conn, user_id) or {}
-        city = (user_profile.get("city") or "").strip()
-        state = (user_profile.get("state_region") or "").strip()
+        # --- build header ---
+        # Auth profile is only used when generating for the logged-in user themselves.
+        # When generating for another contributor, use only their local profile.
+        is_self = (data_user_id == owner_id)
+
+        # Header data: use auth profile for self, local git profile for others
+        local_profile = storage.get_user_profile(conn, data_user_id) or {}
+
+        def _pick(auth_key: str, local_key: Optional[str] = None) -> str:
+            local_val = (local_profile.get(local_key or auth_key) or "").strip()
+            if not is_self:
+                return local_val
+            return (auth_user.get(auth_key) or "").strip() or local_val
+
+        city = _pick("city")
+        state = _pick("state_region")
         location = ", ".join(p for p in [city, state] if p)
-        username = user_profile.get("username") or str(user_id)
+        if is_self:
+            username = auth_user.get("username") or local_profile.get("username") or str(owner_id)
+        else:
+            username = local_profile.get("username") or str(data_user_id)
         header = {
-            "full_name": (user_profile.get("full_name") or username).strip(),
-            "email": (user_profile.get("email") or "").strip(),
-            "phone": (user_profile.get("phone_number") or "").strip(),
+            "full_name": _pick("full_name") or username,
+            "email": _pick("email"),
+            "phone": _pick("phone_number"),
             "location": location,
-            "github_url": (user_profile.get("github_url") or "").strip(),
-            "portfolio_url": (user_profile.get("portfolio_url") or "").strip(),
+            "github_url": _pick("github_url"),
+            "portfolio_url": _pick("portfolio_url"),
         }
 
+        # Resume always owned by the logged-in user (owner_id),
+        # regardless of whose data was used to generate it.
         resume_id = storage.upsert_default_resume_modules(
             conn,
-            user_id=user_id,
+            user_id=owner_id,
             header=header,
             core_skills=skill_names,
             projects=project_items,

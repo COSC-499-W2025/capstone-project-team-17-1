@@ -29,6 +29,14 @@ import sys
 
 logger = get_logger(__name__)
 
+def _user_dir(username: str) -> str:
+    """Return a filesystem-safe, case-sensitive directory name for a username.
+    Uses SHA256 so 'erensun408' and 'ErenSun408' always get different dirs,
+    even on case-insensitive filesystems (Windows/macOS).
+    """
+    return hashlib.sha256(username.encode()).hexdigest()[:24]
+
+
 def get_user_db_path():
 
     global CURRENT_USER
@@ -36,7 +44,7 @@ def get_user_db_path():
     if CURRENT_USER is None:
         return BASE_DIR / "guest_capstone.db"
 
-    path = BASE_DIR / "users" / CURRENT_USER
+    path = BASE_DIR / "users" / _user_dir(CURRENT_USER)
     path.mkdir(parents=True, exist_ok=True)
 
     return path / "capstone.db"
@@ -919,7 +927,7 @@ def set_current_user(user_id: str | None):
 
 def get_database_path():
     if CURRENT_USER:
-        path = BASE_DIR / "data" / "users" / CURRENT_USER
+        path = BASE_DIR / "data" / "users" / _user_dir(CURRENT_USER)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
@@ -2253,13 +2261,18 @@ def _section_row_to_dict(row: tuple, items: list[dict] | None = None) -> dict:
 
 
 def fetch_resumes(conn: sqlite3.Connection, user_id: int) -> list[dict]:
-    """List all resumes for a user (no sections/items)."""
+    """List all resumes for a user (no sections/items, but includes section_count)."""
     rows = conn.execute(
         """
-        SELECT id, user_id, title, target_role, status, created_at, updated_at
-        FROM resumes
-        WHERE user_id = ?
-        ORDER BY datetime(updated_at) DESC, id DESC
+        SELECT r.id, r.user_id, r.title, r.target_role, r.status,
+               r.created_at, r.updated_at,
+               COUNT(s.id) AS section_count
+        FROM resumes r
+        LEFT JOIN resume_sections s
+               ON s.resume_id = r.id AND s.is_enabled = 1
+        WHERE r.user_id = ?
+        GROUP BY r.id
+        ORDER BY datetime(r.updated_at) DESC, r.id DESC
         """,
         (int(user_id),),
     ).fetchall()
@@ -2268,6 +2281,7 @@ def fetch_resumes(conn: sqlite3.Connection, user_id: int) -> list[dict]:
             "id": r[0], "user_id": r[1], "title": r[2],
             "target_role": r[3], "status": r[4],
             "created_at": r[5], "updated_at": r[6],
+            "section_count": r[7],
         }
         for r in rows
     ]

@@ -47,7 +47,13 @@ pip install -e .
 # 4) Install dev/API dependencies
 pip install -r requirements-dev.txt
 
-# 5) Quick verification
+# 5) Install LaTeX (required for PDF resume export)
+#    macOS / Linux:
+bash scripts/setup.sh
+#    Windows (PowerShell, run as Administrator):
+#    .\scripts\setup.ps1
+
+# 6) Quick verification
 capstone --help
 ```
 

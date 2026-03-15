@@ -37,9 +37,7 @@ def _check_auth(request: Request) -> None:
     if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-def _require_db() -> str:
-    if not _DB_DIR:
-        raise HTTPException(status_code=500, detail="Database not configured")
+def _require_db() -> Optional[str]:
     return _DB_DIR
 
 # align naming used in handlers
@@ -55,10 +53,14 @@ async def _get_payload(request: Request) -> dict:
 def list_users(request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
-        rows = c.execute(
-            "SELECT DISTINCT contributor FROM contributor_stats ORDER BY LOWER(contributor)"
-        ).fetchall()
-    users = [r[0] for r in rows if r and r[0] and "[bot]" not in r[0].lower()]
+        rows = c.execute("""
+            SELECT DISTINCT u.id, u.username
+            FROM users u
+            INNER JOIN user_projects up ON u.id = up.user_id
+            INNER JOIN project_analysis pa ON up.project_id = pa.project_id
+            ORDER BY LOWER(u.username)
+        """).fetchall()
+    users = [{"id": r[0], "username": r[1]} for r in rows if r and r[1] and "[bot]" not in r[1].lower()]
     return {"data": users, "error": None}
 
 @router.get("/users/{user}/projects")

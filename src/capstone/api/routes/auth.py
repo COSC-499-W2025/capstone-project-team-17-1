@@ -47,6 +47,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
+    github_url: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -74,6 +75,45 @@ def configure(db_dir: Optional[str] = None):
     global _AUTH_BASE_URL
     _AUTH_BASE_URL = "https://loom-auth.amirparsaaminian1383.workers.dev"
     _load_sessions()
+
+
+def _resolve_contributor_id(auth_user: dict) -> Optional[int]:
+    """After login, find the matching git contributor in the local users table.
+    Tries github handle first, then falls back to auth username.
+    Creates a placeholder record if no match found so the user can generate resumes.
+    """
+    from capstone.portfolio_retrieval import _db_session
+
+    github_url = (auth_user.get("github_url") or "").strip()
+    github_handle = github_url.rstrip("/").split("/")[-1].lower() if github_url else ""
+    auth_username = (auth_user.get("username") or "").strip()
+
+    candidates = [h for h in [github_handle, auth_username.lower()] if h]
+    if not candidates:
+        return None
+
+    try:
+        with _db_session(None) as conn:
+            for handle in candidates:
+                row = conn.execute(
+                    "SELECT id FROM users WHERE LOWER(username) = ?", (handle,)
+                ).fetchone()
+                if row:
+                    return row[0]
+
+            # No match — create a placeholder so the user can start generating resumes
+            email = (auth_user.get("email") or "").strip()
+            identity = github_handle or auth_username
+            conn.execute(
+                "INSERT OR IGNORE INTO users (username, email) VALUES (?, ?)",
+                (identity, email),
+            )
+            row = conn.execute(
+                "SELECT id FROM users WHERE LOWER(username) = ?", (identity.lower(),)
+            ).fetchone()
+            return row[0] if row else None
+    except Exception:
+        return None
 
 def _get_auth_base_url() -> str:
     base = _AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev"
@@ -179,21 +219,26 @@ def register(payload: RegisterRequest):
             "username": payload.username.strip(),
             "password": payload.password,
             "email": payload.email,
+            "github_url": payload.github_url,
         },
     )
 
     user = data.get("user")
     if not user:
-        # fallback in case worker returns only username
         user = {
             "username": payload.username.strip(),
             "email": payload.email,
+            "github_url": payload.github_url,
         }
-
-    token = _new_token()
-    _SESSIONS[token] = {"user": user}
+    # Ensure github_url is in user dict for contributor resolution
+    if payload.github_url and not user.get("github_url"):
+        user["github_url"] = payload.github_url
 
     storage.CURRENT_USER = user["username"]
+    contributor_id = _resolve_contributor_id(user)
+
+    token = _new_token()
+    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
     _save_sessions()
 
     return {
@@ -216,11 +261,12 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    token = _new_token()
-    _SESSIONS[token] = {"user": user}
-    _save_sessions()
-
     storage.CURRENT_USER = user["username"]
+    contributor_id = _resolve_contributor_id(user)
+
+    token = _new_token()
+    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
+    _save_sessions()
 
     return {
         "token": token,
@@ -230,7 +276,15 @@ def login(payload: LoginRequest):
 @router.get("/me")
 def me(request: Request):
     session = _require_session(request)
-    return {"user": session["user"]}
+    user = session["user"]
+    # Always restore CURRENT_USER from the session — critical after server restart
+    storage.CURRENT_USER = user["username"]
+    # Re-resolve contributor_id if missing (sessions persisted before this change)
+    if "contributor_id" not in session:
+        contributor_id = _resolve_contributor_id(user)
+        session["contributor_id"] = contributor_id
+        _save_sessions()
+    return {"user": user}
 
 @router.put("/me")
 def update_me(payload: UpdateProfileRequest, request: Request):
@@ -254,12 +308,14 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
+    storage.CURRENT_USER = updated_user["username"]
+    contributor_id = _resolve_contributor_id(updated_user)
+
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
         _SESSIONS[token]["user"] = updated_user
+        _SESSIONS[token]["contributor_id"] = contributor_id
         _save_sessions()
-
-    storage.CURRENT_USER = updated_user["username"]
 
     return {
         "ok": True,
