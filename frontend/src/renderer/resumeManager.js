@@ -378,20 +378,21 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   }
 
   // education / experience / project / custom
+  // Line 1: title (bold) + date range (right-aligned)
+  // Line 2: subtitle (muted, own row)
+  // Line 3+: location, content, bullets
   return `
     <div class="re-item">
       ${del}
       <div class="re-item-header">
-        <span class="re-item-header-left">
-          ${ce("title", item.title, ctx)}
-          ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
-        </span>
+        <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
         <span class="re-item-date">
           ${ce("start_date", item.start_date || "", ctx)}
           <span class="re-date-sep"> – </span>
           ${ce("end_date", item.end_date || "", ctx)}
         </span>
       </div>
+      ${item.subtitle !== undefined ? `<div class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</div>` : ""}
       ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
       ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
@@ -486,6 +487,35 @@ function buildResumeHtml(resume) {
       ${sectionsHtml || ""}
       <button class="re-add-section-btn" data-resume-id="${rid}">+ Add section</button>
     </div>`;
+}
+
+// Default item fields per section type (used when adding a new item)
+function defaultItemPayload(sectionKey) {
+  switch (sectionKey) {
+    case "education":
+      return { title: "University", subtitle: "Degree", start_date: "", end_date: "", location: "" };
+    case "experience":
+      return { title: "Event", subtitle: "", start_date: "", end_date: "", location: "", content: "Content" };
+    case "project":
+      return { title: "Project Name", subtitle: "Tech Stack", start_date: "", end_date: "", content: "" };
+    case "core_skill":
+      return { title: "Skill Category", content: "skill1, skill2" };
+    case "summary":
+      return { title: "Summary", content: "Write your professional summary here." };
+    default:
+      return { title: "Title", subtitle: "", content: "Content" };
+  }
+}
+
+// Recalculate maxHeight of the nearest accordion expand panel after content changes
+function recalcExpand(container) {
+  const inner  = container.closest(".resume-list-expand-inner");
+  const expand = inner?.closest(".resume-list-expand");
+  if (expand && inner) {
+    requestAnimationFrame(() => {
+      expand.style.maxHeight = inner.scrollHeight + 32 + "px";
+    });
+  }
 }
 
 function attachEditListeners(container) {
@@ -631,6 +661,7 @@ function attachEditListeners(container) {
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
         card.remove();
+        recalcExpand(container);
       } catch (_) { alert("Failed to delete item."); }
       return;
     }
@@ -644,6 +675,7 @@ function attachEditListeners(container) {
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
         secEl?.remove();
+        recalcExpand(container);
       } catch (_) { alert("Failed to delete section."); }
       return;
     }
@@ -656,7 +688,7 @@ function attachEditListeners(container) {
         const res  = await authFetch(`/resumes/${rid}/sections/${sid}/items`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: "" }),
+          body: JSON.stringify(defaultItemPayload(key)),
         });
         const data = await res.json();
         const item = data.data;
@@ -666,8 +698,9 @@ function attachEditListeners(container) {
           tmp.innerHTML = buildItemHtml(rid, sid, key, item).trim();
           const newCard = tmp.firstElementChild;
           body.appendChild(newCard);
-          initAllEditables(newCard);           // only init editables, no new click listener
+          initAllEditables(newCard);
           newCard.querySelector(".re-editable")?.focus();
+          recalcExpand(container);
         }
       } catch (_) { alert("Failed to add item."); }
       return;
@@ -676,24 +709,22 @@ function attachEditListeners(container) {
     // Add section
     const addSecBtn = e.target.closest(".re-add-section-btn");
     if (addSecBtn) {
-      const rid   = addSecBtn.dataset.resumeId;
-      const label = "New Section";
-      const key   = `custom_${Date.now()}`;
+      const rid = addSecBtn.dataset.resumeId;
+      const key = `custom_${Date.now()}`;
       try {
         const secRes  = await authFetch(`/resumes/${rid}/sections`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ label, key }),
+          body: JSON.stringify({ label: "New Section", key }),
         });
         const secData = await secRes.json();
         const sec     = secData.data;
         if (!sec) return;
 
-        // Also create a default item
         const itemRes  = await authFetch(`/resumes/${rid}/sections/${sec.id}/items`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: "", content: "Content" }),
+          body: JSON.stringify(defaultItemPayload(key)),
         });
         const itemData = await itemRes.json();
         const item     = itemData.data;
@@ -713,7 +744,8 @@ function attachEditListeners(container) {
           </div>`.trim();
         const newSec = tmp.firstElementChild;
         addSecBtn.before(newSec);
-        initAllEditables(newSec);              // only init editables, no new click listener
+        initAllEditables(newSec);
+        recalcExpand(container);
       } catch (_) { alert("Failed to add section."); }
     }
   });

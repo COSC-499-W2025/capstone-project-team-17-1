@@ -3076,6 +3076,19 @@ transition: all 0.2s ease;
   font-weight: 400;
 }
 
+.re-item-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 1px;
+  margin-bottom: 2px;
+}
+
+.re-item-subtitle .re-editable:empty::before {
+  content: "Subtitle";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
 .re-item-meta {
   font-size: 0.8rem;
   color: #64748b;
