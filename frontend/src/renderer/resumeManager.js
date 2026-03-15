@@ -489,6 +489,7 @@ function buildResumeHtml(resume) {
 }
 
 function attachEditListeners(container) {
+  // --- shared helpers (closed over container for header-field saves) ---
   function showSaved(el) {
     const existing = el.parentElement?.querySelector(".re-saved");
     if (existing) existing.remove();
@@ -505,7 +506,6 @@ function attachEditListeners(container) {
     const iid   = el.dataset.itemId;
     const value = el.innerText.trim();
 
-    // Header metadata fields
     if (el.dataset.headerField) {
       const allHeaderEls = container.querySelectorAll(`[data-header-field][data-item-id="${iid}"]`);
       const meta = {};
@@ -546,13 +546,11 @@ function attachEditListeners(container) {
           body: JSON.stringify({ [field]: value }),
         });
       } else {
-        // Resume-level field (title / target_role)
         await authFetch(`/resumes/${rid}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ [field]: value }),
         });
-        // Sync title to the list card
         if (field === "title") {
           const listTitle = document.querySelector(`.resume-list-card[data-resume-id="${rid}"] .resume-list-title`);
           if (listTitle) listTitle.textContent = value || "Untitled Resume";
@@ -562,6 +560,7 @@ function attachEditListeners(container) {
     } catch (err) { console.error("Auto-save failed:", err); }
   }
 
+  // --- init a single contenteditable element ---
   function initEditable(el) {
     el.dataset.original = el.innerText.trim();
 
@@ -611,18 +610,23 @@ function attachEditListeners(container) {
     });
   }
 
-  container.querySelectorAll(".re-editable[data-field], .re-editable[data-header-field]").forEach(initEditable);
+  // init all existing editable fields in container
+  function initAllEditables(root) {
+    root.querySelectorAll(".re-editable[data-field], .re-editable[data-header-field]").forEach(initEditable);
+  }
 
-  // ---- Delete item ----
+  initAllEditables(container);
+
+  // --- single delegated click handler on the root container ---
   container.addEventListener("click", async (e) => {
+
+    // Delete item
     const delItemBtn = e.target.closest(".re-item-delete");
     if (delItemBtn) {
-      const card = delItemBtn.closest(".re-item");
-      const anyEl = card?.querySelector("[data-resume-id]");
+      const card   = delItemBtn.closest(".re-item");
+      const anyEl  = card?.querySelector("[data-resume-id]");
       if (!anyEl) return;
-      const rid = anyEl.dataset.resumeId;
-      const sid = anyEl.dataset.sectionId;
-      const iid = anyEl.dataset.itemId;
+      const { resumeId: rid, sectionId: sid, itemId: iid } = anyEl.dataset;
       if (!confirm("Delete this item?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
@@ -631,11 +635,10 @@ function attachEditListeners(container) {
       return;
     }
 
-    // ---- Delete section ----
+    // Delete section
     const delSecBtn = e.target.closest(".re-section-delete");
     if (delSecBtn) {
-      const rid = delSecBtn.dataset.resumeId;
-      const sid = delSecBtn.dataset.sectionId;
+      const { resumeId: rid, sectionId: sid } = delSecBtn.dataset;
       const secEl = container.querySelector(`.re-section[data-section-id="${sid}"]`);
       if (!confirm("Delete this entire section?")) return;
       try {
@@ -645,12 +648,10 @@ function attachEditListeners(container) {
       return;
     }
 
-    // ---- Add item ----
+    // Add item
     const addItemBtn = e.target.closest(".re-add-item-btn");
     if (addItemBtn) {
-      const rid  = addItemBtn.dataset.resumeId;
-      const sid  = addItemBtn.dataset.sectionId;
-      const key  = addItemBtn.dataset.sectionKey;
+      const { resumeId: rid, sectionId: sid, sectionKey: key } = addItemBtn.dataset;
       try {
         const res  = await authFetch(`/resumes/${rid}/sections/${sid}/items`, {
           method: "POST",
@@ -665,43 +666,54 @@ function attachEditListeners(container) {
           tmp.innerHTML = buildItemHtml(rid, sid, key, item).trim();
           const newCard = tmp.firstElementChild;
           body.appendChild(newCard);
-          attachEditListeners(newCard);
+          initAllEditables(newCard);           // only init editables, no new click listener
           newCard.querySelector(".re-editable")?.focus();
         }
       } catch (_) { alert("Failed to add item."); }
       return;
     }
 
-    // ---- Add section ----
+    // Add section
     const addSecBtn = e.target.closest(".re-add-section-btn");
     if (addSecBtn) {
       const rid   = addSecBtn.dataset.resumeId;
-      const label = prompt("Section name:");
-      if (!label?.trim()) return;
-      const key   = label.trim().toLowerCase().replace(/\s+/g, "_");
+      const label = "New Section";
+      const key   = `custom_${Date.now()}`;
       try {
-        const res  = await authFetch(`/resumes/${rid}/sections`, {
+        const secRes  = await authFetch(`/resumes/${rid}/sections`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ label: label.trim(), key }),
+          body: JSON.stringify({ label, key }),
         });
-        const data = await res.json();
-        const sec  = data.data;
+        const secData = await secRes.json();
+        const sec     = secData.data;
         if (!sec) return;
-        const secHtml = `
+
+        // Also create a default item
+        const itemRes  = await authFetch(`/resumes/${rid}/sections/${sec.id}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "", content: "Content" }),
+        });
+        const itemData = await itemRes.json();
+        const item     = itemData.data;
+
+        const itemHtml = item ? buildItemHtml(rid, sec.id, key, item) : "";
+        const tmp = document.createElement("div");
+        tmp.innerHTML = `
           <div class="re-section" data-section-id="${sec.id}">
             <div class="re-section-head">
               <div class="re-section-label">${ce("label", sec.label, `data-resume-id="${rid}" data-section-id="${sec.id}"`)}</div>
               <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sec.id}" title="Delete section">×</button>
             </div>
-            <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}"></div>
+            <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">
+              ${itemHtml}
+            </div>
             <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">+ Add item</button>
-          </div>`;
-        const tmp = document.createElement("div");
-        tmp.innerHTML = secHtml.trim();
+          </div>`.trim();
         const newSec = tmp.firstElementChild;
         addSecBtn.before(newSec);
-        attachEditListeners(newSec);
+        initAllEditables(newSec);              // only init editables, no new click listener
       } catch (_) { alert("Failed to add section."); }
     }
   });
