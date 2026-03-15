@@ -87,6 +87,10 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     def health():
         return {"status": "ok"}
 
+    @app.get("/api/health")
+    def api_health():
+        return {"status": "ok"}
+
     @app.get("/system/system-metrics")
     def system_metrics():
         return get_system_metrics()

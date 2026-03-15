@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Capstone</title>
+  <title>Loom</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -67,7 +67,18 @@
             </select>
           </div>
         </div>
-        <div class="dashboard">
+        <div class="dashboard-grid-area">
+          <!-- Skeleton loader: shown while backend is starting -->
+          <div id="dashboard-loader" class="dashboard dashboard-loader">
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div><div class="skeleton-line short"></div></div>
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+          </div>
+          <!-- Real dashboard content: hidden until APIs are ready -->
+          <div id="dashboard-content" class="dashboard dashboard-content hidden">
 
           <div id="most-used-skills" class="card dashboard-widget" data-widget-id="most-used-skills" data-widget-label="Most Used Skills" data-widget-category="analysis">Most Used Skills</div>
 
@@ -147,6 +158,7 @@
             <div id="recent-activity" class="activity-container"></div>
           </div>
 
+          </div>
         </div>
       </div>
 

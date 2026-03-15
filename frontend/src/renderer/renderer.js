@@ -12,6 +12,7 @@ import { openUploadModal } from "./uploadModal.js";
 import { initNavigation } from "./navigation.js";
 import { initPortfolioResume } from "./portfolioResume.js";
 import { initDisplayPreferences } from "./displayPreferences.js";
+import { initDashboard } from "./dashboardInit.js";
 
 
 // -----------------------------
@@ -42,19 +43,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initDisplayPreferences();
 
-  startMetrics();
-
-  loadMostUsedSkills();
-
-  loadRecentProjects();
-
-  loadProjectHealth();
-
-  loadErrorAnalysis();
   loadProjects();
 
-  loadRecentActivity();
-
-  setInterval(loadRecentActivity, 1000);
+  initDashboard({
+    loadMostUsedSkills,
+    loadRecentProjects,
+    loadProjectHealth,
+    loadErrorAnalysis,
+    loadRecentActivity,
+    startMetrics,
+  }).then(() => {
+    setInterval(loadRecentActivity, 1000);
+  });
 
 });
