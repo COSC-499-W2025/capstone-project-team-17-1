@@ -201,12 +201,18 @@ async def generate_resume(request: Request):
     """
     _check_auth(request)
     payload = await _get_payload(request)
-    user_id = payload.get("user_id")
-    if not user_id:
-        user_id = _get_session_contributor_id(request)
-    if not user_id:
+
+    # owner_id: who the resume belongs to — always the logged-in user
+    owner_id = _get_session_contributor_id(request)
+    if not owner_id:
         raise HTTPException(status_code=400, detail="user_id is required (or login to auto-resolve)")
-    user_id = int(user_id)
+    owner_id = int(owner_id)
+
+    # data_user_id: whose project data / skills / profile to aggregate
+    # defaults to owner (generating for yourself), can be overridden for collaborative projects
+    data_user_id = payload.get("user_id")
+    data_user_id = int(data_user_id) if data_user_id else owner_id
+
     create_new = bool(payload.get("create_new", False))
     resume_title = payload.get("resume_title") or None
     selected_project_ids = payload.get("project_ids") or None
@@ -220,13 +226,13 @@ async def generate_resume(request: Request):
             username = (auth_user.get("username") if auth_user else None) or "guestuser"
             resume_title = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-        # --- collect projects: use selected list if provided, else all linked ---
+        # --- collect projects: use selected list if provided, else all linked to data_user_id ---
         if selected_project_ids:
             project_ids = [str(p) for p in selected_project_ids]
         else:
             rows = conn.execute(
                 "SELECT project_id FROM user_projects WHERE user_id = ?",
-                (user_id,),
+                (data_user_id,),
             ).fetchall()
             project_ids = [r[0] for r in rows]
 
@@ -266,23 +272,33 @@ async def generate_resume(request: Request):
             title = snap.get("project_name") or snap.get("root_name") or pid
             project_items.append({"title": title, "content": summary})
 
-        # --- build header: auth profile takes priority over local users table ---
+        # --- build header ---
+        # Auth profile is only used when generating for the logged-in user themselves.
+        # When generating for another contributor, use only their local profile.
         from capstone.api.routes.auth import _SESSIONS, _extract_bearer
         auth_token = _extract_bearer(request)
-        auth_user = (_SESSIONS.get(auth_token) or {}).get("user") or {} if auth_token else {}
+        session_data = (_SESSIONS.get(auth_token) or {}) if auth_token else {}
+        auth_user = session_data.get("user") or {}
+        session_contributor_id = session_data.get("contributor_id")
 
-        local_profile = storage.get_user_profile(conn, user_id) or {}
+        is_self = (data_user_id == owner_id)
+
+        # Header data: use auth profile for self, local git profile for others
+        local_profile = storage.get_user_profile(conn, data_user_id) or {}
 
         def _pick(auth_key: str, local_key: Optional[str] = None) -> str:
-            return (
-                (auth_user.get(auth_key) or "").strip()
-                or (local_profile.get(local_key or auth_key) or "").strip()
-            )
+            local_val = (local_profile.get(local_key or auth_key) or "").strip()
+            if not is_self:
+                return local_val
+            return (auth_user.get(auth_key) or "").strip() or local_val
 
         city = _pick("city")
         state = _pick("state_region")
         location = ", ".join(p for p in [city, state] if p)
-        username = auth_user.get("username") or local_profile.get("username") or str(user_id)
+        if is_self:
+            username = auth_user.get("username") or local_profile.get("username") or str(owner_id)
+        else:
+            username = local_profile.get("username") or str(data_user_id)
         header = {
             "full_name": _pick("full_name") or username,
             "email": _pick("email"),
@@ -292,9 +308,11 @@ async def generate_resume(request: Request):
             "portfolio_url": _pick("portfolio_url"),
         }
 
+        # Resume always owned by the logged-in user (owner_id),
+        # regardless of whose data was used to generate it.
         resume_id = storage.upsert_default_resume_modules(
             conn,
-            user_id=user_id,
+            user_id=owner_id,
             header=header,
             core_skills=skill_names,
             projects=project_items,

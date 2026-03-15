@@ -78,10 +78,11 @@ async function renderResumeList() {
   }
 
   container.innerHTML = resumes.map((r) => {
-    const date = r.updated_at
-      ? new Date(r.updated_at).toLocaleDateString()
-      : r.created_at ? new Date(r.created_at).toLocaleDateString() : "—";
-    const sectionCount = Array.isArray(r.sections) ? r.sections.length : 0;
+    const rawDate = r.updated_at || r.created_at;
+    const date = rawDate
+      ? new Date(rawDate.replace(" ", "T") + "Z").toLocaleString()
+      : "—";
+    const sectionCount = r.section_count ?? (Array.isArray(r.sections) ? r.sections.length : 0);
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
         <div class="resume-list-card-header">
@@ -89,8 +90,8 @@ async function renderResumeList() {
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
               ${r.target_role ? `<span>${r.target_role}</span> · ` : ""}
-              <span>${sectionCount} section${sectionCount !== 1 ? "s" : ""}</span> ·
-              <span>Updated ${date}</span>
+              <span class="re-card-section-count">${sectionCount} section${sectionCount !== 1 ? "s" : ""}</span> ·
+              <span class="re-card-updated">Updated ${date}</span>
             </div>
           </div>
           <div class="resume-list-actions">
@@ -519,6 +520,19 @@ function recalcExpand(container) {
   }
 }
 
+// Sync the resume list card's section count + updated time after any change
+function updateCardMeta(container, rid) {
+  const card = document.querySelector(`.resume-list-card[data-resume-id="${rid}"]`);
+  if (!card) return;
+
+  const count = container.querySelectorAll(".re-section").length;
+  const countEl = card.querySelector(".re-card-section-count");
+  if (countEl) countEl.textContent = `${count} section${count !== 1 ? "s" : ""}`;
+
+  const updatedEl = card.querySelector(".re-card-updated");
+  if (updatedEl) updatedEl.textContent = `Updated ${new Date().toLocaleString()}`;
+}
+
 function setupDragDrop(container) {
   let dragEl   = null;
   let dragType = null; // 'section' | 'item'
@@ -698,6 +712,7 @@ function attachEditListeners(container) {
         }
       }
       showSaved(el);
+      updateCardMeta(container, rid);
     } catch (err) { console.error("Auto-save failed:", err); }
   }
 
@@ -774,6 +789,7 @@ function attachEditListeners(container) {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
         card.remove();
         recalcExpand(container);
+        updateCardMeta(container, rid);
       } catch (_) { alert("Failed to delete item."); }
       return;
     }
@@ -788,6 +804,7 @@ function attachEditListeners(container) {
         await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
         secEl?.remove();
         recalcExpand(container);
+        updateCardMeta(container, rid);
       } catch (_) { alert("Failed to delete section."); }
       return;
     }
@@ -813,6 +830,7 @@ function attachEditListeners(container) {
           initAllEditables(newCard);
           newCard.querySelector(".re-editable")?.focus();
           recalcExpand(container);
+          updateCardMeta(container, rid);
         }
       } catch (_) { alert("Failed to add item."); }
       return;
@@ -868,6 +886,7 @@ function attachEditListeners(container) {
         }
         initAllEditables(newSec);
         recalcExpand(container);
+        updateCardMeta(container, rid);
       } catch (_) { alert("Failed to add section."); }
     }
   });
