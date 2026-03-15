@@ -1459,7 +1459,7 @@ This week focused on expanding the project dashboard from a project management i
 **Peer Eval**  
 >
 > ![Week 10 — peer eval]
-> 
+> <img width="1084" height="632" alt="image" src="https://github.com/user-attachments/assets/fc96a37f-ccf3-49e9-ba24-b5b9cafb35fc" />
 > _Figure 0. peer evaluation._
 >
 
