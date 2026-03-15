@@ -44,8 +44,12 @@ async function generateResume(projectIds, title, contributorId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Failed to generate resume");
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch (_) {
+    throw new Error(`Server error (${res.status}) — check backend logs`);
+  }
+  if (!res.ok) throw new Error(data.detail || `Server error (${res.status})`);
   return data.data;
 }
 
