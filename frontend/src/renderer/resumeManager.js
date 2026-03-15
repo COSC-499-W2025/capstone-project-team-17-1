@@ -348,11 +348,64 @@ function ceHeader(field, value, ctx = "") {
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
+// Build HTML for a single item card (reused for initial render + after add)
+function buildItemHtml(rid, sid, sectionKey, item) {
+  const iid  = item.id;
+  const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
+  const del  = `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>`;
+  const bullets = (item.bullets || []).filter(Boolean);
+
+  if (sectionKey === "core_skill") {
+    return `
+      <div class="re-item">
+        ${del}
+        <div class="re-item-header">
+          <span class="re-item-header-left">
+            ${ce("title", item.title, ctx)}
+            <span class="re-sep">: </span>
+            ${ce("content", item.content, ctx)}
+          </span>
+        </div>
+      </div>`;
+  }
+
+  if (sectionKey === "summary") {
+    return `
+      <div class="re-item">
+        ${del}
+        <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
+      </div>`;
+  }
+
+  // education / experience / project / custom
+  return `
+    <div class="re-item">
+      ${del}
+      <div class="re-item-header">
+        <span class="re-item-header-left">
+          ${ce("title", item.title, ctx)}
+          ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
+        </span>
+        <span class="re-item-date">
+          ${ce("start_date", item.start_date || "", ctx)}
+          <span class="re-date-sep"> – </span>
+          ${ce("end_date", item.end_date || "", ctx)}
+        </span>
+      </div>
+      ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
+      ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
+      ${bullets.length ? `
+        <ul class="re-bullets">
+          ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
+        </ul>` : ""}
+    </div>`;
+}
+
 function buildResumeHtml(resume) {
   const rid = resume.id;
   const sections = (resume.sections || []).filter((s) => s.is_enabled !== false);
 
-  const headerSec = sections.find((s) => s.key === "header");
+  const headerSec    = sections.find((s) => s.key === "header");
   const otherSections = sections.filter((s) => s.key !== "header");
 
   // === Hero: resume document title + target role ===
@@ -360,16 +413,15 @@ function buildResumeHtml(resume) {
     <div class="re-hero">
       <div class="re-title">${ce("title", resume.title || "Resume", `data-resume-id="${rid}"`)}</div>
       <div class="re-role">${ce("target_role", resume.target_role || "", `data-resume-id="${rid}"`)}</div>
-    </div>
-  `;
+    </div>`;
 
-  // === Header section — contact card ===
+  // === Header section — contact card (no item-delete, no add-item) ===
   let headerSecHtml = "";
   if (headerSec?.items?.length) {
     const item = headerSec.items[0];
     const meta = item.metadata || {};
-    const sid = headerSec.id, iid = item.id;
-    const ctx = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
+    const sid  = headerSec.id, iid = item.id;
+    const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
 
     const fullName  = meta.full_name     || item.content || "Your Name";
     const location  = meta.location      || "";
@@ -391,7 +443,9 @@ function buildResumeHtml(resume) {
 
     headerSecHtml = `
       <div class="re-section">
-        <div class="re-section-label">${ce("label", headerSec.label || "Header", `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
+        <div class="re-section-head">
+          <div class="re-section-label">${ce("label", headerSec.label || "Header", `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
+        </div>
         <div class="re-section-body">
           <div class="re-item">
             <div class="re-item-header">
@@ -401,89 +455,43 @@ function buildResumeHtml(resume) {
             ${linkParts    ? `<div class="re-item-meta-links">${linkParts}</div>` : ""}
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   // === Other sections ===
   const sectionsHtml = otherSections.map((sec) => {
-    const sid = sec.id;
-    const key = sec.key || "";
+    const sid  = sec.id;
+    const key  = sec.key || "";
     const items = (sec.items || []).filter((i) => i.is_enabled !== false);
-    if (!items.length) return "";
 
-    const itemsHtml = items.map((item) => {
-      const iid = item.id;
-      const ctx = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
-      const bullets = (item.bullets || []).filter(Boolean);
-
-      if (key === "core_skill") {
-        return `
-          <div class="re-item">
-            <div class="re-item-header">
-              <span class="re-item-header-left">
-                ${ce("title", item.title, ctx)}
-                <span class="re-sep">: </span>
-                ${ce("content", item.content, ctx)}
-              </span>
-            </div>
-          </div>
-        `;
-      }
-
-      if (key === "summary") {
-        return `
-          <div class="re-item">
-            <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
-          </div>
-        `;
-      }
-
-      // education / experience / project / custom
-      return `
-        <div class="re-item">
-          <div class="re-item-header">
-            <span class="re-item-header-left">
-              ${ce("title", item.title, ctx)}
-              ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
-            </span>
-            <span class="re-item-date">
-              ${ce("start_date", item.start_date || "", ctx)}
-              <span class="re-date-sep"> – </span>
-              ${ce("end_date", item.end_date || "", ctx)}
-            </span>
-          </div>
-          ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
-          ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
-          ${bullets.length ? `
-            <ul class="re-bullets">
-              ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
-            </ul>` : ""}
-        </div>
-      `;
-    }).join("");
+    const itemsHtml = items.map((item) => buildItemHtml(rid, sid, key, item)).join("");
 
     return `
-      <div class="re-section">
-        <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
-        <div class="re-section-body">${itemsHtml}</div>
-      </div>
-    `;
+      <div class="re-section" data-section-id="${sid}">
+        <div class="re-section-head">
+          <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
+          <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>
+        </div>
+        <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">
+          ${itemsHtml}
+        </div>
+        <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
+      </div>`;
   }).join("");
 
   return `
     <div class="re-sheet">
       ${heroHtml}
       ${headerSecHtml}
-      ${sectionsHtml || `<p class="resume-summary-text">No content yet.</p>`}
-    </div>
-  `;
+      ${sectionsHtml || ""}
+      <button class="re-add-section-btn" data-resume-id="${rid}">+ Add section</button>
+    </div>`;
 }
 
 function attachEditListeners(container) {
   function showSaved(el) {
     const existing = el.parentElement?.querySelector(".re-saved");
-    if (existing) { existing.remove(); }
+    if (existing) existing.remove();
     const tag = document.createElement("span");
     tag.className = "re-saved";
     tag.textContent = "Saved ✓";
@@ -492,32 +500,28 @@ function attachEditListeners(container) {
   }
 
   async function save(el) {
-    const rid = el.dataset.resumeId;
-    const sid = el.dataset.sectionId;
-    const iid = el.dataset.itemId;
+    const rid   = el.dataset.resumeId;
+    const sid   = el.dataset.sectionId;
+    const iid   = el.dataset.itemId;
     const value = el.innerText.trim();
 
-    // Header metadata fields — collect all sibling header fields and save as metadata dict
+    // Header metadata fields
     if (el.dataset.headerField) {
       const allHeaderEls = container.querySelectorAll(`[data-header-field][data-item-id="${iid}"]`);
       const meta = {};
       allHeaderEls.forEach((hel) => { meta[hel.dataset.headerField] = hel.innerText.trim(); });
-      const fullName = meta.full_name || "";
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: fullName, metadata: meta }),
+          body: JSON.stringify({ content: meta.full_name || "", metadata: meta }),
         });
         showSaved(el);
-      } catch (err) {
-        console.error("Auto-save failed:", err);
-      }
+      } catch (err) { console.error("Auto-save failed:", err); }
       return;
     }
 
     const field = el.dataset.field;
-
     try {
       if (iid) {
         if (field === "bullet") {
@@ -542,22 +546,25 @@ function attachEditListeners(container) {
           body: JSON.stringify({ [field]: value }),
         });
       } else {
+        // Resume-level field (title / target_role)
         await authFetch(`/resumes/${rid}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ [field]: value }),
         });
+        // Sync title to the list card
+        if (field === "title") {
+          const listTitle = document.querySelector(`.resume-list-card[data-resume-id="${rid}"] .resume-list-title`);
+          if (listTitle) listTitle.textContent = value || "Untitled Resume";
+        }
       }
       showSaved(el);
-    } catch (err) {
-      console.error("Auto-save failed:", err);
-    }
+    } catch (err) { console.error("Auto-save failed:", err); }
   }
 
   function initEditable(el) {
     el.dataset.original = el.innerText.trim();
 
-    // Paste as plain text
     el.addEventListener("paste", (e) => {
       e.preventDefault();
       const text = e.clipboardData.getData("text/plain");
@@ -568,7 +575,6 @@ function attachEditListeners(container) {
       sel.collapseToEnd();
     });
 
-    // Bullets: Enter = new bullet, Backspace on empty = delete
     if (!el.dataset.headerField && el.dataset.field === "bullet") {
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
@@ -588,11 +594,10 @@ function attachEditListeners(container) {
           const prev = el.previousElementSibling;
           el.remove();
           prev?.focus();
-          save(el); // save remaining bullets
+          save(el);
         }
       });
     } else {
-      // Single-line fields: block Enter
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") e.preventDefault();
       });
@@ -607,6 +612,99 @@ function attachEditListeners(container) {
   }
 
   container.querySelectorAll(".re-editable[data-field], .re-editable[data-header-field]").forEach(initEditable);
+
+  // ---- Delete item ----
+  container.addEventListener("click", async (e) => {
+    const delItemBtn = e.target.closest(".re-item-delete");
+    if (delItemBtn) {
+      const card = delItemBtn.closest(".re-item");
+      const anyEl = card?.querySelector("[data-resume-id]");
+      if (!anyEl) return;
+      const rid = anyEl.dataset.resumeId;
+      const sid = anyEl.dataset.sectionId;
+      const iid = anyEl.dataset.itemId;
+      if (!confirm("Delete this item?")) return;
+      try {
+        await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
+        card.remove();
+      } catch (_) { alert("Failed to delete item."); }
+      return;
+    }
+
+    // ---- Delete section ----
+    const delSecBtn = e.target.closest(".re-section-delete");
+    if (delSecBtn) {
+      const rid = delSecBtn.dataset.resumeId;
+      const sid = delSecBtn.dataset.sectionId;
+      const secEl = container.querySelector(`.re-section[data-section-id="${sid}"]`);
+      if (!confirm("Delete this entire section?")) return;
+      try {
+        await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
+        secEl?.remove();
+      } catch (_) { alert("Failed to delete section."); }
+      return;
+    }
+
+    // ---- Add item ----
+    const addItemBtn = e.target.closest(".re-add-item-btn");
+    if (addItemBtn) {
+      const rid  = addItemBtn.dataset.resumeId;
+      const sid  = addItemBtn.dataset.sectionId;
+      const key  = addItemBtn.dataset.sectionKey;
+      try {
+        const res  = await authFetch(`/resumes/${rid}/sections/${sid}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "" }),
+        });
+        const data = await res.json();
+        const item = data.data;
+        const body = container.querySelector(`.re-section-body[data-section-id="${sid}"]`);
+        if (body && item) {
+          const tmp = document.createElement("div");
+          tmp.innerHTML = buildItemHtml(rid, sid, key, item).trim();
+          const newCard = tmp.firstElementChild;
+          body.appendChild(newCard);
+          attachEditListeners(newCard);
+          newCard.querySelector(".re-editable")?.focus();
+        }
+      } catch (_) { alert("Failed to add item."); }
+      return;
+    }
+
+    // ---- Add section ----
+    const addSecBtn = e.target.closest(".re-add-section-btn");
+    if (addSecBtn) {
+      const rid   = addSecBtn.dataset.resumeId;
+      const label = prompt("Section name:");
+      if (!label?.trim()) return;
+      const key   = label.trim().toLowerCase().replace(/\s+/g, "_");
+      try {
+        const res  = await authFetch(`/resumes/${rid}/sections`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label: label.trim(), key }),
+        });
+        const data = await res.json();
+        const sec  = data.data;
+        if (!sec) return;
+        const secHtml = `
+          <div class="re-section" data-section-id="${sec.id}">
+            <div class="re-section-head">
+              <div class="re-section-label">${ce("label", sec.label, `data-resume-id="${rid}" data-section-id="${sec.id}"`)}</div>
+              <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sec.id}" title="Delete section">×</button>
+            </div>
+            <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}"></div>
+            <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">+ Add item</button>
+          </div>`;
+        const tmp = document.createElement("div");
+        tmp.innerHTML = secHtml.trim();
+        const newSec = tmp.firstElementChild;
+        addSecBtn.before(newSec);
+        attachEditListeners(newSec);
+      } catch (_) { alert("Failed to add section."); }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

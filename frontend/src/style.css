@@ -2913,11 +2913,118 @@ transition: all 0.2s ease;
   gap: 8px;
 }
 
+/* --- Section head (label + delete btn) --- */
+.re-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.re-section-head .re-section-label {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.re-section-delete {
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.re-section:hover .re-section-delete {
+  opacity: 1;
+}
+
+.re-section-delete:hover {
+  color: #ef4444;
+}
+
+/* --- Add item / Add section buttons --- */
+.re-add-item-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 0;
+  background: none;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+  opacity: 0;
+}
+
+.re-section:hover .re-add-item-btn {
+  opacity: 1;
+}
+
+.re-add-item-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.re-add-section-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px 0;
+  background: none;
+  border: 1px dashed #e2e8f0;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.re-add-section-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
 /* --- Item card --- */
 .re-item {
+  position: relative;
   padding: 10px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+}
+
+/* --- Item delete button --- */
+.re-item-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.re-item:hover .re-item-delete {
+  opacity: 1;
+}
+
+.re-item-delete:hover {
+  color: #ef4444;
 }
 
 .re-item-header {
