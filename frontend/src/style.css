@@ -2766,6 +2766,72 @@ transition: all 0.2s ease;
   background: rgba(239,68,68,0.25);
 }
 
+.export-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.8);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.export-btn:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+/* Export dropdown menu */
+.export-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #1e2130;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 8px;
+  min-width: 160px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: fadeInDown 0.12s ease;
+}
+.export-menu-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.35);
+  padding: 2px 8px 8px;
+}
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.13s;
+}
+.export-menu-item:hover {
+  background: rgba(255,255,255,0.1);
+}
+.export-menu-icon {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  min-width: 22px;
+  text-align: center;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ===================== */
 /* NEW RESUME MODAL      */
 /* ===================== */

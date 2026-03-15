@@ -99,6 +99,7 @@ async function renderResumeList() {
             </div>
           </div>
           <div class="resume-list-actions">
+            <button class="export-btn resume-export-action" data-resume-id="${r.id}" data-resume-title="${r.title || "Untitled Resume"}">Export</button>
             <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
             <span class="resume-expand-chevron">▾</span>
           </div>
@@ -119,7 +120,7 @@ async function renderResumeList() {
     let loaded = false;
 
     header.addEventListener("click", async (e) => {
-      if (e.target.closest(".resume-delete-action")) return;
+      if (e.target.closest(".resume-delete-action") || e.target.closest(".resume-export-action")) return;
 
       const isOpen = card.classList.contains("expanded");
       if (isOpen) {
@@ -149,6 +150,13 @@ async function renderResumeList() {
       requestAnimationFrame(() => {
         expandEl.style.maxHeight = inner.scrollHeight + 32 + "px";
       });
+    });
+  });
+
+  container.querySelectorAll(".resume-export-action").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openExportMenu(btn, btn.dataset.resumeId, btn.dataset.resumeTitle);
     });
   });
 
@@ -323,6 +331,89 @@ async function openNewResumeModal() {
       generateBtn.textContent = "Generate Resume";
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportResume(resumeId, format, title) {
+  const slug = (title || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
+  const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Export failed (${res.status})`);
+  }
+  if (format === "pdf") {
+    const blob = await res.blob();
+    downloadBlob(blob, `${slug}.pdf`);
+  } else if (format === "markdown") {
+    const text = await res.text();
+    downloadBlob(new Blob([text], { type: "text/markdown" }), `${slug}.md`);
+  } else {
+    const data = await res.json();
+    const json = JSON.stringify(data.data || data, null, 2);
+    downloadBlob(new Blob([json], { type: "application/json" }), `${slug}.json`);
+  }
+}
+
+function openExportMenu(anchorBtn, resumeId, resumeTitle) {
+  // Close any existing export menus
+  document.querySelectorAll(".export-menu").forEach((m) => m.remove());
+
+  const menu = document.createElement("div");
+  menu.className = "export-menu";
+  menu.innerHTML = `
+    <div class="export-menu-title">Export as</div>
+    <button class="export-menu-item" data-format="json">
+      <span class="export-menu-icon">{ }</span>JSON
+    </button>
+    <button class="export-menu-item" data-format="markdown">
+      <span class="export-menu-icon">MD</span>Markdown
+    </button>
+    <button class="export-menu-item" data-format="pdf">
+      <span class="export-menu-icon">PDF</span>PDF
+    </button>
+  `;
+  document.body.appendChild(menu);
+
+  // Position below the anchor button
+  const rect = anchorBtn.getBoundingClientRect();
+  menu.style.top  = `${rect.bottom + window.scrollY + 6}px`;
+  menu.style.left = `${rect.left  + window.scrollX}px`;
+
+  menu.querySelectorAll(".export-menu-item").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      menu.remove();
+      try {
+        await exportResume(resumeId, btn.dataset.format, resumeTitle);
+      } catch (err) {
+        alert(`Export failed: ${err.message}`);
+      }
+    });
+  });
+
+  // Dismiss on outside click
+  setTimeout(() => {
+    function outsideClick(e) {
+      if (!menu.contains(e.target) && e.target !== anchorBtn) {
+        menu.remove();
+        document.removeEventListener("click", outsideClick);
+      }
+    }
+    document.addEventListener("click", outsideClick);
+  }, 0);
 }
 
 // ---------------------------------------------------------------------------
