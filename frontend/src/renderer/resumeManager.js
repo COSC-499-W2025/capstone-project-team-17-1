@@ -156,7 +156,7 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-export-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openExportMenu(btn, btn.dataset.resumeId, btn.dataset.resumeTitle);
+      openExportModal(btn.dataset.resumeId, btn.dataset.resumeTitle);
     });
   });
 
@@ -348,72 +348,125 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-async function exportResume(resumeId, format, title) {
-  const slug = (title || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
-  const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Export failed (${res.status})`);
-  }
-  if (format === "pdf") {
-    const blob = await res.blob();
-    downloadBlob(blob, `${slug}.pdf`);
-  } else if (format === "markdown") {
-    const text = await res.text();
-    downloadBlob(new Blob([text], { type: "text/markdown" }), `${slug}.md`);
-  } else {
-    const data = await res.json();
-    const json = JSON.stringify(data.data || data, null, 2);
-    downloadBlob(new Blob([json], { type: "application/json" }), `${slug}.json`);
-  }
-}
+function openExportModal(resumeId, resumeTitle) {
+  document.getElementById("export-modal")?.remove();
 
-function openExportMenu(anchorBtn, resumeId, resumeTitle) {
-  // Close any existing export menus
-  document.querySelectorAll(".export-menu").forEach((m) => m.remove());
+  const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
 
-  const menu = document.createElement("div");
-  menu.className = "export-menu";
-  menu.innerHTML = `
-    <div class="export-menu-title">Export as</div>
-    <button class="export-menu-item" data-format="json">
-      <span class="export-menu-icon">{ }</span>JSON
-    </button>
-    <button class="export-menu-item" data-format="markdown">
-      <span class="export-menu-icon">MD</span>Markdown
-    </button>
-    <button class="export-menu-item" data-format="pdf">
-      <span class="export-menu-icon">PDF</span>PDF
-    </button>
+  const modal = document.createElement("div");
+  modal.id = "export-modal";
+  modal.className = "export-modal-overlay";
+  modal.innerHTML = `
+    <div class="export-window">
+      <div class="export-modal-header">
+        <h2>Export Resume</h2>
+        <button class="export-modal-close">✕</button>
+      </div>
+
+      <div class="export-format-tabs">
+        <button class="export-format-tab active" data-format="json">
+          <span class="export-tab-badge">{ }</span> JSON
+        </button>
+        <button class="export-format-tab" data-format="markdown">
+          <span class="export-tab-badge">MD</span> Markdown
+        </button>
+        <button class="export-format-tab" data-format="pdf">
+          <span class="export-tab-badge">PDF</span> PDF
+        </button>
+      </div>
+
+      <div class="export-preview-area" id="export-preview-area">
+        <div class="export-preview-placeholder">Loading preview…</div>
+      </div>
+
+      <div class="export-modal-footer">
+        <button class="primary-btn" id="export-download-btn">Download</button>
+      </div>
+    </div>
   `;
-  document.body.appendChild(menu);
 
-  // Position below the anchor button
-  const rect = anchorBtn.getBoundingClientRect();
-  menu.style.top  = `${rect.bottom + window.scrollY + 6}px`;
-  menu.style.left = `${rect.left  + window.scrollX}px`;
+  document.body.appendChild(modal);
 
-  menu.querySelectorAll(".export-menu-item").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      menu.remove();
-      try {
-        await exportResume(resumeId, btn.dataset.format, resumeTitle);
-      } catch (err) {
-        alert(`Export failed: ${err.message}`);
+  let currentFormat = "json";
+  const cache = {}; // format → { text } | { blob, url }
+
+  async function loadPreview(format) {
+    currentFormat = format;
+    const area = document.getElementById("export-preview-area");
+
+    if (cache[format]) {
+      renderPreview(format, cache[format]);
+      return;
+    }
+
+    area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
+
+    try {
+      const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error (${res.status})`);
       }
+
+      if (format === "pdf") {
+        const blob = await res.blob();
+        cache[format] = { blob, url: URL.createObjectURL(blob) };
+      } else if (format === "json") {
+        const data = await res.json();
+        cache[format] = { text: JSON.stringify(data.data || data, null, 2) };
+      } else {
+        cache[format] = { text: await res.text() };
+      }
+
+      renderPreview(format, cache[format]);
+    } catch (err) {
+      area.innerHTML = `<div class="export-preview-error">Failed to load preview: ${err.message}</div>`;
+    }
+  }
+
+  function renderPreview(format, data) {
+    const area = document.getElementById("export-preview-area");
+    if (format === "pdf") {
+      area.innerHTML = `<iframe class="export-pdf-frame" src="${data.url}"></iframe>`;
+    } else {
+      const escaped = data.text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      area.innerHTML = `<pre class="export-code-preview"><code>${escaped}</code></pre>`;
+    }
+  }
+
+  function cleanup() {
+    if (cache.pdf?.url) URL.revokeObjectURL(cache.pdf.url);
+    modal.remove();
+  }
+
+  modal.querySelector(".export-modal-close").onclick = cleanup;
+  modal.addEventListener("click", (e) => { if (e.target === modal) cleanup(); });
+
+  modal.querySelectorAll(".export-format-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modal.querySelectorAll(".export-format-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      loadPreview(btn.dataset.format);
     });
   });
 
-  // Dismiss on outside click
-  setTimeout(() => {
-    function outsideClick(e) {
-      if (!menu.contains(e.target) && e.target !== anchorBtn) {
-        menu.remove();
-        document.removeEventListener("click", outsideClick);
-      }
+  document.getElementById("export-download-btn").addEventListener("click", () => {
+    const data = cache[currentFormat];
+    if (!data) { alert("Please wait for the preview to finish loading."); return; }
+
+    if (currentFormat === "pdf") {
+      downloadBlob(data.blob, `${slug}.pdf`);
+    } else if (currentFormat === "json") {
+      downloadBlob(new Blob([data.text], { type: "application/json" }), `${slug}.json`);
+    } else {
+      downloadBlob(new Blob([data.text], { type: "text/markdown" }), `${slug}.md`);
     }
-    document.addEventListener("click", outsideClick);
-  }, 0);
+  });
+
+  loadPreview("json");
 }
 
 // ---------------------------------------------------------------------------

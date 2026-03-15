@@ -2780,56 +2780,175 @@ transition: all 0.2s ease;
   background: rgba(255,255,255,0.14);
 }
 
-/* Export dropdown menu */
-.export-menu {
+/* Export modal */
+.export-modal-overlay {
   position: fixed;
+  inset: 0;
   z-index: 9999;
-  background: #1e2130;
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+.export-window {
+  background: #1a1d2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  width: 720px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: slideUp 0.18s ease;
+}
+.export-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.export-modal-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  margin: 0;
+}
+.export-modal-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.export-modal-close:hover { color: rgba(255,255,255,0.9); }
+
+/* Format tabs */
+.export-format-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 14px 24px 0;
+  flex-shrink: 0;
+}
+.export-format-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.55);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.export-format-tab:hover {
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.8);
+}
+.export-format-tab.active {
+  background: rgba(99,102,241,0.2);
+  border-color: rgba(99,102,241,0.5);
+  color: #a5b4fc;
+}
+.export-tab-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.03em;
+}
+.export-format-tab.active .export-tab-badge {
+  background: rgba(99,102,241,0.35);
+}
+
+/* Preview area */
+.export-preview-area {
+  flex: 1;
+  margin: 14px 24px;
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
-  padding: 8px;
-  min-width: 160px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  animation: fadeInDown 0.12s ease;
+  overflow: hidden;
+  background: rgba(0,0,0,0.2);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.export-menu-title {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255,255,255,0.35);
-  padding: 2px 8px 8px;
+.export-code-preview {
+  margin: 0;
+  padding: 16px 20px;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.75);
+  overflow: auto;
+  flex: 1;
+  white-space: pre;
 }
-.export-menu-item {
+.export-pdf-frame {
+  width: 100%;
+  flex: 1;
+  border: none;
+  min-height: 420px;
+  background: #fff;
+}
+.export-preview-loading {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  color: rgba(255,255,255,0.85);
-  font-size: 0.875rem;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.13s;
-}
-.export-menu-item:hover {
-  background: rgba(255,255,255,0.1);
-}
-.export-menu-icon {
-  font-size: 0.72rem;
-  font-weight: 700;
   color: rgba(255,255,255,0.4);
-  min-width: 22px;
-  text-align: center;
-  background: rgba(255,255,255,0.08);
-  border-radius: 4px;
-  padding: 2px 4px;
+  font-size: 0.85rem;
+  padding: 48px 24px;
+  justify-content: center;
 }
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-6px); }
+.export-preview-placeholder {
+  color: rgba(255,255,255,0.25);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 48px 24px;
+}
+.export-preview-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  padding: 24px;
+}
+.export-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Footer */
+.export-modal-footer {
+  padding: 14px 24px 18px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ===================== */
