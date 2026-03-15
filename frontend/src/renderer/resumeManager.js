@@ -476,7 +476,10 @@ function buildResumeHtml(resume) {
         <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">
           ${itemsHtml}
         </div>
-        <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
+        <div class="re-section-footer">
+          <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
+          <button class="re-add-section-btn" data-resume-id="${rid}" data-after-section-id="${sid}">+ Add section</button>
+        </div>
       </div>`;
   }).join("");
 
@@ -485,7 +488,6 @@ function buildResumeHtml(resume) {
       ${heroHtml}
       ${headerSecHtml}
       ${sectionsHtml || ""}
-      <button class="re-add-section-btn" data-resume-id="${rid}">+ Add section</button>
     </div>`;
 }
 
@@ -709,8 +711,10 @@ function attachEditListeners(container) {
     // Add section
     const addSecBtn = e.target.closest(".re-add-section-btn");
     if (addSecBtn) {
-      const rid = addSecBtn.dataset.resumeId;
-      const key = `custom_${Date.now()}`;
+      const rid          = addSecBtn.dataset.resumeId;
+      const afterSid     = addSecBtn.dataset.afterSectionId;
+      const anchorSec    = afterSid ? container.querySelector(`.re-section[data-section-id="${afterSid}"]`) : null;
+      const key          = `custom_${Date.now()}`;
       try {
         const secRes  = await authFetch(`/resumes/${rid}/sections`, {
           method: "POST",
@@ -740,10 +744,18 @@ function attachEditListeners(container) {
             <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">
               ${itemHtml}
             </div>
-            <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">+ Add item</button>
+            <div class="re-section-footer">
+              <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sec.id}" data-section-key="${key}">+ Add item</button>
+              <button class="re-add-section-btn" data-resume-id="${rid}" data-after-section-id="${sec.id}">+ Add section</button>
+            </div>
           </div>`.trim();
         const newSec = tmp.firstElementChild;
-        addSecBtn.before(newSec);
+        // Insert after the anchor section, or at the end of the sheet
+        if (anchorSec) {
+          anchorSec.insertAdjacentElement("afterend", newSec);
+        } else {
+          container.querySelector(".re-sheet").appendChild(newSec);
+        }
         initAllEditables(newSec);
         recalcExpand(container);
       } catch (_) { alert("Failed to add section."); }
