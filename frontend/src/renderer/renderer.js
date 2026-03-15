@@ -46,17 +46,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   startMetrics();
 
-  loadMostUsedSkills();
-
-  loadRecentProjects();
-
-  loadProjectHealth();
-
-  loadErrorAnalysis();
-  loadProjects();
-
+  // Data loads are deferred to after auth completes (see auth.js).
+  // initAuthFlow() calls syncCloudDbAndRefresh() for logged-in users,
+  // and dispatches "auth:ready" for public mode — both paths load data
+  // only after CURRENT_USER is correctly set on the backend.
   loadRecentActivity();
-
   setInterval(loadRecentActivity, 1000);
 
 });

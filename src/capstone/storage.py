@@ -29,6 +29,14 @@ import sys
 
 logger = get_logger(__name__)
 
+def _user_dir(username: str) -> str:
+    """Return a filesystem-safe, case-sensitive directory name for a username.
+    Uses SHA256 so 'erensun408' and 'ErenSun408' always get different dirs,
+    even on case-insensitive filesystems (Windows/macOS).
+    """
+    return hashlib.sha256(username.encode()).hexdigest()[:24]
+
+
 def get_user_db_path():
 
     global CURRENT_USER
@@ -36,7 +44,7 @@ def get_user_db_path():
     if CURRENT_USER is None:
         return BASE_DIR / "guest_capstone.db"
 
-    path = BASE_DIR / "users" / CURRENT_USER
+    path = BASE_DIR / "users" / _user_dir(CURRENT_USER)
     path.mkdir(parents=True, exist_ok=True)
 
     return path / "capstone.db"
@@ -919,7 +927,7 @@ def set_current_user(user_id: str | None):
 
 def get_database_path():
     if CURRENT_USER:
-        path = BASE_DIR / "data" / "users" / CURRENT_USER
+        path = BASE_DIR / "data" / "users" / _user_dir(CURRENT_USER)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 

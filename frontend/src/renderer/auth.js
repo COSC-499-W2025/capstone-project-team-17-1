@@ -79,6 +79,7 @@ function setAuthFormMode(mode) {
   const title = document.getElementById("auth-title");
   const subtitle = document.getElementById("auth-subtitle");
   const emailInput = document.getElementById("auth-email");
+  const githubUrlInput = document.getElementById("auth-github-url");
   const submit = document.getElementById("auth-submit");
   const toggleBtn = document.getElementById("auth-toggle");
   const error = document.getElementById("auth-error");
@@ -89,12 +90,14 @@ function setAuthFormMode(mode) {
     title.textContent = "Register";
     subtitle.textContent = "Create account to enter Private Mode";
     emailInput.classList.remove("hidden");
+    githubUrlInput?.classList.remove("hidden");
     submit.textContent = "Register";
     toggleBtn.textContent = "Already have an account? Login";
   } else {
     title.textContent = "Login";
     subtitle.textContent = "Enter Private Mode";
     emailInput.classList.add("hidden");
+    githubUrlInput?.classList.add("hidden");
     submit.textContent = "Login";
     toggleBtn.textContent = "Need an account? Register";
   }
@@ -112,7 +115,7 @@ function goToPage(tabKey, pageId) {
   localStorage.setItem("loom_last_page", JSON.stringify({ tabKey, pageId }));
 }
 
-async function authFetch(path, options = {}) {
+export async function authFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = getAuthToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -267,10 +270,12 @@ async function changePassword() {
 function closeModalToPublic() {
   const usernameInput = document.getElementById("auth-username");
   const emailInput = document.getElementById("auth-email");
+  const githubUrlInput = document.getElementById("auth-github-url");
   const passwordInput = document.getElementById("auth-password");
   const error = document.getElementById("auth-error");
   if (usernameInput) usernameInput.value = "";
   if (emailInput) emailInput.value = "";
+  if (githubUrlInput) githubUrlInput.value = "";
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
   showAuthModal(false);
@@ -363,6 +368,14 @@ export async function initAuthFlow() {
       } else {
         goToPage("dashboard", "dashboard-page");
       }
+      // Public mode: load data from guest DB (CURRENT_USER is None on backend)
+      await Promise.all([
+        loadProjects(),
+        loadRecentProjects(),
+        loadProjectHealth(),
+        loadErrorAnalysis(),
+        loadMostUsedSkills(),
+      ]);
     }
   } catch (_) {
     setAuthToken(null);
@@ -391,9 +404,10 @@ export async function initAuthFlow() {
     return;
   }
 
+  const githubUrl = document.getElementById("auth-github-url")?.value.trim() || "";
   const payload =
     authMode === "register"
-      ? { username, password, email: email || null }
+      ? { username, password, email: email || null, github_url: githubUrl || null }
       : { username, password };
 
   const path = authMode === "register" ? "/auth/register" : "/auth/login";

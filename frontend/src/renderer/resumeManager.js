@@ -1,21 +1,12 @@
-const API_BASE = "http://127.0.0.1:8002";
-const CONTRIBUTOR_KEY = "loom_contributor_id";
-
-function getSelectedUserId() {
-  return localStorage.getItem(CONTRIBUTOR_KEY);
-}
-function setSelectedUserId(id) {
-  if (id) localStorage.setItem(CONTRIBUTOR_KEY, String(id));
-  else localStorage.removeItem(CONTRIBUTOR_KEY);
-}
+import { authFetch } from "./auth.js";
 
 // ---------------------------------------------------------------------------
-// API
+// API — all requests carry Bearer token via authFetch
 // ---------------------------------------------------------------------------
 
 async function fetchContributors() {
   try {
-    const res = await fetch(`${API_BASE}/showcase/users`);
+    const res = await authFetch("/showcase/users");
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data.data) ? data.data : [];
@@ -24,28 +15,31 @@ async function fetchContributors() {
 
 async function fetchProjects() {
   try {
-    const res = await fetch(`${API_BASE}/dashboard/recent-projects`);
+    const res = await authFetch("/dashboard/recent-projects");
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch (_) { return []; }
 }
 
-async function fetchResumes(userId) {
+async function fetchResumes() {
   try {
-    const res = await fetch(`${API_BASE}/resumes?user_id=${userId}`);
+    // user_id is resolved server-side from Bearer token
+    const res = await authFetch("/resumes");
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data.data) ? data.data : [];
   } catch (_) { return []; }
 }
 
-async function generateResume(userId, projectIds, title) {
-  const body = { user_id: Number(userId), create_new: true };
+async function generateResume(projectIds, title, contributorId) {
+  const body = { create_new: true };
   if (projectIds?.length) body.project_ids = projectIds;
   if (title) body.resume_title = title;
+  // Only pass user_id when user explicitly chose a contributor (collaborative project)
+  if (contributorId) body.user_id = Number(contributorId);
 
-  const res = await fetch(`${API_BASE}/resumes/generate`, {
+  const res = await authFetch("/resumes/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -56,12 +50,12 @@ async function generateResume(userId, projectIds, title) {
 }
 
 async function deleteResume(resumeId) {
-  const res = await fetch(`${API_BASE}/resumes/${resumeId}`, { method: "DELETE" });
+  const res = await authFetch(`/resumes/${resumeId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete resume");
 }
 
 async function fetchResumeDetail(resumeId) {
-  const res = await fetch(`${API_BASE}/resumes/${resumeId}`);
+  const res = await authFetch(`/resumes/${resumeId}`);
   if (!res.ok) throw new Error("Failed to fetch resume");
   const data = await res.json();
   return data.data;
@@ -75,14 +69,8 @@ async function renderResumeList() {
   const container = document.getElementById("resume-list-container");
   if (!container) return;
 
-  const userId = getSelectedUserId();
-  if (!userId) {
-    container.innerHTML = `<p class="resume-summary-text">Click "New Resume" to create your first resume.</p>`;
-    return;
-  }
-
   container.innerHTML = `<p class="resume-summary-text">Loading...</p>`;
-  const resumes = await fetchResumes(userId);
+  const resumes = await fetchResumes();
 
   if (!resumes.length) {
     container.innerHTML = `<p class="resume-summary-text">No resumes yet. Click "New Resume" to generate one.</p>`;
@@ -270,14 +258,13 @@ async function openNewResumeModal() {
     generateBtn.disabled = true;
     generateBtn.textContent = "Generating...";
 
-    // For individual-only resumes, use the first available contributor or a fallback
-    const userId = selectedContributor?.value || contributors[0]?.id;
     const projectIds = checkedProjects.map((cb) => cb.value);
     const title = document.getElementById("resume-title-input")?.value.trim() || "";
+    // Only pass contributorId for collaborative projects; individual projects use session user
+    const contributorId = selectedContributor?.value || null;
 
     try {
-      await generateResume(userId, projectIds, title);
-      setSelectedUserId(userId);
+      await generateResume(projectIds, title, contributorId);
       modal.remove();
       await renderResumeList();
     } catch (err) {
@@ -362,6 +349,18 @@ function buildResumeHtml(resume) {
 // ---------------------------------------------------------------------------
 
 export function initResumeManager() {
-  renderResumeList();
   document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
+
+  document.addEventListener("auth:mode-changed", (e) => {
+    if (e.detail?.isPrivate) {
+      // Logged in: backend resolves user_id from token, just render
+      renderResumeList();
+    } else {
+      // Logged out / public mode
+      const container = document.getElementById("resume-list-container");
+      if (container) {
+        container.innerHTML = `<p class="resume-summary-text">Click "New Resume" to create your first resume.</p>`;
+      }
+    }
+  });
 }
