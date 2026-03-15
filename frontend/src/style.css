@@ -2858,6 +2858,139 @@ transition: all 0.2s ease;
   display: none;
 }
 
+/* =====================
+   Inline editable resume
+   ===================== */
+
+.re-sheet {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  color: #1e293b;
+  font-family: "Inter", system-ui, sans-serif;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.re-hero {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.re-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.re-role {
+  font-size: 0.95rem;
+  color: #2563eb;
+  font-weight: 500;
+  margin-top: 4px;
+  min-height: 1.2em;
+}
+
+.re-section {
+  margin-top: 18px;
+}
+
+.re-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.re-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.re-item {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.re-item-header {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+.re-sep {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.re-item-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.re-item-content {
+  font-size: 0.875rem;
+  color: #334155;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+.re-bullets {
+  margin: 6px 0 0 16px;
+  padding: 0;
+  font-size: 0.875rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
+/* Editable field styles */
+.re-editable {
+  border-radius: 3px;
+  outline: none;
+  transition: background 0.15s, box-shadow 0.15s;
+  cursor: text;
+  min-width: 4px;
+  display: inline-block;
+}
+
+.re-editable:hover {
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: 0 1px 0 0 #93c5fd;
+}
+
+.re-editable:focus {
+  background: rgba(37, 99, 235, 0.09);
+  box-shadow: 0 2px 0 0 #2563eb;
+}
+
+.re-item-content.re-editable,
+.re-bullets li.re-editable {
+  display: block;
+}
+
+/* Saved indicator */
+.re-saved {
+  font-size: 0.72rem;
+  color: #22c55e;
+  font-weight: 500;
+  margin-left: 8px;
+  opacity: 1;
+  animation: reFadeOut 2s forwards;
+}
+
+@keyframes reFadeOut {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ===================== */
 /* CLASSIFICATION BADGES */
 /* ===================== */

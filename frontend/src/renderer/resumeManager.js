@@ -133,6 +133,7 @@ async function renderResumeList() {
         try {
           const resume = await fetchResumeDetail(resumeId);
           inner.innerHTML = buildResumeHtml(resume);
+          attachEditListeners(inner);
           loaded = true;
         } catch (_) {
           inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Failed to load.</p>`;
@@ -334,40 +335,172 @@ async function confirmDeleteResume(resumeId) {
 }
 
 
+// ---------------------------------------------------------------------------
+// Editable resume renderer
+// ---------------------------------------------------------------------------
+
+function ce(field, value, extra = "") {
+  // Shorthand: render a contenteditable span with data attributes
+  return `<span contenteditable="true" data-field="${field}" ${extra} class="re-editable">${value || ""}</span>`;
+}
+
 function buildResumeHtml(resume) {
+  const rid = resume.id;
   const sections = (resume.sections || []).filter((s) => s.is_enabled !== false);
+
   const sectionsHtml = sections.map((sec) => {
+    const sid = sec.id;
     const items = (sec.items || []).filter((i) => i.is_enabled !== false);
     if (!items.length) return "";
+
     const itemsHtml = items.map((item) => {
+      const iid = item.id;
+      const ctx = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
       const dates = [item.start_date, item.end_date].filter(Boolean).join(" – ");
       const bullets = (item.bullets || []).filter(Boolean);
+
       return `
-        <div class="resume-preview-project">
-          ${item.title ? `<div class="resume-preview-project-title">${item.title}${item.subtitle ? ` — <span style="font-weight:normal">${item.subtitle}</span>` : ""}</div>` : ""}
-          ${dates || item.location ? `<div class="resume-preview-project-meta">${[dates, item.location].filter(Boolean).join(" · ")}</div>` : ""}
-          ${item.content ? `<p style="margin:4px 0">${item.content}</p>` : ""}
-          ${bullets.length ? `<ul>${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>` : ""}
+        <div class="re-item">
+          ${item.title ? `<div class="re-item-header">
+            ${ce("title", item.title, ctx)}
+            ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
+          </div>` : ""}
+          ${dates || item.location ? `<div class="re-item-meta">${[dates, item.location].filter(Boolean).join(" · ")}</div>` : ""}
+          ${item.content ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
+          ${bullets.length ? `
+            <ul class="re-bullets" ${ctx}>
+              ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
+            </ul>` : ""}
         </div>
       `;
     }).join("");
+
     return `
-      <div class="resume-preview-section">
-        <h3>${sec.label || sec.key}</h3>
-        ${itemsHtml}
+      <div class="re-section">
+        <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
+        <div class="re-section-body">${itemsHtml}</div>
       </div>
     `;
   }).join("");
 
   return `
-    <div class="resume-preview-sheet">
-      <div class="resume-preview-hero">
-        <h1>${resume.title || "Resume"}</h1>
-        ${resume.target_role ? `<p class="resume-preview-role">${resume.target_role}</p>` : ""}
+    <div class="re-sheet">
+      <div class="re-hero">
+        <div class="re-title">${ce("title", resume.title || "Resume", `data-resume-id="${rid}"`)}</div>
+        <div class="re-role">${ce("target_role", resume.target_role || "", `data-resume-id="${rid}"`)}</div>
       </div>
       ${sectionsHtml || `<p class="resume-summary-text">No content yet.</p>`}
     </div>
   `;
+}
+
+function attachEditListeners(container) {
+  function showSaved(el) {
+    const existing = el.parentElement?.querySelector(".re-saved");
+    if (existing) { existing.remove(); }
+    const tag = document.createElement("span");
+    tag.className = "re-saved";
+    tag.textContent = "Saved ✓";
+    el.parentElement?.appendChild(tag);
+    setTimeout(() => tag.remove(), 2000);
+  }
+
+  async function save(el) {
+    const field = el.dataset.field;
+    const rid = el.dataset.resumeId;
+    const sid = el.dataset.sectionId;
+    const iid = el.dataset.itemId;
+    const value = el.innerText.trim();
+
+    try {
+      if (iid) {
+        if (field === "bullet") {
+          const bullets = [...el.closest(".re-bullets").querySelectorAll("li")]
+            .map((li) => li.innerText.trim()).filter(Boolean);
+          await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bullets }),
+          });
+        } else {
+          await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [field]: value }),
+          });
+        }
+      } else if (sid) {
+        await authFetch(`/resumes/${rid}/sections/${sid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value }),
+        });
+      } else {
+        await authFetch(`/resumes/${rid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value }),
+        });
+      }
+      showSaved(el);
+    } catch (err) {
+      console.error("Auto-save failed:", err);
+    }
+  }
+
+  function initEditable(el) {
+    el.dataset.original = el.innerText.trim();
+
+    // Paste as plain text
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain");
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      sel.deleteFromDocument();
+      sel.getRangeAt(0).insertNode(document.createTextNode(text));
+      sel.collapseToEnd();
+    });
+
+    // Bullets: Enter = new bullet, Backspace on empty = delete
+    if (el.dataset.field === "bullet") {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const newLi = document.createElement("li");
+          newLi.contentEditable = "true";
+          newLi.className = "re-editable";
+          newLi.dataset.field = "bullet";
+          newLi.dataset.resumeId = el.dataset.resumeId;
+          newLi.dataset.sectionId = el.dataset.sectionId;
+          newLi.dataset.itemId = el.dataset.itemId;
+          el.after(newLi);
+          newLi.focus();
+          initEditable(newLi);
+        } else if (e.key === "Backspace" && el.innerText.trim() === "") {
+          e.preventDefault();
+          const prev = el.previousElementSibling;
+          el.remove();
+          prev?.focus();
+          save(el); // save remaining bullets
+        }
+      });
+    } else {
+      // Single-line fields: block Enter
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") e.preventDefault();
+      });
+    }
+
+    el.addEventListener("blur", () => {
+      if (el.innerText.trim() !== el.dataset.original) {
+        el.dataset.original = el.innerText.trim();
+        save(el);
+      }
+    });
+  }
+
+  container.querySelectorAll(".re-editable").forEach(initEditable);
 }
 
 // ---------------------------------------------------------------------------
