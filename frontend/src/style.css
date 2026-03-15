@@ -2871,6 +2871,7 @@ transition: all 0.2s ease;
   box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
 
+/* --- Hero (resume title + target role) --- */
 .re-hero {
   margin-bottom: 20px;
   padding-bottom: 16px;
@@ -2892,6 +2893,7 @@ transition: all 0.2s ease;
   min-height: 1.2em;
 }
 
+/* --- Section --- */
 .re-section {
   margin-top: 18px;
 }
@@ -2908,9 +2910,10 @@ transition: all 0.2s ease;
 .re-section-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
+/* --- Item card --- */
 .re-item {
   padding: 10px 12px;
   border: 1px solid #e2e8f0;
@@ -2918,10 +2921,47 @@ transition: all 0.2s ease;
 }
 
 .re-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
   font-weight: 600;
   color: #0f172a;
   font-size: 0.95rem;
   margin-bottom: 2px;
+}
+
+.re-item-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.re-item-date {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.re-item-date .re-editable[data-field="start_date"]:empty::before {
+  content: "Start Date";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
+.re-item-date .re-editable[data-field="end_date"]:empty::before {
+  content: "End Date";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
+.re-date-sep {
+  color: #94a3b8;
+  font-weight: 400;
 }
 
 .re-sep {
@@ -2935,6 +2975,12 @@ transition: all 0.2s ease;
   margin-bottom: 4px;
 }
 
+.re-item-meta-links {
+  font-size: 0.8rem;
+  color: #2563eb;
+  margin-top: 2px;
+}
+
 .re-item-content {
   font-size: 0.875rem;
   color: #334155;
@@ -2942,6 +2988,7 @@ transition: all 0.2s ease;
   margin-top: 4px;
 }
 
+/* --- Bullets --- */
 .re-bullets {
   margin: 6px 0 0 16px;
   padding: 0;
@@ -2950,7 +2997,7 @@ transition: all 0.2s ease;
   line-height: 1.6;
 }
 
-/* Editable field styles */
+/* --- Editable field styles --- */
 .re-editable {
   border-radius: 3px;
   outline: none;
@@ -2975,7 +3022,7 @@ transition: all 0.2s ease;
   display: block;
 }
 
-/* Saved indicator */
+/* --- Saved indicator --- */
 .re-saved {
   font-size: 0.72rem;
   color: #22c55e;

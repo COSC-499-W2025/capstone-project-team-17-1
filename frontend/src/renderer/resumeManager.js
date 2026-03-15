@@ -339,36 +339,124 @@ async function confirmDeleteResume(resumeId) {
 // Editable resume renderer
 // ---------------------------------------------------------------------------
 
-function ce(field, value, extra = "") {
-  // Shorthand: render a contenteditable span with data attributes
-  return `<span contenteditable="true" data-field="${field}" ${extra} class="re-editable">${value || ""}</span>`;
+function ce(field, value, ctx = "") {
+  return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
+}
+
+function ceHeader(field, value, ctx = "") {
+  // Header metadata fields save via data-header-field (collected as full metadata dict)
+  return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
 function buildResumeHtml(resume) {
   const rid = resume.id;
   const sections = (resume.sections || []).filter((s) => s.is_enabled !== false);
 
-  const sectionsHtml = sections.map((sec) => {
+  const headerSec = sections.find((s) => s.key === "header");
+  const otherSections = sections.filter((s) => s.key !== "header");
+
+  // === Hero: resume document title + target role ===
+  const heroHtml = `
+    <div class="re-hero">
+      <div class="re-title">${ce("title", resume.title || "Resume", `data-resume-id="${rid}"`)}</div>
+      <div class="re-role">${ce("target_role", resume.target_role || "", `data-resume-id="${rid}"`)}</div>
+    </div>
+  `;
+
+  // === Header section — contact card ===
+  let headerSecHtml = "";
+  if (headerSec?.items?.length) {
+    const item = headerSec.items[0];
+    const meta = item.metadata || {};
+    const sid = headerSec.id, iid = item.id;
+    const ctx = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
+
+    const fullName  = meta.full_name     || item.content || "Your Name";
+    const location  = meta.location      || "";
+    const email     = meta.email         || "";
+    const phone     = meta.phone         || "";
+    const github    = meta.github_url    || "";
+    const portfolio = meta.portfolio_url || "";
+
+    const contactParts = [
+      location && ceHeader("location", location, ctx),
+      email    && ceHeader("email",    email,    ctx),
+      phone    && ceHeader("phone",    phone,    ctx),
+    ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
+
+    const linkParts = [
+      github    && ceHeader("github_url",    github,    ctx),
+      portfolio && ceHeader("portfolio_url", portfolio, ctx),
+    ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
+
+    headerSecHtml = `
+      <div class="re-section">
+        <div class="re-section-label">${ce("label", headerSec.label || "Header", `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
+        <div class="re-section-body">
+          <div class="re-item">
+            <div class="re-item-header">
+              <span>${ceHeader("full_name", fullName, ctx)}</span>
+            </div>
+            ${contactParts ? `<div class="re-item-meta">${contactParts}</div>` : ""}
+            ${linkParts    ? `<div class="re-item-meta-links">${linkParts}</div>` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // === Other sections ===
+  const sectionsHtml = otherSections.map((sec) => {
     const sid = sec.id;
+    const key = sec.key || "";
     const items = (sec.items || []).filter((i) => i.is_enabled !== false);
     if (!items.length) return "";
 
     const itemsHtml = items.map((item) => {
       const iid = item.id;
       const ctx = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
-      const dates = [item.start_date, item.end_date].filter(Boolean).join(" – ");
       const bullets = (item.bullets || []).filter(Boolean);
 
+      if (key === "core_skill") {
+        return `
+          <div class="re-item">
+            <div class="re-item-header">
+              <span class="re-item-header-left">
+                ${ce("title", item.title, ctx)}
+                <span class="re-sep">: </span>
+                ${ce("content", item.content, ctx)}
+              </span>
+            </div>
+          </div>
+        `;
+      }
+
+      if (key === "summary") {
+        return `
+          <div class="re-item">
+            <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
+          </div>
+        `;
+      }
+
+      // education / experience / project / custom
       return `
         <div class="re-item">
-          ${item.title ? `<div class="re-item-header">
-            ${ce("title", item.title, ctx)}
-            ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
-          </div>` : ""}
-          ${dates || item.location ? `<div class="re-item-meta">${[dates, item.location].filter(Boolean).join(" · ")}</div>` : ""}
-          ${item.content ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
+          <div class="re-item-header">
+            <span class="re-item-header-left">
+              ${ce("title", item.title, ctx)}
+              ${item.subtitle ? `<span class="re-sep"> — </span>${ce("subtitle", item.subtitle, ctx)}` : ""}
+            </span>
+            <span class="re-item-date">
+              ${ce("start_date", item.start_date || "", ctx)}
+              <span class="re-date-sep"> – </span>
+              ${ce("end_date", item.end_date || "", ctx)}
+            </span>
+          </div>
+          ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
+          ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
           ${bullets.length ? `
-            <ul class="re-bullets" ${ctx}>
+            <ul class="re-bullets">
               ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
             </ul>` : ""}
         </div>
@@ -385,10 +473,8 @@ function buildResumeHtml(resume) {
 
   return `
     <div class="re-sheet">
-      <div class="re-hero">
-        <div class="re-title">${ce("title", resume.title || "Resume", `data-resume-id="${rid}"`)}</div>
-        <div class="re-role">${ce("target_role", resume.target_role || "", `data-resume-id="${rid}"`)}</div>
-      </div>
+      ${heroHtml}
+      ${headerSecHtml}
       ${sectionsHtml || `<p class="resume-summary-text">No content yet.</p>`}
     </div>
   `;
@@ -406,11 +492,31 @@ function attachEditListeners(container) {
   }
 
   async function save(el) {
-    const field = el.dataset.field;
     const rid = el.dataset.resumeId;
     const sid = el.dataset.sectionId;
     const iid = el.dataset.itemId;
     const value = el.innerText.trim();
+
+    // Header metadata fields — collect all sibling header fields and save as metadata dict
+    if (el.dataset.headerField) {
+      const allHeaderEls = container.querySelectorAll(`[data-header-field][data-item-id="${iid}"]`);
+      const meta = {};
+      allHeaderEls.forEach((hel) => { meta[hel.dataset.headerField] = hel.innerText.trim(); });
+      const fullName = meta.full_name || "";
+      try {
+        await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: fullName, metadata: meta }),
+        });
+        showSaved(el);
+      } catch (err) {
+        console.error("Auto-save failed:", err);
+      }
+      return;
+    }
+
+    const field = el.dataset.field;
 
     try {
       if (iid) {
@@ -463,7 +569,7 @@ function attachEditListeners(container) {
     });
 
     // Bullets: Enter = new bullet, Backspace on empty = delete
-    if (el.dataset.field === "bullet") {
+    if (!el.dataset.headerField && el.dataset.field === "bullet") {
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -500,7 +606,7 @@ function attachEditListeners(container) {
     });
   }
 
-  container.querySelectorAll(".re-editable").forEach(initEditable);
+  container.querySelectorAll(".re-editable[data-field], .re-editable[data-header-field]").forEach(initEditable);
 }
 
 // ---------------------------------------------------------------------------
