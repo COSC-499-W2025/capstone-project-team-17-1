@@ -2913,6 +2913,49 @@ transition: all 0.2s ease;
   gap: 8px;
 }
 
+/* --- Drag handles --- */
+.re-section-drag,
+.re-item-drag {
+  color: #cbd5e1;
+  cursor: grab;
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.re-section:hover .re-section-drag,
+.re-item:hover .re-item-drag {
+  opacity: 1;
+}
+
+.re-section-drag:hover,
+.re-item-drag:hover {
+  color: #64748b;
+}
+
+.re-item-drag {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Drag states */
+.re-dragging {
+  opacity: 0.4;
+}
+
+.re-drop-above {
+  border-top: 2px solid #2563eb !important;
+}
+
+.re-drop-below {
+  border-bottom: 2px solid #2563eb !important;
+}
+
 /* --- Section head (label + delete btn) --- */
 .re-section-head {
   display: flex;
@@ -2988,7 +3031,7 @@ transition: all 0.2s ease;
 /* --- Item card --- */
 .re-item {
   position: relative;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 20px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }

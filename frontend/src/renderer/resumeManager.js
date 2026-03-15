@@ -353,12 +353,13 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
   const del  = `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>`;
+  const drag = `<span class="re-item-drag" title="Drag to reorder">⠿</span>`;
   const bullets = (item.bullets || []).filter(Boolean);
 
   if (sectionKey === "core_skill") {
     return `
-      <div class="re-item">
-        ${del}
+      <div class="re-item" data-item-id="${iid}">
+        ${drag}${del}
         <div class="re-item-header">
           <span class="re-item-header-left">
             ${ce("title", item.title, ctx)}
@@ -371,19 +372,16 @@ function buildItemHtml(rid, sid, sectionKey, item) {
 
   if (sectionKey === "summary") {
     return `
-      <div class="re-item">
-        ${del}
+      <div class="re-item" data-item-id="${iid}">
+        ${drag}${del}
         <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
       </div>`;
   }
 
   // education / experience / project / custom
-  // Line 1: title (bold) + date range (right-aligned)
-  // Line 2: subtitle (muted, own row)
-  // Line 3+: location, content, bullets
   return `
-    <div class="re-item">
-      ${del}
+    <div class="re-item" data-item-id="${iid}">
+      ${drag}${del}
       <div class="re-item-header">
         <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
         <span class="re-item-date">
@@ -470,6 +468,7 @@ function buildResumeHtml(resume) {
     return `
       <div class="re-section" data-section-id="${sid}">
         <div class="re-section-head">
+          <span class="re-section-drag" title="Drag to reorder">⠿</span>
           <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
           <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>
         </div>
@@ -518,6 +517,116 @@ function recalcExpand(container) {
       expand.style.maxHeight = inner.scrollHeight + 32 + "px";
     });
   }
+}
+
+function setupDragDrop(container) {
+  let dragEl   = null;
+  let dragType = null; // 'section' | 'item'
+
+  // Make drag handle the trigger — set draggable on parent only while handle is pressed
+  container.addEventListener("mousedown", (e) => {
+    const secHandle  = e.target.closest(".re-section-drag");
+    const itemHandle = e.target.closest(".re-item-drag");
+    if (secHandle)  secHandle.closest(".re-section").setAttribute("draggable", "true");
+    if (itemHandle) itemHandle.closest(".re-item").setAttribute("draggable", "true");
+  });
+
+  container.addEventListener("mouseup", () => {
+    // Clean up draggable if drag never started
+    container.querySelectorAll(".re-section[draggable], .re-item[draggable]").forEach((el) => {
+      if (!el.classList.contains("re-dragging")) el.removeAttribute("draggable");
+    });
+  });
+
+  container.addEventListener("dragstart", (e) => {
+    const sec  = e.target.closest(".re-section[draggable]");
+    const item = e.target.closest(".re-item[draggable]");
+    if (sec)  { dragEl = sec;  dragType = "section"; }
+    if (item) { dragEl = item; dragType = "item"; }
+    if (!dragEl) return;
+    e.dataTransfer.effectAllowed = "move";
+    setTimeout(() => dragEl.classList.add("re-dragging"), 0);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const selector = dragType === "section" ? ".re-section:not(.re-dragging)" : ".re-item:not(.re-dragging)";
+    const over = e.target.closest(selector);
+    if (!over || over === dragEl) return;
+
+    // Clear old indicators
+    container.querySelectorAll(".re-drop-above, .re-drop-below").forEach((el) => {
+      el.classList.remove("re-drop-above", "re-drop-below");
+    });
+
+    const rect = over.getBoundingClientRect();
+    over.classList.add(e.clientY < rect.top + rect.height / 2 ? "re-drop-above" : "re-drop-below");
+  });
+
+  container.addEventListener("dragleave", (e) => {
+    const el = e.target.closest(".re-section, .re-item");
+    if (el && !el.contains(e.relatedTarget)) {
+      el.classList.remove("re-drop-above", "re-drop-below");
+    }
+  });
+
+  container.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    container.querySelectorAll(".re-drop-above, .re-drop-below").forEach((el) => {
+      el.classList.remove("re-drop-above", "re-drop-below");
+    });
+    if (!dragEl) return;
+
+    const selector = dragType === "section" ? ".re-section:not(.re-dragging)" : ".re-item:not(.re-dragging)";
+    const over = e.target.closest(selector);
+    if (!over || over === dragEl) return;
+
+    if (dragType === "section") {
+      const rect = over.getBoundingClientRect();
+      e.clientY < rect.top + rect.height / 2 ? over.before(dragEl) : over.after(dragEl);
+
+      const rid = dragEl.querySelector("[data-resume-id]")?.dataset.resumeId;
+      if (!rid) return;
+      const ids = [...container.querySelectorAll(".re-section[data-section-id]")]
+        .map((s) => s.dataset.sectionId);
+      await authFetch(`/resumes/${rid}/sections/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      }).catch(console.error);
+
+    } else if (dragType === "item") {
+      const srcBody = dragEl.closest(".re-section-body");
+      const tgtBody = over.closest(".re-section-body");
+      if (!srcBody || srcBody !== tgtBody) return; // cross-section not supported
+
+      const rect = over.getBoundingClientRect();
+      e.clientY < rect.top + rect.height / 2 ? over.before(dragEl) : over.after(dragEl);
+
+      const rid = srcBody.dataset.resumeId;
+      const sid = srcBody.dataset.sectionId;
+      const ids = [...srcBody.querySelectorAll(".re-item[data-item-id]")]
+        .map((el) => el.dataset.itemId);
+      await authFetch(`/resumes/${rid}/sections/${sid}/items/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      }).catch(console.error);
+    }
+
+    recalcExpand(container);
+  });
+
+  container.addEventListener("dragend", () => {
+    dragEl?.classList.remove("re-dragging");
+    dragEl?.removeAttribute("draggable");
+    container.querySelectorAll(".re-drop-above, .re-drop-below").forEach((el) => {
+      el.classList.remove("re-drop-above", "re-drop-below");
+    });
+    dragEl = null;
+    dragType = null;
+  });
 }
 
 function attachEditListeners(container) {
@@ -648,6 +757,7 @@ function attachEditListeners(container) {
   }
 
   initAllEditables(container);
+  setupDragDrop(container);
 
   // --- single delegated click handler on the root container ---
   container.addEventListener("click", async (e) => {
