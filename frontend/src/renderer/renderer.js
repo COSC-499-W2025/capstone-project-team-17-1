@@ -1,3 +1,4 @@
+import { initPortfolioCustomization } from "./portfolioCustomization.js";
 import { initThemeToggle } from "./theme.js";
 import { initWindowControls } from "./windowControls.js";
 import { startMetrics } from "./metrics.js";
@@ -41,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initNavigation();
   
   initPortfolioResume();
+  initPortfolioCustomization();
   initResumeManager();
 
   initDisplayPreferences();

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Loom</title>
+  <title>Capstone</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -52,52 +52,26 @@
       <!-- DASHBOARD PAGE -->
       <!-- ===================== -->
       <div id="dashboard-page" class="page active">
-        <div class="dashboard-toolbar">
-          <div class="dashboard-toolbar-copy">
-            <h1>Dashboard</h1>
-          </div>
-          <div class="dashboard-toolbar-controls">
-            <input id="dashboard-search-input" class="dashboard-search-input" type="text" placeholder="Search dashboard widgets..." />
-            <select id="dashboard-filter-select" class="dashboard-filter-select">
-              <option value="all">All widgets</option>
-              <option value="analysis">Analysis</option>
-              <option value="projects">Projects</option>
-              <option value="system">System</option>
-              <option value="activity">Activity</option>
-            </select>
-          </div>
-        </div>
-        <div class="dashboard-grid-area">
-          <!-- Skeleton loader: shown while backend is starting -->
-          <div id="dashboard-loader" class="dashboard dashboard-loader">
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div><div class="skeleton-line short"></div></div>
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-            <div class="card skeleton-card"><div class="skeleton-shimmer"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-          </div>
-          <!-- Real dashboard content: hidden until APIs are ready -->
-          <div id="dashboard-content" class="dashboard dashboard-content hidden">
+        <div class="dashboard">
 
-          <div id="most-used-skills" class="card dashboard-widget" data-widget-id="most-used-skills" data-widget-label="Most Used Skills" data-widget-category="analysis">Most Used Skills</div>
+          <div id="most-used-skills" class="card">Most Used Skills</div>
 
-          <div class="card error-analysis-card dashboard-widget" data-widget-id="error-analysis" data-widget-label="Error Analysis" data-widget-category="analysis">
+          <div class="card error-analysis-card">
             <h2 class="card-title">Error Analysis</h2>
             <div id="error-analysis-container" class="error-analysis-container"></div>
           </div>
 
-          <div class="card dashboard-widget" data-widget-id="project-health" data-widget-label="Project Health" data-widget-category="projects">
+          <div class="card">
             <h3>Project Health</h3>
             <div id="project-health-container" class="health-grid"></div>
           </div>
 
-          <div class="card recent-projects-card dashboard-widget" data-widget-id="recent-projects" data-widget-label="Recent Projects" data-widget-category="projects">
+          <div class="card recent-projects-card">
             <h2 class="card-title">Recent Projects</h2>
             <div id="recent-projects-container" class="recent-projects-container"></div>
           </div>
 
-          <div id="system-health-card" class="card dashboard-widget" data-widget-id="system-health" data-widget-label="System Health" data-widget-category="system">
+          <div id="system-health-card" class="card">
             <h3>System Health</h3>
 
             <div class="status-row">
@@ -153,12 +127,11 @@
             </div>
           </div>
 
-          <div class="card dashboard-widget" data-widget-id="activity-log" data-widget-label="Activity Log" data-widget-category="activity">
+          <div class="card">
             <h3 class="card-title">Activity Log</h3>
             <div id="recent-activity" class="activity-container"></div>
           </div>
 
-          </div>
         </div>
       </div>
 
@@ -189,62 +162,39 @@
           <div class="portfolio-header">
             <div>
               <h1>Portfolio & Resume</h1>
+              <p class="portfolio-subtitle">
+                Showcase your strongest work, core skills, and one-page resume highlights.
+              </p>
             </div>
             <div class="portfolio-actions">
-              <input id="portfolio-search-input" class="dashboard-search-input" type="text" placeholder="Search portfolio sections..." />
-              <select id="portfolio-filter-select" class="dashboard-filter-select">
-                <option value="all">All sections</option>
-                <option value="summary">Summary</option>
-                <option value="projects">Projects</option>
-                <option value="insights">Insights</option>
-                <option value="activity">Activity</option>
-              </select>
-              <div id="portfolio-selection-wrapper" class="dashboard-selection-wrapper hidden">
-                <button id="portfolio-selection-toggle" class="secondary-btn dashboard-selection-toggle" type="button">
-                  Selection
-                </button>
-                <div id="portfolio-selection-panel" class="dashboard-selection-panel hidden"></div>
-              </div>
               <button id="preview-resume-btn" class="secondary-btn">Preview Resume</button>
               <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
             </div>
           </div>
       
-          <!-- My Resumes -->
-          <div class="card resume-manager-card">
-            <div class="resume-manager-header">
-              <h2 class="card-title">My Resumes</h2>
-              <div class="resume-manager-actions">
-                <button id="new-resume-btn" class="primary-btn">New Resume</button>
-              </div>
-            </div>
-            <div id="resume-list-container" class="resume-list-container">
-              <p class="resume-summary-text">Select a contributor above to see their resumes.</p>
-            </div>
-          </div>
-
           <div class="portfolio-grid">
-
-            <div class="card portfolio-hero-card portfolio-section" data-portfolio-section="resume-summary" data-portfolio-label="Resume Snapshot" data-portfolio-category="summary">
+      
+            <div class="card portfolio-hero-card">
               <h2 class="card-title">Resume Snapshot</h2>
               <div id="resume-summary-container" class="resume-summary-container"></div>
             </div>
       
-            <div class="card portfolio-projects-card portfolio-section" data-portfolio-section="top-projects" data-portfolio-label="Top 3 Project Showcase" data-portfolio-category="projects">
+            <div class="card portfolio-projects-card">
               <h2 class="card-title">Top 3 Project Showcase</h2>
               <div id="top-projects-container" class="top-projects-container"></div>
             </div>
       
-            <div class="card portfolio-skills-card portfolio-section" data-portfolio-section="portfolio-stats" data-portfolio-label="Portfolio Stats" data-portfolio-category="insights">
+            <div class="card portfolio-skills-card">
               <h2 class="card-title">Portfolio Stats</h2>
               <div id="skills-expertise-container" class="skills-expertise-container"></div>
             </div>
       
-            <div class="card portfolio-timeline-card portfolio-section" data-portfolio-section="skills-timeline" data-portfolio-label="Skills Timeline" data-portfolio-category="insights">
+            <div class="card portfolio-timeline-card">
               <h2 class="card-title">Skills Timeline</h2>
               <div id="skills-timeline-container" class="skills-timeline-container"></div>
             </div>
-            <div class="card portfolio-heatmap-card portfolio-section" data-portfolio-section="activity-heatmap" data-portfolio-label="Activity Heatmap" data-portfolio-category="activity">
+            
+            <div class="card portfolio-heatmap-card">
               <h2 class="card-title">Activity Heatmap</h2>
               <div id="activity-heatmap-container" class="activity-heatmap-container"></div>
             </div>
@@ -253,15 +203,44 @@
         </div>
       </div>
       <div id="customization-page" class="page">
-        <div class="tab-panel">
-          <div class="customization-empty">
-            <h3>Customization</h3>
-            <p>empty for now</p>
+        <div id="portfolio-customization-root" class="tab-panel customization-page-shell">
+          <div class="customization-header">
+            <div>
+              <h1>Portfolio Customization</h1>
+              <p class="resume-summary-text">
+                Choose featured projects, edit portfolio-facing descriptions, and control which sections appear in your portfolio.
+              </p>
+            </div>
+            <div class="customization-actions">
+              <button id="portfolio-customization-save-btn" class="primary-btn" type="button">
+                Save Customization
+              </button>
+            </div>
+          </div>
+      
+          <div id="portfolio-customization-status" class="customization-status"></div>
+      
+          <div class="customization-grid">
+            <div class="card customization-card">
+              <h2 class="card-title">Section Visibility</h2>
+              <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
+            </div>
+      
+            <div class="card customization-card">
+              <h2 class="card-title">Featured Projects</h2>
+              <p class="resume-summary-text">
+                Select up to 3 projects to appear in the Top 3 Project Showcase.
+              </p>
+              <div id="portfolio-featured-projects-container" class="customization-project-picker"></div>
+            </div>
+      
+            <div class="card customization-card customization-card-wide">
+              <h2 class="card-title">Project Portfolio Details</h2>
+              <div id="portfolio-project-editor-container" class="customization-project-editor-list"></div>
+            </div>
           </div>
         </div>
       </div>
-
-      <div id="project-viewer-page" class="page"></div>
 
       <div id="settings-page" class="page">
         <div id="tab-settings" class="tab-panel">
@@ -292,7 +271,6 @@
       <p id="auth-subtitle">Enter Private Mode</p>
       <input id="auth-username" type="text" placeholder="Username" />
       <input id="auth-email" class="hidden" type="email" placeholder="Email (optional)" />
-      <input id="auth-github-url" class="hidden" type="text" placeholder="GitHub URL (e.g. https://github.com/username)" />
       <input id="auth-password" type="password" placeholder="Password" />
       <div id="auth-error" class="auth-error"></div>
       <div class="auth-actions">
