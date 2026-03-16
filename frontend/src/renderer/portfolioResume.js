@@ -128,6 +128,26 @@ function formatPeriodLabel(period) {
   return raw || "Unknown";
 }
 
+function formatTimelineTimestamp(timestamp) {
+  const raw = String(timestamp || "").trim();
+  if (!raw) return "Unknown";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return raw;
+  }
+
+  return date.toLocaleString("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 function getHeatmapBucket(intensity) {
   if (intensity >= 0.8) return 4;
   if (intensity >= 0.6) return 3;
@@ -408,10 +428,18 @@ function renderSkillsTimeline(timeline) {
   container.innerHTML = timeline
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
+      const timeLabel = formatTimelineTimestamp(entry.timestamp || entry.year);
+      const projectLabel = String(entry.project_id || "").trim();
 
       return `
         <div class="timeline-year-row">
-          <div class="timeline-year">${escapeHtml(entry.year)}</div>
+          <div class="timeline-year">
+            <span class="timeline-dot" aria-hidden="true"></span>
+            <div class="timeline-time-block">
+              <span class="timeline-time-label">${escapeHtml(timeLabel)}</span>
+              ${projectLabel ? `<span class="timeline-project-label">${escapeHtml(projectLabel)}</span>` : ""}
+            </div>
+          </div>
           <div class="timeline-track">
             <div class="timeline-skill-pills">
               ${

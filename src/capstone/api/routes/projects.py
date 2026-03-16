@@ -821,6 +821,14 @@ def edit_project(id: str, payload: ProjectEdit):
     return {"data": updated, "error": None}
 
 
+@router.post("/{id}/edit")
+def edit_project_legacy(id: str, payload: ProjectEdit):
+    """
+    Backward-compatible alias for older clients still posting to /projects/{id}/edit.
+    """
+    return edit_project(id, payload)
+
+
 @router.get("/{id}/overrides")
 def get_project_overrides(id: str):
     conn = storage.open_db()
