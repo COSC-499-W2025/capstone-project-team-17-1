@@ -14,6 +14,9 @@ const SECTION_LABELS = [
   { id: "activity-heatmap", label: "Activity Heatmap" },
 ];
 
+let previewProjectsCache = [];
+let portfolioCustomizationInitialized = false;
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -34,20 +37,32 @@ function setStatus(message, kind = "info") {
   el.dataset.kind = kind;
 }
 
+function getPreviewContainer() {
+  return document.getElementById("portfolio-live-preview-container");
+}
+
 function renderPublicModeMessage() {
   const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const editorContainer = document.getElementById("portfolio-project-editor-container");
+  const previewContainer = getPreviewContainer();
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
 
   if (toggleContainer) {
-    toggleContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
+    toggleContainer.innerHTML =
+      `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
   }
   if (featuredContainer) {
-    featuredContainer.innerHTML = `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+    featuredContainer.innerHTML =
+      `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
   }
   if (editorContainer) {
-    editorContainer.innerHTML = `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+    editorContainer.innerHTML =
+      `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+  }
+  if (previewContainer) {
+    previewContainer.innerHTML =
+      `<p class="resume-summary-text">Live preview is only available in Private Mode.</p>`;
   }
   if (saveBtn) {
     saveBtn.disabled = true;
@@ -79,7 +94,8 @@ function renderFeaturedProjects(projects, customization) {
   const selected = new Set(customization.featuredProjectIds || []);
 
   if (!projects.length) {
-    container.innerHTML = `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
+    container.innerHTML =
+      `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
     return;
   }
 
@@ -89,7 +105,7 @@ function renderFeaturedProjects(projects, customization) {
         <label class="customization-project-pick">
           <input
             type="checkbox"
-            data-featured-project="${escapeHtml(project.project_id)}"
+            data-featured-project-id="${escapeHtml(project.project_id)}"
             ${selected.has(project.project_id) ? "checked" : ""}
           />
           <div>
@@ -109,7 +125,8 @@ function renderProjectEditors(projects, customization) {
   if (!container) return;
 
   if (!projects.length) {
-    container.innerHTML = `<p class="resume-summary-text">No projects available for customization yet.</p>`;
+    container.innerHTML =
+      `<p class="resume-summary-text">No projects available for customization yet.</p>`;
     return;
   }
 
@@ -117,10 +134,11 @@ function renderProjectEditors(projects, customization) {
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
       const isFeatured = (customization.featuredProjectIds || []).includes(project.project_id);
-      const rank = Math.max(1, (customization.featuredProjectIds || []).indexOf(project.project_id) + 1 || 1);
+      const existingRank = (customization.featuredProjectIds || []).indexOf(project.project_id);
+      const rank = existingRank >= 0 ? existingRank + 1 : 1;
 
       return `
-        <div class="customization-project-editor" data-project-editor="${escapeHtml(project.project_id)}">
+        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
           <div class="customization-project-editor-header">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
@@ -128,6 +146,7 @@ function renderProjectEditors(projects, customization) {
                 ${project.total_files || 0} files analyzed • ${project.total_skills || 0} skill signals
               </p>
             </div>
+
             <div class="customization-project-editor-meta">
               <label class="customization-inline-check">
                 <input
@@ -137,6 +156,7 @@ function renderProjectEditors(projects, customization) {
                 />
                 <span>Featured</span>
               </label>
+
               <label class="customization-rank-wrap">
                 <span>Order</span>
                 <input
@@ -155,7 +175,7 @@ function renderProjectEditors(projects, customization) {
               <span>Key role</span>
               <input
                 type="text"
-                data-project-key-role="${escapeHtml(project.project_id)}"
+                data-field="keyRole"
                 value="${escapeHtml(override.keyRole || "")}"
                 placeholder="Example: Frontend integration lead"
               />
@@ -164,7 +184,7 @@ function renderProjectEditors(projects, customization) {
             <label class="customization-full-row">
               <span>Evidence of success</span>
               <textarea
-                data-project-evidence="${escapeHtml(project.project_id)}"
+                data-field="evidence"
                 rows="3"
                 placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
               >${escapeHtml(override.evidence || "")}</textarea>
@@ -173,7 +193,7 @@ function renderProjectEditors(projects, customization) {
             <label class="customization-full-row">
               <span>Portfolio blurb</span>
               <textarea
-                data-project-blurb="${escapeHtml(project.project_id)}"
+                data-field="portfolioBlurb"
                 rows="3"
                 placeholder="Short description that should appear in the portfolio showcase."
               >${escapeHtml(override.portfolioBlurb || "")}</textarea>
@@ -185,34 +205,52 @@ function renderProjectEditors(projects, customization) {
     .join("");
 }
 
-function collectCustomization(projects) {
-  const current = loadPortfolioCustomization();
-
-  const sectionVisibility = {};
-  SECTION_LABELS.forEach((section) => {
-    const input = document.querySelector(`[data-section-visibility="${section.id}"]`);
-    sectionVisibility[section.id] = input ? !!input.checked : true;
-  });
-
-  const featuredRaw = projects
+function getSelectedFeaturedProjects(projects) {
+  return projects
     .filter((project) => {
-      const checked = document.querySelector(`[data-project-selected="${project.project_id}"]`);
-      return checked?.checked;
+      const editorCheckbox = document.querySelector(
+        `[data-project-selected="${CSS.escape(project.project_id)}"]`
+      );
+      const pickerCheckbox = document.querySelector(
+        `[data-featured-project-id="${CSS.escape(project.project_id)}"]`
+      );
+      return !!(editorCheckbox?.checked || pickerCheckbox?.checked);
     })
     .map((project) => {
-      const rankInput = document.querySelector(`[data-project-rank="${project.project_id}"]`);
+      const rankInput = document.querySelector(
+        `[data-project-rank="${CSS.escape(project.project_id)}"]`
+      );
       const rank = Number(rankInput?.value || 99);
       return { id: project.project_id, rank };
     })
     .sort((a, b) => a.rank - b.rank)
     .slice(0, 3)
     .map((entry) => entry.id);
+}
+
+function collectCustomization(projects) {
+  const current = loadPortfolioCustomization();
+
+  const sectionVisibility = {};
+  SECTION_LABELS.forEach((section) => {
+    const input = document.querySelector(
+      `[data-section-visibility="${CSS.escape(section.id)}"]`
+    );
+    sectionVisibility[section.id] = input ? !!input.checked : true;
+  });
+
+  const featuredProjectIds = getSelectedFeaturedProjects(projects);
 
   const projectOverrides = {};
   projects.forEach((project) => {
-    const keyRole = document.querySelector(`[data-project-key-role="${project.project_id}"]`)?.value?.trim() || "";
-    const evidence = document.querySelector(`[data-project-evidence="${project.project_id}"]`)?.value?.trim() || "";
-    const portfolioBlurb = document.querySelector(`[data-project-blurb="${project.project_id}"]`)?.value?.trim() || "";
+    const editor = document.querySelector(
+      `[data-project-editor-id="${CSS.escape(project.project_id)}"]`
+    );
+
+    const keyRole = editor?.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
+    const evidence = editor?.querySelector('[data-field="evidence"]')?.value?.trim() || "";
+    const portfolioBlurb =
+      editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
 
     projectOverrides[project.project_id] = {
       keyRole,
@@ -224,9 +262,13 @@ function collectCustomization(projects) {
   return {
     ...current,
     sectionVisibility,
-    featuredProjectIds: featuredRaw,
+    featuredProjectIds,
     projectOverrides,
   };
+}
+
+function collectDraftCustomization() {
+  return collectCustomization(previewProjectsCache);
 }
 
 async function persistProjectOverrides(projects, customization) {
@@ -254,11 +296,116 @@ async function persistProjectOverrides(projects, customization) {
   await Promise.allSettled(updates);
 }
 
+function renderLivePreview(projects, draftCustomization) {
+  const container = getPreviewContainer();
+  if (!container) return;
+
+  const sectionVisibility = {
+    "resume-summary": true,
+    "top-projects": true,
+    "portfolio-stats": true,
+    "skills-timeline": true,
+    "activity-heatmap": true,
+    ...(draftCustomization.sectionVisibility || {}),
+  };
+
+  const projectMap = new Map(
+    projects.map((project) => [String(project.project_id), project])
+  );
+
+  const featuredProjects = (draftCustomization.featuredProjectIds || [])
+    .map((id) => projectMap.get(String(id)))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const totalProjects = projects.length;
+  const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
+  const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
+
+  container.innerHTML = `
+    <div class="live-preview-section ${sectionVisibility["resume-summary"] ? "" : "hidden"}">
+      <h3>Resume Snapshot</h3>
+      <p>${totalProjects} project${totalProjects === 1 ? "" : "s"} • ${totalFiles} files • ${totalSkills} skill signals</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}">
+      <h3>Top 3 Project Showcase</h3>
+      ${
+        featuredProjects.length
+          ? featuredProjects
+              .map((project) => {
+                const override =
+                  draftCustomization.projectOverrides?.[project.project_id] || {};
+
+                return `
+                  <div class="live-preview-project-card">
+                    <h4>${escapeHtml(project.project_id)}</h4>
+                    <div class="live-preview-meta">
+                      ${project.total_files || 0} files • ${project.total_skills || 0} skills
+                    </div>
+                    ${
+                      override.portfolioBlurb
+                        ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
+                        : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
+                    }
+                    ${
+                      override.keyRole
+                        ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
+                        : ""
+                    }
+                    ${
+                      override.evidence
+                        ? `<p><strong>Evidence:</strong> ${escapeHtml(override.evidence)}</p>`
+                        : ""
+                    }
+                  </div>
+                `;
+              })
+              .join("")
+          : `<p class="live-preview-empty">No featured projects selected.</p>`
+      }
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["portfolio-stats"] ? "" : "hidden"}">
+      <h3>Portfolio Stats</h3>
+      <p>${totalProjects} Projects • ${totalFiles} Files • ${totalSkills} Skill Signals</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["skills-timeline"] ? "" : "hidden"}">
+      <h3>Skills Timeline</h3>
+      <p class="live-preview-empty">Preview placeholder</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["activity-heatmap"] ? "" : "hidden"}">
+      <h3>Activity Heatmap</h3>
+      <p class="live-preview-empty">Preview placeholder</p>
+    </div>
+  `;
+}
+
+function updateLivePreview() {
+  const draftCustomization = collectDraftCustomization();
+  renderLivePreview(previewProjectsCache, draftCustomization);
+}
+
+function syncFeaturedCheckboxes(projectId, checked) {
+  const picker = document.querySelector(
+    `[data-featured-project-id="${CSS.escape(projectId)}"]`
+  );
+  const editor = document.querySelector(
+    `[data-project-selected="${CSS.escape(projectId)}"]`
+  );
+
+  if (picker) picker.checked = checked;
+  if (editor) editor.checked = checked;
+}
+
 async function renderPortfolioCustomizationPage() {
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
   if (!saveBtn) return;
 
   if (!isPrivateMode()) {
+    previewProjectsCache = [];
     renderPublicModeMessage();
     setStatus("Private Mode is required for portfolio customization.", "warning");
     return;
@@ -267,46 +414,80 @@ async function renderPortfolioCustomizationPage() {
   saveBtn.disabled = false;
   setStatus("");
 
-  const customization = loadPortfolioCustomization();
-  const projects = await fetchProjects();
+  try {
+    const customization = loadPortfolioCustomization();
+    const projects = await fetchProjects();
 
-  renderSectionToggles(customization);
-  renderFeaturedProjects(projects, customization);
-  renderProjectEditors(projects, customization);
+    previewProjectsCache = projects;
 
-  saveBtn.onclick = async () => {
-    try {
-      saveBtn.disabled = true;
-      setStatus("Saving customization...", "info");
+    renderSectionToggles(customization);
+    renderFeaturedProjects(projects, customization);
+    renderProjectEditors(projects, customization);
+    updateLivePreview();
 
-      const nextCustomization = collectCustomization(projects);
-      savePortfolioCustomization(nextCustomization);
-      await persistProjectOverrides(projects, nextCustomization);
+    saveBtn.onclick = async () => {
+      try {
+        saveBtn.disabled = true;
+        setStatus("Saving customization...", "info");
 
-      await loadPortfolioResume();
-      document.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+        const nextCustomization = collectCustomization(projects);
+        savePortfolioCustomization(nextCustomization);
+        await persistProjectOverrides(projects, nextCustomization);
 
-      setStatus("Portfolio customization saved.", "success");
-    } catch (error) {
-      console.error("Failed to save portfolio customization:", error);
-      setStatus("Failed to save portfolio customization.", "error");
-    } finally {
-      saveBtn.disabled = false;
-    }
-  };
+        await loadPortfolioResume();
+        window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+
+        setStatus("Portfolio customization saved.", "success");
+      } catch (error) {
+        console.error("Failed to save portfolio customization:", error);
+        setStatus("Failed to save portfolio customization.", "error");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    };
+  } catch (error) {
+    console.error("Failed to render portfolio customization page:", error);
+    setStatus("Failed to load portfolio customization data.", "error");
+  }
 }
 
 export function initPortfolioCustomization() {
   const tab = document.getElementById("customization-tab");
-  tab?.addEventListener("click", renderPortfolioCustomizationPage);
+  const root = document.getElementById("portfolio-customization-root");
 
-  document.addEventListener("auth:mode-changed", () => {
-    renderPortfolioCustomizationPage();
-  });
+  if (!portfolioCustomizationInitialized) {
+    portfolioCustomizationInitialized = true;
 
-  document.addEventListener("portfolio:customization-updated", () => {
-    renderPortfolioCustomizationPage();
-  });
+    tab?.addEventListener("click", renderPortfolioCustomizationPage);
+
+    document.addEventListener("auth:mode-changed", () => {
+      renderPortfolioCustomizationPage();
+    });
+
+    window.addEventListener("portfolio:customization-updated", () => {
+      renderPortfolioCustomizationPage();
+    });
+
+    root?.addEventListener("input", () => {
+      updateLivePreview();
+    });
+
+    root?.addEventListener("change", (event) => {
+      const target = event.target;
+
+      if (target instanceof HTMLInputElement) {
+        if (target.matches("[data-featured-project-id]")) {
+          syncFeaturedCheckboxes(target.dataset.featuredProjectId, target.checked);
+        }
+
+        if (target.matches("[data-project-selected]")) {
+          syncFeaturedCheckboxes(target.dataset.projectSelected, target.checked);
+        }
+      }
+
+      updateLivePreview();
+    });
+  }
 
   renderPortfolioCustomizationPage();
 }

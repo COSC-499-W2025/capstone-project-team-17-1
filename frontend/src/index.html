@@ -8,9 +8,9 @@
 </head>
 <body class="dark">
 
-  <!-- ===================== -->
+  
   <!-- TITLE BAR -->
-  <!-- ===================== -->
+
   <div class="titlebar">
     <div class="logo-wrapper">
       <img src="../assets/logo.png" class="logo-img" />
@@ -42,15 +42,15 @@
     </div>
   </div>
 
-  <!-- ===================== -->
-  <!-- MAIN CONTAINER (CRITICAL FIX) -->
-  <!-- ===================== -->
+
+  <!-- MAIN CONTAINER -->
+
   <div class="main-container">
     <div id="page-container">
 
-      <!-- ===================== -->
+  
       <!-- DASHBOARD PAGE -->
-      <!-- ===================== -->
+     
       <div id="dashboard-page" class="page active">
         <div class="dashboard">
 
@@ -79,9 +79,7 @@
               <span id="system-status">Checking...</span>
             </div>
 
-
             <div class="gauges">
-
               <!-- CPU -->
               <div class="gauge">
                 <svg viewBox="0 0 100 60">
@@ -123,7 +121,6 @@
                 <p id="gpu-label">GPU</p>
                 <canvas id="gpu-chart" class="mini-chart"></canvas>
               </div>
-
             </div>
           </div>
 
@@ -135,12 +132,11 @@
         </div>
       </div>
 
-      <!-- ===================== -->
+    
       <!-- PROJECTS PAGE -->
-      <!-- ===================== -->
+
       <div id="projects-page" class="page">
         <div class="projects-page-wrapper">
-
           <div class="projects-header">
             <h1>Projects</h1>
             <button id="upload-project-btn" class="primary-btn">
@@ -153,12 +149,15 @@
               No projects uploaded yet.
             </div>
           </div>
-
         </div>
       </div>
+
+
+      <!-- PORTFOLIO & RESUME PAGE -->
+ 
       <div id="portfolio-resume-page" class="page">
         <div class="portfolio-page-wrapper">
-      
+
           <div class="portfolio-header">
             <div>
               <h1>Portfolio & Resume</h1>
@@ -171,37 +170,39 @@
               <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
             </div>
           </div>
-      
+
           <div class="portfolio-grid">
-      
             <div class="card portfolio-hero-card">
               <h2 class="card-title">Resume Snapshot</h2>
               <div id="resume-summary-container" class="resume-summary-container"></div>
             </div>
-      
+
             <div class="card portfolio-projects-card">
               <h2 class="card-title">Top 3 Project Showcase</h2>
               <div id="top-projects-container" class="top-projects-container"></div>
             </div>
-      
+
             <div class="card portfolio-skills-card">
               <h2 class="card-title">Portfolio Stats</h2>
               <div id="skills-expertise-container" class="skills-expertise-container"></div>
             </div>
-      
+
             <div class="card portfolio-timeline-card">
               <h2 class="card-title">Skills Timeline</h2>
               <div id="skills-timeline-container" class="skills-timeline-container"></div>
             </div>
-            
+
             <div class="card portfolio-heatmap-card">
               <h2 class="card-title">Activity Heatmap</h2>
               <div id="activity-heatmap-container" class="activity-heatmap-container"></div>
             </div>
-      
           </div>
         </div>
       </div>
+
+    
+      <!-- CUSTOMIZATION PAGE -->
+ 
       <div id="customization-page" class="page">
         <div id="portfolio-customization-root" class="tab-panel customization-page-shell">
           <div class="customization-header">
@@ -217,15 +218,15 @@
               </button>
             </div>
           </div>
-      
+
           <div id="portfolio-customization-status" class="customization-status"></div>
-      
+
           <div class="customization-grid">
             <div class="card customization-card">
               <h2 class="card-title">Section Visibility</h2>
               <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
             </div>
-      
+
             <div class="card customization-card">
               <h2 class="card-title">Featured Projects</h2>
               <p class="resume-summary-text">
@@ -233,14 +234,21 @@
               </p>
               <div id="portfolio-featured-projects-container" class="customization-project-picker"></div>
             </div>
-      
+
             <div class="card customization-card customization-card-wide">
               <h2 class="card-title">Project Portfolio Details</h2>
               <div id="portfolio-project-editor-container" class="customization-project-editor-list"></div>
             </div>
+
+            <div class="card customization-card customization-card-wide">
+              <h2 class="card-title">Live Preview</h2>
+              <div id="portfolio-live-preview-container" class="portfolio-live-preview-container"></div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- SETTINGS PAGE -->
 
       <div id="settings-page" class="page">
         <div id="tab-settings" class="tab-panel">
@@ -260,10 +268,10 @@
         <h2>One-Page Resume Preview</h2>
         <button id="resume-preview-close" class="resume-preview-close" aria-label="Close">×</button>
       </div>
-  
       <div id="resume-preview-body" class="resume-preview-body"></div>
     </div>
   </div>
+
   <div id="auth-modal" class="auth-modal hidden">
     <div class="auth-dialog">
       <button id="auth-close" class="auth-close" aria-label="Close">x</button>
