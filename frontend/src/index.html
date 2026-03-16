@@ -224,38 +224,36 @@
       <!-- CUSTOMIZATION PAGE -->
  
       <div id="customization-page" class="page">
-        <div id="portfolio-customization-root" class="tab-panel customization-page-shell">
-          <div class="customization-header">
-            <div>
-              <h1>Portfolio Customization</h1>
-              <p class="resume-summary-text">
-                Choose featured projects, edit portfolio-facing descriptions, and control which sections appear in your portfolio.
-              </p>
+          <div class="tab-panel customization-page-shell">
+            <div class="customization-header">
+              <div>
+                <h1>Portfolio Customization</h1>
+                <p class="resume-summary-text">
+                  Choose featured projects, edit portfolio-facing descriptions, and control which sections appear in your portfolio.
+                </p>
+              </div>
+              <div class="customization-actions">
+                <button id="portfolio-customization-save-btn" class="primary-btn" type="button">
+                  Save Customization
+                </button>
+              </div>
             </div>
-            <div class="customization-actions">
-              <button id="portfolio-customization-save-btn" class="primary-btn" type="button">
-                Save Customization
-              </button>
-            </div>
-          </div>
+        
+            <div id="portfolio-customization-status" class="customization-status"></div>
+        
+            <div class="customization-grid">
+              <div class="card customization-card customization-card-wide">
+                <h2 class="card-title">Target Job</h2>
+                <div id="portfolio-job-target-container"></div>
+              </div>
 
-          <div id="portfolio-customization-status" class="customization-status"></div>
-
-          <div class="customization-grid">
-            <div class="card customization-card">
-              <h2 class="card-title">Section Visibility</h2>
-              <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
-            </div>
-
-            <div class="card customization-card">
-              <h2 class="card-title">Featured Projects</h2>
-              <p class="resume-summary-text">
-                Select up to 3 projects to appear in the Top 3 Project Showcase.
-              </p>
-              <div id="portfolio-featured-projects-container" class="customization-project-picker"></div>
-            
-              <div class="customization-featured-order-block">
-                <h3 class="customization-subtitle">Reorder Featured Projects</h3>
+              <div class="card customization-card">
+                <h2 class="card-title">Section Visibility</h2>
+                <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
+              </div>
+        
+              <div class="card customization-card">
+                <h2 class="card-title">Featured Projects</h2>
                 <p class="resume-summary-text">
                   Drag selected projects to control the Top 3 showcase order.
                 </p>

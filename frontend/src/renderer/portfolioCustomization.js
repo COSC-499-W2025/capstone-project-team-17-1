@@ -141,8 +141,8 @@ function renderPublicModeMessage() {
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
-  const previewContainer = getPreviewContainer();
-  const saveBtn = getSaveButton();
+  const saveBtn = document.getElementById("portfolio-customization-save-btn");
+  const jobContainer = document.getElementById("portfolio-job-target-container");
 
   if (toggleContainer) {
     toggleContainer.innerHTML =
@@ -167,6 +167,9 @@ function renderPublicModeMessage() {
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Save Customization";
+  }
+  if (jobContainer) {
+    jobContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to analyze job descriptions.</p>`;
   }
 }
 
@@ -200,6 +203,9 @@ function renderFeaturedProjects(projects, customization) {
     return;
   }
 
+  const matchScores = window.__jobMatchResults || [];
+  const scoreMap = new Map(matchScores.map(m => [m.project_id, m.score]));
+
   container.innerHTML = projects
     .map(
       (project) => `
@@ -213,6 +219,9 @@ function renderFeaturedProjects(projects, customization) {
             <div class="customization-project-title">${escapeHtml(project.project_id)}</div>
             <div class="customization-project-meta">
               ${project.total_files || 0} files • ${project.total_skills || 0} skills
+              ${scoreMap.has(project.project_id)
+                ? ` • <span class="job-match-score">${Math.round(scoreMap.get(project.project_id) * 100)}% match</span>`
+                : ""}
             </div>
           </div>
         </label>
@@ -235,6 +244,8 @@ function renderProjectEditors(projects, customization) {
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
       const isFeatured = (customization.featuredProjectIds || []).includes(project.project_id);
+      const index = (customization.featuredProjectIds || []).indexOf(project.project_id);
+      const rank = index >= 0 ? index + 1 : 1;
 
       return `
         <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
@@ -291,6 +302,22 @@ function renderProjectEditors(projects, customization) {
       `;
     })
     .join("");
+
+    const checkboxes = container.querySelectorAll("[data-project-selected]");
+
+    checkboxes.forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const checked = container.querySelectorAll("[data-project-selected]:checked");
+
+        if (checked.length <= 3) {
+          setStatus("");
+        }
+        if (checked.length > 3) {
+          cb.checked = false;
+          setStatus("You can only feature up to 3 projects.", "warning");
+        }
+      });
+    });
 }
 
 function getSelectedProjectIdsFromInputs(projects) {
@@ -374,10 +401,25 @@ function collectCustomization(projects) {
     sectionVisibility[section.id] = input ? !!input.checked : true;
   });
 
-  let featuredProjectIds = getFeaturedOrderFromDom();
-  if (!featuredProjectIds.length) {
-    featuredProjectIds = getSelectedProjectIdsFromInputs(projects);
+  let featuredRaw = projects
+    .filter((project) => {
+      const checked = document.querySelector(`[data-project-selected="${project.project_id}"]`);
+      return checked?.checked;
+    })
+    .map((project) => {
+      const rankInput = document.querySelector(`[data-project-rank="${project.project_id}"]`);
+      const rank = Number(rankInput?.value || 99);
+      return { id: project.project_id, rank };
+    })
+    .sort((a, b) => a.rank - b.rank);
+
+  if (featuredRaw.length > 3) {
+    setStatus("You can only select up to 3 featured projects. The top 3 were used.", "warning");
   }
+
+  featuredRaw = featuredRaw
+    .slice(0, 3)
+    .map((entry) => entry.id);
 
   const projectOverrides = {};
   projects.forEach((project) => {
@@ -397,11 +439,19 @@ function collectCustomization(projects) {
     };
   });
 
+  // get job info from ui
+  const jobTarget = {
+    title: document.getElementById("job-target-title")?.value?.trim() || "",
+    company: document.getElementById("job-target-company")?.value?.trim() || "",
+    description: document.getElementById("job-target-description")?.value?.trim() || ""
+  };
+
   return {
     ...current,
     sectionVisibility,
     featuredProjectIds,
     projectOverrides,
+    jobTarget
   };
 }
 
@@ -695,16 +745,46 @@ async function renderPortfolioCustomizationPage() {
     const customization = loadPortfolioCustomization();
     const projects = await fetchProjects();
 
-    previewProjectsCache = projects;
-    lastSavedSnapshot = snapshotCustomization(customization);
-    isDirty = false;
-    isSaving = false;
+  renderJobTargetSection(customization);
+  renderSectionToggles(customization);
+  renderFeaturedProjects(projects, customization);
+  renderProjectEditors(projects, customization);
 
-    renderSectionToggles(customization);
-    renderFeaturedProjects(projects, customization);
-    renderProjectEditors(projects, customization);
-    renderFeaturedOrderList(projects, customization);
-    renderLivePreview(projects, customization);
+  // trigger job analysis if user selects analyze job match
+  const analyzeBtn = document.getElementById("analyze-job-btn");
+
+  if (analyzeBtn) {
+    analyzeBtn.onclick = async () => {
+      console.log("Analyze button clicked");
+      try {
+
+      setStatus("Analyzing job description...", "info");
+      analyzeBtn.disabled = true;
+
+      const customization = loadPortfolioCustomization();
+
+      await autoSelectFeaturedProjects(projects, customization);
+
+      renderFeaturedProjects(projects, customization);
+      renderProjectEditors(projects, customization);
+
+      await loadPortfolioResume();
+
+    } catch (err) {
+      console.error(err);
+      setStatus("Job matching failed.", "error");
+
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  };
+}
+      
+
+  saveBtn.onclick = async () => {
+    try {
+      saveBtn.disabled = true;
+      setStatus("Saving customization...", "info");
 
     setStatus("Saved", "success");
     updateSaveButtonState();
@@ -776,4 +856,147 @@ export function initPortfolioCustomization() {
   }
 
   renderPortfolioCustomizationPage();
+}
+
+// let users paste job descriptions in customization
+function renderJobTargetSection(customization) {
+  const container = document.getElementById("portfolio-job-target-container");
+  if (!container)
+    return;
+
+  const job = customization?.jobTarget ?? {
+    title: "",
+    company: "",
+    description: ""
+  };
+
+  container.innerHTML = `
+    <div class="customization-form-grid">
+
+        <label>
+          <span>Job Title</span>
+          <input
+            id="job-target-title"
+            type="text"
+            value="${escapeHtml(job.title || "")}"
+            placeholder="Example: Frontend Engineer"
+          />
+        </label>
+
+        <label>
+          <span>Company</span>
+          <input
+            id="job-target-company"
+            type="text"
+            value="${escapeHtml(job.company || "")}"
+            placeholder="Example: Shopify"
+          />
+        </label>
+
+        <label class="customization-full-row">
+          <span>Job Description</span>
+          <textarea
+            id="job-target-description"
+            rows="8"
+            placeholder="Paste the job description here to tailor your portfolio."
+          >${escapeHtml(job.description || "")}</textarea>
+        </label>
+
+        <button id="analyze-job-btn" class="primary-btn">
+          Analyze Job Match
+        </button>
+
+      </div>
+    `;
+    const analyzeBtn = container.querySelector("#analyze-job-btn");
+
+    if (analyzeBtn) {
+      analyzeBtn.onclick = async () => {
+      try {
+
+        setStatus("Analyzing job description...", "info");
+        analyzeBtn.disabled = true;
+
+        const projects = await fetchProjects();
+        const customization = collectCustomization(projects);
+
+        await autoSelectFeaturedProjects(projects, customization);
+
+        renderFeaturedProjects(projects, customization);
+        renderProjectEditors(projects, customization);
+
+        await loadPortfolioResume();
+
+      } catch (err) {
+        console.error(err);
+        setStatus("Job matching failed.", "error");
+
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    };
+  }
+}
+
+// connect backend to ranking endpoint (analyze + rank)
+async function analyzeJobMatch() {
+
+  const jd = document.getElementById("job-target-description")?.value;
+
+  if (!jd || !jd.trim()) {
+    setStatus("Please paste a job description first.", "warning");
+    return [];
+  }
+
+  const res = await authFetch("/job-matching/rank", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      job_description: jd,
+    }),
+  });
+
+  // safety incase returned is not json
+  if (!res.ok) {
+    throw new Error(`Job matching API failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+
+  console.log("Job match API response:", "data");
+
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.matches)) return data.matches;
+
+  return [];
+
+}
+
+// pick best projects based on job match ranking
+async function autoSelectFeaturedProjects(projects, customization) {
+
+  const matches = await analyzeJobMatch();
+
+  window.__jobMatchResults = matches;
+
+  if (!matches.length) return;
+
+  // select top 3 highest scoring projects for output
+  const topProjects = matches
+    .slice(0, 3)
+    .map((m) => m.project_id);
+
+  customization.featuredProjectIds = topProjects;
+
+  // save updated state
+  savePortfolioCustomization(customization);
+
+  // notify related ui of change
+  document.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+
+  setStatus("Featured projects selected based on job match.", "success");
 }

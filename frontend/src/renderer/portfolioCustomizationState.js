@@ -1,11 +1,22 @@
-const STORAGE_KEY = "portfolioCustomization";
+const STORAGE_KEY = "loom_portfolio_customization_v1";
 
-const DEFAULT_SECTION_VISIBILITY = {
-  "resume-summary": true,
-  "top-projects": true,
-  "portfolio-stats": true,
-  "skills-timeline": true,
-  "activity-heatmap": true,
+const DEFAULT_STATE = {
+  sectionVisibility: {
+    "resume-summary": true,
+    "top-projects": true,
+    "portfolio-stats": true,
+    "skills-timeline": true,
+    "activity-heatmap": true,
+  },
+  featuredProjectIds: [],
+  projectOverrides: {},
+
+  // target info for pasted job listing
+  jobTarget: {
+    title: "",
+    company: "",
+    description: ""
+  }
 };
 
 function createDefaultCustomization() {
@@ -18,7 +29,27 @@ function createDefaultCustomization() {
 
 function safeParse(raw) {
   try {
-    return JSON.parse(raw);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return cloneDefaultState();
+
+    const parsed = JSON.parse(raw);
+    return {
+      sectionVisibility: {
+        ...DEFAULT_STATE.sectionVisibility,
+        ...(parsed?.sectionVisibility || {}),
+      },
+      featuredProjectIds: Array.isArray(parsed?.featuredProjectIds)
+        ? parsed.featuredProjectIds.map((id) => String(id).trim()).filter(Boolean)
+        : [],
+      projectOverrides:
+        parsed?.projectOverrides && typeof parsed.projectOverrides === "object"
+          ? parsed.projectOverrides
+          : {},
+      jobTarget:
+        parsed?.jobTarget && typeof parsed.jobTarget === "object"
+          ? parsed.jobTarget
+          : cloneDefaultState().jobTarget
+    };
   } catch {
     return null;
   }
@@ -105,9 +136,5 @@ export function getFeaturedProjects(projects = []) {
     return projects.slice(0, 3);
   }
 
-  const featured = customization.featuredProjectIds
-    .map((id) => projects.find((project) => String(project.id) === String(id)))
-    .filter(Boolean);
-
-  return featured.slice(0, 3);
+  return selected.slice(0, 3);
 }
