@@ -684,19 +684,20 @@ Overall, this week’s work significantly improved the completeness of the produ
 ## WEEK 10 TEAM LOG (Term2)
 (Mar 9 - Mar 15, 2026)
 
-### Recap of Milestone Goal - Week 9
+### Recap of Milestone Goal - Week 10
 The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
 
-### Burnup chart - Week 9
+### Burnup chart - Week 10
+<img width="1012" height="577" alt="Screenshot 2026-03-15 at 9 00 14 PM" src="https://github.com/user-attachments/assets/06d43953-9c65-429e-99ab-d57e88f6410c" />
 
+### Completed Tasks - Week 10
+<img width="1229" height="255" alt="Screenshot 2026-03-15 at 8 59 01 PM" src="https://github.com/user-attachments/assets/2c315f11-49f0-48d0-a713-13b2627de265" />
+<img width="1150" height="263" alt="Screenshot 2026-03-15 at 8 58 49 PM" src="https://github.com/user-attachments/assets/82399cc2-c161-44ed-9d33-88c318e2914f" />
 
-### Completed Tasks - Week 9
+### In Progress Tasks - Week 10
+<img width="1237" height="789" alt="Screenshot 2026-03-15 at 8 59 29 PM" src="https://github.com/user-attachments/assets/30fc2679-a45f-4fad-b8c8-b9cd6a35b423" />
 
-
-### In Progress Tasks - Week 9
-
-
-### Test Report - Week 9
+### Test Report - Week 10
 This week, the team focused on improving the frontend experience and polishing the Portfolio and Résumé features for Milestone 3. Several updates were made to résumé management, project viewing, portfolio customization, and frontend stability to make the system more complete and user-friendly.
 
 [Enhance Web Portfolio Presentation and Fix Project Deletion (#292)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292) improved the Web Portfolio interface and fixed a backend issue related to project deletion. The update refined how projects and learning progression are displayed in the portfolio and ensured that project deletion works correctly without leaving inconsistent records.
