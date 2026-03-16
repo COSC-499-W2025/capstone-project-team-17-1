@@ -14,6 +14,16 @@ const SECTION_LABELS = [
   { id: "activity-heatmap", label: "Activity Heatmap" },
 ];
 
+const AUTOSAVE_DELAY_MS = 1200;
+
+let previewProjectsCache = [];
+let portfolioCustomizationInitialized = false;
+let draggedFeaturedProjectId = null;
+let autosaveTimer = null;
+let isDirty = false;
+let isSaving = false;
+let lastSavedSnapshot = "";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -34,24 +44,129 @@ function setStatus(message, kind = "info") {
   el.dataset.kind = kind;
 }
 
+function getPreviewContainer() {
+  return document.getElementById("portfolio-live-preview-container");
+}
+
+function getFeaturedOrderContainer() {
+  return document.getElementById("portfolio-featured-order-container");
+}
+
+function getSaveButton() {
+  return document.getElementById("portfolio-customization-save-btn");
+}
+
+function clearAutosaveTimer() {
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+}
+
+function normalizeCustomization(customization) {
+  const sectionVisibility = {};
+  SECTION_LABELS.forEach((section) => {
+    sectionVisibility[section.id] = customization?.sectionVisibility?.[section.id] !== false;
+  });
+
+  const featuredProjectIds = Array.isArray(customization?.featuredProjectIds)
+    ? customization.featuredProjectIds.map((id) => String(id))
+    : [];
+
+  const projectOverrides = {};
+  const rawOverrides =
+    customization?.projectOverrides && typeof customization.projectOverrides === "object"
+      ? customization.projectOverrides
+      : {};
+
+  Object.keys(rawOverrides)
+    .sort()
+    .forEach((projectId) => {
+      const override = rawOverrides[projectId] || {};
+      projectOverrides[String(projectId)] = {
+        keyRole: String(override.keyRole || ""),
+        evidence: String(override.evidence || ""),
+        portfolioBlurb: String(override.portfolioBlurb || ""),
+      };
+    });
+
+  return {
+    sectionVisibility,
+    featuredProjectIds,
+    projectOverrides,
+  };
+}
+
+function snapshotCustomization(customization) {
+  return JSON.stringify(normalizeCustomization(customization));
+}
+
+function updateSaveButtonState() {
+  const saveBtn = getSaveButton();
+  if (!saveBtn) return;
+
+  if (!isPrivateMode()) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Save Customization";
+    return;
+  }
+
+  if (isSaving) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    return;
+  }
+
+  saveBtn.disabled = !isDirty;
+  saveBtn.textContent = isDirty ? "Save Customization" : "Saved";
+}
+
+function markDirtyState(nextCustomization) {
+  const snapshot = snapshotCustomization(nextCustomization);
+  isDirty = snapshot !== lastSavedSnapshot;
+
+  if (!isSaving) {
+    if (isDirty) {
+      setStatus("Unsaved changes", "warning");
+    } else {
+      setStatus("Saved", "success");
+    }
+  }
+
+  updateSaveButtonState();
+}
+
 function renderPublicModeMessage() {
   const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
+  const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
   const jobContainer = document.getElementById("portfolio-job-target-container");
 
   if (toggleContainer) {
-    toggleContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
+    toggleContainer.innerHTML =
+      `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
   }
   if (featuredContainer) {
-    featuredContainer.innerHTML = `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+    featuredContainer.innerHTML =
+      `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+  }
+  if (orderContainer) {
+    orderContainer.innerHTML =
+      `<p class="resume-summary-text">Reordering is only available in Private Mode.</p>`;
   }
   if (editorContainer) {
-    editorContainer.innerHTML = `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+    editorContainer.innerHTML =
+      `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+  }
+  if (previewContainer) {
+    previewContainer.innerHTML =
+      `<p class="resume-summary-text">Live preview is only available in Private Mode.</p>`;
   }
   if (saveBtn) {
     saveBtn.disabled = true;
+    saveBtn.textContent = "Save Customization";
   }
   if (jobContainer) {
     jobContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to analyze job descriptions.</p>`;
@@ -83,7 +198,8 @@ function renderFeaturedProjects(projects, customization) {
   const selected = new Set(customization.featuredProjectIds || []);
 
   if (!projects.length) {
-    container.innerHTML = `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
+    container.innerHTML =
+      `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
     return;
   }
 
@@ -96,7 +212,7 @@ function renderFeaturedProjects(projects, customization) {
         <label class="customization-project-pick">
           <input
             type="checkbox"
-            data-featured-project="${escapeHtml(project.project_id)}"
+            data-featured-project-id="${escapeHtml(project.project_id)}"
             ${selected.has(project.project_id) ? "checked" : ""}
           />
           <div>
@@ -119,7 +235,8 @@ function renderProjectEditors(projects, customization) {
   if (!container) return;
 
   if (!projects.length) {
-    container.innerHTML = `<p class="resume-summary-text">No projects available for customization yet.</p>`;
+    container.innerHTML =
+      `<p class="resume-summary-text">No projects available for customization yet.</p>`;
     return;
   }
 
@@ -131,7 +248,7 @@ function renderProjectEditors(projects, customization) {
       const rank = index >= 0 ? index + 1 : 1;
 
       return `
-        <div class="customization-project-editor" data-project-editor="${escapeHtml(project.project_id)}">
+        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
           <div class="customization-project-editor-header">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
@@ -139,6 +256,7 @@ function renderProjectEditors(projects, customization) {
                 ${project.total_files || 0} files analyzed • ${project.total_skills || 0} skill signals
               </p>
             </div>
+
             <div class="customization-project-editor-meta">
               <label class="customization-inline-check">
                 <input
@@ -148,16 +266,6 @@ function renderProjectEditors(projects, customization) {
                 />
                 <span>Featured</span>
               </label>
-              <label class="customization-rank-wrap">
-                <span>Order</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="3"
-                  data-project-rank="${escapeHtml(project.project_id)}"
-                  value="${rank}"
-                />
-              </label>
             </div>
           </div>
 
@@ -166,7 +274,7 @@ function renderProjectEditors(projects, customization) {
               <span>Key role</span>
               <input
                 type="text"
-                data-project-key-role="${escapeHtml(project.project_id)}"
+                data-field="keyRole"
                 value="${escapeHtml(override.keyRole || "")}"
                 placeholder="Example: Frontend integration lead"
               />
@@ -175,7 +283,7 @@ function renderProjectEditors(projects, customization) {
             <label class="customization-full-row">
               <span>Evidence of success</span>
               <textarea
-                data-project-evidence="${escapeHtml(project.project_id)}"
+                data-field="evidence"
                 rows="3"
                 placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
               >${escapeHtml(override.evidence || "")}</textarea>
@@ -184,7 +292,7 @@ function renderProjectEditors(projects, customization) {
             <label class="customization-full-row">
               <span>Portfolio blurb</span>
               <textarea
-                data-project-blurb="${escapeHtml(project.project_id)}"
+                data-field="portfolioBlurb"
                 rows="3"
                 placeholder="Short description that should appear in the portfolio showcase."
               >${escapeHtml(override.portfolioBlurb || "")}</textarea>
@@ -212,12 +320,84 @@ function renderProjectEditors(projects, customization) {
     });
 }
 
+function getSelectedProjectIdsFromInputs(projects) {
+  return projects
+    .filter((project) => {
+      const editorCheckbox = document.querySelector(
+        `[data-project-selected="${CSS.escape(project.project_id)}"]`
+      );
+      const pickerCheckbox = document.querySelector(
+        `[data-featured-project-id="${CSS.escape(project.project_id)}"]`
+      );
+      return !!(editorCheckbox?.checked || pickerCheckbox?.checked);
+    })
+    .map((project) => project.project_id)
+    .slice(0, 3);
+}
+
+function getFeaturedOrderFromDom() {
+  const items = [...document.querySelectorAll("[data-featured-order-item]")];
+  return items.map((item) => String(item.dataset.featuredOrderItem)).slice(0, 3);
+}
+
+function renderFeaturedOrderList(projects, customization) {
+  const container = getFeaturedOrderContainer();
+  if (!container) return;
+
+  const selectedIds = getSelectedProjectIdsFromInputs(projects);
+  const orderedIdsFromState = (customization.featuredProjectIds || []).filter((id) =>
+    selectedIds.includes(id)
+  );
+
+  const mergedOrder = [
+    ...orderedIdsFromState,
+    ...selectedIds.filter((id) => !orderedIdsFromState.includes(id)),
+  ].slice(0, 3);
+
+  if (!mergedOrder.length) {
+    container.innerHTML = `
+      <p class="customization-featured-order-empty">
+        Select up to 3 featured projects to enable drag-and-drop ordering.
+      </p>
+    `;
+    return;
+  }
+
+  const projectMap = new Map(projects.map((project) => [project.project_id, project]));
+
+  container.innerHTML = mergedOrder
+    .map((projectId, index) => {
+      const project = projectMap.get(projectId);
+      if (!project) return "";
+
+      return `
+        <div
+          class="customization-featured-order-item"
+          data-featured-order-item="${escapeHtml(project.project_id)}"
+          draggable="true"
+        >
+          <div class="customization-featured-order-rank">${index + 1}</div>
+          <div class="customization-featured-order-content">
+            <div class="customization-featured-order-title">${escapeHtml(project.project_id)}</div>
+            <div class="customization-featured-order-meta">
+              ${project.total_files || 0} files • ${project.total_skills || 0} skills
+            </div>
+          </div>
+          <div class="customization-featured-order-handle">⋮⋮</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function collectCustomization(projects) {
   const current = loadPortfolioCustomization();
 
   const sectionVisibility = {};
   SECTION_LABELS.forEach((section) => {
-    const input = document.querySelector(`[data-section-visibility="${section.id}"]`);
+    const input = document.querySelector(
+      `[data-section-visibility="${CSS.escape(section.id)}"]`
+    );
     sectionVisibility[section.id] = input ? !!input.checked : true;
   });
 
@@ -243,9 +423,14 @@ function collectCustomization(projects) {
 
   const projectOverrides = {};
   projects.forEach((project) => {
-    const keyRole = document.querySelector(`[data-project-key-role="${project.project_id}"]`)?.value?.trim() || "";
-    const evidence = document.querySelector(`[data-project-evidence="${project.project_id}"]`)?.value?.trim() || "";
-    const portfolioBlurb = document.querySelector(`[data-project-blurb="${project.project_id}"]`)?.value?.trim() || "";
+    const editor = document.querySelector(
+      `[data-project-editor-id="${CSS.escape(project.project_id)}"]`
+    );
+
+    const keyRole = editor?.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
+    const evidence = editor?.querySelector('[data-field="evidence"]')?.value?.trim() || "";
+    const portfolioBlurb =
+      editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
 
     projectOverrides[project.project_id] = {
       keyRole,
@@ -264,10 +449,14 @@ function collectCustomization(projects) {
   return {
     ...current,
     sectionVisibility,
-    featuredProjectIds: featuredRaw,
+    featuredProjectIds,
     projectOverrides,
     jobTarget
   };
+}
+
+function collectDraftCustomization() {
+  return collectCustomization(previewProjectsCache);
 }
 
 async function persistProjectOverrides(projects, customization) {
@@ -295,21 +484,266 @@ async function persistProjectOverrides(projects, customization) {
   await Promise.allSettled(updates);
 }
 
+function renderLivePreview(projects, draftCustomization) {
+  const container = getPreviewContainer();
+  if (!container) return;
+
+  const sectionVisibility = {
+    "resume-summary": true,
+    "top-projects": true,
+    "portfolio-stats": true,
+    "skills-timeline": true,
+    "activity-heatmap": true,
+    ...(draftCustomization.sectionVisibility || {}),
+  };
+
+  const projectMap = new Map(
+    projects.map((project) => [String(project.project_id), project])
+  );
+
+  const featuredProjects = (draftCustomization.featuredProjectIds || [])
+    .map((id) => projectMap.get(String(id)))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const totalProjects = projects.length;
+  const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
+  const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
+
+  container.innerHTML = `
+    <div class="live-preview-section ${sectionVisibility["resume-summary"] ? "" : "hidden"}">
+      <h3>Resume Snapshot</h3>
+      <p>${totalProjects} project${totalProjects === 1 ? "" : "s"} • ${totalFiles} files • ${totalSkills} skill signals</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}">
+      <h3>Top 3 Project Showcase</h3>
+      ${
+        featuredProjects.length
+          ? featuredProjects
+              .map((project) => {
+                const override =
+                  draftCustomization.projectOverrides?.[project.project_id] || {};
+
+                return `
+                  <div class="live-preview-project-card">
+                    <h4>${escapeHtml(project.project_id)}</h4>
+                    <div class="live-preview-meta">
+                      ${project.total_files || 0} files • ${project.total_skills || 0} skills
+                    </div>
+                    ${
+                      override.portfolioBlurb
+                        ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
+                        : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
+                    }
+                    ${
+                      override.keyRole
+                        ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
+                        : ""
+                    }
+                    ${
+                      override.evidence
+                        ? `<p><strong>Evidence:</strong> ${escapeHtml(override.evidence)}</p>`
+                        : ""
+                    }
+                  </div>
+                `;
+              })
+              .join("")
+          : `<p class="live-preview-empty">No featured projects selected.</p>`
+      }
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["portfolio-stats"] ? "" : "hidden"}">
+      <h3>Portfolio Stats</h3>
+      <p>${totalProjects} Projects • ${totalFiles} Files • ${totalSkills} Skill Signals</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["skills-timeline"] ? "" : "hidden"}">
+      <h3>Skills Timeline</h3>
+      <p class="live-preview-empty">Timeline preview follows the saved portfolio layout.</p>
+    </div>
+
+    <div class="live-preview-section ${sectionVisibility["activity-heatmap"] ? "" : "hidden"}">
+      <h3>Activity Heatmap</h3>
+      <p class="live-preview-empty">Heatmap preview follows the saved portfolio layout.</p>
+    </div>
+  `;
+}
+
+function updateLivePreview() {
+  const draftCustomization = collectDraftCustomization();
+  renderLivePreview(previewProjectsCache, draftCustomization);
+  markDirtyState(draftCustomization);
+}
+
+function scheduleAutosave() {
+  if (!isPrivateMode() || !isDirty || isSaving) return;
+
+  clearAutosaveTimer();
+  autosaveTimer = setTimeout(() => {
+    performSave({ silent: true });
+  }, AUTOSAVE_DELAY_MS);
+}
+
+function syncFeaturedCheckboxes(projectId, checked) {
+  const picker = document.querySelector(
+    `[data-featured-project-id="${CSS.escape(projectId)}"]`
+  );
+  const editor = document.querySelector(
+    `[data-project-selected="${CSS.escape(projectId)}"]`
+  );
+
+  if (picker) picker.checked = checked;
+  if (editor) editor.checked = checked;
+}
+
+function rerenderFeaturedOrdering() {
+  const draftCustomization = collectDraftCustomization();
+  renderFeaturedOrderList(previewProjectsCache, draftCustomization);
+  updateLivePreview();
+  scheduleAutosave();
+}
+
+function handleFeaturedOrderDragStart(event) {
+  const item = event.target.closest("[data-featured-order-item]");
+  if (!item) return;
+
+  draggedFeaturedProjectId = item.dataset.featuredOrderItem;
+  item.classList.add("dragging");
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedFeaturedProjectId);
+  }
+}
+
+function handleFeaturedOrderDragOver(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  if (!target || !draggedFeaturedProjectId) return;
+
+  event.preventDefault();
+  target.classList.add("drag-over");
+}
+
+function handleFeaturedOrderDragLeave(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  target?.classList.remove("drag-over");
+}
+
+function handleFeaturedOrderDrop(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  if (!target || !draggedFeaturedProjectId) return;
+
+  event.preventDefault();
+
+  const targetId = target.dataset.featuredOrderItem;
+  if (!targetId || targetId === draggedFeaturedProjectId) {
+    target.classList.remove("drag-over");
+    return;
+  }
+
+  const orderedIds = getFeaturedOrderFromDom();
+  const fromIndex = orderedIds.indexOf(draggedFeaturedProjectId);
+  const toIndex = orderedIds.indexOf(targetId);
+
+  if (fromIndex === -1 || toIndex === -1) {
+    target.classList.remove("drag-over");
+    return;
+  }
+
+  const nextOrder = [...orderedIds];
+  const [moved] = nextOrder.splice(fromIndex, 1);
+  nextOrder.splice(toIndex, 0, moved);
+
+  const draftCustomization = collectDraftCustomization();
+  draftCustomization.featuredProjectIds = nextOrder;
+
+  renderFeaturedOrderList(previewProjectsCache, draftCustomization);
+  updateLivePreview();
+  scheduleAutosave();
+}
+
+function handleFeaturedOrderDragEnd() {
+  document
+    .querySelectorAll(".customization-featured-order-item")
+    .forEach((item) => {
+      item.classList.remove("dragging");
+      item.classList.remove("drag-over");
+    });
+
+  draggedFeaturedProjectId = null;
+}
+
+async function performSave({ silent = false } = {}) {
+  const saveBtn = getSaveButton();
+  if (!saveBtn || !isPrivateMode()) return;
+
+  clearAutosaveTimer();
+
+  const nextCustomization = collectCustomization(previewProjectsCache);
+  const nextSnapshot = snapshotCustomization(nextCustomization);
+
+  if (nextSnapshot === lastSavedSnapshot) {
+    isDirty = false;
+    updateSaveButtonState();
+    if (!silent) {
+      setStatus("No changes to save", "info");
+    } else {
+      setStatus("Saved", "success");
+    }
+    return;
+  }
+
+  try {
+    isSaving = true;
+    updateSaveButtonState();
+    setStatus(silent ? "Autosaving..." : "Saving customization...", "info");
+
+    savePortfolioCustomization(nextCustomization);
+    await persistProjectOverrides(previewProjectsCache, nextCustomization);
+
+    lastSavedSnapshot = snapshotCustomization(nextCustomization);
+    isDirty = false;
+
+    await loadPortfolioResume();
+    window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+
+    setStatus("Saved", "success");
+  } catch (error) {
+    console.error("Failed to save portfolio customization:", error);
+    isDirty = true;
+    setStatus(
+      silent
+        ? "Autosave failed. Please click Save Customization."
+        : "Failed to save portfolio customization.",
+      "error"
+    );
+  } finally {
+    isSaving = false;
+    updateSaveButtonState();
+  }
+}
+
 async function renderPortfolioCustomizationPage() {
-  const saveBtn = document.getElementById("portfolio-customization-save-btn");
+  const saveBtn = getSaveButton();
   if (!saveBtn) return;
 
+  clearAutosaveTimer();
+
   if (!isPrivateMode()) {
+    previewProjectsCache = [];
+    isDirty = false;
+    isSaving = false;
+    lastSavedSnapshot = "";
     renderPublicModeMessage();
     setStatus("Private Mode is required for portfolio customization.", "warning");
     return;
   }
 
-  saveBtn.disabled = false;
-  setStatus("");
-
-  const customization = loadPortfolioCustomization();
-  const projects = await fetchProjects();
+  try {
+    const customization = loadPortfolioCustomization();
+    const projects = await fetchProjects();
 
   renderJobTargetSection(customization);
   renderSectionToggles(customization);
@@ -352,34 +786,74 @@ async function renderPortfolioCustomizationPage() {
       saveBtn.disabled = true;
       setStatus("Saving customization...", "info");
 
-      const nextCustomization = collectCustomization(projects);
-      savePortfolioCustomization(nextCustomization);
-      await persistProjectOverrides(projects, nextCustomization);
+    setStatus("Saved", "success");
+    updateSaveButtonState();
 
-      await loadPortfolioResume();
-      document.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
-
-      setStatus("Portfolio customization saved.", "success");
-    } catch (error) {
-      console.error("Failed to save portfolio customization:", error);
-      setStatus("Failed to save portfolio customization.", "error");
-    } finally {
-      saveBtn.disabled = false;
-    }
-  };
+    saveBtn.onclick = async () => {
+      await performSave({ silent: false });
+    };
+  } catch (error) {
+    console.error("Failed to render portfolio customization page:", error);
+    setStatus("Failed to load portfolio customization data.", "error");
+  }
 }
 
 export function initPortfolioCustomization() {
   const tab = document.getElementById("customization-tab");
-  tab?.addEventListener("click", renderPortfolioCustomizationPage);
+  const root = document.getElementById("portfolio-customization-root");
+  const orderContainer = getFeaturedOrderContainer();
 
-  document.addEventListener("auth:mode-changed", () => {
-    renderPortfolioCustomizationPage();
-  });
+  if (!portfolioCustomizationInitialized) {
+    portfolioCustomizationInitialized = true;
 
-  document.addEventListener("portfolio:customization-updated", () => {
-    renderPortfolioCustomizationPage();
-  });
+    tab?.addEventListener("click", renderPortfolioCustomizationPage);
+
+    document.addEventListener("auth:mode-changed", () => {
+      renderPortfolioCustomizationPage();
+    });
+
+    window.addEventListener("portfolio:customization-updated", () => {
+      renderPortfolioCustomizationPage();
+    });
+
+    root?.addEventListener("input", () => {
+      updateLivePreview();
+      scheduleAutosave();
+    });
+
+    root?.addEventListener("change", (event) => {
+      const target = event.target;
+
+      if (target instanceof HTMLInputElement) {
+        if (target.matches("[data-featured-project-id]")) {
+          syncFeaturedCheckboxes(target.dataset.featuredProjectId, target.checked);
+          rerenderFeaturedOrdering();
+          return;
+        }
+
+        if (target.matches("[data-project-selected]")) {
+          syncFeaturedCheckboxes(target.dataset.projectSelected, target.checked);
+          rerenderFeaturedOrdering();
+          return;
+        }
+      }
+
+      updateLivePreview();
+      scheduleAutosave();
+    });
+
+    orderContainer?.addEventListener("dragstart", handleFeaturedOrderDragStart);
+    orderContainer?.addEventListener("dragover", handleFeaturedOrderDragOver);
+    orderContainer?.addEventListener("dragleave", handleFeaturedOrderDragLeave);
+    orderContainer?.addEventListener("drop", handleFeaturedOrderDrop);
+    orderContainer?.addEventListener("dragend", handleFeaturedOrderDragEnd);
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+  }
 
   renderPortfolioCustomizationPage();
 }
