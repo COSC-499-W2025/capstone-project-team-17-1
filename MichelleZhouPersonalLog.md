@@ -8,6 +8,7 @@
 - [T2 Week 5 Personal Log](#T2-week-5-personal-log)
 - [T2 Week 8 Personal Log](#T2-week-8-personal-log)
 - [T2 Week 9 Personal Log](#T2-week-9-personal-log)
+- [T2 Week 10 Personal Log](#T2-week-10-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
