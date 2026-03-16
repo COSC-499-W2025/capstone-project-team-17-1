@@ -4724,6 +4724,12 @@ transition: all 0.2s ease;
   grid-column: 1 / -1;
 }
 
+.customization-job-match-score {
+  color: #38bdf8;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 .portfolio-detail-block {
   margin-top: 12px;
   padding: 12px 14px;
