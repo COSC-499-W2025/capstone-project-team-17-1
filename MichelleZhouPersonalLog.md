@@ -362,3 +362,29 @@ This week involved reviewing and aligning cloud related implementation details w
 ### Additionally:<br />
 Moving forward my focus will continue on stabilizing and polishing the codebase. I will also shift towards connecting backend features with our electron dashboard and making sure the backend functionalities is surfaced clearly and reliably in the UI. I will also be helping with frontend development, specifically portfolio data and presentation.
 
+
+## T2 Week 10 Personal Log
+
+- (Mar 09 - Mar 15, 2026)<br />
+
+
+
+Weekly Recap:
+This week focused on implementing and integrating the Job Matching workflow into the Electron frontend and connecting it with the existing backend ranking system. The main objective was to allow users to paste a job description and automatically determine which of their projects best match the role. This involved frontend feature development, backend integration, debugging API communication, and reviewing multiple pull requests related to portfolio and job matching functionality. A significant portion of the work involved wiring the Portfolio Customization UI to the backend job matching endpoints and ensuring that the returned ranking results could be properly visualized and used inside the dashboard. This also required debugging several API connectivity issues between the Electron frontend and the FastAPI backend. After resolving these issues, the job matching analysis now successfully ranks projects, displays relevance scores, and allows the user to automatically select recommended projects for their portfolio.
+
+Coding tasks
+I implemented the frontend job matching workflow for the Portfolio Customization interface ([PR #304](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/304)). This allows users to paste a job description and analyze which of their projects best match the job requirements. The implementation connects the Electron frontend with the backend job matching endpoint and retrieves ranked project results. The frontend now sends the job description to the backend /job-matching/rank endpoint and receives a list of matched projects with scores and skill coverage information. The results are processed on the frontend and stored globally so they can be rendered inside the Featured Projects customization section. The UI was updated to automatically select the top recommended projects and display match scores beside each project entry.
+
+I also implemented a project selection constraint inside the customization interface to prevent users from selecting more than three featured projects simultaneously. A warning message is displayed when the user attempts to exceed this limit. This ensures the portfolio output remains focused and aligned with the intended design of highlighting only the most relevant projects. In addition to the frontend integration, I connected the job matching results with the project display logic so that match scores are visible beside each project in the customization panel. This provides clear feedback to users about which projects are most relevant to the job description they entered.
+
+Testing or Debugging Tasks
+A large portion of this week involved debugging frontend and backend communication issues during the integration of the job matching system. Initially, the customization interface and portfolio data were not appearing because the Electron frontend was unable to connect to the backend API. This was traced to incorrect API endpoints and missing backend server connections. I debugged multiple ERR_CONNECTION_REFUSED errors that occurred when the frontend attempted to fetch portfolio data, skills timeline information, project summaries, and activity heatmaps. The issue was resolved by ensuring the FastAPI backend server was running on the correct port and that the Electron frontend was targeting the correct API base URL.
+
+After restoring backend connectivity, I tested the full job matching pipeline by submitting sample job descriptions and verifying that the backend returned valid ranking results. I confirmed that the API response correctly included project match scores, keyword overlap metrics, skill coverage values, and generated tailored project descriptions. Additional debugging involved verifying that project data was correctly loaded from the backend before running the job match analysis. I tested API responses directly through the browser console to ensure the backend returned valid project lists and match results. These tests confirmed that the job matching endpoint successfully ranked projects and returned deterministic results.
+
+Reviewing or collaboration tasks
+This week also involved reviewing several pull requests related to portfolio functionality, frontend UI updates, and backend feature integrations. I reviewed multiple PRs to verify that frontend components behaved correctly, tests passed successfully, and UI improvements rendered as expected in the Electron dashboard. Part of the collaboration process included validating that backend changes related to project storage and artifact analysis remained compatible with the frontend customization interface. I also coordinated with teammates to ensure that the job matching logic aligned with the project metadata format used by the backend and that the ranking results could be consumed cleanly by the frontend.
+
+Additionally:
+Moving forward, I will continue improving the integration between backend analysis features and the Electron dashboard. This will include refining how portfolio insights and project rankings are presented to users and improving the overall usability of the portfolio customization interface. I will also continue debugging integration issues and assisting with frontend development to ensure the remaining backend features are surfaced clearly within the application UI.
+
