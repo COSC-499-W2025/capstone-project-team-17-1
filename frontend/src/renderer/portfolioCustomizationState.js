@@ -10,6 +10,13 @@ const DEFAULT_STATE = {
   },
   featuredProjectIds: [],
   projectOverrides: {},
+
+  // target info for pasted job listing
+  jobTarget: {
+    title: "",
+    company: "",
+    description: ""
+  }
 };
 
 function cloneDefaultState() {
@@ -34,6 +41,10 @@ export function loadPortfolioCustomization() {
         parsed?.projectOverrides && typeof parsed.projectOverrides === "object"
           ? parsed.projectOverrides
           : {},
+      jobTarget:
+        parsed?.jobTarget && typeof parsed.jobTarget === "object"
+          ? parsed.jobTarget
+          : cloneDefaultState().jobTarget
     };
   } catch {
     return cloneDefaultState();
