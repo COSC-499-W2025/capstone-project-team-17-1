@@ -64,6 +64,7 @@ BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 CURRENT_USER = None
+_SCHEMA_READY: set[str] = set()
 
 def _is_noreply_email(email: str | None) -> bool:
     if not email:
@@ -96,6 +97,25 @@ def _default_github_url(username: str | None) -> str | None:
     if not token:
         return None
     return f"https://github.com/{token}"
+
+
+def _has_required_schema(conn: sqlite3.Connection) -> bool:
+    """
+    Return True when the core tables needed for read endpoints already exist.
+    This allows the app to keep serving reads if the database is temporarily
+    opened in a readonly state and schema bootstrapping cannot run.
+    """
+    required = {
+        "project_analysis",
+        "files",
+        "uploads",
+        "error_analysis_results",
+    }
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+    ).fetchall()
+    existing = {str(row[0]) for row in rows}
+    return required.issubset(existing)
 
 
 # Schema + migrations
@@ -942,6 +962,7 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
     target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     db_path = get_database_path()
+    db_key = str(db_path.resolve())
 
     logger.info("Opening database at %s", db_path)
 
@@ -952,9 +973,28 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
         conn.execute("PRAGMA foreign_keys = ON")
     except Exception:
         pass
+    try:
+        conn.execute("PRAGMA busy_timeout = 5000")
+    except Exception:
+        pass
 
-    _initialize_schema(conn)
-    _migrate_uploads_table(conn)
+    if db_key not in _SCHEMA_READY:
+        try:
+            _initialize_schema(conn)
+            _migrate_uploads_table(conn)
+            _SCHEMA_READY.add(db_key)
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            if "readonly" not in message and "locked" not in message:
+                raise
+            if not _has_required_schema(conn):
+                raise
+            _SCHEMA_READY.add(db_key)
+            logger.warning(
+                "Skipping schema initialization for %s because database is temporarily unavailable for writes: %s",
+                db_path,
+                exc,
+            )
 
     return conn
 
