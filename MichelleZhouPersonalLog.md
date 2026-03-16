@@ -368,7 +368,7 @@ Moving forward my focus will continue on stabilizing and polishing the codebase.
 
 - (Mar 09 - Mar 15, 2026)<br />
 
-
+<img width="965" height="570" alt="image" src="https://github.com/user-attachments/assets/b4225c17-dd88-4637-a7a6-9ef32da15073" />
 
 Weekly Recap:
 This week focused on implementing and integrating the Job Matching workflow into the Electron frontend and connecting it with the existing backend ranking system. The main objective was to allow users to paste a job description and automatically determine which of their projects best match the role. This involved frontend feature development, backend integration, debugging API communication, and reviewing multiple pull requests related to portfolio and job matching functionality. A significant portion of the work involved wiring the Portfolio Customization UI to the backend job matching endpoints and ensuring that the returned ranking results could be properly visualized and used inside the dashboard. This also required debugging several API connectivity issues between the Electron frontend and the FastAPI backend. After resolving these issues, the job matching analysis now successfully ranks projects, displays relevance scores, and allows the user to automatically select recommended projects for their portfolio.
