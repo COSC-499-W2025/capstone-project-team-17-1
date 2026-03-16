@@ -1,5 +1,3 @@
-"""Job matching utilities."""
-
 from __future__ import annotations
 
 import math
@@ -10,18 +8,11 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .skills import SkillScore
 from .storage import open_db, fetch_latest_snapshot
+
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, List, Dict, Any, Optional
-
-import math
-
-from .skills import SkillScore  # existing class from skills.py
-from .storage import open_db, fetch_latest_snapshot
 
 
 # Expand / tweak this as needed
@@ -433,3 +424,55 @@ def matches_to_json(matches: List[ProjectMatch]) -> Dict[str, Any]:
             for m in matches
         ]
     }
+    
+# rewrite project description based on job description (based on relevance)
+def generate_tailored_project(project_snapshot, match):
+
+    project_id = project_snapshot.get("project_id", "Project")
+
+    matched = []
+    
+    if hasattr(match, "matched_skills"):
+        matched = [
+            s.get("skill")
+            for s in match.matched_skills
+            if isinstance(s, dict) and s.get("skill")
+        ]
+        
+    elif hasattr(match, "matched_required"):
+        matched = (
+            list(match.matched_required)
+            + list(match.matched_preferred)
+            + list(match.matched_keywords)
+        )
+        
+    matched = [m for m in matched if m]
+
+    if not matched:
+        return (
+            f"{project_id} demonstrates general software engineering experience "
+            "across multiple technologies."
+        )
+
+    skill_phrase = ", ".join(matched[:3])
+
+    return (
+        f"{project_id} demonstrates hands-on experience with {skill_phrase}. "
+        "This project involved building real-world functionality while applying "
+        "these technologies in practical implementations."
+    )
+
+# reorder skills so mose relevant is first
+def reorder_skills_for_job(job_text, project_skills):
+
+    job_skills = set(extract_job_skills(job_text))
+
+    def score(skill):
+        name = str(skill.get("skill", "")).lower()
+
+        if name in job_skills:
+            return (0, -float(skill.get("confidence", 0)))
+
+        return (1, -float(skill.get("confidence", 0)))
+
+    return sorted(project_skills, key=score)
