@@ -10,6 +10,7 @@
 - [Milestone 2 - Week 7 [Feb 16 – Feb 22, 2026]](#week-7-m2)
 - [Milestone 2 - Week 8 [Feb 23 – Mar 1, 2026]](#week-8-m2)
 - [Milestone 2 - Week 9 [Mar 2 – Mar 8, 2026]](#week-9-m2)
+- [Milestone 2 - Week 10 [Mar 9 – Mar 15, 2026]](#week-10-m2)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -227,6 +228,22 @@ I also recorded the demo video this week to showcase the system workflow and API
 [Mar 2 – Mar 8, 2026]
 This week, I did not make corresponding changes to the new features or frontend development, since those parts were being handled by my teammates. Having multiple people modify the frontend at the same time is not an ideal choice, so I decided to carefully review and revise the existing tests, improve coverage, and refactor necessary parts to make our project more stable. In particular, I added 60 new tests covering previously untested storage and project CRUD functionality, including GitHub token handling, project overrides and evidence, database backup and snapshot export, as well as the main project management endpoints for listing, retrieving, updating, deleting, and reading overrides. During this process, I also identified and documented several infrastructure issues, such as storage.open_db(base_dir) ignoring its base_dir argument, Windows SQLite file locks requiring additional cleanup handling, and identical ZIP uploads sharing the same file_id, so the tests were adjusted to use unique ZIP content to avoid foreign key conflicts. [Add Storage & Project CRUD Test Coverage
  (#288)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/288) Next week, I will start working on the development and integration of the new frontend features, alternating tasks with my teammates and coordinating closely with them.
+
+<img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
+
+[Back](#table-of-contents)
+
+
+## Week 10 (M2)
+[Mar 9 – Mar 15, 2026]
+This week, I completed the full My Resumes feature, covering the entire workflow from resume generation to editing, structural management, and export. I implemented the New Resume modal so users can generate resumes from both uploaded and imported projects, with proper support for collaborative projects by separating owner_id and data_user_id. This ensures the generated resume is always saved under the logged-in user while still allowing project data from another contributor to be used when needed.
+
+I also integrated generated resumes into the My Resumes page as expandable cards within the portfolio grid, showing key metadata such as title, section count, and last updated time. When expanded, resumes can now be edited inline with auto-save on blur, and title updates are reflected on the card immediately. In addition, I added structural editing features so users can add or delete sections and items, as well as reorder them through drag and drop with a dedicated drag handle.
+
+On the export side, I redesigned the workflow into a modal with separate JSON, Markdown, and PDF tabs, each providing a live preview before download. I also implemented PDF preview using Chromium’s built-in viewer and added cleanup for blob URLs when the modal closes. Finally, I expanded automated test coverage for resume listing, collaborative ownership behavior, and authenticated generation flows to improve reliability and ensure the feature works correctly across different use cases. [Implement resume generation, editing, deletion, and export
+ (#294)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/294)
+
+Next week, I plan to refactor the database to align it with the newly added login system. In addition, it will also be necessary to further polish the existing features more carefully. At the same time, remaining issues from Milestone 2, such as automatic detection of user roles, also need to be addressed and completed.
 
 <img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
 
