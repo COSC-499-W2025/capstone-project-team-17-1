@@ -7,6 +7,16 @@ import {
 
 const API_BASE = "http://127.0.0.1:8002";
 
+const SECTION_SELECTOR_MAP = {
+  "resume-summary": ".portfolio-hero-card",
+  "top-projects": ".portfolio-projects-card",
+  "portfolio-stats": ".portfolio-skills-card",
+  "skills-timeline": ".portfolio-timeline-card",
+  "activity-heatmap": ".portfolio-heatmap-card",
+};
+
+let portfolioResumeInitialized = false;
+
 function getStaticProfile() {
   return {
     name: "Raunak Khanna",
@@ -128,11 +138,21 @@ function getHeatmapBucket(intensity) {
 
 function applyPortfolioSectionVisibility() {
   const customization = loadPortfolioCustomization();
+  const sectionVisibility = {
+    "resume-summary": true,
+    "top-projects": true,
+    "portfolio-stats": true,
+    "skills-timeline": true,
+    "activity-heatmap": true,
+    ...(customization?.sectionVisibility || {}),
+  };
 
-  document.querySelectorAll(".portfolio-section").forEach((section) => {
-    const sectionId = section.dataset.portfolioSection;
-    const isVisible = customization.sectionVisibility?.[sectionId] !== false;
-    section.classList.toggle("hidden", !isVisible);
+  Object.entries(SECTION_SELECTOR_MAP).forEach(([sectionKey, selector]) => {
+    const element = document.querySelector(selector);
+    if (!element) return;
+
+    const isVisible = sectionVisibility[sectionKey] !== false;
+    element.style.display = isVisible ? "" : "none";
   });
 }
 
@@ -140,8 +160,7 @@ function renderResumeSummary(profile, projects, summaryData) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
 
-  const customization = loadPortfolioCustomization();
-  const featuredProjects = getFeaturedProjects(projects, customization, getTopProjects);
+  const featuredProjects = getFeaturedProjects(projects);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -250,14 +269,14 @@ function renderTopProjects(projects, summaryData) {
     return;
   }
 
-  const customization = loadPortfolioCustomization();
   const projectDetailsMap = getProjectDetailsMap(summaryData);
-  const topProjects = getFeaturedProjects(projects, customization, getTopProjects);
+  const featuredProjects = getFeaturedProjects(projects);
+  const topProjects = featuredProjects.length ? featuredProjects : getTopProjects(projects);
 
   container.innerHTML = topProjects
     .map((project, index) => {
       const details = projectDetailsMap.get(project.project_id);
-      const override = getProjectOverride(customization, project.project_id);
+      const override = getProjectOverride(project.project_id) || {};
 
       const title = details?.title || project.project_id;
       const summary =
@@ -468,8 +487,7 @@ function renderActivityHeatmap(heatmapData) {
 }
 
 function buildResumePreviewHtml(profile, projects, summaryData) {
-  const customization = loadPortfolioCustomization();
-  const topProjects = getFeaturedProjects(projects, customization, getTopProjects);
+  const topProjects = getFeaturedProjects(projects);
   const projectDetailsMap = getProjectDetailsMap(summaryData);
 
   const totalProjects = projects.length;
@@ -526,7 +544,7 @@ function buildResumePreviewHtml(profile, projects, summaryData) {
             ? topProjects
                 .map((project) => {
                   const details = projectDetailsMap.get(project.project_id);
-                  const override = getProjectOverride(customization, project.project_id);
+                  const override = getProjectOverride(project.project_id) || {};
                   const title = details?.title || project.project_id;
                   const summary =
                     override.portfolioBlurb ||
@@ -634,6 +652,9 @@ export async function loadPortfolioResume() {
 export function initPortfolioResume() {
   loadPortfolioResume();
 
+  if (portfolioResumeInitialized) return;
+  portfolioResumeInitialized = true;
+
   const refreshBtn = document.getElementById("refresh-portfolio-btn");
   refreshBtn?.addEventListener("click", loadPortfolioResume);
 
@@ -656,7 +677,7 @@ export function initPortfolioResume() {
     }
   });
 
-  document.addEventListener("portfolio:customization-updated", () => {
+  window.addEventListener("portfolio:customization-updated", () => {
     loadPortfolioResume();
   });
 }

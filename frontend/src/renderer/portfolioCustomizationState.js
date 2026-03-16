@@ -1,76 +1,113 @@
-const STORAGE_KEY = "loom_portfolio_customization_v1";
+const STORAGE_KEY = "portfolioCustomization";
 
-const DEFAULT_STATE = {
-  sectionVisibility: {
-    "resume-summary": true,
-    "top-projects": true,
-    "portfolio-stats": true,
-    "skills-timeline": true,
-    "activity-heatmap": true,
-  },
-  featuredProjectIds: [],
-  projectOverrides: {},
+const DEFAULT_SECTION_VISIBILITY = {
+  "resume-summary": true,
+  "top-projects": true,
+  "portfolio-stats": true,
+  "skills-timeline": true,
+  "activity-heatmap": true,
 };
 
-function cloneDefaultState() {
-  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+function createDefaultCustomization() {
+  return {
+    sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY },
+    featuredProjectIds: [],
+    projectOverrides: {},
+  };
+}
+
+function safeParse(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeProjectOverrides(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const normalized = {};
+
+  Object.entries(value).forEach(([projectId, override]) => {
+    if (!override || typeof override !== "object" || Array.isArray(override)) {
+      return;
+    }
+
+    normalized[String(projectId)] = {
+      keyRole: typeof override.keyRole === "string" ? override.keyRole : "",
+      evidence: typeof override.evidence === "string" ? override.evidence : "",
+      portfolioBlurb:
+        typeof override.portfolioBlurb === "string" ? override.portfolioBlurb : "",
+    };
+  });
+
+  return normalized;
+}
+
+function normalizeCustomization(value) {
+  const defaults = createDefaultCustomization();
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return defaults;
+  }
+
+  const sectionVisibility = {
+    ...DEFAULT_SECTION_VISIBILITY,
+    ...(value.sectionVisibility && typeof value.sectionVisibility === "object"
+      ? value.sectionVisibility
+      : {}),
+  };
+
+  const featuredProjectIds = Array.isArray(value.featuredProjectIds)
+    ? value.featuredProjectIds.map((id) => String(id))
+    : [];
+
+  const projectOverrides = normalizeProjectOverrides(value.projectOverrides);
+
+  return {
+    sectionVisibility,
+    featuredProjectIds,
+    projectOverrides,
+  };
 }
 
 export function loadPortfolioCustomization() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return cloneDefaultState();
-
-    const parsed = JSON.parse(raw);
-    return {
-      sectionVisibility: {
-        ...DEFAULT_STATE.sectionVisibility,
-        ...(parsed?.sectionVisibility || {}),
-      },
-      featuredProjectIds: Array.isArray(parsed?.featuredProjectIds)
-        ? parsed.featuredProjectIds.map((id) => String(id).trim()).filter(Boolean)
-        : [],
-      projectOverrides:
-        parsed?.projectOverrides && typeof parsed.projectOverrides === "object"
-          ? parsed.projectOverrides
-          : {},
-    };
-  } catch {
-    return cloneDefaultState();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return createDefaultCustomization();
   }
+
+  return normalizeCustomization(safeParse(raw));
 }
 
-export function savePortfolioCustomization(state) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function savePortfolioCustomization(customization) {
+  const normalized = normalizeCustomization(customization);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
 }
 
-export function getProjectOverride(customization, projectId) {
-  return customization?.projectOverrides?.[String(projectId).trim()] || {};
+export function getProjectOverride(projectId) {
+  const customization = loadPortfolioCustomization();
+  return customization.projectOverrides[String(projectId)] || null;
 }
 
-export function getFeaturedProjects(projects, customization, fallbackSelector) {
-  const featuredIds = Array.isArray(customization?.featuredProjectIds)
-    ? customization.featuredProjectIds
-    : [];
+export function getFeaturedProjects(projects = []) {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const parsed = raw ? safeParse(raw) : null;
+  const customization = normalizeCustomization(parsed);
 
-  const selected = featuredIds
-    .map((id) => projects.find((project) => project.project_id === id))
+  // Only fallback to first 3 projects when there is NO saved customization yet.
+  // If featuredProjectIds exists (even as []), respect the saved state.
+  if (!parsed || !Array.isArray(parsed.featuredProjectIds)) {
+    return projects.slice(0, 3);
+  }
+
+  const featured = customization.featuredProjectIds
+    .map((id) => projects.find((project) => String(project.id) === String(id)))
     .filter(Boolean);
 
-  if (selected.length >= 3) {
-    return selected.slice(0, 3);
-  }
-
-  const fallback = typeof fallbackSelector === "function" ? fallbackSelector(projects) : projects;
-  const used = new Set(selected.map((project) => project.project_id));
-
-  for (const project of fallback) {
-    if (!used.has(project.project_id)) {
-      selected.push(project);
-      used.add(project.project_id);
-    }
-    if (selected.length >= 3) break;
-  }
-
-  return selected.slice(0, 3);
+  return featured.slice(0, 3);
 }
