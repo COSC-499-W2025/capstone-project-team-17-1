@@ -12,6 +12,7 @@ from capstone.job_matching import (
     build_jd_profile,
     rank_projects_for_job,
     matches_to_json,
+    generate_tailored_project
 )
 from capstone.storage import open_db, close_db
 from capstone.activity_log import log_event
@@ -94,9 +95,33 @@ def rank_projects(
     matches = rank_projects_for_job(jd_profile, project_snapshots)
 
     matches = matches[:top_k]
-    log_event(
-    "INFO",
-    f"Job ranking executed · Candidates: {len(project_snapshots)} · Returned: {len(matches)}"
-)
     
-    return matches_to_json(matches)
+    results = []
+    
+    for match in matches:
+        snapshot = next(
+            (s for s in project_snapshots if s.get("project_id") == match.project_id),
+            None
+        )
+        
+        description = generate_tailored_project(snapshot, match) if snapshot else ""
+
+        results.append({
+            "project_id": match.project_id,
+            "score": match.score,
+            "required_coverage": match.required_coverage,
+            "preferred_coverage": match.preferred_coverage,
+            "keyword_overlap": match.keyword_overlap,
+            "recency_factor": match.recency_factor,
+            "matched_required_skills": match.matched_required,
+            "matched_preferred_skills": match.matched_preferred,
+            "matched_keywords": match.matched_keywords,
+            "tailored_description": description
+        })
+
+    log_event(
+        "INFO",
+        f"Job ranking executed · Candidates: {len(project_snapshots)} · Returned: {len(results)}"
+    )
+
+    return {"matches": results}
