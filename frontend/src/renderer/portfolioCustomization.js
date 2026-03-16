@@ -14,9 +14,15 @@ const SECTION_LABELS = [
   { id: "activity-heatmap", label: "Activity Heatmap" },
 ];
 
+const AUTOSAVE_DELAY_MS = 1200;
+
 let previewProjectsCache = [];
 let portfolioCustomizationInitialized = false;
 let draggedFeaturedProjectId = null;
+let autosaveTimer = null;
+let isDirty = false;
+let isSaving = false;
+let lastSavedSnapshot = "";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -46,13 +52,97 @@ function getFeaturedOrderContainer() {
   return document.getElementById("portfolio-featured-order-container");
 }
 
+function getSaveButton() {
+  return document.getElementById("portfolio-customization-save-btn");
+}
+
+function clearAutosaveTimer() {
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+}
+
+function normalizeCustomization(customization) {
+  const sectionVisibility = {};
+  SECTION_LABELS.forEach((section) => {
+    sectionVisibility[section.id] = customization?.sectionVisibility?.[section.id] !== false;
+  });
+
+  const featuredProjectIds = Array.isArray(customization?.featuredProjectIds)
+    ? customization.featuredProjectIds.map((id) => String(id))
+    : [];
+
+  const projectOverrides = {};
+  const rawOverrides =
+    customization?.projectOverrides && typeof customization.projectOverrides === "object"
+      ? customization.projectOverrides
+      : {};
+
+  Object.keys(rawOverrides)
+    .sort()
+    .forEach((projectId) => {
+      const override = rawOverrides[projectId] || {};
+      projectOverrides[String(projectId)] = {
+        keyRole: String(override.keyRole || ""),
+        evidence: String(override.evidence || ""),
+        portfolioBlurb: String(override.portfolioBlurb || ""),
+      };
+    });
+
+  return {
+    sectionVisibility,
+    featuredProjectIds,
+    projectOverrides,
+  };
+}
+
+function snapshotCustomization(customization) {
+  return JSON.stringify(normalizeCustomization(customization));
+}
+
+function updateSaveButtonState() {
+  const saveBtn = getSaveButton();
+  if (!saveBtn) return;
+
+  if (!isPrivateMode()) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Save Customization";
+    return;
+  }
+
+  if (isSaving) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    return;
+  }
+
+  saveBtn.disabled = !isDirty;
+  saveBtn.textContent = isDirty ? "Save Customization" : "Saved";
+}
+
+function markDirtyState(nextCustomization) {
+  const snapshot = snapshotCustomization(nextCustomization);
+  isDirty = snapshot !== lastSavedSnapshot;
+
+  if (!isSaving) {
+    if (isDirty) {
+      setStatus("Unsaved changes", "warning");
+    } else {
+      setStatus("Saved", "success");
+    }
+  }
+
+  updateSaveButtonState();
+}
+
 function renderPublicModeMessage() {
   const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
   const previewContainer = getPreviewContainer();
-  const saveBtn = document.getElementById("portfolio-customization-save-btn");
+  const saveBtn = getSaveButton();
 
   if (toggleContainer) {
     toggleContainer.innerHTML =
@@ -76,6 +166,7 @@ function renderPublicModeMessage() {
   }
   if (saveBtn) {
     saveBtn.disabled = true;
+    saveBtn.textContent = "Save Customization";
   }
 }
 
@@ -433,6 +524,16 @@ function renderLivePreview(projects, draftCustomization) {
 function updateLivePreview() {
   const draftCustomization = collectDraftCustomization();
   renderLivePreview(previewProjectsCache, draftCustomization);
+  markDirtyState(draftCustomization);
+}
+
+function scheduleAutosave() {
+  if (!isPrivateMode() || !isDirty || isSaving) return;
+
+  clearAutosaveTimer();
+  autosaveTimer = setTimeout(() => {
+    performSave({ silent: true });
+  }, AUTOSAVE_DELAY_MS);
 }
 
 function syncFeaturedCheckboxes(projectId, checked) {
@@ -451,6 +552,7 @@ function rerenderFeaturedOrdering() {
   const draftCustomization = collectDraftCustomization();
   renderFeaturedOrderList(previewProjectsCache, draftCustomization);
   updateLivePreview();
+  scheduleAutosave();
 }
 
 function handleFeaturedOrderDragStart(event) {
@@ -509,6 +611,7 @@ function handleFeaturedOrderDrop(event) {
 
   renderFeaturedOrderList(previewProjectsCache, draftCustomization);
   updateLivePreview();
+  scheduleAutosave();
 }
 
 function handleFeaturedOrderDragEnd() {
@@ -522,51 +625,92 @@ function handleFeaturedOrderDragEnd() {
   draggedFeaturedProjectId = null;
 }
 
+async function performSave({ silent = false } = {}) {
+  const saveBtn = getSaveButton();
+  if (!saveBtn || !isPrivateMode()) return;
+
+  clearAutosaveTimer();
+
+  const nextCustomization = collectCustomization(previewProjectsCache);
+  const nextSnapshot = snapshotCustomization(nextCustomization);
+
+  if (nextSnapshot === lastSavedSnapshot) {
+    isDirty = false;
+    updateSaveButtonState();
+    if (!silent) {
+      setStatus("No changes to save", "info");
+    } else {
+      setStatus("Saved", "success");
+    }
+    return;
+  }
+
+  try {
+    isSaving = true;
+    updateSaveButtonState();
+    setStatus(silent ? "Autosaving..." : "Saving customization...", "info");
+
+    savePortfolioCustomization(nextCustomization);
+    await persistProjectOverrides(previewProjectsCache, nextCustomization);
+
+    lastSavedSnapshot = snapshotCustomization(nextCustomization);
+    isDirty = false;
+
+    await loadPortfolioResume();
+    window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+
+    setStatus("Saved", "success");
+  } catch (error) {
+    console.error("Failed to save portfolio customization:", error);
+    isDirty = true;
+    setStatus(
+      silent
+        ? "Autosave failed. Please click Save Customization."
+        : "Failed to save portfolio customization.",
+      "error"
+    );
+  } finally {
+    isSaving = false;
+    updateSaveButtonState();
+  }
+}
+
 async function renderPortfolioCustomizationPage() {
-  const saveBtn = document.getElementById("portfolio-customization-save-btn");
+  const saveBtn = getSaveButton();
   if (!saveBtn) return;
+
+  clearAutosaveTimer();
 
   if (!isPrivateMode()) {
     previewProjectsCache = [];
+    isDirty = false;
+    isSaving = false;
+    lastSavedSnapshot = "";
     renderPublicModeMessage();
     setStatus("Private Mode is required for portfolio customization.", "warning");
     return;
   }
-
-  saveBtn.disabled = false;
-  setStatus("");
 
   try {
     const customization = loadPortfolioCustomization();
     const projects = await fetchProjects();
 
     previewProjectsCache = projects;
+    lastSavedSnapshot = snapshotCustomization(customization);
+    isDirty = false;
+    isSaving = false;
 
     renderSectionToggles(customization);
     renderFeaturedProjects(projects, customization);
     renderProjectEditors(projects, customization);
     renderFeaturedOrderList(projects, customization);
-    updateLivePreview();
+    renderLivePreview(projects, customization);
+
+    setStatus("Saved", "success");
+    updateSaveButtonState();
 
     saveBtn.onclick = async () => {
-      try {
-        saveBtn.disabled = true;
-        setStatus("Saving customization...", "info");
-
-        const nextCustomization = collectCustomization(projects);
-        savePortfolioCustomization(nextCustomization);
-        await persistProjectOverrides(projects, nextCustomization);
-
-        await loadPortfolioResume();
-        window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
-
-        setStatus("Portfolio customization saved.", "success");
-      } catch (error) {
-        console.error("Failed to save portfolio customization:", error);
-        setStatus("Failed to save portfolio customization.", "error");
-      } finally {
-        saveBtn.disabled = false;
-      }
+      await performSave({ silent: false });
     };
   } catch (error) {
     console.error("Failed to render portfolio customization page:", error);
@@ -594,6 +738,7 @@ export function initPortfolioCustomization() {
 
     root?.addEventListener("input", () => {
       updateLivePreview();
+      scheduleAutosave();
     });
 
     root?.addEventListener("change", (event) => {
@@ -614,6 +759,7 @@ export function initPortfolioCustomization() {
       }
 
       updateLivePreview();
+      scheduleAutosave();
     });
 
     orderContainer?.addEventListener("dragstart", handleFeaturedOrderDragStart);
@@ -621,6 +767,12 @@ export function initPortfolioCustomization() {
     orderContainer?.addEventListener("dragleave", handleFeaturedOrderDragLeave);
     orderContainer?.addEventListener("drop", handleFeaturedOrderDrop);
     orderContainer?.addEventListener("dragend", handleFeaturedOrderDragEnd);
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
   }
 
   renderPortfolioCustomizationPage();

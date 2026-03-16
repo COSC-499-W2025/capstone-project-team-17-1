@@ -4882,3 +4882,23 @@ transition: all 0.2s ease;
   padding: 12px 0;
   opacity: 0.75;
 }
+
+
+/*autosave*/
+
+
+.customization-status[data-kind="success"] {
+  color: #7ef0a8;
+}
+
+.customization-status[data-kind="warning"] {
+  color: #ffd36b;
+}
+
+.customization-status[data-kind="error"] {
+  color: #ff8a8a;
+}
+
+.customization-status[data-kind="info"] {
+  color: #9ecbff;
+}
