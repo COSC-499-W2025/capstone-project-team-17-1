@@ -679,3 +679,41 @@ This week, the team made strong progress on frontend development, backend integr
 [Add Storage & Project CRUD Test Coverage (#288)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/288) is currently in progress and adds 60 new tests for storage and project CRUD functionality. It expands coverage for previously untested areas and also documents several infrastructure issues discovered during testing, helping improve overall project stability.
 
 Overall, this week’s work significantly improved the completeness of the product by strengthening the dashboard, project management, authentication flow, portfolio/resume experience, cloud sync support, and automated test coverage. Going into next week, the team is in a much stronger position to continue frontend integration, stabilize remaining features, and prepare the system for final milestone delivery.
+
+
+## WEEK 10 TEAM LOG (Term2)
+(Mar 9 - Mar 15, 2026)
+
+### Recap of Milestone Goal - Week 10
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Burnup chart - Week 10
+<img width="1012" height="577" alt="Screenshot 2026-03-15 at 9 00 14 PM" src="https://github.com/user-attachments/assets/06d43953-9c65-429e-99ab-d57e88f6410c" />
+
+### Completed Tasks - Week 10
+<img width="1229" height="255" alt="Screenshot 2026-03-15 at 8 59 01 PM" src="https://github.com/user-attachments/assets/2c315f11-49f0-48d0-a713-13b2627de265" />
+<img width="1150" height="263" alt="Screenshot 2026-03-15 at 8 58 49 PM" src="https://github.com/user-attachments/assets/82399cc2-c161-44ed-9d33-88c318e2914f" />
+
+### In Progress Tasks - Week 10
+<img width="1237" height="789" alt="Screenshot 2026-03-15 at 8 59 29 PM" src="https://github.com/user-attachments/assets/30fc2679-a45f-4fad-b8c8-b9cd6a35b423" />
+
+### Test Report - Week 10
+This week, the team focused on improving the frontend experience and polishing the Portfolio and Résumé features for Milestone 3. Several updates were made to résumé management, project viewing, portfolio customization, and frontend stability to make the system more complete and user-friendly.
+
+[Enhance Web Portfolio Presentation and Fix Project Deletion (#292)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292) improved the Web Portfolio interface and fixed a backend issue related to project deletion. The update refined how projects and learning progression are displayed in the portfolio and ensured that project deletion works correctly without leaving inconsistent records.
+
+[added a view prject functionality (#293)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/293) added a project viewing feature in the frontend. This allows users to open and explore project content directly within the interface, improving accessibility to project files and information.
+
+[Implement resume generation, editing, deletion, and export (#294)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/294) introduced the résumé management system. Users can now generate resumes from project data, edit resume content, delete resumes, and export them in multiple formats, significantly expanding the functionality of the Portfolio & Resume module.
+
+[Fix/fix frontend minor bugs (#297)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/297) resolved several small frontend issues affecting usability and interface consistency. These fixes help stabilize the frontend and improve the overall user experience.
+
+[Fix/portfolio customization debug (#299)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/299) addressed debugging issues in the portfolio customization workflow. The update improves the reliability of customization features and ensures that user changes are handled correctly.
+
+[Feature/drag drop featured projects (#300)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/300) added drag-and-drop support for arranging featured projects in the portfolio. This allows users to control how their projects are presented and improves customization flexibility.
+
+[Feature/featured project ordering (#301)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/301) introduced project ordering functionality so that featured projects can be displayed in a consistent and user-defined order.
+
+[Feature/customization autosave (#302)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/302) added an autosave mechanism to portfolio customization. Changes made by users are automatically saved, reducing the risk of losing edits and improving the editing experience.
+
+Overall, this week’s work strengthened the Portfolio & Resume system and improved frontend stability. These updates move the project closer to completing the Milestone 3 interface and preparing the system for final integration and polishing.

@@ -18,6 +18,7 @@
 - [Term 2 Week 5 Personal Log](#term-2-week-5-personal-log)
 - [Term 2 Week 8 Personal Log](#term-2-week-8-personal-log)
 - [Term 2 Week 9 Personal Log](#term-2-week-9-personal-log)
+- [Term 2 Week 10 Personal Log](#term-2-week-10-personal-log)
 
 ---
 
@@ -1386,9 +1387,77 @@ This helped surface project productivity over time and strengthened the portfoli
 #### Reflection
 Overall, this was a productive week with visible progress on Milestone 3. I contributed multiple portfolio-related PRs that improved both the technical functionality and the polish of the user-facing application. The main value of my work this week was not just adding new features, but also making the portfolio experience more coherent, more stable, and more aligned with the final expectations of the capstone project.
 
+ALL PRS:
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/281
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/278
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/273
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/273
+
+
 
 <img width="1077" height="628" alt="Screenshot 2026-03-08 at 5 29 04 PM" src="https://github.com/user-attachments/assets/541a3254-2cb2-446f-8a95-ff2955cda6fa" />
 
 
 
 
+### TERM 2 WEEK 10 PERSONAL LOG
+
+# Weekly Log of Merged PRs
+
+## Week of March 9–15, 2026
+
+This week, the team continued integration work on the frontend and resume/portfolio flows, along with project viewing and export-related fixes. Based on the repository history visible in GitHub Desktop, the following merged PRs and merge events were observed:
+
+### Merged PRs
+# Weekly Work Log
+
+## Week of March 9–15, 2026
+
+This week, I mainly worked on the **portfolio customization feature for Private Mode** as part of **Issue #291 — user customization / portfolio**.
+
+### What we worked on
+- built the **Customization** page in **Private Mode**
+- added support for choosing **featured projects** for the **Top 3 Project Showcase**
+- added per-project customization fields for:
+  - **key role**
+  - **evidence of success**
+  - **portfolio blurb**
+- added **section visibility controls** so users can choose which sections appear on the **Portfolio & Resume** page
+- connected customization settings to the portfolio page so saved changes are reflected immediately
+- added customization state handling using **localStorage**
+- connected project-specific edits to the backend edit flow
+- updated portfolio rendering logic to prioritize:
+  1. user customization overrides
+  2. backend-generated summary data
+  3. fallback default text
+
+### Debugging and fixes
+- debugged the **Private Mode login issue**
+- found that the backend was not running locally on port `8002`
+- fixed backend startup issues by setting the correct `CAPSTONE_DB_DIR`
+- installed missing backend dependencies such as `boto3`
+- confirmed the backend runs successfully with the local FastAPI server
+- fixed the **blank Customization tab** issue caused by duplicate `customization-page` markup in `index.html`
+- corrected the section visibility control rendering issue
+
+### Verification completed
+- confirmed login works in **Private Mode**
+- confirmed the **Customization** tab appears after login
+- confirmed project data loads into the customization workflow
+- confirmed featured project selection works
+- confirmed custom text fields save correctly
+- confirmed portfolio overrides appear on the **Portfolio & Resume** page
+- confirmed section visibility changes affect the portfolio page correctly
+
+### Outcome
+By the end of the week, the **portfolio customization workflow for Private Mode** was working end-to-end and was ready to be submitted as a PR.
+
+Merged PRS: 
+
+
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/299
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/300
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/301
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/302
+
+<img width="1077" height="628" alt="screenshot" src="https://github.com/user-attachments/assets/541a3254-2cb2-446f-8a95-ff2955cda6fa" />

@@ -1444,3 +1444,126 @@ These fixes were not always large individually, but together they were essential
 This week was one of the most impactful weeks of the project so far because it pushed the system beyond a local Electron prototype and into a real hosted product architecture. I completed the Projects tab and turned it into a functional project management interface with upload, delete, pull, and project viewing behavior. I also extended the authentication and account system so the application supports persistent sessions and real profile management. Most importantly, I built and deployed a working web version of the app by separating browser safe frontend logic from Electron specific code, deploying the Python backend to Render, and deploying the frontend to Cloudflare Pages.
 
 A lot of the work this week was not just implementing new code, but carefully tracing how assumptions from the desktop version broke when moved into a hosted browser environment. Fixing those mismatches forced me to understand the architecture more deeply, especially around auth flow, deployment, data loading, and Electron only dependencies. By the end of the week, the application was no longer limited to local desktop execution and now exists as a publicly accessible full stack web deployment, which is a major milestone for the capstone.
+
+---
+
+## Week 10 Personal Log [Mar 9 – Mar 15, 2026]
+
+This week focused on expanding the project dashboard from a project management interface into a real development analysis environment. The work centered on building an in-app project code viewer, extending the analytics system with collaboration metrics, and integrating GitHub repository data so the platform can analyze real developer activity. In addition, I worked on creating a Mini VSCode style project viewer that allows files inside uploaded project archives to be opened and edited directly inside the application. These improvements significantly expanded the capabilities of the dashboard and moved the platform closer to a full developer insight tool rather than just a project listing interface.
+
+### PR Hyperlink
+
+[PR #293](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/293)  
+[PR #297](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/297)
+
+**Peer Eval**  
+>
+> ![Week 10 — peer eval]
+> <img width="1084" height="632" alt="image" src="https://github.com/user-attachments/assets/fc96a37f-ccf3-49e9-ba24-b5b9cafb35fc" />
+> _Figure 0. peer evaluation._
+>
+
+---
+
+### Building the Mini VSCode Viewer
+
+One of the largest features implemented this week was the Mini VSCode Viewer inside the project dashboard. Previously the system only allowed projects to be uploaded and displayed as metadata cards. There was no way to actually explore the project contents directly within the application.
+
+To address this, I designed and implemented a code viewing environment inspired by lightweight IDE interfaces such as VSCode.
+
+* Added a **View tab** that allows users to open project files directly from the stored project archive.
+* Integrated the **Monaco Editor**, the same editor used by VSCode, to provide syntax highlighted code editing directly inside the dashboard.
+* Implemented file loading logic so project files stored inside ZIP archives can be opened dynamically in the editor.
+* Added full syntax highlighting support through Monaco so multiple programming languages are displayed correctly.
+* Implemented save functionality that allows users to modify files and write changes back to the project archive.
+* Added a new backend endpoint that handles updating files securely within the stored project ZIP files.
+* Connected the editor save functionality with the backend update route so file changes persist correctly.
+
+This feature essentially turns the project dashboard into a **lightweight development environment** where users can inspect and modify code without leaving the application.
+
+---
+
+### Implementing the Project Collaboration Analytics
+
+Another major part of the work this week was expanding the **Analysis tab** to include deeper collaboration insights for Git based projects. The goal was to move beyond simple project statistics and begin analyzing how contributors interact within a repository.
+
+To achieve this, I implemented contributor ranking and collaboration analytics based on real GitHub activity.
+
+* Extended the backend analytics logic to calculate contributor activity metrics.
+* Implemented contributor ranking based on commit counts, pull requests created, and pull request reviews.
+* Added a scoring system that aggregates multiple activity metrics into a single contribution score.
+* Implemented logic to correctly map Git commit authors to GitHub usernames so contributor data is properly attributed.
+* Updated the frontend analytics view to display ranked contributor tables based on the calculated scores.
+
+This allows the system to provide insights into **who contributes the most to a project and how different contributors collaborate within a repository.**
+
+---
+
+### Integrating GitHub API Data
+
+One challenge that appeared while building the collaboration analytics was that Git history alone does not contain information about pull requests and review activity. Because of this limitation, I needed to integrate additional GitHub API endpoints to retrieve this data.
+
+To solve this issue, I implemented GitHub API integration using authenticated requests.
+
+* Added backend integration with the GitHub REST API to retrieve pull request data.
+* Added logic to retrieve pull request review information for each repository.
+* Implemented authentication through the user's GitHub token to access repository activity.
+* Combined Git commit data with GitHub API responses to build a complete contributor activity dataset.
+
+This integration allows the analytics system to analyze collaboration behavior using **both Git history and GitHub platform data**, which significantly improves the accuracy of the contributor ranking system.
+
+---
+
+### Creating the Collaboration Overview Tab
+
+To make the analytics easier to interpret, I added a dedicated **Collaboration tab** that summarizes contributor activity and project history information.
+
+The goal of this tab is to provide a high level overview of how a project evolves over time and how contributors interact with the repository.
+
+The tab now includes:
+
+* Project timeline information including the **first commit date** and **last activity date**.
+* Calculated **project duration** based on repository history.
+* Contributor activity metrics summarizing commits, pull requests, and reviews.
+* Ranked contributor tables displaying calculated contribution scores.
+* Scrollable collaboration panels for easier data exploration.
+
+This provides a clear overview of **project lifecycle information and contributor collaboration patterns.**
+
+---
+
+### Improving Contributor Matching Logic
+
+While implementing the collaboration analytics I encountered an issue where Git commit authors did not always match GitHub usernames. This happens because Git commits can use different email addresses or name formats than GitHub accounts.
+
+To fix this, I implemented improvements to the contributor matching logic.
+
+* Added normalization logic for Git commit author names.
+* Implemented username mapping between Git commits and GitHub accounts.
+* Improved matching reliability when contributors use multiple identities across commits.
+* Ensured that contributor activity metrics are correctly aggregated under the proper GitHub account.
+
+These fixes were important because inaccurate contributor mapping would cause activity metrics and ranking calculations to become incorrect.
+
+---
+
+### UI and Usability Improvements
+
+In addition to the major backend features, I also implemented several frontend improvements to make the new tools easier to use.
+
+* Added scrollable collaboration panels so large datasets can be navigated more easily.
+* Implemented save state indicators in the Monaco editor.
+* Improved styling of contributor ranking tables.
+* Added clearer layout for analytics and collaboration sections.
+* Improved UI consistency across the new dashboard tabs.
+
+These improvements ensure that the new analytics and editing tools remain intuitive and visually integrated with the rest of the dashboard.
+
+---
+
+### Reflection
+
+This week significantly expanded the capabilities of the application by turning the project dashboard into both a development exploration tool and a collaboration analysis platform. The Mini VSCode Viewer allows users to open and edit project files directly inside the application using the Monaco Editor, effectively embedding a lightweight code editor into the dashboard. At the same time, the collaboration analytics system introduces contributor ranking and project activity insights by combining Git history with GitHub API data.
+
+A key challenge this week was integrating multiple data sources and ensuring that contributor activity was mapped correctly between Git commits and GitHub accounts. Solving this required both backend logic changes and frontend visualization updates. By the end of the week, the dashboard evolved from a simple project viewer into a much more powerful development analytics environment that allows users to inspect code, analyze collaboration patterns, and explore repository activity directly from the platform.
+
