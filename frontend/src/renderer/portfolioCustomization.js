@@ -16,6 +16,7 @@ const SECTION_LABELS = [
 
 let previewProjectsCache = [];
 let portfolioCustomizationInitialized = false;
+let draggedFeaturedProjectId = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -41,9 +42,14 @@ function getPreviewContainer() {
   return document.getElementById("portfolio-live-preview-container");
 }
 
+function getFeaturedOrderContainer() {
+  return document.getElementById("portfolio-featured-order-container");
+}
+
 function renderPublicModeMessage() {
   const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
+  const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
   const previewContainer = getPreviewContainer();
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
@@ -55,6 +61,10 @@ function renderPublicModeMessage() {
   if (featuredContainer) {
     featuredContainer.innerHTML =
       `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+  }
+  if (orderContainer) {
+    orderContainer.innerHTML =
+      `<p class="resume-summary-text">Reordering is only available in Private Mode.</p>`;
   }
   if (editorContainer) {
     editorContainer.innerHTML =
@@ -134,8 +144,6 @@ function renderProjectEditors(projects, customization) {
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
       const isFeatured = (customization.featuredProjectIds || []).includes(project.project_id);
-      const existingRank = (customization.featuredProjectIds || []).indexOf(project.project_id);
-      const rank = existingRank >= 0 ? existingRank + 1 : 1;
 
       return `
         <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
@@ -155,17 +163,6 @@ function renderProjectEditors(projects, customization) {
                   ${isFeatured ? "checked" : ""}
                 />
                 <span>Featured</span>
-              </label>
-
-              <label class="customization-rank-wrap">
-                <span>Order</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="3"
-                  data-project-rank="${escapeHtml(project.project_id)}"
-                  value="${rank}"
-                />
               </label>
             </div>
           </div>
@@ -205,7 +202,7 @@ function renderProjectEditors(projects, customization) {
     .join("");
 }
 
-function getSelectedFeaturedProjects(projects) {
+function getSelectedProjectIdsFromInputs(projects) {
   return projects
     .filter((project) => {
       const editorCheckbox = document.querySelector(
@@ -216,16 +213,63 @@ function getSelectedFeaturedProjects(projects) {
       );
       return !!(editorCheckbox?.checked || pickerCheckbox?.checked);
     })
-    .map((project) => {
-      const rankInput = document.querySelector(
-        `[data-project-rank="${CSS.escape(project.project_id)}"]`
-      );
-      const rank = Number(rankInput?.value || 99);
-      return { id: project.project_id, rank };
+    .map((project) => project.project_id)
+    .slice(0, 3);
+}
+
+function getFeaturedOrderFromDom() {
+  const items = [...document.querySelectorAll("[data-featured-order-item]")];
+  return items.map((item) => String(item.dataset.featuredOrderItem)).slice(0, 3);
+}
+
+function renderFeaturedOrderList(projects, customization) {
+  const container = getFeaturedOrderContainer();
+  if (!container) return;
+
+  const selectedIds = getSelectedProjectIdsFromInputs(projects);
+  const orderedIdsFromState = (customization.featuredProjectIds || []).filter((id) =>
+    selectedIds.includes(id)
+  );
+
+  const mergedOrder = [
+    ...orderedIdsFromState,
+    ...selectedIds.filter((id) => !orderedIdsFromState.includes(id)),
+  ].slice(0, 3);
+
+  if (!mergedOrder.length) {
+    container.innerHTML = `
+      <p class="customization-featured-order-empty">
+        Select up to 3 featured projects to enable drag-and-drop ordering.
+      </p>
+    `;
+    return;
+  }
+
+  const projectMap = new Map(projects.map((project) => [project.project_id, project]));
+
+  container.innerHTML = mergedOrder
+    .map((projectId, index) => {
+      const project = projectMap.get(projectId);
+      if (!project) return "";
+
+      return `
+        <div
+          class="customization-featured-order-item"
+          data-featured-order-item="${escapeHtml(project.project_id)}"
+          draggable="true"
+        >
+          <div class="customization-featured-order-rank">${index + 1}</div>
+          <div class="customization-featured-order-content">
+            <div class="customization-featured-order-title">${escapeHtml(project.project_id)}</div>
+            <div class="customization-featured-order-meta">
+              ${project.total_files || 0} files • ${project.total_skills || 0} skills
+            </div>
+          </div>
+          <div class="customization-featured-order-handle">⋮⋮</div>
+        </div>
+      `;
     })
-    .sort((a, b) => a.rank - b.rank)
-    .slice(0, 3)
-    .map((entry) => entry.id);
+    .join("");
 }
 
 function collectCustomization(projects) {
@@ -239,7 +283,10 @@ function collectCustomization(projects) {
     sectionVisibility[section.id] = input ? !!input.checked : true;
   });
 
-  const featuredProjectIds = getSelectedFeaturedProjects(projects);
+  let featuredProjectIds = getFeaturedOrderFromDom();
+  if (!featuredProjectIds.length) {
+    featuredProjectIds = getSelectedProjectIdsFromInputs(projects);
+  }
 
   const projectOverrides = {};
   projects.forEach((project) => {
@@ -373,12 +420,12 @@ function renderLivePreview(projects, draftCustomization) {
 
     <div class="live-preview-section ${sectionVisibility["skills-timeline"] ? "" : "hidden"}">
       <h3>Skills Timeline</h3>
-      <p class="live-preview-empty">Preview placeholder</p>
+      <p class="live-preview-empty">Timeline preview follows the saved portfolio layout.</p>
     </div>
 
     <div class="live-preview-section ${sectionVisibility["activity-heatmap"] ? "" : "hidden"}">
       <h3>Activity Heatmap</h3>
-      <p class="live-preview-empty">Preview placeholder</p>
+      <p class="live-preview-empty">Heatmap preview follows the saved portfolio layout.</p>
     </div>
   `;
 }
@@ -398,6 +445,81 @@ function syncFeaturedCheckboxes(projectId, checked) {
 
   if (picker) picker.checked = checked;
   if (editor) editor.checked = checked;
+}
+
+function rerenderFeaturedOrdering() {
+  const draftCustomization = collectDraftCustomization();
+  renderFeaturedOrderList(previewProjectsCache, draftCustomization);
+  updateLivePreview();
+}
+
+function handleFeaturedOrderDragStart(event) {
+  const item = event.target.closest("[data-featured-order-item]");
+  if (!item) return;
+
+  draggedFeaturedProjectId = item.dataset.featuredOrderItem;
+  item.classList.add("dragging");
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedFeaturedProjectId);
+  }
+}
+
+function handleFeaturedOrderDragOver(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  if (!target || !draggedFeaturedProjectId) return;
+
+  event.preventDefault();
+  target.classList.add("drag-over");
+}
+
+function handleFeaturedOrderDragLeave(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  target?.classList.remove("drag-over");
+}
+
+function handleFeaturedOrderDrop(event) {
+  const target = event.target.closest("[data-featured-order-item]");
+  if (!target || !draggedFeaturedProjectId) return;
+
+  event.preventDefault();
+
+  const targetId = target.dataset.featuredOrderItem;
+  if (!targetId || targetId === draggedFeaturedProjectId) {
+    target.classList.remove("drag-over");
+    return;
+  }
+
+  const orderedIds = getFeaturedOrderFromDom();
+  const fromIndex = orderedIds.indexOf(draggedFeaturedProjectId);
+  const toIndex = orderedIds.indexOf(targetId);
+
+  if (fromIndex === -1 || toIndex === -1) {
+    target.classList.remove("drag-over");
+    return;
+  }
+
+  const nextOrder = [...orderedIds];
+  const [moved] = nextOrder.splice(fromIndex, 1);
+  nextOrder.splice(toIndex, 0, moved);
+
+  const draftCustomization = collectDraftCustomization();
+  draftCustomization.featuredProjectIds = nextOrder;
+
+  renderFeaturedOrderList(previewProjectsCache, draftCustomization);
+  updateLivePreview();
+}
+
+function handleFeaturedOrderDragEnd() {
+  document
+    .querySelectorAll(".customization-featured-order-item")
+    .forEach((item) => {
+      item.classList.remove("dragging");
+      item.classList.remove("drag-over");
+    });
+
+  draggedFeaturedProjectId = null;
 }
 
 async function renderPortfolioCustomizationPage() {
@@ -423,6 +545,7 @@ async function renderPortfolioCustomizationPage() {
     renderSectionToggles(customization);
     renderFeaturedProjects(projects, customization);
     renderProjectEditors(projects, customization);
+    renderFeaturedOrderList(projects, customization);
     updateLivePreview();
 
     saveBtn.onclick = async () => {
@@ -454,6 +577,7 @@ async function renderPortfolioCustomizationPage() {
 export function initPortfolioCustomization() {
   const tab = document.getElementById("customization-tab");
   const root = document.getElementById("portfolio-customization-root");
+  const orderContainer = getFeaturedOrderContainer();
 
   if (!portfolioCustomizationInitialized) {
     portfolioCustomizationInitialized = true;
@@ -478,15 +602,25 @@ export function initPortfolioCustomization() {
       if (target instanceof HTMLInputElement) {
         if (target.matches("[data-featured-project-id]")) {
           syncFeaturedCheckboxes(target.dataset.featuredProjectId, target.checked);
+          rerenderFeaturedOrdering();
+          return;
         }
 
         if (target.matches("[data-project-selected]")) {
           syncFeaturedCheckboxes(target.dataset.projectSelected, target.checked);
+          rerenderFeaturedOrdering();
+          return;
         }
       }
 
       updateLivePreview();
     });
+
+    orderContainer?.addEventListener("dragstart", handleFeaturedOrderDragStart);
+    orderContainer?.addEventListener("dragover", handleFeaturedOrderDragOver);
+    orderContainer?.addEventListener("dragleave", handleFeaturedOrderDragLeave);
+    orderContainer?.addEventListener("drop", handleFeaturedOrderDrop);
+    orderContainer?.addEventListener("dragend", handleFeaturedOrderDragEnd);
   }
 
   renderPortfolioCustomizationPage();
