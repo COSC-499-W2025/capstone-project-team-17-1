@@ -1,9 +1,11 @@
 import sqlite3
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from capstone.activity_log import log_event
 from capstone.storage import open_db
 from datetime import datetime, timezone
+from capstone.api.routes.auth import get_authenticated_username
+import capstone.storage as storage_module
 
 router = APIRouter(tags=["consent"])
 
@@ -39,12 +41,18 @@ def _ensure_row(conn):
     return _read_row(conn)
 
 
+def _bind_current_user_from_session(request: Request) -> None:
+    username = get_authenticated_username(request)
+    storage_module.CURRENT_USER = username if username else None
+
+
 # ------------------------------------------------
 # GET FULL CONSENT STATE
 # ------------------------------------------------
 
 @router.get("/privacy-consent")
-def get_consent():
+def get_consent(request: Request):
+    _bind_current_user_from_session(request)
     conn = open_db()
     try:
         row = _read_row(conn)
@@ -67,7 +75,8 @@ def get_consent():
 # ------------------------------------------------
 
 @router.post("/privacy-consent/local")
-def set_local_consent(payload: ConsentIn):
+def set_local_consent(payload: ConsentIn, request: Request):
+    _bind_current_user_from_session(request)
     conn = open_db()
     try:
         _ensure_row(conn)
@@ -100,7 +109,8 @@ def set_local_consent(payload: ConsentIn):
 # ------------------------------------------------
 
 @router.post("/privacy-consent/external")
-def set_external_consent(payload: ConsentIn):
+def set_external_consent(payload: ConsentIn, request: Request):
+    _bind_current_user_from_session(request)
     conn = open_db()
     try:
         _ensure_row(conn)

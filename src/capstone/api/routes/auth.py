@@ -79,6 +79,8 @@ def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
         source = sqlite3.connect(guest_db)
         target = sqlite3.connect(user_db)
         source.backup(target)
+        target.execute("DELETE FROM privacy_consent")
+        target.commit()
         target.close()
         source.close()
     except Exception:

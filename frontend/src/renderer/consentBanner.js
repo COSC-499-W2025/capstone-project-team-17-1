@@ -1,4 +1,5 @@
 const API_BASE = "http://127.0.0.1:8002";
+const AUTH_TOKEN_KEY = "loom_auth_token";
 
 const CONSENT_COPY = {
   summary:
@@ -17,9 +18,20 @@ function getModal() {
   return document.getElementById("consent-details-modal");
 }
 
+function buildAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 async function fetchConsentState() {
   // Keep banner and settings aligned with the backend source
-  const res = await fetch(`${API_BASE}/privacy-consent`);
+  const res = await fetch(`${API_BASE}/privacy-consent`, {
+    headers: buildAuthHeaders(),
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch consent state: ${res.status}`);
   }
@@ -30,7 +42,7 @@ async function saveConsent(path, consent) {
   // Persist one consent choice without forcing the user
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ consent }),
   });
   if (!res.ok) {
@@ -168,11 +180,29 @@ export async function refreshConsentUI() {
   // Refresh every consent surface together
   try {
     const state = await fetchConsentState();
-    setBannerVisible(!(state.local_consent && state.external_consent));
+    const bannerVisible = !(state.local_consent && state.external_consent);
+    setBannerVisible(bannerVisible);
     renderSettingsConsent(state);
     renderConsentDetails(state);
+    window.dispatchEvent(
+      new CustomEvent("consent:state-changed", {
+        detail: {
+          ...state,
+          bannerVisible,
+        },
+      })
+    );
+    return {
+      ...state,
+      bannerVisible,
+    };
   } catch (_) {
     setBannerVisible(false);
+    return {
+      local_consent: false,
+      external_consent: false,
+      bannerVisible: false,
+    };
   }
 }
 

@@ -497,5 +497,4 @@ function bindTutorialControls() {
 
 export function initOnboarding() {
   bindTutorialControls();
-  maybeShowOnboardingForAudience("guest");
 }

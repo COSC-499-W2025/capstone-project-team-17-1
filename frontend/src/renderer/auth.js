@@ -387,8 +387,10 @@ export async function initAuthFlow() {
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      await refreshConsentUI();
-      maybeShowOnboardingForAudience(user.username || user.id || "guest");
+      const consentState = await refreshConsentUI();
+      if (!consentState?.bannerVisible) {
+        maybeShowOnboardingForAudience(user.username || user.id || "guest");
+      }
       if (!restoreLastAllowedPage({ requirePrivate: true })) {
         goToPage("dashboard", "dashboard-page");
       }
@@ -407,7 +409,10 @@ export async function initAuthFlow() {
         loadMostUsedSkills(),
       ]);
       notifyPortfolioDataUpdated();
-      await refreshConsentUI();
+      const consentState = await refreshConsentUI();
+      if (!consentState?.bannerVisible) {
+        maybeShowOnboardingForAudience("guest");
+      }
     }
   } catch (_) {
     setAuthToken(null);
@@ -463,11 +468,13 @@ export async function initAuthFlow() {
     setAuthToken(data.token);
     setModeUI(true, data.user);
     showAuthModal(false);
-    goToPage("customization", "customization-page");
+    goToPage("dashboard", "dashboard-page");
 
     await syncCloudDbAndRefresh();
-    await refreshConsentUI();
-    maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
+    const consentState = await refreshConsentUI();
+    if (!consentState?.bannerVisible) {
+      maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
+    }
   } catch (_) {
     error.textContent = "Unable to reach auth service.";
   }
@@ -496,4 +503,9 @@ export async function initAuthFlow() {
 
   logoutBtn.disabled = false;
 });
+
+ window.addEventListener("consent:state-changed", (event) => {
+  if (event.detail?.bannerVisible) return;
+  maybeShowOnboardingForAudience(currentUser?.username || currentUser?.id || "guest");
+ });
 }
