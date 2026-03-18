@@ -180,7 +180,7 @@ export async function refreshConsentUI() {
   // Refresh every consent surface together
   try {
     const state = await fetchConsentState();
-    const bannerVisible = !(state.local_consent && state.external_consent);
+    const bannerVisible = !state.local_consent;
     setBannerVisible(bannerVisible);
     renderSettingsConsent(state);
     renderConsentDetails(state);
