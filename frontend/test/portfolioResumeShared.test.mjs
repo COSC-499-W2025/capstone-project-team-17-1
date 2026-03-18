@@ -104,6 +104,8 @@ test("buildTopProjectsMarkup highlights contribution and impact evidence", () =>
   assert.match(markup, /Contribution/);
   assert.match(markup, /Implemented incremental uploads/);
   assert.match(markup, /Evidence of Success/);
+  assert.match(markup, /View Details/);
+  assert.match(markup, /data-evidence-details-panel="proj-a"/);
   assert.match(markup, /12 files analyzed/);
   assert.match(markup, /4 skill signals detected/);
 });

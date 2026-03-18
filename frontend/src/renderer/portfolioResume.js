@@ -89,6 +89,39 @@ function buildImpactSummary(project, details, override) {
   return `Portfolio impact is supported by ${impactSignals.join(" and ")}.`;
 }
 
+function buildProjectEvolutionSteps(project, details, override) {
+  const technologies = dedupeStrings(details?.technologies);
+  const highlights = dedupeStrings(details?.highlights);
+  const keyRole = String(override?.keyRole || "").trim();
+  const evidence = String(override?.evidence || "").trim();
+
+  const stageOne = {
+    label: "Starting Point",
+    text:
+      technologies.length > 0
+        ? `The project started with hands-on work in ${technologies.slice(0, 2).join(" and ")}.`
+        : `The project began as ${project.is_github ? "a GitHub import" : "a ZIP upload"} ready for analysis.`,
+  };
+
+  const stageTwo = {
+    label: "Key Change",
+    text:
+      keyRole ||
+      highlights[0] ||
+      `The implementation expanded across ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"}.`,
+  };
+
+  const stageThree = {
+    label: "Current Outcome",
+    text:
+      evidence ||
+      highlights[1] ||
+      `It now shows ${project.total_skills || 0} detected skill signal${project.total_skills === 1 ? "" : "s"} and portfolio-ready evidence of progress.`,
+  };
+
+  return [stageOne, stageTwo, stageThree];
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -493,6 +526,7 @@ function renderTopProjects(projects, summaryData) {
       const evidence = override.evidence?.trim();
       const contributionSummary = buildContributionSummary(project, details, override);
       const impactSummary = buildImpactSummary(project, details, override);
+      const evolutionSteps = buildProjectEvolutionSteps(project, details, override);
 
       return `
         <div class="top-project-card">
@@ -531,6 +565,24 @@ function renderTopProjects(projects, summaryData) {
                       <div class="project-story-block">
                         <span class="project-story-label">Evidence of Success</span>
                         <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
+                      </div>
+                      <div class="project-evolution-block">
+                        <span class="portfolio-detail-label">Project Evolution</span>
+                        <div class="project-evolution-steps">
+                          ${evolutionSteps
+                            .map(
+                              (step, stepIndex) => `
+                                <div class="project-evolution-step">
+                                  <div class="project-evolution-marker">${stepIndex + 1}</div>
+                                  <div>
+                                    <div class="project-evolution-title">${escapeHtml(step.label)}</div>
+                                    <p class="project-evolution-text">${escapeHtml(step.text)}</p>
+                                  </div>
+                                </div>
+                              `
+                            )
+                            .join("")}
+                        </div>
                       </div>
                     </div>
                   </div>
