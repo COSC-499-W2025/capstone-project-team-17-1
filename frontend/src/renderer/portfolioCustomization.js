@@ -141,6 +141,7 @@ function renderPublicModeMessage() {
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
+  const previewContainer = getPreviewContainer();
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
   const jobContainer = document.getElementById("portfolio-job-target-container");
 
@@ -744,50 +745,44 @@ async function renderPortfolioCustomizationPage() {
   try {
     const customization = loadPortfolioCustomization();
     const projects = await fetchProjects();
+    previewProjectsCache = projects;
+    lastSavedSnapshot = snapshotCustomization(customization);
+    isDirty = false;
+    isSaving = false;
 
-  renderJobTargetSection(customization);
-  renderSectionToggles(customization);
-  renderFeaturedProjects(projects, customization);
-  renderProjectEditors(projects, customization);
-
-  // trigger job analysis if user selects analyze job match
-  const analyzeBtn = document.getElementById("analyze-job-btn");
-
-  if (analyzeBtn) {
-    analyzeBtn.onclick = async () => {
-      console.log("Analyze button clicked");
-      try {
-
-      setStatus("Analyzing job description...", "info");
-      analyzeBtn.disabled = true;
-
-      const customization = loadPortfolioCustomization();
-
-      await autoSelectFeaturedProjects(projects, customization);
-
-      renderFeaturedProjects(projects, customization);
-      renderProjectEditors(projects, customization);
-
-      await loadPortfolioResume();
-
-    } catch (err) {
-      console.error(err);
-      setStatus("Job matching failed.", "error");
-
-    } finally {
-      analyzeBtn.disabled = false;
-    }
-  };
-}
-      
-
-  saveBtn.onclick = async () => {
-    try {
-      saveBtn.disabled = true;
-      setStatus("Saving customization...", "info");
-
-    setStatus("Saved", "success");
+    renderJobTargetSection(customization);
+    renderSectionToggles(customization);
+    renderFeaturedProjects(projects, customization);
+    renderProjectEditors(projects, customization);
+    renderLivePreview(projects, customization);
     updateSaveButtonState();
+
+    const analyzeBtn = document.getElementById("analyze-job-btn");
+    if (analyzeBtn) {
+      analyzeBtn.onclick = async () => {
+        try {
+          setStatus("Analyzing job description...", "info");
+          analyzeBtn.disabled = true;
+
+          const nextCustomization = loadPortfolioCustomization();
+          await autoSelectFeaturedProjects(projects, nextCustomization);
+
+          renderFeaturedProjects(projects, nextCustomization);
+          renderProjectEditors(projects, nextCustomization);
+          renderLivePreview(projects, nextCustomization);
+
+          lastSavedSnapshot = snapshotCustomization(nextCustomization);
+          isDirty = false;
+          await loadPortfolioResume();
+          updateSaveButtonState();
+        } catch (err) {
+          console.error(err);
+          setStatus("Job matching failed.", "error");
+        } finally {
+          analyzeBtn.disabled = false;
+        }
+      };
+    }
 
     saveBtn.onclick = async () => {
       await performSave({ silent: false });
@@ -795,6 +790,7 @@ async function renderPortfolioCustomizationPage() {
   } catch (error) {
     console.error("Failed to render portfolio customization page:", error);
     setStatus("Failed to load portfolio customization data.", "error");
+    updateSaveButtonState();
   }
 }
 

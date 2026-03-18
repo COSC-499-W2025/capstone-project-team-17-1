@@ -1,58 +1,31 @@
 const STORAGE_KEY = "loom_portfolio_customization_v1";
 
+const DEFAULT_SECTION_VISIBILITY = {
+  "resume-summary": true,
+  "top-projects": true,
+  "portfolio-stats": true,
+  "skills-timeline": true,
+  "activity-heatmap": true,
+};
+
 const DEFAULT_STATE = {
-  sectionVisibility: {
-    "resume-summary": true,
-    "top-projects": true,
-    "portfolio-stats": true,
-    "skills-timeline": true,
-    "activity-heatmap": true,
-  },
+  sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY },
   featuredProjectIds: [],
   projectOverrides: {},
-
-  // target info for pasted job listing
   jobTarget: {
     title: "",
     company: "",
-    description: ""
-  }
+    description: "",
+  },
 };
 
-function createDefaultCustomization() {
+function cloneDefaultState() {
   return {
-    sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY },
+    sectionVisibility: { ...DEFAULT_STATE.sectionVisibility },
     featuredProjectIds: [],
     projectOverrides: {},
+    jobTarget: { ...DEFAULT_STATE.jobTarget },
   };
-}
-
-function safeParse(raw) {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return cloneDefaultState();
-
-    const parsed = JSON.parse(raw);
-    return {
-      sectionVisibility: {
-        ...DEFAULT_STATE.sectionVisibility,
-        ...(parsed?.sectionVisibility || {}),
-      },
-      featuredProjectIds: Array.isArray(parsed?.featuredProjectIds)
-        ? parsed.featuredProjectIds.map((id) => String(id).trim()).filter(Boolean)
-        : [],
-      projectOverrides:
-        parsed?.projectOverrides && typeof parsed.projectOverrides === "object"
-          ? parsed.projectOverrides
-          : {},
-      jobTarget:
-        parsed?.jobTarget && typeof parsed.jobTarget === "object"
-          ? parsed.jobTarget
-          : cloneDefaultState().jobTarget
-    };
-  } catch {
-    return null;
-  }
 }
 
 function normalizeProjectOverrides(value) {
@@ -79,30 +52,47 @@ function normalizeProjectOverrides(value) {
 }
 
 function normalizeCustomization(value) {
-  const defaults = createDefaultCustomization();
+  const defaults = cloneDefaultState();
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return defaults;
   }
 
-  const sectionVisibility = {
-    ...DEFAULT_SECTION_VISIBILITY,
-    ...(value.sectionVisibility && typeof value.sectionVisibility === "object"
-      ? value.sectionVisibility
-      : {}),
-  };
-
-  const featuredProjectIds = Array.isArray(value.featuredProjectIds)
-    ? value.featuredProjectIds.map((id) => String(id))
-    : [];
-
-  const projectOverrides = normalizeProjectOverrides(value.projectOverrides);
-
   return {
-    sectionVisibility,
-    featuredProjectIds,
-    projectOverrides,
+    sectionVisibility: {
+      ...DEFAULT_SECTION_VISIBILITY,
+      ...(value.sectionVisibility && typeof value.sectionVisibility === "object"
+        ? value.sectionVisibility
+        : {}),
+    },
+    featuredProjectIds: Array.isArray(value.featuredProjectIds)
+      ? value.featuredProjectIds.map((id) => String(id).trim()).filter(Boolean)
+      : [],
+    projectOverrides: normalizeProjectOverrides(value.projectOverrides),
+    jobTarget:
+      value.jobTarget && typeof value.jobTarget === "object"
+        ? {
+            title: typeof value.jobTarget.title === "string" ? value.jobTarget.title : "",
+            company: typeof value.jobTarget.company === "string" ? value.jobTarget.company : "",
+            description:
+              typeof value.jobTarget.description === "string"
+                ? value.jobTarget.description
+                : "",
+          }
+        : { ...DEFAULT_STATE.jobTarget },
   };
+}
+
+function safeParse(raw) {
+  try {
+    return normalizeCustomization(JSON.parse(raw));
+  } catch {
+    return cloneDefaultState();
+  }
+}
+
+function createDefaultCustomization() {
+  return cloneDefaultState();
 }
 
 export function loadPortfolioCustomization() {
@@ -111,7 +101,7 @@ export function loadPortfolioCustomization() {
     return createDefaultCustomization();
   }
 
-  return normalizeCustomization(safeParse(raw));
+  return safeParse(raw);
 }
 
 export function savePortfolioCustomization(customization) {
@@ -126,15 +116,15 @@ export function getProjectOverride(projectId) {
 }
 
 export function getFeaturedProjects(projects = []) {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const parsed = raw ? safeParse(raw) : null;
-  const customization = normalizeCustomization(parsed);
+  const customization = loadPortfolioCustomization();
 
-  // Only fallback to first 3 projects when there is NO saved customization yet.
-  // If featuredProjectIds exists (even as []), respect the saved state.
-  if (!parsed || !Array.isArray(parsed.featuredProjectIds)) {
+  if (!customization.featuredProjectIds.length) {
     return projects.slice(0, 3);
   }
+
+  const selected = customization.featuredProjectIds
+    .map((id) => projects.find((project) => String(project.project_id) === id))
+    .filter(Boolean);
 
   return selected.slice(0, 3);
 }

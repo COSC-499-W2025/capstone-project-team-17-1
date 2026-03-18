@@ -26,7 +26,25 @@ function createWindow() {
     }
   });
 
-  win.loadFile("src/index.html");
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error("Renderer failed to load:", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+    });
+  });
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Renderer process exited:", details);
+  });
+
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    const levels = ["LOG", "WARN", "ERROR"];
+    const label = levels[level] || "LOG";
+    console.log(`RENDERER ${label}: ${message} (${sourceId}:${line})`);
+  });
+
+  win.loadFile(path.join(__dirname, "index.html"));
 
 }
 
@@ -80,7 +98,7 @@ function startAPI() {
   });
 
   apiProcess.stderr.on("data", data => {
-    console.error("API ERROR:", data.toString());
+    console.log("API STDERR:", data.toString());
   });
 
   apiProcess.on("error", err => {

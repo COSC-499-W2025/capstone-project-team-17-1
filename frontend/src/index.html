@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Capstone</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../node_modules/chart.js/dist/chart.umd.js"></script>
 </head>
 <body class="dark">
 
@@ -52,26 +52,61 @@
       <!-- DASHBOARD PAGE -->
      
       <div id="dashboard-page" class="page active">
+        <div id="dashboard-loader" class="dashboard-loader hidden">
+          <div class="empty-state">
+            <h3>Loading dashboard...</h3>
+            <p>Preparing your private workspace.</p>
+          </div>
+        </div>
+
+        <div id="dashboard-content" class="dashboard-content">
         <div class="dashboard">
 
-          <div id="most-used-skills" class="card">Most Used Skills</div>
+          <div
+            id="most-used-skills"
+            class="card dashboard-widget"
+            data-widget-id="most-used-skills"
+            data-widget-label="Most Used Skills"
+            data-widget-category="skills"
+          >Most Used Skills</div>
 
-          <div class="card error-analysis-card">
+          <div
+            class="card error-analysis-card dashboard-widget"
+            data-widget-id="error-analysis"
+            data-widget-label="Error Analysis"
+            data-widget-category="analysis"
+          >
             <h2 class="card-title">Error Analysis</h2>
             <div id="error-analysis-container" class="error-analysis-container"></div>
           </div>
 
-          <div class="card">
+          <div
+            class="card dashboard-widget"
+            data-widget-id="project-health"
+            data-widget-label="Project Health"
+            data-widget-category="health"
+          >
             <h3>Project Health</h3>
             <div id="project-health-container" class="health-grid"></div>
           </div>
 
-          <div class="card recent-projects-card">
+          <div
+            class="card recent-projects-card dashboard-widget"
+            data-widget-id="recent-projects"
+            data-widget-label="Recent Projects"
+            data-widget-category="projects"
+          >
             <h2 class="card-title">Recent Projects</h2>
             <div id="recent-projects-container" class="recent-projects-container"></div>
           </div>
 
-          <div id="system-health-card" class="card">
+          <div
+            id="system-health-card"
+            class="card dashboard-widget"
+            data-widget-id="system-health"
+            data-widget-label="System Health"
+            data-widget-category="health"
+          >
             <h3>System Health</h3>
 
             <div class="status-row">
@@ -124,11 +159,17 @@
             </div>
           </div>
 
-          <div class="card">
+          <div
+            class="card dashboard-widget"
+            data-widget-id="activity-log"
+            data-widget-label="Activity Log"
+            data-widget-category="activity"
+          >
             <h3 class="card-title">Activity Log</h3>
             <div id="recent-activity" class="activity-container"></div>
           </div>
 
+        </div>
         </div>
       </div>
 
