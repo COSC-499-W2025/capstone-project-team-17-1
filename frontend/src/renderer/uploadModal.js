@@ -1,5 +1,6 @@
 import {setUploadTab, startImport} from "./githubImport.js";
 import { openProjectViewer } from "./projectViewer.js";
+import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
 
 async function loadProjects() {
   try {
@@ -214,6 +215,7 @@ async function submitZipUpload() {
 
     document.getElementById("upload-modal")?.remove();
     loadProjects();
+    notifyPortfolioDataUpdated();
   } catch (err) {
     console.error("ZIP upload failed:", err);
     alert(err.message || "Upload failed.");

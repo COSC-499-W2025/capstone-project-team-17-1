@@ -164,7 +164,7 @@ function closeConsentDetails() {
   modal.classList.add("hidden");
 }
 
-async function refreshConsentUI() {
+export async function refreshConsentUI() {
   // Refresh every consent surface together
   try {
     const state = await fetchConsentState();

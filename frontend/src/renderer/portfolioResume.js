@@ -1,5 +1,5 @@
 import { fetchProjects } from "./projects.js";
-import { getCurrentUser } from "./auth.js";
+import { authFetch, getCurrentUser } from "./auth.js";
 import {
   getFeaturedProjects,
   getProjectOverride,
@@ -100,7 +100,7 @@ function getTopProjects(projects) {
 }
 
 async function fetchSkillsTimeline() {
-  const res = await fetch(`${API_BASE}/skills/timeline`);
+  const res = await authFetch(`/skills/timeline`);
   if (!res.ok) {
     throw new Error(`Failed to fetch skills timeline: ${res.status}`);
   }
@@ -109,7 +109,7 @@ async function fetchSkillsTimeline() {
 }
 
 async function fetchPortfolioResumeSummary() {
-  const res = await fetch(`${API_BASE}/portfolio/latest/summary`);
+  const res = await authFetch(`/portfolio/latest/summary`);
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio summary: ${res.status}`);
   }
@@ -118,7 +118,7 @@ async function fetchPortfolioResumeSummary() {
 }
 
 async function fetchActivityHeatmap() {
-  const res = await fetch(`${API_BASE}/portfolio/activity-heatmap`);
+  const res = await authFetch(`/portfolio/activity-heatmap`);
   if (!res.ok) {
     throw new Error(`Failed to fetch activity heatmap: ${res.status}`);
   }
@@ -556,28 +556,63 @@ function renderActivityHeatmap(heatmapData) {
     return;
   }
 
+  const totalActivity = cells.reduce((sum, cell) => sum + Number(cell.count || 0), 0);
+  const averageActivity = cells.length ? Math.round(totalActivity / cells.length) : 0;
+  const peakCell = [...cells].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
+  const legendLevels = [
+    { label: "Low", bucket: 0 },
+    { label: "", bucket: 1 },
+    { label: "", bucket: 2 },
+    { label: "", bucket: 3 },
+    { label: "High", bucket: 4 },
+  ];
+
   container.innerHTML = `
     <div class="heatmap-summary">
-      <p class="resume-summary-text">
-        Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
-      </p>
+      <div>
+        <p class="resume-summary-text">
+          Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
+        </p>
+        <div class="heatmap-chip-row">
+          <span class="hero-stat-chip">${totalActivity} total activity events</span>
+          <span class="hero-stat-chip">${averageActivity} avg / active month</span>
+          <span class="hero-stat-chip">Peak: ${escapeHtml(formatPeriodLabel(peakCell?.period || ""))}</span>
+        </div>
+      </div>
     </div>
 
-    <div class="heatmap-grid">
-      ${cells
-        .map((cell) => {
-          const period = formatPeriodLabel(cell.period);
-          const count = Number(cell.count || 0);
-          const bucket = getHeatmapBucket(Number(cell.intensity || 0));
+    <div class="heatmap-legend">
+      <span class="heatmap-legend-label">Less</span>
+      <div class="heatmap-legend-scale">
+        ${legendLevels
+          .map(
+            (item) => `
+              <span class="heatmap-legend-cell bucket-${item.bucket}" aria-hidden="true"></span>
+            `
+          )
+          .join("")}
+      </div>
+      <span class="heatmap-legend-label">More</span>
+    </div>
 
-          return `
-            <div class="heatmap-cell bucket-${bucket}" title="${escapeHtml(period)} · ${count} activity event${count === 1 ? "" : "s"}">
-              <span class="heatmap-period">${escapeHtml(period)}</span>
-              <span class="heatmap-count">${count}</span>
-            </div>
-          `;
-        })
-        .join("")}
+    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by month">
+      <div class="heatmap-calendar-row">
+        ${cells
+          .map((cell) => {
+            const period = formatPeriodLabel(cell.period);
+            const count = Number(cell.count || 0);
+            const bucket = getHeatmapBucket(Number(cell.intensity || 0));
+
+            return `
+              <div class="heatmap-calendar-cell">
+                <div class="heatmap-square bucket-${bucket}" title="${escapeHtml(period)} · ${count} activity event${count === 1 ? "" : "s"}"></div>
+                <span class="heatmap-axis-label">${escapeHtml(period)}</span>
+                <span class="heatmap-axis-value">${count}</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
     </div>
   `;
 }
@@ -789,6 +824,10 @@ export function initPortfolioResume() {
   });
 
   window.addEventListener("portfolio:customization-updated", () => {
+    loadPortfolioResume();
+  });
+
+  window.addEventListener("portfolio:data-updated", () => {
     loadPortfolioResume();
   });
 }

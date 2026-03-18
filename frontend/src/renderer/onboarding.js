@@ -2,7 +2,7 @@ import { openLoginFlow } from "./auth.js";
 import { switchPage } from "./navigation.js";
 import { shouldHighlightTutorialSection, shouldPlaceOnboardingPanelRight } from "./onboardingShared.mjs";
 
-const ONBOARDING_KEY = "loom_onboarding_completed_v1";
+const ONBOARDING_KEY_PREFIX = "loom_onboarding_completed_v1";
 
 const TUTORIAL_STEPS = [
   {
@@ -167,6 +167,12 @@ let currentStepIndex = 0;
 let listenersBound = false;
 let detailOpen = false;
 let currentSectionIndex = 0;
+let currentOnboardingAudience = "guest";
+
+function getOnboardingKey(audience = currentOnboardingAudience) {
+  const suffix = String(audience || "guest").trim() || "guest";
+  return `${ONBOARDING_KEY_PREFIX}:${suffix}`;
+}
 
 function getPanel() {
   return document.getElementById("onboarding-panel");
@@ -177,7 +183,11 @@ function getStep(index) {
 }
 
 function markCompleted() {
-  localStorage.setItem(ONBOARDING_KEY, "true");
+  localStorage.setItem(getOnboardingKey(), "true");
+}
+
+function hasCompletedOnboarding(audience = currentOnboardingAudience) {
+  return localStorage.getItem(getOnboardingKey(audience)) === "true";
 }
 
 function clearSectionFocus() {
@@ -321,11 +331,21 @@ function exitTutorial() {
 }
 
 export function reopenOnboarding() {
-  localStorage.removeItem(ONBOARDING_KEY);
+  localStorage.removeItem(getOnboardingKey());
   currentStepIndex = 0;
   detailOpen = false;
   currentSectionIndex = 0;
   setTutorialActive(true);
+}
+
+export function maybeShowOnboardingForAudience(audience = "guest") {
+  currentOnboardingAudience = String(audience || "guest").trim() || "guest";
+  if (hasCompletedOnboarding(currentOnboardingAudience)) return false;
+  currentStepIndex = 0;
+  detailOpen = false;
+  currentSectionIndex = 0;
+  setTutorialActive(true);
+  return true;
 }
 
 function bindTutorialControls() {
@@ -477,9 +497,5 @@ function bindTutorialControls() {
 
 export function initOnboarding() {
   bindTutorialControls();
-  if (localStorage.getItem(ONBOARDING_KEY) === "true") return;
-  currentStepIndex = 0;
-  detailOpen = false;
-  currentSectionIndex = 0;
-  setTutorialActive(true);
+  maybeShowOnboardingForAudience("guest");
 }

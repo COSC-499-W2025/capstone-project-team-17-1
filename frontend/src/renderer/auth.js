@@ -4,9 +4,10 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
-import { renderConsentSettings } from "./consentBanner.js";
-import { reopenOnboarding } from "./onboarding.js";
+import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
+import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
 import { shouldRequireLoginForTab } from "./authShared.mjs";
+import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
@@ -333,6 +334,7 @@ async function syncCloudDbAndRefresh() {
     loadErrorAnalysis(),
     loadMostUsedSkills(),
   ]);
+  notifyPortfolioDataUpdated();
 }  
 
 export async function initAuthFlow() {
@@ -385,6 +387,8 @@ export async function initAuthFlow() {
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
+      await refreshConsentUI();
+      maybeShowOnboardingForAudience(user.username || user.id || "guest");
       if (!restoreLastAllowedPage({ requirePrivate: true })) {
         goToPage("dashboard", "dashboard-page");
       }
@@ -402,6 +406,8 @@ export async function initAuthFlow() {
         loadErrorAnalysis(),
         loadMostUsedSkills(),
       ]);
+      notifyPortfolioDataUpdated();
+      await refreshConsentUI();
     }
   } catch (_) {
     setAuthToken(null);
@@ -460,6 +466,8 @@ export async function initAuthFlow() {
     goToPage("customization", "customization-page");
 
     await syncCloudDbAndRefresh();
+    await refreshConsentUI();
+    maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
   } catch (_) {
     error.textContent = "Unable to reach auth service.";
   }
@@ -483,6 +491,8 @@ export async function initAuthFlow() {
     loadErrorAnalysis(),
     loadMostUsedSkills(),
   ]);
+  notifyPortfolioDataUpdated();
+  await refreshConsentUI();
 
   logoutBtn.disabled = false;
 });

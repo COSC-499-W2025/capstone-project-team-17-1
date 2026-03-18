@@ -17,7 +17,9 @@ from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
+from capstone.api.routes.auth import get_authenticated_username
+import capstone.storage as storage_module
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -47,6 +49,12 @@ def _check_auth(request: Request) -> None:
     auth_header = request.headers.get("Authorization", "")
     if not (auth_header.startswith("Bearer ") and auth_header.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+
+def _bind_current_user_from_session(request: Request) -> None:
+    username = get_authenticated_username(request)
+    if username:
+        storage_module.CURRENT_USER = username
 
 
 class PortfolioProject(BaseModel):
@@ -418,6 +426,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
 def latest_portfolio_summary(request: Request) -> dict[str, Any]:
     try:
         _check_auth(request)
+        _bind_current_user_from_session(request)
 
         db_dir = _resolve_db_dir(request)
         if not db_dir:
@@ -463,40 +472,29 @@ def latest_portfolio_summary(request: Request) -> dict[str, Any]:
 def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
     try:
         _check_auth(request)
+        _bind_current_user_from_session(request)
 
         db_dir = _resolve_db_dir(request)
         if not db_dir:
             raise HTTPException(status_code=500, detail="Database not configured")
 
         with _db_session(db_dir) as c:
-            rows = fetch_latest_snapshots(c) or []
-            latest_rows = c.execute(
-                """
-                SELECT pa.project_id, pa.zip_path
-                FROM project_analysis pa
-                JOIN (
-                    SELECT project_id, MAX(datetime(created_at)) AS max_created
-                    FROM project_analysis
-                    GROUP BY project_id
-                ) latest
-                  ON latest.project_id = pa.project_id
-                 AND datetime(pa.created_at) = latest.max_created
-                """
-            ).fetchall()
-            zip_path_by_project = {str(project_id): zip_path for project_id, zip_path in latest_rows}
+            rows = fetch_latest_snapshots_with_zip(c) or []
 
         period_counts: dict[str, int] = {}
         project_count = 0
 
         for row in rows:
-            project_id, snapshot = _extract_row_project_and_snapshot(row)
+            project_id = str(row.get("project_id") or "").strip()
+            snapshot = row.get("snapshot") or {}
+            zip_path = row.get("zip_path")
 
-            if not isinstance(snapshot, dict):
+            if not project_id or not isinstance(snapshot, dict):
                 continue
 
             file_summary = snapshot.get("file_summary") or {}
             if not isinstance(file_summary, dict) or not file_summary.get("timeline"):
-                file_summary = _build_file_summary_from_zip_path(zip_path_by_project.get(str(project_id)))
+                file_summary = _build_file_summary_from_zip_path(zip_path)
             timeline = file_summary.get("timeline") or {}
 
             if not isinstance(timeline, dict):
