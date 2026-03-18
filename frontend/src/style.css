@@ -2611,6 +2611,26 @@ transition: all 0.2s ease;
   gap: 14px;
 }
 
+.skills-expertise-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skills-expertise-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skills-expertise-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(158, 207, 255, 0.88);
+}
+
 .top-project-card {
   display: flex;
   gap: 14px;

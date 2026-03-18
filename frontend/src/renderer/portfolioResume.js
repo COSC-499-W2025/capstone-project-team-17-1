@@ -199,6 +199,80 @@ function formatTimelineTimestamp(timestamp) {
   });
 }
 
+function getTimelineSkillName(skill) {
+  return String(skill?.name || skill?.skill || "").trim();
+}
+
+function getTimelineSkillWeight(skill) {
+  const rawWeight = Number(skill?.weight ?? skill?.score ?? skill?.confidence ?? 0);
+  if (!Number.isFinite(rawWeight)) return 0;
+  return Math.max(0, rawWeight);
+}
+
+function getSkillExpertiseLevel(depthScore) {
+  if (depthScore >= 2.5) return "Advanced";
+  if (depthScore >= 1.0) return "Intermediate";
+  return "Foundation";
+}
+
+function buildSkillExpertiseGroups(timeline, summaryData) {
+  const depthBySkill = new Map();
+
+  asArray(timeline).forEach((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const seenInSnapshot = new Set();
+
+    skills.forEach((skill) => {
+      const name = getTimelineSkillName(skill);
+      if (!name) return;
+
+      const key = name.toLowerCase();
+      const current = depthBySkill.get(key) || { name, totalWeight: 0, appearances: 0 };
+      current.totalWeight += getTimelineSkillWeight(skill);
+      if (!seenInSnapshot.has(key)) {
+        current.appearances += 1;
+        seenInSnapshot.add(key);
+      }
+      depthBySkill.set(key, current);
+    });
+  });
+
+  if (!depthBySkill.size) {
+    dedupeStrings(summaryData?.skills).forEach((name) => {
+      depthBySkill.set(name.toLowerCase(), {
+        name,
+        totalWeight: 0.9,
+        appearances: 1,
+      });
+    });
+  }
+
+  const groups = {
+    Advanced: [],
+    Intermediate: [],
+    Foundation: [],
+  };
+
+  [...depthBySkill.values()]
+    .map((skill) => {
+      const depthScore = skill.totalWeight + skill.appearances * 0.35;
+      return {
+        ...skill,
+        depthScore,
+        level: getSkillExpertiseLevel(depthScore),
+      };
+    })
+    .sort((a, b) => {
+      if (b.depthScore !== a.depthScore) return b.depthScore - a.depthScore;
+      return a.name.localeCompare(b.name);
+    })
+    .forEach((skill) => {
+      groups[skill.level].push(skill.name);
+    });
+
+  return groups;
+}
+
 function getHeatmapBucket(intensity) {
   if (intensity >= 0.8) return 4;
   if (intensity >= 0.6) return 3;
@@ -477,7 +551,7 @@ function renderTopProjects(projects, summaryData) {
     .join("");
 }
 
-function renderPortfolioStats(projects, summaryData) {
+function renderPortfolioStats(projects, summaryData, timeline = []) {
   const container = document.getElementById("skills-expertise-container");
   if (!container) return;
 
@@ -500,6 +574,7 @@ function renderPortfolioStats(projects, summaryData) {
 
   const backendSkills = dedupeStrings(summaryData?.skills);
   const backendHighlights = dedupeStrings(summaryData?.highlights);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
 
   container.innerHTML = `
     <div class="skills-group-card">
@@ -515,20 +590,55 @@ function renderPortfolioStats(projects, summaryData) {
     </div>
 
     ${
-      backendSkills.length
+      expertiseGroups.Advanced.length || expertiseGroups.Intermediate.length || expertiseGroups.Foundation.length
         ? `
           <div class="skills-group-card">
-            <h3>Detected Skills</h3>
-            <div class="skills-pill-row">
-              ${backendSkills.map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`).join("")}
+            <h3>Skills by Expertise Level</h3>
+            <div class="skills-expertise-levels">
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Advanced</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Advanced.length
+                      ? expertiseGroups.Advanced
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No advanced skills yet</span>`
+                  }
+                </div>
+              </div>
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Intermediate</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Intermediate.length
+                      ? expertiseGroups.Intermediate
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No intermediate skills yet</span>`
+                  }
+                </div>
+              </div>
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Foundation</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Foundation.length
+                      ? expertiseGroups.Foundation
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No foundation skills yet</span>`
+                  }
+                </div>
+              </div>
             </div>
           </div>
         `
         : `
           <div class="skills-group-card">
-            <h3>Next backend improvement</h3>
+            <h3>No skills detected yet</h3>
             <p class="resume-summary-text">
-              Replace aggregate counts with real extracted skills grouped by expertise once the API exposes skill levels.
+              Upload projects with detected skills to categorize portfolio skills by expertise level.
             </p>
           </div>
         `
@@ -858,7 +968,7 @@ export async function loadPortfolioResume() {
 
   renderResumeSummary(profile, projects, summaryData);
   renderTopProjects(projects, summaryData);
-  renderPortfolioStats(projects, summaryData);
+  renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
   applyPortfolioSectionVisibility();
