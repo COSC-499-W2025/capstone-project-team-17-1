@@ -160,6 +160,7 @@ function renderPublicModeMessage() {
     editorContainer.innerHTML =
       `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
   }
+  const previewContainer = getPreviewContainer();
   if (previewContainer) {
     previewContainer.innerHTML =
       `<p class="resume-summary-text">Live preview is only available in Private Mode.</p>`;
@@ -449,7 +450,7 @@ function collectCustomization(projects) {
   return {
     ...current,
     sectionVisibility,
-    featuredProjectIds,
+    featuredProjectIds: featuredRaw,
     projectOverrides,
     jobTarget
   };
@@ -745,48 +746,16 @@ async function renderPortfolioCustomizationPage() {
     const customization = loadPortfolioCustomization();
     const projects = await fetchProjects();
 
-  renderJobTargetSection(customization);
-  renderSectionToggles(customization);
-  renderFeaturedProjects(projects, customization);
-  renderProjectEditors(projects, customization);
+    previewProjectsCache = projects;
+    lastSavedSnapshot = snapshotCustomization(customization);
 
-  // trigger job analysis if user selects analyze job match
-  const analyzeBtn = document.getElementById("analyze-job-btn");
+    renderJobTargetSection(customization);
+    renderSectionToggles(customization);
+    renderFeaturedProjects(projects, customization);
+    renderProjectEditors(projects, customization);
+    renderFeaturedOrderList(projects, customization);
+    renderLivePreview(projects, customization);
 
-  if (analyzeBtn) {
-    analyzeBtn.onclick = async () => {
-      console.log("Analyze button clicked");
-      try {
-
-      setStatus("Analyzing job description...", "info");
-      analyzeBtn.disabled = true;
-
-      const customization = loadPortfolioCustomization();
-
-      await autoSelectFeaturedProjects(projects, customization);
-
-      renderFeaturedProjects(projects, customization);
-      renderProjectEditors(projects, customization);
-
-      await loadPortfolioResume();
-
-    } catch (err) {
-      console.error(err);
-      setStatus("Job matching failed.", "error");
-
-    } finally {
-      analyzeBtn.disabled = false;
-    }
-  };
-}
-      
-
-  saveBtn.onclick = async () => {
-    try {
-      saveBtn.disabled = true;
-      setStatus("Saving customization...", "info");
-
-    setStatus("Saved", "success");
     updateSaveButtonState();
 
     saveBtn.onclick = async () => {

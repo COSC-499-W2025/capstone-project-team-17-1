@@ -19,17 +19,21 @@ const DEFAULT_STATE = {
   }
 };
 
-function createDefaultCustomization() {
+function cloneDefaultState() {
   return {
-    sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY },
+    sectionVisibility: { ...DEFAULT_STATE.sectionVisibility },
     featuredProjectIds: [],
     projectOverrides: {},
+    jobTarget: { ...DEFAULT_STATE.jobTarget },
   };
+}
+
+function createDefaultCustomization() {
+  return cloneDefaultState();
 }
 
 function safeParse(raw) {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return cloneDefaultState();
 
     const parsed = JSON.parse(raw);
@@ -48,7 +52,7 @@ function safeParse(raw) {
       jobTarget:
         parsed?.jobTarget && typeof parsed.jobTarget === "object"
           ? parsed.jobTarget
-          : cloneDefaultState().jobTarget
+          : cloneDefaultState().jobTarget,
     };
   } catch {
     return null;
@@ -86,7 +90,7 @@ function normalizeCustomization(value) {
   }
 
   const sectionVisibility = {
-    ...DEFAULT_SECTION_VISIBILITY,
+    ...DEFAULT_STATE.sectionVisibility,
     ...(value.sectionVisibility && typeof value.sectionVisibility === "object"
       ? value.sectionVisibility
       : {}),
@@ -136,5 +140,7 @@ export function getFeaturedProjects(projects = []) {
     return projects.slice(0, 3);
   }
 
+  const featuredIds = new Set(customization.featuredProjectIds);
+  const selected = projects.filter((p) => featuredIds.has(String(p.project_id)));
   return selected.slice(0, 3);
 }
