@@ -9,6 +9,8 @@ from capstone.storage import (
     fetch_error_results,
 )
 from capstone.consent import (
+    ensure_local_consent,
+    ConsentError,
     ensure_external_permission,
     ExternalPermissionDenied,
 )
@@ -27,6 +29,15 @@ def analyze_errors() -> Dict[str, Any]:
     conn = open_db()
 
     try:
+        try:
+            ensure_local_consent()
+        except ConsentError:
+            log_event(
+                "ERROR",
+                "AI error analysis failed: Local consent required",
+            )
+            return {"status": "local_consent_required"}
+
         # 🔥 Use the NEW function that returns snapshot + zip_path
         snapshots = fetch_latest_snapshots_with_zip(conn)
 

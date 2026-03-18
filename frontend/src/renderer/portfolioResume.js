@@ -1,4 +1,5 @@
 import { fetchProjects } from "./projects.js";
+import { getCurrentUser } from "./auth.js";
 import {
   getFeaturedProjects,
   getProjectOverride,
@@ -43,6 +44,51 @@ function dedupeStrings(values) {
   return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
 }
 
+function buildContributionSummary(project, details, override) {
+  // Prefer user-authored portfolio overrides, then fall back to detected project signals.
+  const overrideRole = String(override?.keyRole || "").trim();
+  const overrideEvidence = String(override?.evidence || "").trim();
+  const highlights = dedupeStrings(details?.highlights);
+  const technologies = dedupeStrings(details?.technologies);
+
+  if (overrideRole && overrideEvidence) {
+    return `${overrideRole} • ${overrideEvidence}`;
+  }
+
+  if (overrideRole) {
+    return overrideRole;
+  }
+
+  if (highlights.length) {
+    return highlights[0];
+  }
+
+  if (technologies.length) {
+    return `Applied ${technologies.slice(0, 3).join(", ")} across the implementation.`;
+  }
+
+  return `Contributed to ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"} in this project.`;
+}
+
+function buildImpactSummary(project, details, override) {
+  const overrideEvidence = String(override?.evidence || "").trim();
+  const highlights = dedupeStrings(details?.highlights);
+  const impactSignals = [
+    `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed`,
+    `${project.total_skills || 0} skill signal${project.total_skills === 1 ? "" : "s"} detected`,
+  ];
+
+  if (overrideEvidence) {
+    return `${overrideEvidence} Backed by ${impactSignals.join(" and ")}.`;
+  }
+
+  if (highlights.length > 1) {
+    return `${highlights[1]} Backed by ${impactSignals.join(" and ")}.`;
+  }
+
+  return `Portfolio impact is supported by ${impactSignals.join(" and ")}.`;
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -82,8 +128,13 @@ async function fetchActivityHeatmap() {
 
 function buildProfile(summaryData) {
   const fallback = getStaticProfile();
+  const currentUser = getCurrentUser();
+  // Prefer the user's editable profile name
+  const editableName =
+    String(currentUser?.full_name || "").trim() ||
+    String(currentUser?.username || "").trim();
   return {
-    name: summaryData?.owner || fallback.name,
+    name: editableName || summaryData?.owner || fallback.name,
     title: fallback.title,
     education: summaryData?.education || fallback.education,
     awards: dedupeStrings(summaryData?.awards).length
@@ -307,6 +358,8 @@ function renderTopProjects(projects, summaryData) {
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const keyRole = override.keyRole?.trim();
       const evidence = override.evidence?.trim();
+      const contributionSummary = buildContributionSummary(project, details, override);
+      const impactSummary = buildImpactSummary(project, details, override);
 
       return `
         <div class="top-project-card">
@@ -316,22 +369,37 @@ function renderTopProjects(projects, summaryData) {
             <p>${escapeHtml(summary)}</p>
 
             ${
-              keyRole
+              contributionSummary
                 ? `
                   <div class="portfolio-detail-block">
-                    <span class="portfolio-detail-label">Key Role</span>
-                    <p>${escapeHtml(keyRole)}</p>
+                    <span class="portfolio-detail-label">Contribution</span>
+                    <p>${escapeHtml(contributionSummary)}</p>
                   </div>
                 `
                 : ""
             }
 
             ${
-              evidence
+              impactSummary
                 ? `
-                  <div class="portfolio-detail-block">
-                    <span class="portfolio-detail-label">Evidence of Success</span>
-                    <p>${escapeHtml(evidence)}</p>
+                  <!-- Keep success evidence behind an explicit toggle in both public and private portfolio views. -->
+                  <div class="project-details">
+                    <button
+                      class="project-details-toggle"
+                      type="button"
+                      data-evidence-details="${escapeHtml(project.project_id)}"
+                    >
+                      View Details
+                    </button>
+                    <div
+                      class="project-details-panel hidden"
+                      data-evidence-details-panel="${escapeHtml(project.project_id)}"
+                    >
+                      <div class="project-story-block">
+                        <span class="project-story-label">Evidence of Success</span>
+                        <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
+                      </div>
+                    </div>
                   </div>
                 `
                 : ""
@@ -703,6 +771,21 @@ export function initPortfolioResume() {
     if (event.key === "Escape") {
       closeResumePreview();
     }
+  });
+
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-evidence-details]");
+    if (!toggle) return;
+
+    const projectId = toggle.dataset.evidenceDetails;
+    const panel = document.querySelector(
+      `[data-evidence-details-panel="${CSS.escape(projectId)}"]`
+    );
+    if (!panel) return;
+
+    const isHidden = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !isHidden);
+    toggle.textContent = isHidden ? "Hide Details" : "View Details";
   });
 
   window.addEventListener("portfolio:customization-updated", () => {

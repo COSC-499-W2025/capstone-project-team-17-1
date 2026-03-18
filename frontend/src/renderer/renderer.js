@@ -15,6 +15,7 @@ import { initPortfolioResume } from "./portfolioResume.js";
 import { initResumeManager } from "./resumeManager.js";
 import { initDisplayPreferences } from "./displayPreferences.js";
 import { initDashboard } from "./dashboardInit.js";
+import { initConsentBanner } from "./consentBanner.js";
 
 
 // -----------------------------
@@ -46,6 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initResumeManager();
 
   initDisplayPreferences();
+  initConsentBanner();
 
   loadProjects();
 

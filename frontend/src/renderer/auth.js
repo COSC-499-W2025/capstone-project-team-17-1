@@ -4,6 +4,7 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
+import { renderConsentSettings } from "./consentBanner.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
@@ -203,6 +204,7 @@ function renderSettingsProfile() {
 
   document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
   document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
+  renderConsentSettings();
 }
 
 async function saveProfile() {
