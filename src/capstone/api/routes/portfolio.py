@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import traceback
 import tempfile
+import zipfile
 
 from datetime import UTC, datetime
 from enum import Enum
@@ -12,6 +13,8 @@ from fastapi import APIRouter, Body, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from capstone.activity_log import log_event
+from capstone.language_detection import classify_activity
+from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
 from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
@@ -266,7 +269,51 @@ def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional
         if isinstance(raw_snapshot, dict):
             snapshot = raw_snapshot
 
-        return project_id, snapshot
+    return project_id, snapshot
+
+
+def _build_file_summary_from_zip_path(zip_path: str | None) -> dict[str, Any]:
+    if not zip_path:
+        return {}
+
+    path = Path(zip_path)
+    if not path.exists():
+        return {}
+
+    metrics_inputs: list[FileMetric] = []
+
+    try:
+        with zipfile.ZipFile(path) as zf:
+            roots = set()
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                parts = [p for p in info.filename.strip("/").split("/") if p]
+                if parts:
+                    roots.add(parts[0])
+            root_name = next(iter(roots)) if len(roots) == 1 else None
+
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                raw_path = info.filename.strip("/")
+                if not raw_path:
+                    continue
+                rel_path = raw_path
+                if root_name and raw_path.startswith(root_name + "/"):
+                    rel_path = raw_path[len(root_name) + 1 :]
+                metrics_inputs.append(
+                    FileMetric(
+                        path=rel_path,
+                        size=int(info.file_size),
+                        modified=datetime(*info.date_time),
+                        activity=classify_activity(rel_path),
+                    )
+                )
+    except (zipfile.BadZipFile, FileNotFoundError, OSError, ValueError):
+        return {}
+
+    return compute_metrics(metrics_inputs).__dict__
 
     if isinstance(row, (tuple, list)):
         if len(row) >= 1 and row[0] is not None:
@@ -423,17 +470,33 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
 
         with _db_session(db_dir) as c:
             rows = fetch_latest_snapshots(c) or []
+            latest_rows = c.execute(
+                """
+                SELECT pa.project_id, pa.zip_path
+                FROM project_analysis pa
+                JOIN (
+                    SELECT project_id, MAX(datetime(created_at)) AS max_created
+                    FROM project_analysis
+                    GROUP BY project_id
+                ) latest
+                  ON latest.project_id = pa.project_id
+                 AND datetime(pa.created_at) = latest.max_created
+                """
+            ).fetchall()
+            zip_path_by_project = {str(project_id): zip_path for project_id, zip_path in latest_rows}
 
         period_counts: dict[str, int] = {}
         project_count = 0
 
         for row in rows:
-            _, snapshot = _extract_row_project_and_snapshot(row)
+            project_id, snapshot = _extract_row_project_and_snapshot(row)
 
             if not isinstance(snapshot, dict):
                 continue
 
             file_summary = snapshot.get("file_summary") or {}
+            if not isinstance(file_summary, dict) or not file_summary.get("timeline"):
+                file_summary = _build_file_summary_from_zip_path(zip_path_by_project.get(str(project_id)))
             timeline = file_summary.get("timeline") or {}
 
             if not isinstance(timeline, dict):

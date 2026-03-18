@@ -45,6 +45,20 @@ function setBannerVisible(visible) {
   banner.classList.toggle("hidden", !visible);
 }
 
+function setBannerBusy(isBusy, primaryLabel = "Accept") {
+  const acceptAll = document.getElementById("consent-accept-all");
+  const rejectExternal = document.getElementById("consent-reject-external");
+  const detailsBtn = document.getElementById("consent-view-details");
+
+  [acceptAll, rejectExternal, detailsBtn].forEach((button) => {
+    if (button) button.disabled = isBusy;
+  });
+
+  if (acceptAll) {
+    acceptAll.textContent = isBusy ? "Saving..." : primaryLabel;
+  }
+}
+
 function setConsentSummary(state) {
   const summary = document.getElementById("consent-settings-summary");
   if (!summary) return;
@@ -187,15 +201,35 @@ export function initConsentBanner() {
   const modal = getModal();
 
   acceptAll?.addEventListener("click", async () => {
-    await saveConsent("/privacy-consent/local", true);
-    await saveConsent("/privacy-consent/external", true);
-    await refreshConsentUI();
+    setBannerBusy(true);
+    try {
+      setBannerVisible(false);
+      await Promise.all([
+        saveConsent("/privacy-consent/local", true),
+        saveConsent("/privacy-consent/external", true),
+      ]);
+      await refreshConsentUI();
+    } catch (_) {
+      setBannerVisible(true);
+    } finally {
+      setBannerBusy(false);
+    }
   });
 
   rejectExternal?.addEventListener("click", async () => {
-    await saveConsent("/privacy-consent/local", true);
-    await saveConsent("/privacy-consent/external", false);
-    await refreshConsentUI();
+    setBannerBusy(true, "Accept");
+    try {
+      setBannerVisible(false);
+      await Promise.all([
+        saveConsent("/privacy-consent/local", true),
+        saveConsent("/privacy-consent/external", false),
+      ]);
+      await refreshConsentUI();
+    } catch (_) {
+      setBannerVisible(true);
+    } finally {
+      setBannerBusy(false, "Accept");
+    }
   });
 
   detailsBtn?.addEventListener("click", () => {

@@ -336,14 +336,10 @@ export function renderRepoCards(repos) {
           return;
         }
 
-        let projectId = document
+        const customProjectId = document
           .getElementById("github-project-id-input")
           ?.value
           ?.trim();
-
-        if (!projectId) {
-          projectId = name;
-        }
 
         // -------------------------
         // FETCH BRANCHES
@@ -365,6 +361,13 @@ export function renderRepoCards(repos) {
         }
 
         let selectedBranch = branches[0] || "main";
+        const buildProjectId = (branchName) => {
+          if (customProjectId) return customProjectId;
+          const safeBranch = String(branchName || "main")
+            .trim()
+            .replace(/[^a-zA-Z0-9._-]+/g, "-");
+          return `${name}-${safeBranch}`;
+        };
 
 if (branches.length > 1) {
 
@@ -399,7 +402,7 @@ if (branches.length > 1) {
 
     modal.remove();
 
-    startImport(owner, name, projectId, selectedBranch);
+    startImport(owner, name, buildProjectId(selectedBranch), selectedBranch);
 
   };
 
@@ -410,7 +413,7 @@ if (branches.length > 1) {
   return;
 }
 
-startImport(owner, name, projectId, selectedBranch);
+startImport(owner, name, buildProjectId(selectedBranch), selectedBranch);
 
 
       });

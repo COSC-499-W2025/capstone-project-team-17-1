@@ -24,6 +24,10 @@ let isDirty = false;
 let isSaving = false;
 let lastSavedSnapshot = "";
 
+function isJobTargetField(target) {
+  return target instanceof HTMLElement && /^job-target-/.test(target.id || "");
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -847,13 +851,20 @@ export function initPortfolioCustomization() {
       renderPortfolioCustomizationPage();
     });
 
-    root?.addEventListener("input", () => {
+    root?.addEventListener("input", (event) => {
+      if (isJobTargetField(event.target)) {
+        return;
+      }
       updateLivePreview();
       scheduleAutosave();
     });
 
     root?.addEventListener("change", (event) => {
       const target = event.target;
+
+      if (isJobTargetField(target)) {
+        return;
+      }
 
       if (target instanceof HTMLInputElement) {
         if (target.matches("[data-featured-project-id]")) {

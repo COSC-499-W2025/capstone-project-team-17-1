@@ -531,6 +531,135 @@ body.light .theme-toggle::before {
   max-width: 640px;
 }
 
+.onboarding-actions {
+  justify-content: flex-end;
+}
+
+.onboarding-panel {
+  position: fixed;
+  top: 92px;
+  left: 28px;
+  z-index: 35;
+  width: min(460px, calc(100vw - 56px));
+  padding: 18px 18px 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #15203a;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(14px);
+}
+
+.onboarding-panel-right {
+  left: auto;
+  right: 28px;
+}
+
+.onboarding-progress {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(21, 32, 58, 0.58);
+}
+
+.onboarding-close {
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  opacity: 1 !important;
+}
+
+.onboarding-close:hover {
+  background: #f3f4f6;
+}
+
+#onboarding-leave-btn {
+  border: 1px solid rgba(21, 32, 58, 0.16);
+  background: rgba(21, 32, 58, 0.08);
+  color: #15203a;
+}
+
+#onboarding-leave-btn:hover {
+  background: rgba(21, 32, 58, 0.14);
+}
+
+.onboarding-panel .settings-consent-text {
+  color: rgba(21, 32, 58, 0.82);
+}
+
+.onboarding-hint {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(21, 32, 58, 0.07);
+  color: rgba(21, 32, 58, 0.84);
+  line-height: 1.5;
+}
+
+.onboarding-detail-box {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-detail-line {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(21, 32, 58, 0.07);
+  color: rgba(21, 32, 58, 0.88);
+  line-height: 1.45;
+}
+
+.nav-tab.tutorial-focus {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.32), 0 0 0 8px rgba(77, 166, 255, 0.16);
+}
+
+.tutorial-section-target {
+  position: relative;
+  z-index: 19;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.72), 0 0 0 6px rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+}
+
+.tutorial-section-focus {
+  position: relative;
+  z-index: 20;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 0 8px rgba(77, 166, 255, 0.32);
+}
+
+#onboarding-show-details-btn {
+  background: #15203a;
+  color: #ffffff;
+}
+
+@media (max-width: 700px) {
+  .onboarding-panel {
+    top: 76px;
+    left: 12px;
+    width: calc(100vw - 24px);
+    padding: 18px 18px 16px;
+  }
+
+  .onboarding-panel-right {
+    right: 12px;
+  }
+
+}
+
 .consent-detail-list {
   display: grid;
   gap: 14px;

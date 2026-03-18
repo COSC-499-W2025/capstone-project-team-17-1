@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
+from datetime import datetime
 import tempfile
 import shutil
 import time
@@ -10,6 +11,8 @@ import hashlib
 from collections import Counter
 from capstone.activity_log import log_event
 from capstone import file_store, storage
+from capstone.language_detection import classify_activity
+from capstone.metrics import FileMetric, compute_metrics
 from capstone.resume_retrieval import build_resume_project_summary
 from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
 import capstone.storage as storage_module
@@ -98,6 +101,46 @@ def _inspect_zip_manifest(zip_path: Path) -> dict:
         "skills": dict(skills),
         "signature": signature,
     }
+
+
+def _build_file_summary_from_zip(zip_path: Path) -> dict:
+    metrics_inputs: list[FileMetric] = []
+
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            root_name = None
+            roots = set()
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                parts = [p for p in info.filename.strip("/").split("/") if p]
+                if parts:
+                    roots.add(parts[0])
+            if len(roots) == 1:
+                root_name = next(iter(roots))
+
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                raw_path = info.filename.strip("/")
+                if not raw_path:
+                    continue
+                rel_path = raw_path
+                if root_name and raw_path.startswith(root_name + "/"):
+                    rel_path = raw_path[len(root_name) + 1 :]
+                modified = datetime(*info.date_time)
+                metrics_inputs.append(
+                    FileMetric(
+                        path=rel_path,
+                        size=int(info.file_size),
+                        modified=modified,
+                        activity=classify_activity(rel_path),
+                    )
+                )
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid zip archive")
+
+    return compute_metrics(metrics_inputs).__dict__
 
 
 def _is_noreply_email(email: str) -> bool:
@@ -297,7 +340,8 @@ async def upload_project(
         "project_id": project_id,
         "skills": manifest.get("skills", {}),
         "root_name": manifest.get("root_name"),
-        "file_count": len(manifest.get("files", []))    
+        "file_count": len(manifest.get("files", [])),
+        "file_summary": _build_file_summary_from_zip(Path(stored["path"])),
     }
     
     storage.store_analysis_snapshot(
@@ -433,6 +477,7 @@ async def upload_project_bundle(file: UploadFile = File(...)):
                     "root_name": manifest.get("root_name") or sub_name,
                     "file_count": len(manifest.get("files", [])),
                     "source": "multi_project_zip",
+                    "file_summary": _build_file_summary_from_zip(sub_tmp_path),
                 }
                 storage.store_analysis_snapshot(
                     conn,

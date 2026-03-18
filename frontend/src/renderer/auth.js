@@ -5,6 +5,8 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
 import { renderConsentSettings } from "./consentBanner.js";
+import { reopenOnboarding } from "./onboarding.js";
+import { shouldRequireLoginForTab } from "./authShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
@@ -116,19 +118,35 @@ function goToPage(tabKey, pageId) {
   localStorage.setItem("loom_last_page", JSON.stringify({ tabKey, pageId }));
 }
 
+function showSavedPage(tabKey, pageId) {
+  if (!tabKey || !pageId) return;
+  switchPage(pageId);
+  setActiveTabByKey(tabKey);
+}
+
 function restoreLastAllowedPage({ requirePrivate = false } = {}) {
   const lastPage = getLastPage();
-  const privateOnlyTabs = new Set(["customization", "settings"]);
+  const privateOnlyTabs = new Set(["customization"]);
 
   if (lastPage?.tabKey && lastPage?.pageId) {
     const requiresPrivateTab = privateOnlyTabs.has(lastPage.tabKey);
     if (!requiresPrivateTab || requirePrivate) {
       goToPage(lastPage.tabKey, lastPage.pageId);
+      if (lastPage.tabKey === "settings") {
+        renderSettingsProfile();
+      }
       return true;
     }
   }
 
   return false;
+}
+
+function restoreSavedPageOptimistically() {
+  const lastPage = getLastPage();
+  if (!lastPage?.tabKey || !lastPage?.pageId) return false;
+  showSavedPage(lastPage.tabKey, lastPage.pageId);
+  return true;
 }
 
 export async function authFetch(path, options = {}) {
@@ -153,7 +171,7 @@ async function ensureCurrentUser() {
   }
 }
 
-async function startLoginFlow() {
+export async function openLoginFlow() {
   let mode = "login";
   try {
     const res = await authFetch("/auth/bootstrap");
@@ -190,6 +208,9 @@ function renderSettingsProfile() {
       <button id="profile-save-btn" class="auth-btn">Save Profile</button>
       <span id="profile-msg"></span>
     </div>
+    <div class="profile-actions">
+      <button id="show-tutorial-btn" class="auth-btn" type="button">Show Tutorial Again</button>
+    </div>
     <hr />
     <h4>Change Password</h4>
     <div class="profile-grid">
@@ -203,6 +224,9 @@ function renderSettingsProfile() {
   `;
 
   document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
+  document.getElementById("show-tutorial-btn")?.addEventListener("click", () => {
+    reopenOnboarding();
+  });
   document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
   renderConsentSettings();
 }
@@ -302,18 +326,6 @@ function closeModalToPublic() {
 }
 
 async function syncCloudDbAndRefresh() {
-  try {
-    await authFetch("/cloud/db/download", {
-      method: "POST"
-    });
-
-    await authFetch("/cloud/projects/download-all", {
-      method: "POST"
-    });
-  } catch (_) {
-    // ignore if user has no cloud data yet
-  }
-
   await Promise.all([
     loadProjects(),
     loadRecentProjects(),
@@ -343,22 +355,23 @@ export async function initAuthFlow() {
 
   setModeUI(false, null);
   setAuthFormMode("login");
+  restoreSavedPageOptimistically();
 
   initNavigation({
     onBeforeNavigate: async ({ tabKey, target }) => {
       if (!target) return false;
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
-        if (!user) {
-          await startLoginFlow();
+        if (shouldRequireLoginForTab(tabKey, user)) {
+          await openLoginFlow();
           return false;
         }
         renderSettingsProfile();
       }
       if (tabKey === "customization") {
         const user = await ensureCurrentUser();
-        if (!user) {
-          await startLoginFlow();
+        if (shouldRequireLoginForTab(tabKey, user)) {
+          await openLoginFlow();
           return false;
         }
       }
@@ -398,7 +411,7 @@ export async function initAuthFlow() {
     }
   }
 
-  loginBtn.addEventListener("click", startLoginFlow);
+  loginBtn.addEventListener("click", openLoginFlow);
   toggleBtn.addEventListener("click", () => {
     setAuthFormMode(authMode === "login" ? "register" : "login");
   });
@@ -445,9 +458,6 @@ export async function initAuthFlow() {
     setModeUI(true, data.user);
     showAuthModal(false);
     goToPage("customization", "customization-page");
-
-    await authFetch("/cloud/db/download", { method: "POST" });
-    await authFetch("/cloud/projects/download-all", { method: "POST" });
 
     await syncCloudDbAndRefresh();
   } catch (_) {

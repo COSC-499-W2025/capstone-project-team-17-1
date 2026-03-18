@@ -10,21 +10,20 @@ function renderLocalConsentPrompt(container, { inline = false } = {}) {
   // Local processing consent is required
   container.innerHTML = `
     <div class="${inline ? "error-healthy-state" : "error-empty-state"}">
-      <p>Local processing consent is required before running analysis.</p>
-      <button id="grant-local-consent-btn" class="ai-consent-btn">
-        Grant Local Consent
+      <p>Local processing consent is required before running analysis. Grant consent in Settings to continue.</p>
+      <button id="open-settings-consent-btn" class="ai-consent-btn">
+        Open Settings
       </button>
     </div>
   `;
 
-  document.getElementById("grant-local-consent-btn")?.addEventListener("click", async () => {
-    await fetch("http://127.0.0.1:8002/privacy-consent/local", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consent: true })
+  document.getElementById("open-settings-consent-btn")?.addEventListener("click", () => {
+    document.querySelectorAll(".nav-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === "settings");
     });
-
-    loadErrorAnalysis();
+    document.querySelectorAll(".page").forEach((page) => {
+      page.classList.toggle("active", page.id === "settings-page");
+    });
   });
 }
 
