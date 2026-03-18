@@ -1,5 +1,6 @@
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";
+import { formatConsentSummary, shouldShowConsentBanner } from "./consentShared.mjs";
 
 const CONSENT_COPY = {
   summary:
@@ -74,10 +75,7 @@ function setBannerBusy(isBusy, primaryLabel = "Accept") {
 function setConsentSummary(state) {
   const summary = document.getElementById("consent-settings-summary");
   if (!summary) return;
-
-  const local = state.local_consent ? "Granted" : "Not granted";
-  const external = state.external_consent ? "Granted" : "Not granted";
-  summary.textContent = `Local processing: ${local} • External AI: ${external}`;
+  summary.textContent = formatConsentSummary(state);
 }
 
 function renderSettingsConsent(state) {
@@ -180,7 +178,7 @@ export async function refreshConsentUI() {
   // Refresh every consent surface together
   try {
     const state = await fetchConsentState();
-    const bannerVisible = !state.local_consent;
+    const bannerVisible = shouldShowConsentBanner(state);
     setBannerVisible(bannerVisible);
     renderSettingsConsent(state);
     renderConsentDetails(state);
