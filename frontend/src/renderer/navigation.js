@@ -27,6 +27,11 @@ export function switchPage(targetId) {
   const target = document.getElementById(targetId);
   if (target) {
     target.classList.add("active");
+    document.dispatchEvent(
+      new CustomEvent("navigation:page-changed", {
+        detail: { pageId: targetId },
+      })
+    );
   }
 }
 

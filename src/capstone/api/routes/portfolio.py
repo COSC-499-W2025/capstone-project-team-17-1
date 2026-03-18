@@ -3,8 +3,9 @@ from __future__ import annotations
 import traceback
 import tempfile
 import zipfile
+import calendar
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -323,6 +324,61 @@ def _build_file_summary_from_zip_path(zip_path: str | None) -> dict[str, Any]:
 
     return compute_metrics(metrics_inputs).__dict__
 
+
+def _build_daily_activity_from_zip_path(zip_path: str | None) -> dict[str, int]:
+    if not zip_path:
+        return {}
+
+    path = Path(zip_path)
+    if not path.exists():
+        return {}
+
+    daily_counts: dict[str, int] = {}
+
+    try:
+        with zipfile.ZipFile(path) as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                day_key = date(*info.date_time[:3]).isoformat()
+                daily_counts[day_key] = daily_counts.get(day_key, 0) + 1
+    except (zipfile.BadZipFile, FileNotFoundError, OSError, ValueError):
+        return {}
+
+    return dict(sorted(daily_counts.items()))
+
+
+def _expand_monthly_timeline_to_daily(monthly_timeline: dict[str, Any]) -> dict[str, int]:
+    daily_counts: dict[str, int] = {}
+
+    for period, raw_count in sorted(monthly_timeline.items()):
+        period_key = str(period).strip()
+        if not period_key or not isinstance(period_key, str) or len(period_key) != 7 or period_key[4] != "-":
+            continue
+
+        try:
+            year = int(period_key[:4])
+            month = int(period_key[5:7])
+            days_in_month = calendar.monthrange(year, month)[1]
+        except (ValueError, calendar.IllegalMonthError):
+            continue
+
+        count = max(0, _safe_int(raw_count))
+        if count == 0:
+            continue
+
+        base = count // days_in_month
+        remainder = count % days_in_month
+
+        for day in range(1, days_in_month + 1):
+            day_count = base + (1 if day <= remainder else 0)
+            if day_count <= 0:
+                continue
+            day_key = date(year, month, day).isoformat()
+            daily_counts[day_key] = day_count
+
+    return daily_counts
+
     if isinstance(row, (tuple, list)):
         if len(row) >= 1 and row[0] is not None:
             project_id = str(row[0])
@@ -481,7 +537,7 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
         with _db_session(db_dir) as c:
             rows = fetch_latest_snapshots_with_zip(c) or []
 
-        period_counts: dict[str, int] = {}
+        daily_counts: dict[str, int] = {}
         project_count = 0
 
         for row in rows:
@@ -493,33 +549,41 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
                 continue
 
             file_summary = snapshot.get("file_summary") or {}
-            if not isinstance(file_summary, dict) or not file_summary.get("timeline"):
-                file_summary = _build_file_summary_from_zip_path(zip_path)
-            timeline = file_summary.get("timeline") or {}
+            monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
+            activity_by_day = {}
+            if isinstance(file_summary, dict):
+                activity_by_day = file_summary.get("daily_timeline") or {}
 
-            if not isinstance(timeline, dict):
+            if not isinstance(activity_by_day, dict) or not activity_by_day:
+                activity_by_day = _build_daily_activity_from_zip_path(zip_path)
+
+            if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
+                activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
+
+            if not isinstance(activity_by_day, dict):
                 continue
 
             project_count += 1
 
-            for period, count in timeline.items():
+            for period, count in activity_by_day.items():
                 key = str(period).strip()
                 if not key:
                     continue
-                period_counts[key] = period_counts.get(key, 0) + _safe_int(count)
+                daily_counts[key] = daily_counts.get(key, 0) + _safe_int(count)
 
-        if not period_counts:
+        if not daily_counts:
             return {
                 "data": {
                     "cells": [],
                     "maxCount": 0,
                     "projectCount": project_count,
+                    "granularity": "day",
                 },
                 "error": None,
             }
 
-        ordered_periods = sorted(period_counts.items(), key=lambda item: item[0])
-        max_count = max(period_counts.values()) if period_counts else 0
+        ordered_periods = sorted(daily_counts.items(), key=lambda item: item[0])
+        max_count = max(daily_counts.values()) if daily_counts else 0
 
         cells = []
         for period, count in ordered_periods:
@@ -537,7 +601,7 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
 
         log_event(
             "SUCCESS",
-            f"Portfolio activity heatmap generated · Periods: {len(cells)} · Projects: {project_count}",
+            f"Portfolio activity heatmap generated · Days: {len(cells)} · Projects: {project_count}",
         )
 
         return {
@@ -545,6 +609,7 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
                 "cells": cells,
                 "maxCount": max_count,
                 "projectCount": project_count,
+                "granularity": "day",
             },
             "error": None,
         }

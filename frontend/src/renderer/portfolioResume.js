@@ -207,6 +207,65 @@ function getHeatmapBucket(intensity) {
   return 0;
 }
 
+function buildContributionHeatmapModel(cells) {
+  const entries = [...cells]
+    .map((cell) => {
+      const rawDate = String(cell.period || "").trim();
+      const parsed = new Date(`${rawDate}T00:00:00`);
+      return {
+        dateKey: rawDate,
+        date: parsed,
+        count: Number(cell.count || 0),
+        intensity: Number(cell.intensity || 0),
+      };
+    })
+    .filter((cell) => !Number.isNaN(cell.date.getTime()))
+    .sort((a, b) => a.date - b.date);
+
+  if (!entries.length) {
+    return { monthLabels: [], weeks: [] };
+  }
+
+  const byDate = new Map(entries.map((entry) => [entry.dateKey, entry]));
+  const start = new Date(entries[0].date);
+  start.setDate(start.getDate() - start.getDay());
+  const end = new Date(entries[entries.length - 1].date);
+  end.setDate(end.getDate() + (6 - end.getDay()));
+
+  const weeks = [];
+  const monthLabels = [];
+  let cursor = new Date(start);
+  let weekIndex = 0;
+
+  while (cursor <= end) {
+    const weekDays = [];
+    const weekStart = new Date(cursor);
+    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+      const current = new Date(cursor);
+      current.setDate(cursor.getDate() + dayIndex);
+      const key = current.toISOString().slice(0, 10);
+      const entry = byDate.get(key);
+      weekDays.push({
+        key,
+        label: current.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        count: entry?.count || 0,
+        bucket: getHeatmapBucket(entry?.intensity || 0),
+        inRange: current >= entries[0].date && current <= entries[entries.length - 1].date,
+      });
+    }
+
+    const firstOfMonth = weekDays.find((day) => day.key.endsWith("-01"));
+    monthLabels.push(
+      firstOfMonth ? weekStart.toLocaleDateString("en-US", { month: "short" }) : ""
+    );
+    weeks.push({ index: weekIndex, days: weekDays });
+    cursor.setDate(cursor.getDate() + 7);
+    weekIndex += 1;
+  }
+
+  return { monthLabels, weeks };
+}
+
 function applyPortfolioSectionVisibility() {
   const customization = loadPortfolioCustomization();
   const sectionVisibility = {
@@ -541,6 +600,8 @@ function renderActivityHeatmap(heatmapData) {
   const container = document.getElementById("activity-heatmap-container");
   if (!container) return;
 
+  const card = container.closest(".portfolio-heatmap-card");
+
   const cells = Array.isArray(heatmapData?.cells) ? heatmapData.cells : [];
   const projectCount = Number(heatmapData?.projectCount || 0);
 
@@ -556,9 +617,15 @@ function renderActivityHeatmap(heatmapData) {
     return;
   }
 
+  // If activity data exists, keep the heatmap card visible even if an older local customization hid it.
+  if (card) {
+    card.style.display = "";
+  }
+
   const totalActivity = cells.reduce((sum, cell) => sum + Number(cell.count || 0), 0);
   const averageActivity = cells.length ? Math.round(totalActivity / cells.length) : 0;
   const peakCell = [...cells].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
+  const heatmap = buildContributionHeatmapModel(cells);
   const legendLevels = [
     { label: "Low", bucket: 0 },
     { label: "", bucket: 1 },
@@ -575,8 +642,8 @@ function renderActivityHeatmap(heatmapData) {
         </p>
         <div class="heatmap-chip-row">
           <span class="hero-stat-chip">${totalActivity} total activity events</span>
-          <span class="hero-stat-chip">${averageActivity} avg / active month</span>
-          <span class="hero-stat-chip">Peak: ${escapeHtml(formatPeriodLabel(peakCell?.period || ""))}</span>
+          <span class="hero-stat-chip">${averageActivity} avg / active day</span>
+          <span class="hero-stat-chip">Peak: ${escapeHtml(peakCell?.period || "")}</span>
         </div>
       </div>
     </div>
@@ -595,23 +662,40 @@ function renderActivityHeatmap(heatmapData) {
       <span class="heatmap-legend-label">More</span>
     </div>
 
-    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by month">
-      <div class="heatmap-calendar-row">
-        ${cells
-          .map((cell) => {
-            const period = formatPeriodLabel(cell.period);
-            const count = Number(cell.count || 0);
-            const bucket = getHeatmapBucket(Number(cell.intensity || 0));
-
-            return `
-              <div class="heatmap-calendar-cell">
-                <div class="heatmap-square bucket-${bucket}" title="${escapeHtml(period)} · ${count} activity event${count === 1 ? "" : "s"}"></div>
-                <span class="heatmap-axis-label">${escapeHtml(period)}</span>
-                <span class="heatmap-axis-value">${count}</span>
-              </div>
-            `;
-          })
-          .join("")}
+    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
+      <div class="heatmap-month-row">
+        <div class="heatmap-month-spacer"></div>
+        <div class="heatmap-month-labels">
+          ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="heatmap-body">
+        <div class="heatmap-weekday-labels">
+          <span>Sun</span>
+          <span>Tue</span>
+          <span>Thu</span>
+          <span>Sat</span>
+        </div>
+        <div class="heatmap-weeks">
+          ${heatmap.weeks
+            .map(
+              (week) => `
+                <div class="heatmap-week-column">
+                  ${week.days
+                    .map(
+                      (day) => `
+                        <div
+                          class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
+                          title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
+                        ></div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+            )
+            .join("")}
+        </div>
       </div>
     </div>
   `;
@@ -829,5 +913,11 @@ export function initPortfolioResume() {
 
   window.addEventListener("portfolio:data-updated", () => {
     loadPortfolioResume();
+  });
+
+  document.addEventListener("navigation:page-changed", (event) => {
+    if (event.detail?.pageId === "portfolio-resume-page") {
+      loadPortfolioResume();
+    }
   });
 }
