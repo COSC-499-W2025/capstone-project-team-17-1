@@ -4722,6 +4722,12 @@ transition: all 0.2s ease;
   grid-column: 1 / -1;
 }
 
+.customization-project-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .customization-job-match-score {
   color: #38bdf8;
   font-weight: 600;

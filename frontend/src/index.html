@@ -224,18 +224,13 @@
       <!-- CUSTOMIZATION PAGE -->
  
       <div id="customization-page" class="page">
-          <div class="tab-panel customization-page-shell">
+          <div id="portfolio-customization-root" class="tab-panel customization-page-shell">
             <div class="customization-header">
               <div>
                 <h1>Portfolio Customization</h1>
                 <p class="resume-summary-text">
                   Choose featured projects, edit portfolio-facing descriptions, and control which sections appear in your portfolio.
                 </p>
-              </div>
-              <div class="customization-actions">
-                <button id="portfolio-customization-save-btn" class="primary-btn" type="button">
-                  Save Customization
-                </button>
               </div>
             </div>
         
@@ -257,6 +252,7 @@
                 <p class="resume-summary-text">
                   Drag selected projects to control the Top 3 showcase order.
                 </p>
+                <div id="portfolio-featured-projects-container" class="customization-project-picker-list"></div>
                 <div id="portfolio-featured-order-container" class="customization-featured-order-list"></div>
               </div>
             </div>

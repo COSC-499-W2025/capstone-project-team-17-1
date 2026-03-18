@@ -103,22 +103,42 @@ function snapshotCustomization(customization) {
 
 function updateSaveButtonState() {
   const saveBtn = getSaveButton();
-  if (!saveBtn) return;
+  const projectSaveButtons = document.querySelectorAll("[data-project-save]");
+
+  if (!saveBtn && !projectSaveButtons.length) return;
 
   if (!isPrivateMode()) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Save Customization";
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Save Customization";
+    }
+    projectSaveButtons.forEach((button) => {
+      button.disabled = true;
+      button.textContent = "Save Project Details";
+    });
     return;
   }
 
   if (isSaving) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Saving...";
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+    }
+    projectSaveButtons.forEach((button) => {
+      button.disabled = true;
+      button.textContent = "Saving...";
+    });
     return;
   }
 
-  saveBtn.disabled = !isDirty;
-  saveBtn.textContent = isDirty ? "Save Customization" : "Saved";
+  if (saveBtn) {
+    saveBtn.disabled = !isDirty;
+    saveBtn.textContent = isDirty ? "Save Customization" : "Saved";
+  }
+  projectSaveButtons.forEach((button) => {
+    button.disabled = false;
+    button.textContent = isDirty ? "Save Project Details" : "Saved";
+  });
 }
 
 function markDirtyState(nextCustomization) {
@@ -299,12 +319,23 @@ function renderProjectEditors(projects, customization) {
               >${escapeHtml(override.portfolioBlurb || "")}</textarea>
             </label>
           </div>
+
+          <div class="customization-project-editor-actions">
+            <button
+              type="button"
+              class="secondary-btn customization-project-save-btn"
+              data-project-save="${escapeHtml(project.project_id)}"
+            >
+              Save Project Details
+            </button>
+          </div>
         </div>
       `;
     })
     .join("");
 
     const checkboxes = container.querySelectorAll("[data-project-selected]");
+    const saveButtons = container.querySelectorAll("[data-project-save]");
 
     checkboxes.forEach((cb) => {
       cb.addEventListener("change", () => {
@@ -317,6 +348,12 @@ function renderProjectEditors(projects, customization) {
           cb.checked = false;
           setStatus("You can only feature up to 3 projects.", "warning");
         }
+      });
+    });
+
+    saveButtons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        await performSave({ silent: false });
       });
     });
 }
@@ -402,25 +439,24 @@ function collectCustomization(projects) {
     sectionVisibility[section.id] = input ? !!input.checked : true;
   });
 
-  let featuredRaw = projects
+  const selectedIds = projects
     .filter((project) => {
-      const checked = document.querySelector(`[data-project-selected="${project.project_id}"]`);
-      return checked?.checked;
+      const checked = document.querySelector(
+        `[data-project-selected="${CSS.escape(project.project_id)}"]`
+      );
+      return !!checked?.checked;
     })
-    .map((project) => {
-      const rankInput = document.querySelector(`[data-project-rank="${project.project_id}"]`);
-      const rank = Number(rankInput?.value || 99);
-      return { id: project.project_id, rank };
-    })
-    .sort((a, b) => a.rank - b.rank);
+    .map((project) => project.project_id);
 
-  if (featuredRaw.length > 3) {
+  if (selectedIds.length > 3) {
     setStatus("You can only select up to 3 featured projects. The top 3 were used.", "warning");
   }
 
-  featuredRaw = featuredRaw
-    .slice(0, 3)
-    .map((entry) => entry.id);
+  const orderedIds = getFeaturedOrderFromDom().filter((id) => selectedIds.includes(id));
+  const featuredProjectIds = [
+    ...orderedIds,
+    ...selectedIds.filter((id) => !orderedIds.includes(id)),
+  ].slice(0, 3);
 
   const projectOverrides = {};
   projects.forEach((project) => {
@@ -450,9 +486,9 @@ function collectCustomization(projects) {
   return {
     ...current,
     sectionVisibility,
-    featuredProjectIds: featuredRaw,
+    featuredProjectIds,
     projectOverrides,
-    jobTarget
+    jobTarget,
   };
 }
 
@@ -677,8 +713,7 @@ function handleFeaturedOrderDragEnd() {
 }
 
 async function performSave({ silent = false } = {}) {
-  const saveBtn = getSaveButton();
-  if (!saveBtn || !isPrivateMode()) return;
+  if (!isPrivateMode()) return;
 
   clearAutosaveTimer();
 
@@ -727,9 +762,6 @@ async function performSave({ silent = false } = {}) {
 }
 
 async function renderPortfolioCustomizationPage() {
-  const saveBtn = getSaveButton();
-  if (!saveBtn) return;
-
   clearAutosaveTimer();
 
   if (!isPrivateMode()) {
@@ -758,9 +790,39 @@ async function renderPortfolioCustomizationPage() {
 
     updateSaveButtonState();
 
-    saveBtn.onclick = async () => {
-      await performSave({ silent: false });
-    };
+    const analyzeBtn = document.getElementById("analyze-job-btn");
+    if (analyzeBtn) {
+      analyzeBtn.onclick = async () => {
+        try {
+          setStatus("Analyzing job description...", "info");
+          analyzeBtn.disabled = true;
+
+          const nextCustomization = loadPortfolioCustomization();
+          await autoSelectFeaturedProjects(projects, nextCustomization);
+
+          renderFeaturedProjects(projects, nextCustomization);
+          renderProjectEditors(projects, nextCustomization);
+          renderLivePreview(projects, nextCustomization);
+
+          lastSavedSnapshot = snapshotCustomization(nextCustomization);
+          isDirty = false;
+          await loadPortfolioResume();
+          updateSaveButtonState();
+        } catch (err) {
+          console.error(err);
+          setStatus("Job matching failed.", "error");
+        } finally {
+          analyzeBtn.disabled = false;
+        }
+      };
+    }
+
+    const saveBtn = getSaveButton();
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        await performSave({ silent: false });
+      };
+    }
   } catch (error) {
     console.error("Failed to render portfolio customization page:", error);
     setStatus("Failed to load portfolio customization data.", "error");
@@ -877,34 +939,6 @@ function renderJobTargetSection(customization) {
 
       </div>
     `;
-    const analyzeBtn = container.querySelector("#analyze-job-btn");
-
-    if (analyzeBtn) {
-      analyzeBtn.onclick = async () => {
-      try {
-
-        setStatus("Analyzing job description...", "info");
-        analyzeBtn.disabled = true;
-
-        const projects = await fetchProjects();
-        const customization = collectCustomization(projects);
-
-        await autoSelectFeaturedProjects(projects, customization);
-
-        renderFeaturedProjects(projects, customization);
-        renderProjectEditors(projects, customization);
-
-        await loadPortfolioResume();
-
-      } catch (err) {
-        console.error(err);
-        setStatus("Job matching failed.", "error");
-
-      } finally {
-        analyzeBtn.disabled = false;
-      }
-    };
-  }
 }
 
 // connect backend to ranking endpoint (analyze + rank)
@@ -965,7 +999,7 @@ async function autoSelectFeaturedProjects(projects, customization) {
   savePortfolioCustomization(customization);
 
   // notify related ui of change
-  document.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+  window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
 
   setStatus("Featured projects selected based on job match.", "success");
 }

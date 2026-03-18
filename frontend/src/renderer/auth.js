@@ -115,6 +115,21 @@ function goToPage(tabKey, pageId) {
   localStorage.setItem("loom_last_page", JSON.stringify({ tabKey, pageId }));
 }
 
+function restoreLastAllowedPage({ requirePrivate = false } = {}) {
+  const lastPage = getLastPage();
+  const privateOnlyTabs = new Set(["customization", "settings"]);
+
+  if (lastPage?.tabKey && lastPage?.pageId) {
+    const requiresPrivateTab = privateOnlyTabs.has(lastPage.tabKey);
+    if (!requiresPrivateTab || requirePrivate) {
+      goToPage(lastPage.tabKey, lastPage.pageId);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export async function authFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = getAuthToken();
@@ -279,7 +294,9 @@ function closeModalToPublic() {
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
   showAuthModal(false);
-  if (!currentUser) goToPage("dashboard", "dashboard-page");
+  if (!currentUser && !restoreLastAllowedPage()) {
+    goToPage("dashboard", "dashboard-page");
+  }
 }
 
 async function syncCloudDbAndRefresh() {
@@ -350,22 +367,16 @@ export async function initAuthFlow() {
     try {
     const user = await ensureCurrentUser();
 
-    const lastPage = getLastPage();
-
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      if (lastPage?.tabKey === "customization" || lastPage?.tabKey === "settings" || lastPage?.tabKey === "projects" || lastPage?.tabKey === "portfolio-resume" || lastPage?.tabKey === "dashboard") {
-        goToPage(lastPage.tabKey, lastPage.pageId);
-      } else {
+      if (!restoreLastAllowedPage({ requirePrivate: true })) {
         goToPage("dashboard", "dashboard-page");
       }
     } else {
       setAuthToken(null);
       setModeUI(false, null);
-      if (lastPage?.tabKey && lastPage.tabKey !== "customization" && lastPage.tabKey !== "settings") {
-        goToPage(lastPage.tabKey, lastPage.pageId);
-      } else {
+      if (!restoreLastAllowedPage()) {
         goToPage("dashboard", "dashboard-page");
       }
       // Public mode: load data from guest DB (CURRENT_USER is None on backend)
@@ -380,7 +391,9 @@ export async function initAuthFlow() {
   } catch (_) {
     setAuthToken(null);
     setModeUI(false, null);
-    goToPage("dashboard", "dashboard-page");
+    if (!restoreLastAllowedPage()) {
+      goToPage("dashboard", "dashboard-page");
+    }
   }
 
   loginBtn.addEventListener("click", startLoginFlow);
@@ -428,27 +441,28 @@ export async function initAuthFlow() {
 
     setAuthToken(data.token);
     setModeUI(true, data.user);
+    showAuthModal(false);
+    goToPage("customization", "customization-page");
 
     await authFetch("/cloud/db/download", { method: "POST" });
     await authFetch("/cloud/projects/download-all", { method: "POST" });
 
     await syncCloudDbAndRefresh();
-
-    showAuthModal(false);
-    goToPage("customization", "customization-page");
   } catch (_) {
     error.textContent = "Unable to reach auth service.";
   }
 });
 
  logoutBtn.addEventListener("click", async () => {
-  try {
-    await authFetch("/auth/logout", { method: "POST" });
-  } catch (_) {}
+  logoutBtn.disabled = true;
 
   setAuthToken(null);
   setModeUI(false, null);
   goToPage("dashboard", "dashboard-page");
+
+  try {
+    await authFetch("/auth/logout", { method: "POST" });
+  } catch (_) {}
 
   await Promise.all([
     loadProjects(),
@@ -457,5 +471,7 @@ export async function initAuthFlow() {
     loadErrorAnalysis(),
     loadMostUsedSkills(),
   ]);
+
+  logoutBtn.disabled = false;
 });
 }
