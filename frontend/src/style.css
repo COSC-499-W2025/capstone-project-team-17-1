@@ -4117,6 +4117,30 @@ transition: all 0.2s ease;
   cursor: grabbing;
 }
 
+.resume-star-btn {
+  background: none;
+  border: none;
+  padding: 0 6px 0 0;
+  font-size: 1rem;
+  color: rgba(255,255,255,0.15);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.resume-list-card:hover .resume-star-btn {
+  color: rgba(255,255,255,0.35);
+}
+.resume-list-card:hover .resume-star-btn.starred {
+  color: #fbbf24;
+}
+.resume-star-btn.starred {
+  color: #fbbf24;
+}
+.resume-star-btn.starred:hover {
+  color: #f59e0b;
+}
+
 .resume-list-card-header {
   display: flex;
   align-items: center;
@@ -4180,6 +4204,20 @@ transition: all 0.2s ease;
 
 .danger-btn:hover {
   background: rgba(239,68,68,0.25);
+}
+
+.preview-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(59,130,246,0.4);
+  background: rgba(59,130,246,0.12);
+  color: #93c5fd;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.preview-btn:hover {
+  background: rgba(59,130,246,0.25);
 }
 
 .export-btn {

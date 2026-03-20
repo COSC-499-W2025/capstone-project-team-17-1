@@ -7,7 +7,6 @@ import {
 } from "./portfolioCustomizationState.js";
 
 const SECTION_LABELS = [
-  { id: "resume-summary", label: "Resume Snapshot" },
   { id: "top-projects", label: "Top 3 Project Showcase" },
   { id: "portfolio-stats", label: "Portfolio Stats" },
   { id: "skills-timeline", label: "Skills Timeline" },

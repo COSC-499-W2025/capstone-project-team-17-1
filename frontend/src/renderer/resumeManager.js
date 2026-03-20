@@ -1,4 +1,5 @@
 import { authFetch } from "./auth.js";
+import { openResumePreview } from "./portfolioResume.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -80,6 +81,15 @@ function getSavedResumeOrder() {
 
 function saveResumeOrder(ids) {
   localStorage.setItem("resume_list_order", JSON.stringify(ids));
+}
+
+function getSavedStarred() {
+  try { return new Set(JSON.parse(localStorage.getItem("resume_list_starred") || "[]")); }
+  catch { return new Set(); }
+}
+
+function saveStarred(starredSet) {
+  localStorage.setItem("resume_list_starred", JSON.stringify([...starredSet]));
 }
 
 function applySavedOrder(resumes) {
@@ -174,16 +184,19 @@ async function renderResumeList() {
 
   const resumes = applySavedOrder(rawResumes);
 
+  const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
     const date = rawDate
       ? new Date(rawDate.replace(" ", "T") + "Z").toLocaleString()
       : "—";
     const sectionCount = r.section_count ?? (Array.isArray(r.sections) ? r.sections.length : 0);
+    const isStarred = starred.has(String(r.id));
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
         <div class="resume-list-card-header">
           <span class="resume-card-drag" title="Drag to reorder">⠿</span>
+          <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -193,6 +206,7 @@ async function renderResumeList() {
             </div>
           </div>
           <div class="resume-list-actions">
+            <button class="preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
             <button class="export-btn resume-export-action" data-resume-id="${r.id}" data-resume-title="${r.title || "Untitled Resume"}">Export</button>
             <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
             <span class="resume-expand-chevron">▾</span>
@@ -219,6 +233,8 @@ async function renderResumeList() {
       if (
         e.target.closest(".resume-delete-action") ||
         e.target.closest(".resume-export-action") ||
+        e.target.closest(".resume-preview-action") ||
+        e.target.closest(".resume-star-btn") ||
         e.target.closest(".resume-card-drag")
       ) return;
 
@@ -250,6 +266,29 @@ async function renderResumeList() {
       requestAnimationFrame(() => {
         expandEl.style.maxHeight = inner.scrollHeight + 32 + "px";
       });
+    });
+  });
+
+  container.querySelectorAll(".resume-star-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = String(btn.dataset.resumeId);
+      const currentStarred = getSavedStarred();
+      const nowStarred = !currentStarred.has(id);
+
+      if (nowStarred) currentStarred.add(id);
+      else currentStarred.delete(id);
+      saveStarred(currentStarred);
+
+      btn.classList.toggle("starred", nowStarred);
+      btn.title = nowStarred ? "Unstar" : "Star";
+    });
+  });
+
+  container.querySelectorAll(".resume-preview-action").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openResumePreview();
     });
   });
 

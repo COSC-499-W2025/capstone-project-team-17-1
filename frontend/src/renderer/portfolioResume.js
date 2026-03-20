@@ -9,7 +9,6 @@ import {
 const API_BASE = "http://127.0.0.1:8002";
 
 const SECTION_SELECTOR_MAP = {
-  "resume-summary": ".portfolio-hero-card",
   "top-projects": ".portfolio-projects-card",
   "portfolio-stats": ".portfolio-skills-card",
   "skills-timeline": ".portfolio-timeline-card",
@@ -376,7 +375,6 @@ function buildContributionHeatmapModel(cells) {
 function applyPortfolioSectionVisibility() {
   const customization = loadPortfolioCustomization();
   const sectionVisibility = {
-    "resume-summary": true,
     "top-projects": true,
     "portfolio-stats": true,
     "skills-timeline": true,
@@ -952,7 +950,8 @@ function buildResumePreviewHtml(profile, projects, summaryData) {
   `;
 }
 
-async function openResumePreview() {
+
+export async function openResumePreview() {
   const modal = document.getElementById("resume-preview-modal");
   const body = document.getElementById("resume-preview-body");
   if (!modal || !body) return;
@@ -965,17 +964,11 @@ async function openResumePreview() {
       fetchProjects(),
       fetchPortfolioResumeSummary(),
     ]);
-
     const profile = buildProfile(summaryData);
     body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
-    body.innerHTML = `
-      <div class="skills-group-card">
-        <h3>Preview unavailable</h3>
-        <p class="resume-summary-text">Unable to load live portfolio/resume data for the preview.</p>
-      </div>
-    `;
+    body.innerHTML = `<p class="resume-summary-text">Unable to load resume preview.</p>`;
   }
 }
 
@@ -1018,7 +1011,6 @@ export async function loadPortfolioResume() {
     console.error("Failed to load activity heatmap:", heatmapResult.reason);
   }
 
-  renderResumeSummary(profile, projects, summaryData);
   renderTopProjects(projects, summaryData);
   renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
@@ -1034,9 +1026,6 @@ export function initPortfolioResume() {
 
   const refreshBtn = document.getElementById("refresh-portfolio-btn");
   refreshBtn?.addEventListener("click", loadPortfolioResume);
-
-  const previewBtn = document.getElementById("preview-resume-btn");
-  previewBtn?.addEventListener("click", openResumePreview);
 
   const closeBtn = document.getElementById("resume-preview-close");
   closeBtn?.addEventListener("click", closeResumePreview);
