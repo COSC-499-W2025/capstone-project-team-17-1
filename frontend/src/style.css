@@ -2000,100 +2000,98 @@ transition: all 0.2s ease;
   min-width: 260px;
 }
 
-.dashboard-selection-wrapper {
+/* ── Tab toolbar (All sections + Selection) — shared across all tabs ── */
+
+.tab-selection-wrapper {
   position: relative;
 }
 
-.dashboard-selection-toggle {
-  min-height: 44px;
-}
 
-.dashboard-selection-panel {
+.tab-selection-panel {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
   width: 300px;
   padding: 18px;
   border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(23, 33, 58, 0.98), rgba(10, 16, 32, 0.98));
-  border: 1px solid rgba(158, 207, 255, 0.14);
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, rgba(23,33,58,0.98), rgba(10,16,32,0.98));
+  border: 1px solid rgba(158,207,255,0.14);
+  box-shadow: 0 20px 44px rgba(0,0,0,0.3);
   z-index: 20;
 }
 
-.dashboard-selection-content {
+.tab-selection-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.dashboard-selection-header {
+.tab-selection-header {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.dashboard-selection-title {
+.tab-selection-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   opacity: 0.6;
 }
 
-.dashboard-selection-subtitle {
+.tab-selection-subtitle {
   font-size: 14px;
   font-weight: 600;
   color: #dcecff;
 }
 
-.dashboard-selection-options {
+.tab-selection-options {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.dashboard-selection-option {
+.tab-selection-option {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 13px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.05);
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
   cursor: pointer;
 }
 
-.dashboard-selection-option:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(158, 207, 255, 0.16);
+.tab-selection-option:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(158,207,255,0.16);
   transform: translateY(-1px);
 }
 
-.dashboard-selection-option:has(input:checked) {
-  background: rgba(30, 144, 255, 0.14);
-  border-color: rgba(98, 179, 255, 0.38);
-  box-shadow: inset 0 0 0 1px rgba(98, 179, 255, 0.12);
+.tab-selection-option:has(input:checked) {
+  background: rgba(30,144,255,0.14);
+  border-color: rgba(98,179,255,0.38);
+  box-shadow: inset 0 0 0 1px rgba(98,179,255,0.12);
 }
 
-.dashboard-selection-option input {
+.tab-selection-option input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
-.dashboard-selection-option-check {
+.tab-selection-option-check {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  border: 1.5px solid rgba(184, 220, 255, 0.36);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(184,220,255,0.36);
+  background: rgba(255,255,255,0.03);
   flex-shrink: 0;
   position: relative;
 }
 
-.dashboard-selection-option-check::after {
+.tab-selection-option-check::after {
   content: "";
   position: absolute;
   inset: 3px;
@@ -2103,18 +2101,38 @@ transition: all 0.2s ease;
   transition: transform 0.18s ease;
 }
 
-.dashboard-selection-option:has(input:checked) .dashboard-selection-option-check {
-  border-color: rgba(120, 193, 255, 0.8);
+.tab-selection-option:has(input:checked) .tab-selection-option-check {
+  border-color: rgba(120,193,255,0.8);
 }
 
-.dashboard-selection-option:has(input:checked) .dashboard-selection-option-check::after {
+.tab-selection-option:has(input:checked) .tab-selection-option-check::after {
   transform: scale(1);
 }
 
-.dashboard-selection-option-label {
+.tab-selection-option-label {
   font-size: 14px;
   font-weight: 500;
-  color: rgba(236, 245, 255, 0.9);
+  color: rgba(236,245,255,0.9);
+  flex: 1;
+}
+
+.tab-selection-option-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tab-selection-option-jump {
+  font-size: 12px;
+  color: rgba(158,207,255,0.5);
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.tab-selection-option:hover .tab-selection-option-jump {
+  color: rgba(158,207,255,0.9);
+  transform: translate(1px, -1px);
 }
 
 .portfolio-page-wrapper {
@@ -2932,7 +2950,7 @@ transition: all 0.2s ease;
     width: 100%;
   }
 
-  .dashboard-selection-panel {
+  .tab-selection-panel {
     position: static;
     width: 100%;
     margin-top: 8px;
@@ -2943,6 +2961,7 @@ transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
 }
 
 .secondary-btn {
@@ -5058,6 +5077,7 @@ transition: all 0.2s ease;
 .customization-card-wide {
   grid-column: 1 / -1;
 }
+
 
 .customization-toggle-list,
 .customization-project-picker,

@@ -200,27 +200,31 @@
               </p>
             </div>
             <div class="portfolio-actions">
+              <div id="portfolio-selection-wrapper" class="tab-selection-wrapper hidden">
+                <button id="portfolio-selection-toggle" class="export-btn">Selection</button>
+                <div id="portfolio-selection-panel" class="tab-selection-panel hidden"></div>
+              </div>
               <button id="refresh-portfolio-btn" class="primary-btn">Refresh</button>
             </div>
           </div>
 
           <div class="portfolio-grid">
-            <div class="card portfolio-projects-card">
+            <div class="card portfolio-projects-card portfolio-section" data-portfolio-section="top-projects" data-portfolio-label="Top 3 Project Showcase">
               <h2 class="card-title">Top 3 Project Showcase</h2>
               <div id="top-projects-container" class="top-projects-container"></div>
             </div>
 
-            <div class="card portfolio-skills-card">
+            <div class="card portfolio-skills-card portfolio-section" data-portfolio-section="portfolio-stats" data-portfolio-label="Portfolio Stats">
               <h2 class="card-title">Portfolio Stats</h2>
               <div id="skills-expertise-container" class="skills-expertise-container"></div>
             </div>
 
-            <div class="card portfolio-timeline-card">
+            <div class="card portfolio-timeline-card portfolio-section" data-portfolio-section="skills-timeline" data-portfolio-label="Skills Timeline">
               <h2 class="card-title">Skills Timeline</h2>
               <div id="skills-timeline-container" class="skills-timeline-container"></div>
             </div>
 
-            <div class="card portfolio-heatmap-card">
+            <div class="card portfolio-heatmap-card portfolio-section" data-portfolio-section="activity-heatmap" data-portfolio-label="Activity Heatmap">
               <h2 class="card-title">Activity Heatmap</h2>
               <div id="activity-heatmap-container" class="activity-heatmap-container"></div>
             </div>
@@ -240,11 +244,6 @@
             <div id="portfolio-customization-status" class="customization-status"></div>
 
             <div class="customization-grid">
-              <div id="customization-sections-card" class="card customization-card">
-                <h2 class="card-title">Section Visibility</h2>
-                <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
-              </div>
-            </div>
 
             <div id="customization-editor-card" class="card customization-card customization-card-wide">
               <h2 class="card-title">Project Portfolio Details</h2>

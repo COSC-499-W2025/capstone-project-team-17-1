@@ -6,12 +6,6 @@ import {
   savePortfolioCustomization,
 } from "./portfolioCustomizationState.js";
 
-const SECTION_LABELS = [
-  { id: "top-projects", label: "Top 3 Project Showcase" },
-  { id: "portfolio-stats", label: "Portfolio Stats" },
-  { id: "skills-timeline", label: "Skills Timeline" },
-  { id: "activity-heatmap", label: "Activity Heatmap" },
-];
 
 const AUTOSAVE_DELAY_MS = 1200;
 
@@ -64,10 +58,7 @@ function clearAutosaveTimer() {
 }
 
 function normalizeCustomization(customization) {
-  const sectionVisibility = {};
-  SECTION_LABELS.forEach((section) => {
-    sectionVisibility[section.id] = customization?.sectionVisibility?.[section.id] !== false;
-  });
+  const sectionVisibility = customization?.sectionVisibility || {};
 
   const featuredProjectIds = Array.isArray(customization?.featuredProjectIds)
     ? customization.featuredProjectIds.map((id) => String(id))
@@ -157,17 +148,12 @@ function markDirtyState(nextCustomization) {
 }
 
 function renderPublicModeMessage() {
-  const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
   const jobContainer = document.getElementById("portfolio-job-target-container");
 
-  if (toggleContainer) {
-    toggleContainer.innerHTML =
-      `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
-  }
   if (featuredContainer) {
     featuredContainer.innerHTML =
       `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
@@ -194,23 +180,6 @@ function renderPublicModeMessage() {
   }
 }
 
-function renderSectionToggles(customization) {
-  const container = document.getElementById("portfolio-section-toggle-container");
-  if (!container) return;
-
-  container.innerHTML = SECTION_LABELS.map(
-    (section) => `
-      <label class="customization-toggle-item">
-        <input
-          type="checkbox"
-          data-section-visibility="${section.id}"
-          ${customization.sectionVisibility?.[section.id] !== false ? "checked" : ""}
-        />
-        <span>${escapeHtml(section.label)}</span>
-      </label>
-    `
-  ).join("");
-}
 
 function renderFeaturedProjects(projects, customization) {
   const container = document.getElementById("portfolio-featured-projects-container");
@@ -431,13 +400,7 @@ function renderFeaturedOrderList(projects, customization) {
 function collectCustomization(projects) {
   const current = loadPortfolioCustomization();
 
-  const sectionVisibility = {};
-  SECTION_LABELS.forEach((section) => {
-    const input = document.querySelector(
-      `[data-section-visibility="${CSS.escape(section.id)}"]`
-    );
-    sectionVisibility[section.id] = input ? !!input.checked : true;
-  });
+  const sectionVisibility = current?.sectionVisibility || {};
 
   const selectedIds = projects
     .filter((project) => {
@@ -781,7 +744,6 @@ async function renderPortfolioCustomizationPage() {
     previewProjectsCache = projects;
     lastSavedSnapshot = snapshotCustomization(customization);
 
-    renderSectionToggles(customization);
     renderFeaturedProjects(projects, customization);
     renderProjectEditors(projects, customization);
     renderFeaturedOrderList(projects, customization);
