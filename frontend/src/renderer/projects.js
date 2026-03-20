@@ -2,6 +2,7 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
+import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
 
 export async function fetchProjects() {
   const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
@@ -129,6 +130,7 @@ export async function loadProjects() {
           if (typeof loadRecentProjects === "function") await loadRecentProjects();
           if (typeof loadProjectHealth === "function") await loadProjectHealth();
           if (typeof loadErrorAnalysis === "function") await loadErrorAnalysis();
+          notifyPortfolioDataUpdated();
         } catch (err) {
           console.error("Pull failed:", err);
           pullBtn.innerText = "Pull";

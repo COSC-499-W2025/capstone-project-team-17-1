@@ -1,7 +1,9 @@
 export function initWindowControls() {
+  const closeButton = document.getElementById("close");
+  const minimizeButton = document.getElementById("minimize");
+  const maximizeButton = document.getElementById("maximize");
 
-document.getElementById("close").addEventListener("click", () => window.api.close())
-document.getElementById("minimize").addEventListener("click", () => window.api.minimize())
-document.getElementById("maximize").addEventListener("click", () => window.api.maximize())
-
+  closeButton?.addEventListener("click", () => window.api.close());
+  minimizeButton?.addEventListener("click", () => window.api.minimize());
+  maximizeButton?.addEventListener("click", () => window.api.maximize());
 }

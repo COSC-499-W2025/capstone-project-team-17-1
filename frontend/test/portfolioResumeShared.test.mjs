@@ -75,9 +75,39 @@ test("buildTopProjectsMarkup omits private details in public mode", () => {
     getProjectThumbnailUrl: () => "/thumb.png",
   });
 
-  assert.ok(!markup.includes("View Details"));
   assert.ok(!markup.includes("Process"));
   assert.ok(!markup.includes("Evolution"));
+  assert.match(markup, /Contribution/);
+  assert.match(markup, /Evidence of Success/);
+  assert.match(markup, /data-evidence-details=/);
+  assert.match(markup, /View Details/);
+});
+
+test("buildTopProjectsMarkup highlights contribution and impact evidence", () => {
+  const markup = buildTopProjectsMarkup({
+    projects: [{ project_id: "proj-a", total_skills: 4, total_files: 12, is_github: true }],
+    summaryData: {
+      projects: [
+        {
+          project_id: "proj-a",
+          title: "Project A",
+          summary: "Portfolio-ready project",
+          technologies: ["FastAPI", "SQLite"],
+          highlights: ["Implemented incremental uploads", "Improved project analysis visibility"],
+        },
+      ],
+    },
+    isPrivateMode: false,
+    getProjectThumbnailUrl: () => "/thumb.png",
+  });
+
+  assert.match(markup, /Contribution/);
+  assert.match(markup, /Implemented incremental uploads/);
+  assert.match(markup, /Evidence of Success/);
+  assert.match(markup, /View Details/);
+  assert.match(markup, /data-evidence-details-panel="proj-a"/);
+  assert.match(markup, /12 files analyzed/);
+  assert.match(markup, /4 skill signals detected/);
 });
 
 test("formatTimelineTimestamp returns a stable YYYY-MM-DD HH:mm:ss-like timestamp", () => {

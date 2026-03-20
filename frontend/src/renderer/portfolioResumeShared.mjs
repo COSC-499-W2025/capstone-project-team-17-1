@@ -15,6 +15,35 @@ function dedupeStrings(values) {
   return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
 }
 
+function buildContributionSummary(project, details) {
+  const highlights = dedupeStrings(details?.highlights);
+  const technologies = dedupeStrings(details?.technologies);
+
+  if (highlights.length) {
+    return highlights[0];
+  }
+
+  if (technologies.length) {
+    return `Applied ${technologies.slice(0, 3).join(", ")} across the implementation.`;
+  }
+
+  return `Contributed to ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"} in this project.`;
+}
+
+function buildImpactSummary(project, details) {
+  const highlights = dedupeStrings(details?.highlights);
+  const impactSignals = [
+    `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed`,
+    `${project.total_skills || 0} skill signal${project.total_skills === 1 ? "" : "s"} detected`,
+  ];
+
+  if (highlights.length > 1) {
+    return `${highlights[1]} Backed by ${impactSignals.join(" and ")}.`;
+  }
+
+  return `Portfolio impact is supported by ${impactSignals.join(" and ")}.`;
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -209,6 +238,8 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
       const highlights = dedupeStrings(details?.highlights).slice(0, 2);
       const processSteps = isPrivateMode ? buildProjectProcess(project, details, index) : [];
       const evolutionSummary = isPrivateMode ? buildProjectEvolution(project, details) : "";
+      const contributionSummary = buildContributionSummary(project, details);
+      const impactSummary = buildImpactSummary(project, details);
 
       return `
         <div class="top-project-card">
@@ -248,6 +279,30 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
                 `
                 : ""
             }
+
+            <div class="portfolio-detail-block">
+              <span class="portfolio-detail-label">Contribution</span>
+              <p>${escapeHtml(contributionSummary)}</p>
+            </div>
+
+            <div class="project-details">
+              <button
+                class="project-details-toggle"
+                type="button"
+                data-evidence-details="${escapeHtml(project.project_id)}"
+              >
+                View Details
+              </button>
+              <div
+                class="project-details-panel hidden"
+                data-evidence-details-panel="${escapeHtml(project.project_id)}"
+              >
+                <div class="project-story-block">
+                  <span class="project-story-label">Evidence of Success</span>
+                  <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
+                </div>
+              </div>
+            </div>
 
             ${
               isPrivateMode

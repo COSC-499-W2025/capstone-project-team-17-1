@@ -1,3 +1,85 @@
+async function fetchConsentState() {
+  const res = await fetch("http://127.0.0.1:8002/privacy-consent");
+  if (!res.ok) {
+    throw new Error(`Failed to fetch consent state: ${res.status}`);
+  }
+  return res.json();
+}
+
+function renderLocalConsentPrompt(container, { inline = false } = {}) {
+  // Local processing consent is required
+  container.innerHTML = `
+    <div class="${inline ? "error-healthy-state" : "error-empty-state"}">
+      <p>Local processing consent is required before running analysis. Grant consent in Settings to continue.</p>
+      <button id="open-settings-consent-btn" class="ai-consent-btn">
+        Open Settings
+      </button>
+    </div>
+  `;
+
+  document.getElementById("open-settings-consent-btn")?.addEventListener("click", () => {
+    document.querySelectorAll(".nav-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === "settings");
+    });
+    document.querySelectorAll(".page").forEach((page) => {
+      page.classList.toggle("active", page.id === "settings-page");
+    });
+  });
+}
+
+async function runErrorAnalysis(container) {
+  // Re-check consent
+  try {
+    const consent = await fetchConsentState();
+    if (!consent.local_consent) {
+      renderLocalConsentPrompt(container, { inline: true });
+      return;
+    }
+  } catch (err) {
+    console.error("Failed to verify local consent:", err);
+  }
+
+  container.innerHTML = `
+    <div class="error-loading">
+      Running AI analysis...
+    </div>
+  `;
+
+  const res = await fetch("http://127.0.0.1:8002/errors/analyze", {
+    method: "POST"
+  });
+  const payload = await res.json();
+
+  if (payload.status === "local_consent_required") {
+    renderLocalConsentPrompt(container, { inline: true });
+    return;
+  }
+
+  if (payload.status === "consent_required") {
+    container.innerHTML = `
+      <div class="error-empty-state">
+        <p>External AI consent is required to continue.</p>
+        <button id="enable-ai-btn" class="ai-consent-btn">
+          Enable AI Analysis
+        </button>
+      </div>
+    `;
+
+    document.getElementById("enable-ai-btn")?.addEventListener("click", async () => {
+      await fetch("http://127.0.0.1:8002/privacy-consent/external", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: true })
+      });
+
+      loadErrorAnalysis();
+    });
+    return;
+  }
+
+  setTimeout(loadErrorAnalysis, 500);
+}
+
 export async function loadErrorAnalysis() {
   const container = document.getElementById("error-analysis-container");
   if (!container) return;
@@ -40,6 +122,11 @@ export async function loadErrorAnalysis() {
       return;
     }
 
+    if (data.status === "local_consent_required") {
+      renderLocalConsentPrompt(container);
+      return;
+    }
+
     // -----------------------------
     // NO PROJECTS
     // -----------------------------
@@ -67,26 +154,12 @@ export async function loadErrorAnalysis() {
       `;
 
       document.getElementById("run-analysis-btn")?.addEventListener("click", async () => {
-        container.innerHTML = `
-          <div class="error-loading">
-            Running AI analysis...
-          </div>
-        `;
-
-        await fetch("http://127.0.0.1:8002/errors/analyze", {
-          method: "POST"
-        });
-
-        // Wait briefly to avoid race condition
-        setTimeout(loadErrorAnalysis, 500);
+        await runErrorAnalysis(container);
       });
 
       return;
     }
 
-    // -----------------------------
-// ANALYZED (CLEAN OR WITH ERRORS)
-// -----------------------------
 if (data.status === "ok") {
 
   // Header bar with re-run button
@@ -100,15 +173,7 @@ if (data.status === "ok") {
   container.appendChild(headerBar);
 
   document.getElementById("rerun-analysis-btn")?.addEventListener("click", async () => {
-    container.innerHTML = `
-      <div class="error-loading">
-        Running AI analysis...
-      </div>
-    `;
-
-    await fetch("http://127.0.0.1:8002/errors/analyze", { method: "POST" });
-
-    setTimeout(loadErrorAnalysis, 500);
+    await runErrorAnalysis(container);
   });
 
   // No issues found

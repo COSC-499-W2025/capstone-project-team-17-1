@@ -1,4 +1,5 @@
 import { fetchProjects } from "./projects.js";
+import { authFetch, getCurrentUser } from "./auth.js";
 import {
   getFeaturedProjects,
   getProjectOverride,
@@ -43,6 +44,84 @@ function dedupeStrings(values) {
   return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
 }
 
+function buildContributionSummary(project, details, override) {
+  // Prefer user-authored portfolio overrides, then fall back to detected project signals.
+  const overrideRole = String(override?.keyRole || "").trim();
+  const overrideEvidence = String(override?.evidence || "").trim();
+  const highlights = dedupeStrings(details?.highlights);
+  const technologies = dedupeStrings(details?.technologies);
+
+  if (overrideRole && overrideEvidence) {
+    return `${overrideRole} • ${overrideEvidence}`;
+  }
+
+  if (overrideRole) {
+    return overrideRole;
+  }
+
+  if (highlights.length) {
+    return highlights[0];
+  }
+
+  if (technologies.length) {
+    return `Applied ${technologies.slice(0, 3).join(", ")} across the implementation.`;
+  }
+
+  return `Contributed to ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"} in this project.`;
+}
+
+function buildImpactSummary(project, details, override) {
+  const overrideEvidence = String(override?.evidence || "").trim();
+  const highlights = dedupeStrings(details?.highlights);
+  const impactSignals = [
+    `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed`,
+    `${project.total_skills || 0} skill signal${project.total_skills === 1 ? "" : "s"} detected`,
+  ];
+
+  if (overrideEvidence) {
+    return `${overrideEvidence} Backed by ${impactSignals.join(" and ")}.`;
+  }
+
+  if (highlights.length > 1) {
+    return `${highlights[1]} Backed by ${impactSignals.join(" and ")}.`;
+  }
+
+  return `Portfolio impact is supported by ${impactSignals.join(" and ")}.`;
+}
+
+function buildProjectEvolutionSteps(project, details, override) {
+  const technologies = dedupeStrings(details?.technologies);
+  const highlights = dedupeStrings(details?.highlights);
+  const keyRole = String(override?.keyRole || "").trim();
+  const evidence = String(override?.evidence || "").trim();
+
+  const stageOne = {
+    label: "Starting Point",
+    text:
+      technologies.length > 0
+        ? `The project started with hands-on work in ${technologies.slice(0, 2).join(" and ")}.`
+        : `The project began as ${project.is_github ? "a GitHub import" : "a ZIP upload"} ready for analysis.`,
+  };
+
+  const stageTwo = {
+    label: "Key Change",
+    text:
+      keyRole ||
+      highlights[0] ||
+      `The implementation expanded across ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"}.`,
+  };
+
+  const stageThree = {
+    label: "Current Outcome",
+    text:
+      evidence ||
+      highlights[1] ||
+      `It now shows ${project.total_skills || 0} detected skill signal${project.total_skills === 1 ? "" : "s"} and portfolio-ready evidence of progress.`,
+  };
+
+  return [stageOne, stageTwo, stageThree];
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -54,7 +133,7 @@ function getTopProjects(projects) {
 }
 
 async function fetchSkillsTimeline() {
-  const res = await fetch(`${API_BASE}/skills/timeline`);
+  const res = await authFetch(`/skills/timeline`);
   if (!res.ok) {
     throw new Error(`Failed to fetch skills timeline: ${res.status}`);
   }
@@ -63,7 +142,7 @@ async function fetchSkillsTimeline() {
 }
 
 async function fetchPortfolioResumeSummary() {
-  const res = await fetch(`${API_BASE}/portfolio/latest/summary`);
+  const res = await authFetch(`/portfolio/latest/summary`);
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio summary: ${res.status}`);
   }
@@ -72,7 +151,7 @@ async function fetchPortfolioResumeSummary() {
 }
 
 async function fetchActivityHeatmap() {
-  const res = await fetch(`${API_BASE}/portfolio/activity-heatmap`);
+  const res = await authFetch(`/portfolio/activity-heatmap`);
   if (!res.ok) {
     throw new Error(`Failed to fetch activity heatmap: ${res.status}`);
   }
@@ -82,8 +161,13 @@ async function fetchActivityHeatmap() {
 
 function buildProfile(summaryData) {
   const fallback = getStaticProfile();
+  const currentUser = getCurrentUser();
+  // Prefer the user's editable profile name
+  const editableName =
+    String(currentUser?.full_name || "").trim() ||
+    String(currentUser?.username || "").trim();
   return {
-    name: summaryData?.owner || fallback.name,
+    name: editableName || summaryData?.owner || fallback.name,
     title: fallback.title,
     education: summaryData?.education || fallback.education,
     awards: dedupeStrings(summaryData?.awards).length
@@ -148,12 +232,145 @@ function formatTimelineTimestamp(timestamp) {
   });
 }
 
+function getTimelineSkillName(skill) {
+  return String(skill?.name || skill?.skill || "").trim();
+}
+
+function getTimelineSkillWeight(skill) {
+  const rawWeight = Number(skill?.weight ?? skill?.score ?? skill?.confidence ?? 0);
+  if (!Number.isFinite(rawWeight)) return 0;
+  return Math.max(0, rawWeight);
+}
+
+function getSkillExpertiseLevel(depthScore) {
+  if (depthScore >= 2.5) return "Advanced";
+  if (depthScore >= 1.0) return "Intermediate";
+  return "Foundation";
+}
+
+function buildSkillExpertiseGroups(timeline, summaryData) {
+  const depthBySkill = new Map();
+
+  asArray(timeline).forEach((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const seenInSnapshot = new Set();
+
+    skills.forEach((skill) => {
+      const name = getTimelineSkillName(skill);
+      if (!name) return;
+
+      const key = name.toLowerCase();
+      const current = depthBySkill.get(key) || { name, totalWeight: 0, appearances: 0 };
+      current.totalWeight += getTimelineSkillWeight(skill);
+      if (!seenInSnapshot.has(key)) {
+        current.appearances += 1;
+        seenInSnapshot.add(key);
+      }
+      depthBySkill.set(key, current);
+    });
+  });
+
+  if (!depthBySkill.size) {
+    dedupeStrings(summaryData?.skills).forEach((name) => {
+      depthBySkill.set(name.toLowerCase(), {
+        name,
+        totalWeight: 0.9,
+        appearances: 1,
+      });
+    });
+  }
+
+  const groups = {
+    Advanced: [],
+    Intermediate: [],
+    Foundation: [],
+  };
+
+  [...depthBySkill.values()]
+    .map((skill) => {
+      const depthScore = skill.totalWeight + skill.appearances * 0.35;
+      return {
+        ...skill,
+        depthScore,
+        level: getSkillExpertiseLevel(depthScore),
+      };
+    })
+    .sort((a, b) => {
+      if (b.depthScore !== a.depthScore) return b.depthScore - a.depthScore;
+      return a.name.localeCompare(b.name);
+    })
+    .forEach((skill) => {
+      groups[skill.level].push(skill.name);
+    });
+
+  return groups;
+}
+
 function getHeatmapBucket(intensity) {
   if (intensity >= 0.8) return 4;
   if (intensity >= 0.6) return 3;
   if (intensity >= 0.35) return 2;
   if (intensity > 0) return 1;
   return 0;
+}
+
+function buildContributionHeatmapModel(cells) {
+  const entries = [...cells]
+    .map((cell) => {
+      const rawDate = String(cell.period || "").trim();
+      const parsed = new Date(`${rawDate}T00:00:00`);
+      return {
+        dateKey: rawDate,
+        date: parsed,
+        count: Number(cell.count || 0),
+        intensity: Number(cell.intensity || 0),
+      };
+    })
+    .filter((cell) => !Number.isNaN(cell.date.getTime()))
+    .sort((a, b) => a.date - b.date);
+
+  if (!entries.length) {
+    return { monthLabels: [], weeks: [] };
+  }
+
+  const byDate = new Map(entries.map((entry) => [entry.dateKey, entry]));
+  const start = new Date(entries[0].date);
+  start.setDate(start.getDate() - start.getDay());
+  const end = new Date(entries[entries.length - 1].date);
+  end.setDate(end.getDate() + (6 - end.getDay()));
+
+  const weeks = [];
+  const monthLabels = [];
+  let cursor = new Date(start);
+  let weekIndex = 0;
+
+  while (cursor <= end) {
+    const weekDays = [];
+    const weekStart = new Date(cursor);
+    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+      const current = new Date(cursor);
+      current.setDate(cursor.getDate() + dayIndex);
+      const key = current.toISOString().slice(0, 10);
+      const entry = byDate.get(key);
+      weekDays.push({
+        key,
+        label: current.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        count: entry?.count || 0,
+        bucket: getHeatmapBucket(entry?.intensity || 0),
+        inRange: current >= entries[0].date && current <= entries[entries.length - 1].date,
+      });
+    }
+
+    const firstOfMonth = weekDays.find((day) => day.key.endsWith("-01"));
+    monthLabels.push(
+      firstOfMonth ? weekStart.toLocaleDateString("en-US", { month: "short" }) : ""
+    );
+    weeks.push({ index: weekIndex, days: weekDays });
+    cursor.setDate(cursor.getDate() + 7);
+    weekIndex += 1;
+  }
+
+  return { monthLabels, weeks };
 }
 
 function applyPortfolioSectionVisibility() {
@@ -307,6 +524,9 @@ function renderTopProjects(projects, summaryData) {
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const keyRole = override.keyRole?.trim();
       const evidence = override.evidence?.trim();
+      const contributionSummary = buildContributionSummary(project, details, override);
+      const impactSummary = buildImpactSummary(project, details, override);
+      const evolutionSteps = buildProjectEvolutionSteps(project, details, override);
 
       return `
         <div class="top-project-card">
@@ -316,22 +536,55 @@ function renderTopProjects(projects, summaryData) {
             <p>${escapeHtml(summary)}</p>
 
             ${
-              keyRole
+              contributionSummary
                 ? `
                   <div class="portfolio-detail-block">
-                    <span class="portfolio-detail-label">Key Role</span>
-                    <p>${escapeHtml(keyRole)}</p>
+                    <span class="portfolio-detail-label">Contribution</span>
+                    <p>${escapeHtml(contributionSummary)}</p>
                   </div>
                 `
                 : ""
             }
 
             ${
-              evidence
+              impactSummary
                 ? `
-                  <div class="portfolio-detail-block">
-                    <span class="portfolio-detail-label">Evidence of Success</span>
-                    <p>${escapeHtml(evidence)}</p>
+                  <!-- Keep success evidence behind an explicit toggle in both public and private portfolio views. -->
+                  <div class="project-details">
+                    <button
+                      class="project-details-toggle"
+                      type="button"
+                      data-evidence-details="${escapeHtml(project.project_id)}"
+                    >
+                      View Details
+                    </button>
+                    <div
+                      class="project-details-panel hidden"
+                      data-evidence-details-panel="${escapeHtml(project.project_id)}"
+                    >
+                      <div class="project-story-block">
+                        <span class="project-story-label">Evidence of Success</span>
+                        <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
+                      </div>
+                      <div class="project-evolution-block">
+                        <span class="portfolio-detail-label">Project Evolution</span>
+                        <div class="project-evolution-steps">
+                          ${evolutionSteps
+                            .map(
+                              (step, stepIndex) => `
+                                <div class="project-evolution-step">
+                                  <div class="project-evolution-marker">${stepIndex + 1}</div>
+                                  <div>
+                                    <div class="project-evolution-title">${escapeHtml(step.label)}</div>
+                                    <p class="project-evolution-text">${escapeHtml(step.text)}</p>
+                                  </div>
+                                </div>
+                              `
+                            )
+                            .join("")}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 `
                 : ""
@@ -350,7 +603,7 @@ function renderTopProjects(projects, summaryData) {
     .join("");
 }
 
-function renderPortfolioStats(projects, summaryData) {
+function renderPortfolioStats(projects, summaryData, timeline = []) {
   const container = document.getElementById("skills-expertise-container");
   if (!container) return;
 
@@ -373,6 +626,7 @@ function renderPortfolioStats(projects, summaryData) {
 
   const backendSkills = dedupeStrings(summaryData?.skills);
   const backendHighlights = dedupeStrings(summaryData?.highlights);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
 
   container.innerHTML = `
     <div class="skills-group-card">
@@ -388,20 +642,55 @@ function renderPortfolioStats(projects, summaryData) {
     </div>
 
     ${
-      backendSkills.length
+      expertiseGroups.Advanced.length || expertiseGroups.Intermediate.length || expertiseGroups.Foundation.length
         ? `
           <div class="skills-group-card">
-            <h3>Detected Skills</h3>
-            <div class="skills-pill-row">
-              ${backendSkills.map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`).join("")}
+            <h3>Skills by Expertise Level</h3>
+            <div class="skills-expertise-levels">
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Advanced</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Advanced.length
+                      ? expertiseGroups.Advanced
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No advanced skills yet</span>`
+                  }
+                </div>
+              </div>
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Intermediate</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Intermediate.length
+                      ? expertiseGroups.Intermediate
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No intermediate skills yet</span>`
+                  }
+                </div>
+              </div>
+              <div class="skills-expertise-group">
+                <span class="skills-expertise-label">Foundation</span>
+                <div class="skills-pill-row">
+                  ${
+                    expertiseGroups.Foundation.length
+                      ? expertiseGroups.Foundation
+                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                          .join("")
+                      : `<span class="timeline-empty">No foundation skills yet</span>`
+                  }
+                </div>
+              </div>
             </div>
           </div>
         `
         : `
           <div class="skills-group-card">
-            <h3>Next backend improvement</h3>
+            <h3>No skills detected yet</h3>
             <p class="resume-summary-text">
-              Replace aggregate counts with real extracted skills grouped by expertise once the API exposes skill levels.
+              Upload projects with detected skills to categorize portfolio skills by expertise level.
             </p>
           </div>
         `
@@ -473,6 +762,8 @@ function renderActivityHeatmap(heatmapData) {
   const container = document.getElementById("activity-heatmap-container");
   if (!container) return;
 
+  const card = container.closest(".portfolio-heatmap-card");
+
   const cells = Array.isArray(heatmapData?.cells) ? heatmapData.cells : [];
   const projectCount = Number(heatmapData?.projectCount || 0);
 
@@ -488,28 +779,86 @@ function renderActivityHeatmap(heatmapData) {
     return;
   }
 
+  // If activity data exists, keep the heatmap card visible even if an older local customization hid it.
+  if (card) {
+    card.style.display = "";
+  }
+
+  const totalActivity = cells.reduce((sum, cell) => sum + Number(cell.count || 0), 0);
+  const averageActivity = cells.length ? Math.round(totalActivity / cells.length) : 0;
+  const peakCell = [...cells].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
+  const heatmap = buildContributionHeatmapModel(cells);
+  const legendLevels = [
+    { label: "Low", bucket: 0 },
+    { label: "", bucket: 1 },
+    { label: "", bucket: 2 },
+    { label: "", bucket: 3 },
+    { label: "High", bucket: 4 },
+  ];
+
   container.innerHTML = `
     <div class="heatmap-summary">
-      <p class="resume-summary-text">
-        Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
-      </p>
+      <div>
+        <p class="resume-summary-text">
+          Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
+        </p>
+        <div class="heatmap-chip-row">
+          <span class="hero-stat-chip">${totalActivity} total activity events</span>
+          <span class="hero-stat-chip">${averageActivity} avg / active day</span>
+          <span class="hero-stat-chip">Peak: ${escapeHtml(peakCell?.period || "")}</span>
+        </div>
+      </div>
     </div>
 
-    <div class="heatmap-grid">
-      ${cells
-        .map((cell) => {
-          const period = formatPeriodLabel(cell.period);
-          const count = Number(cell.count || 0);
-          const bucket = getHeatmapBucket(Number(cell.intensity || 0));
+    <div class="heatmap-legend">
+      <span class="heatmap-legend-label">Less</span>
+      <div class="heatmap-legend-scale">
+        ${legendLevels
+          .map(
+            (item) => `
+              <span class="heatmap-legend-cell bucket-${item.bucket}" aria-hidden="true"></span>
+            `
+          )
+          .join("")}
+      </div>
+      <span class="heatmap-legend-label">More</span>
+    </div>
 
-          return `
-            <div class="heatmap-cell bucket-${bucket}" title="${escapeHtml(period)} · ${count} activity event${count === 1 ? "" : "s"}">
-              <span class="heatmap-period">${escapeHtml(period)}</span>
-              <span class="heatmap-count">${count}</span>
-            </div>
-          `;
-        })
-        .join("")}
+    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
+      <div class="heatmap-month-row">
+        <div class="heatmap-month-spacer"></div>
+        <div class="heatmap-month-labels">
+          ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="heatmap-body">
+        <div class="heatmap-weekday-labels">
+          <span>Sun</span>
+          <span>Tue</span>
+          <span>Thu</span>
+          <span>Sat</span>
+        </div>
+        <div class="heatmap-weeks">
+          ${heatmap.weeks
+            .map(
+              (week) => `
+                <div class="heatmap-week-column">
+                  ${week.days
+                    .map(
+                      (day) => `
+                        <div
+                          class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
+                          title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
+                        ></div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -671,7 +1020,7 @@ export async function loadPortfolioResume() {
 
   renderResumeSummary(profile, projects, summaryData);
   renderTopProjects(projects, summaryData);
-  renderPortfolioStats(projects, summaryData);
+  renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
   applyPortfolioSectionVisibility();
@@ -705,7 +1054,32 @@ export function initPortfolioResume() {
     }
   });
 
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-evidence-details]");
+    if (!toggle) return;
+
+    const projectId = toggle.dataset.evidenceDetails;
+    const panel = document.querySelector(
+      `[data-evidence-details-panel="${CSS.escape(projectId)}"]`
+    );
+    if (!panel) return;
+
+    const isHidden = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !isHidden);
+    toggle.textContent = isHidden ? "Hide Details" : "View Details";
+  });
+
   window.addEventListener("portfolio:customization-updated", () => {
     loadPortfolioResume();
+  });
+
+  window.addEventListener("portfolio:data-updated", () => {
+    loadPortfolioResume();
+  });
+
+  document.addEventListener("navigation:page-changed", (event) => {
+    if (event.detail?.pageId === "portfolio-resume-page") {
+      loadPortfolioResume();
+    }
   });
 }

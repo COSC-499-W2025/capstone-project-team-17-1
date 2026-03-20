@@ -10,11 +10,12 @@ import { loadErrorAnalysis } from "./errors.js";
 import { loadProjects } from "./projects.js";
 import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
-import { initNavigation } from "./navigation.js";
 import { initPortfolioResume } from "./portfolioResume.js";
 import { initResumeManager } from "./resumeManager.js";
 import { initDisplayPreferences } from "./displayPreferences.js";
 import { initDashboard } from "./dashboardInit.js";
+import { initConsentBanner } from "./consentBanner.js";
+import { initOnboarding } from "./onboarding.js";
 
 
 // -----------------------------
@@ -37,15 +38,14 @@ document.addEventListener("DOMContentLoaded", () => {
   initWindowControls();
 
   initAuthFlow();
-
-  // these are for portfolio/resume feature 
-  initNavigation();
   
   initPortfolioResume();
   initPortfolioCustomization();
   initResumeManager();
 
   initDisplayPreferences();
+  initConsentBanner();
+  initOnboarding();
 
   loadProjects();
 
@@ -60,12 +60,5 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(loadRecentActivity, 1000);
   });
   startMetrics();
-
-  // Data loads are deferred to after auth completes (see auth.js).
-  // initAuthFlow() calls syncCloudDbAndRefresh() for logged-in users,
-  // and dispatches "auth:ready" for public mode — both paths load data
-  // only after CURRENT_USER is correctly set on the backend.
-  loadRecentActivity();
-  setInterval(loadRecentActivity, 1000);
 
 });

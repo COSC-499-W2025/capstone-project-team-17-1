@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import sqlite3
 from typing import Optional
 
 import requests
@@ -40,6 +41,48 @@ def _save_sessions() -> None:
     try:
         with open(_SESSION_FILE, "w", encoding="utf-8") as f:
             json.dump(_SESSIONS, f, indent=2)
+    except Exception:
+        pass
+
+
+def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
+    guest_db = storage.BASE_DIR / "data" / "guest" / "capstone.db"
+    if not guest_db.exists():
+        return
+
+    previous_user = storage.CURRENT_USER
+    try:
+        storage.CURRENT_USER = username
+        user_db = storage.get_database_path()
+    finally:
+        storage.CURRENT_USER = previous_user
+
+    user_db.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        user_conn = sqlite3.connect(user_db)
+        row = user_conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_analysis'"
+        ).fetchone()
+        has_project_table = bool(row and row[0])
+        existing_projects = 0
+        if has_project_table:
+            existing_projects = user_conn.execute("SELECT COUNT(*) FROM project_analysis").fetchone()[0]
+        user_conn.close()
+    except Exception:
+        existing_projects = 0
+
+    if existing_projects:
+        return
+
+    try:
+        source = sqlite3.connect(guest_db)
+        target = sqlite3.connect(user_db)
+        source.backup(target)
+        target.execute("DELETE FROM privacy_consent")
+        target.commit()
+        target.close()
+        source.close()
     except Exception:
         pass
 
@@ -194,6 +237,14 @@ def _session_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="invalid session user")
     return user
 
+
+def get_authenticated_username(request: Request) -> Optional[str]:
+    token = _extract_bearer(request)
+    session = _SESSIONS.get(token) if token else None
+    user = session.get("user") if session else None
+    username = (user or {}).get("username")
+    return str(username).strip() if username else None
+
 @router.get("/bootstrap")
 def bootstrap(request: Request):
     token = _extract_bearer(request)
@@ -235,6 +286,7 @@ def register(payload: RegisterRequest):
         user["github_url"] = payload.github_url
 
     storage.CURRENT_USER = user["username"]
+    _migrate_guest_data_into_user_db_if_needed(user["username"])
     contributor_id = _resolve_contributor_id(user)
 
     token = _new_token()
@@ -262,6 +314,7 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
     storage.CURRENT_USER = user["username"]
+    _migrate_guest_data_into_user_db_if_needed(user["username"])
     contributor_id = _resolve_contributor_id(user)
 
     token = _new_token()
