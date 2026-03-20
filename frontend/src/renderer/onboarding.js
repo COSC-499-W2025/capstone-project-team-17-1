@@ -117,12 +117,12 @@ const TUTORIAL_STEPS = [
       },
       {
         label: "Evidence Editing",
-        selectors: ["#customization-editor-card"],
+        selectors: ["#portfolio-editor-card"],
         description: "Edit contribution and evidence text before sharing.",
       },
       {
         label: "Live Preview",
-        selectors: ["#customization-preview-card"],
+        selectors: ["#portfolio-preview-card"],
         description: "Live Preview shows how your portfolio changes will look before you share them publicly.",
       },
     ],

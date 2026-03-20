@@ -27,6 +27,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+
 function getStatusEl() {
   return document.getElementById("portfolio-customization-status");
 }
@@ -733,7 +734,6 @@ async function renderPortfolioCustomizationPage() {
     isSaving = false;
     lastSavedSnapshot = "";
     renderPublicModeMessage();
-    setStatus("Private Mode is required for portfolio customization.", "warning");
     return;
   }
 

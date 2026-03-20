@@ -5051,9 +5051,12 @@ transition: all 0.2s ease;
 }
 
 .customization-status {
-  min-height: 20px;
   font-size: 14px;
   opacity: 0.9;
+}
+
+.customization-status:empty {
+  display: none;
 }
 
 .customization-status[data-kind="success"] {
@@ -5074,7 +5077,8 @@ transition: all 0.2s ease;
   gap: 20px;
 }
 
-.customization-card-wide {
+.portfolio-editor-card,
+.portfolio-preview-card {
   grid-column: 1 / -1;
 }
 
