@@ -10,11 +10,11 @@ const PORTFOLIO_STATE_KEY = "loom_portfolio_state";
 const PRIVATE_SELECTION_KEY = "loom_private_portfolio_selection";
 const PORTFOLIO_OPTIONS = [
   { id: "project-details", label: "Project Portfolio Details" },
-  { id: "live-preview", label: "Live Preview" },
   { id: "top-projects", label: "Top 3 Project Showcase" },
   { id: "portfolio-stats", label: "Portfolio Stats" },
   { id: "skills-timeline", label: "Skills Timeline" },
   { id: "activity-heatmap", label: "Activity Heatmap" },
+  { id: "live-preview", label: "Live Preview" },
 ];
 
 function escapeHtml(value) {

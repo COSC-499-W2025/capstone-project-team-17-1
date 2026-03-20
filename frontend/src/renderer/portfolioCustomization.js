@@ -118,7 +118,6 @@ function updateSaveButtonState() {
     }
     projectSaveButtons.forEach((button) => {
       button.disabled = true;
-      button.textContent = "Saving...";
     });
     return;
   }
@@ -129,7 +128,6 @@ function updateSaveButtonState() {
   }
   projectSaveButtons.forEach((button) => {
     button.disabled = false;
-    button.textContent = isDirty ? "Save Project Details" : "Saved";
   });
 }
 
@@ -238,8 +236,15 @@ function renderProjectEditors(projects, customization) {
       const index = (customization.featuredProjectIds || []).indexOf(project.project_id);
       const rank = index >= 0 ? index + 1 : 1;
 
+      const initialSnapshot = JSON.stringify({
+        keyRole: override.keyRole || "",
+        evidence: override.evidence || "",
+        portfolioBlurb: override.portfolioBlurb || "",
+        isFeatured,
+      });
+
       return `
-        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
+        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}" data-saved-snapshot="${escapeHtml(initialSnapshot)}">
           <div class="customization-project-editor-header">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
@@ -249,14 +254,18 @@ function renderProjectEditors(projects, customization) {
             </div>
 
             <div class="customization-project-editor-meta">
-              <label class="customization-inline-check">
-                <input
-                  type="checkbox"
-                  data-project-selected="${escapeHtml(project.project_id)}"
-                  ${isFeatured ? "checked" : ""}
-                />
-                <span>Featured</span>
-              </label>
+              <input
+                type="checkbox"
+                data-project-selected="${escapeHtml(project.project_id)}"
+                ${isFeatured ? "checked" : ""}
+                style="display:none"
+              />
+              <button
+                type="button"
+                class="resume-star-btn${isFeatured ? " starred" : ""}"
+                data-project-star="${escapeHtml(project.project_id)}"
+                title="Mark as featured"
+              >★</button>
             </div>
           </div>
 
@@ -291,12 +300,13 @@ function renderProjectEditors(projects, customization) {
           </div>
 
           <div class="customization-project-editor-actions">
+            <span class="customization-project-save-status"></span>
             <button
               type="button"
               class="secondary-btn customization-project-save-btn"
               data-project-save="${escapeHtml(project.project_id)}"
             >
-              Save Project Details
+              Save
             </button>
           </div>
         </div>
@@ -306,24 +316,63 @@ function renderProjectEditors(projects, customization) {
 
     const checkboxes = container.querySelectorAll("[data-project-selected]");
     const saveButtons = container.querySelectorAll("[data-project-save]");
+    const starButtons = container.querySelectorAll("[data-project-star]");
+
+    starButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const projectId = btn.dataset.projectStar;
+        const cb = container.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
+        if (!cb) return;
+
+        const wouldCheck = !cb.checked;
+        const checked = container.querySelectorAll("[data-project-selected]:checked");
+
+        if (wouldCheck && checked.length >= 3) {
+          setStatus("You can only feature up to 3 projects.", "warning");
+          return;
+        }
+
+        cb.checked = wouldCheck;
+        btn.classList.toggle("starred", wouldCheck);
+        setStatus(checked.length <= 3 ? "" : "");
+        cb.dispatchEvent(new Event("change"));
+      });
+    });
 
     checkboxes.forEach((cb) => {
       cb.addEventListener("change", () => {
         const checked = container.querySelectorAll("[data-project-selected]:checked");
-
-        if (checked.length <= 3) {
-          setStatus("");
-        }
         if (checked.length > 3) {
           cb.checked = false;
           setStatus("You can only feature up to 3 projects.", "warning");
+        } else {
+          setStatus("");
         }
       });
     });
 
     saveButtons.forEach((button) => {
+      const projectId = button.dataset.projectSave;
       button.addEventListener("click", async () => {
-        await performSave({ silent: false });
+        const statusSpan = button.parentElement?.querySelector(".customization-project-save-status");
+        const showLocal = (msg, kind) => {
+          if (!statusSpan) return;
+          statusSpan.textContent = msg;
+          statusSpan.dataset.kind = kind;
+        };
+
+        showLocal("Saving...", "info");
+        try {
+          const result = await saveProjectById(projectId);
+          if (result === "no-changes") {
+            showLocal("No changes to save", "info");
+          } else {
+            showLocal("Saved", "success");
+          }
+          setTimeout(() => showLocal("", ""), 2500);
+        } catch (_) {
+          showLocal("Failed to save", "error");
+        }
       });
     });
 }
@@ -469,9 +518,7 @@ async function persistProjectOverrides(projects, customization) {
 
     return authFetch(`/projects/${encodeURIComponent(project.project_id)}/edit`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         key_role: override.keyRole || null,
         evidence: override.evidence || null,
@@ -483,6 +530,45 @@ async function persistProjectOverrides(projects, customization) {
   });
 
   await Promise.allSettled(updates);
+}
+
+async function saveProjectById(projectId) {
+  if (!isPrivateMode()) return "no-changes";
+
+  const editor = document.querySelector(`[data-project-editor-id="${CSS.escape(projectId)}"]`);
+  if (!editor) return "no-changes";
+
+  const keyRole = editor.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
+  const evidence = editor.querySelector('[data-field="evidence"]')?.value?.trim() || "";
+  const portfolioBlurb = editor.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
+  const isFeatured = !!editor.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`)?.checked;
+
+  const snapshot = JSON.stringify({ keyRole, evidence, portfolioBlurb, isFeatured });
+  if (editor.dataset.savedSnapshot === snapshot) return "no-changes";
+
+  const current = loadPortfolioCustomization();
+  const featuredIds = current?.featuredProjectIds || [];
+  const rank = featuredIds.indexOf(projectId);
+
+  await authFetch(`/projects/${encodeURIComponent(projectId)}/edit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      key_role: keyRole || null,
+      evidence: evidence || null,
+      portfolio_blurb: portfolioBlurb || null,
+      selected: isFeatured,
+      rank: rank >= 0 ? rank + 1 : null,
+    }),
+  });
+
+  // Update local customization store
+  const overrides = { ...(current?.projectOverrides || {}), [projectId]: { keyRole, evidence, portfolioBlurb } };
+  savePortfolioCustomization({ ...current, projectOverrides: overrides });
+
+  editor.dataset.savedSnapshot = snapshot;
+
+  await loadPortfolioResume();
 }
 
 function renderLivePreview(projects, draftCustomization) {
@@ -692,7 +778,7 @@ async function performSave({ silent = false } = {}) {
     } else {
       setStatus("Saved", "success");
     }
-    return;
+    return "no-changes";
   }
 
   try {

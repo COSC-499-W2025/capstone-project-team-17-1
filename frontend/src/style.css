@@ -4147,10 +4147,12 @@ transition: all 0.2s ease;
   transition: color 0.15s;
   line-height: 1;
 }
-.resume-list-card:hover .resume-star-btn {
+.resume-list-card:hover .resume-star-btn,
+.customization-project-editor:hover .resume-star-btn {
   color: rgba(255,255,255,0.35);
 }
-.resume-list-card:hover .resume-star-btn.starred {
+.resume-list-card:hover .resume-star-btn.starred,
+.customization-project-editor:hover .resume-star-btn.starred {
   color: #fbbf24;
 }
 .resume-star-btn.starred {
@@ -5084,16 +5086,20 @@ transition: all 0.2s ease;
 
 
 .customization-toggle-list,
-.customization-project-picker,
-.customization-project-editor-list {
+.customization-project-picker {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
+.customization-project-editor-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
 .customization-toggle-item,
-.customization-project-pick,
-.customization-inline-check {
+.customization-project-pick {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -5120,6 +5126,21 @@ transition: all 0.2s ease;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  min-width: 0;
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              border-color 0.25s ease;
+}
+
+.customization-project-editor:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.customization-project-editor h3 {
+  overflow-wrap: break-word;
 }
 
 .customization-project-editor-header {
@@ -5174,9 +5195,20 @@ transition: all 0.2s ease;
 
 .customization-project-editor-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 16px;
 }
+
+.customization-project-save-status {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.customization-project-save-status[data-kind="success"] { color: #7ef0a8; }
+.customization-project-save-status[data-kind="info"]    { color: #9ecbff; }
+.customization-project-save-status[data-kind="error"]   { color: #ff8a8a; }
 
 .customization-job-match-score {
   color: #38bdf8;
@@ -5203,7 +5235,8 @@ transition: all 0.2s ease;
 
 @media (max-width: 960px) {
   .customization-grid,
-  .customization-form-grid {
+  .customization-form-grid,
+  .customization-project-editor-list {
     grid-template-columns: 1fr;
   }
 
