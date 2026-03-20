@@ -1078,7 +1078,8 @@ export function initPortfolioResume() {
   });
 
   document.addEventListener("navigation:page-changed", (event) => {
-    if (event.detail?.pageId === "portfolio-resume-page") {
+    const { pageId } = event.detail ?? {};
+    if (pageId === "resume-page" || pageId === "portfolio-page") {
       loadPortfolioResume();
     }
   });

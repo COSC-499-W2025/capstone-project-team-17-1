@@ -67,21 +67,29 @@ const TUTORIAL_STEPS = [
     ],
   },
   {
-    tabKey: "portfolio-resume",
-    pageId: "portfolio-resume-page",
-    title: "Portfolio & Resume",
-    description: "Portfolio & Resume shows your one-page resume, top projects, skills timeline, and activity heatmap.",
+    tabKey: "resume",
+    pageId: "resume-page",
+    title: "Resume",
+    description: "Resume lets you manage your saved resumes and view the one-page resume snapshot built from your portfolio data.",
     sections: [
       {
-        label: "Resume Generation",
+        label: "My Resumes",
         selectors: [".resume-manager-card"],
-        description: "Resume Generation lets you browse saved resumes and view the one-page resume snapshot built from your portfolio data.",
+        description: "Browse and manage your saved resumes.",
       },
       {
         label: "Resume Snapshot",
         selector: ".portfolio-hero-card",
         description: "Resume Snapshot condenses your education, awards, skills, and project highlights into a one-page resume view.",
       },
+    ],
+  },
+  {
+    tabKey: "portfolio",
+    pageId: "portfolio-page",
+    title: "Portfolio",
+    description: "Portfolio showcases your top projects, skills timeline, and activity heatmap. Use the customization section to control what appears publicly.",
+    sections: [
       {
         label: "Top Projects",
         selector: ".portfolio-projects-card",
@@ -102,38 +110,38 @@ const TUTORIAL_STEPS = [
         selector: ".portfolio-heatmap-card",
         description: "Activity Heatmap shows when project work happened so you can see productivity over time.",
       },
-    ],
-  },
-  {
-    tabKey: "customization",
-    pageId: "customization-page",
-    title: "Customization",
-    description: "Customization is only available in private mode and lets you tailor featured projects, evidence, and visible sections before sharing.",
-    sections: [
-      {
-        label: "Job Description",
-        selectors: ["#customization-job-card"],
-        description: "Job Description lets you enter a target role so the app can tailor portfolio wording and matching around that position.",
-      },
       {
         label: "Sections",
         selectors: ["#customization-sections-card"],
         description: "Choose which sections appear publicly and control the structure of the portfolio view.",
       },
       {
-        label: "Featured Projects",
-        selectors: ["#customization-featured-card"],
-        description: "Reorder featured projects and control which work is emphasized first.",
-      },
-      {
         label: "Evidence Editing",
         selectors: ["#customization-editor-card"],
-        description: "Edit contribution and evidence text before sharing. This tab is private-mode only.",
+        description: "Edit contribution and evidence text before sharing.",
       },
       {
         label: "Live Preview",
         selectors: ["#customization-preview-card"],
         description: "Live Preview shows how your portfolio changes will look before you share them publicly.",
+      },
+    ],
+  },
+  {
+    tabKey: "job-match",
+    pageId: "job-match-page",
+    title: "Job Match",
+    description: "Job Match is only available in private mode. Paste a job description to auto-select your best matching projects.",
+    sections: [
+      {
+        label: "Target Job",
+        selectors: ["#portfolio-job-target-container"],
+        description: "Enter a target role and paste a job description so the app can rank and select your best matching projects.",
+      },
+      {
+        label: "Featured Projects",
+        selectors: ["#customization-featured-card"],
+        description: "After analyzing a job, the top matching projects are auto-selected here. You can also manually reorder them.",
       },
     ],
   },

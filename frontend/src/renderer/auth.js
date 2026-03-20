@@ -38,15 +38,15 @@ function setModeUI(isPrivate, user) {
   const loginBtn = document.getElementById("login-btn");
   const logoutBtn = document.getElementById("logout-btn");
   const profilePill = document.getElementById("profile-pill");
-  const customizationTab = document.getElementById("customization-tab");
-  if (!modeBadge || !loginBtn || !logoutBtn || !profilePill || !customizationTab) return;
+  const jobMatchTab = document.getElementById("job-match-tab");
+  if (!modeBadge || !loginBtn || !logoutBtn || !profilePill || !jobMatchTab) return;
 
   modeBadge.textContent = isPrivate ? "Private Mode" : "Public Mode";
   modeBadge.classList.toggle("private", isPrivate);
   modeBadge.classList.toggle("public", !isPrivate);
   loginBtn.classList.toggle("hidden", isPrivate);
   logoutBtn.classList.toggle("hidden", !isPrivate);
-  customizationTab.classList.toggle("hidden", !isPrivate);
+  jobMatchTab.classList.toggle("hidden", !isPrivate);
 
   if (isPrivate && user) {
     profilePill.textContent = user.username || `User ${user.id || ""}`;

@@ -24,9 +24,6 @@ let isDirty = false;
 let isSaving = false;
 let lastSavedSnapshot = "";
 
-function isJobTargetField(target) {
-  return target instanceof HTMLElement && /^job-target-/.test(target.id || "");
-}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -785,7 +782,6 @@ async function renderPortfolioCustomizationPage() {
     previewProjectsCache = projects;
     lastSavedSnapshot = snapshotCustomization(customization);
 
-    renderJobTargetSection(customization);
     renderSectionToggles(customization);
     renderFeaturedProjects(projects, customization);
     renderProjectEditors(projects, customization);
@@ -793,33 +789,6 @@ async function renderPortfolioCustomizationPage() {
     renderLivePreview(projects, customization);
 
     updateSaveButtonState();
-
-    const analyzeBtn = document.getElementById("analyze-job-btn");
-    if (analyzeBtn) {
-      analyzeBtn.onclick = async () => {
-        try {
-          setStatus("Analyzing job description...", "info");
-          analyzeBtn.disabled = true;
-
-          const nextCustomization = loadPortfolioCustomization();
-          await autoSelectFeaturedProjects(projects, nextCustomization);
-
-          renderFeaturedProjects(projects, nextCustomization);
-          renderProjectEditors(projects, nextCustomization);
-          renderLivePreview(projects, nextCustomization);
-
-          lastSavedSnapshot = snapshotCustomization(nextCustomization);
-          isDirty = false;
-          await loadPortfolioResume();
-          updateSaveButtonState();
-        } catch (err) {
-          console.error(err);
-          setStatus("Job matching failed.", "error");
-        } finally {
-          analyzeBtn.disabled = false;
-        }
-      };
-    }
 
     const saveBtn = getSaveButton();
     if (saveBtn) {
@@ -834,7 +803,7 @@ async function renderPortfolioCustomizationPage() {
 }
 
 export function initPortfolioCustomization() {
-  const tab = document.getElementById("customization-tab");
+  const tab = document.getElementById("portfolio-tab");
   const root = document.getElementById("portfolio-customization-root");
   const orderContainer = getFeaturedOrderContainer();
 
@@ -851,20 +820,13 @@ export function initPortfolioCustomization() {
       renderPortfolioCustomizationPage();
     });
 
-    root?.addEventListener("input", (event) => {
-      if (isJobTargetField(event.target)) {
-        return;
-      }
+    root?.addEventListener("input", () => {
       updateLivePreview();
       scheduleAutosave();
     });
 
     root?.addEventListener("change", (event) => {
       const target = event.target;
-
-      if (isJobTargetField(target)) {
-        return;
-      }
 
       if (target instanceof HTMLInputElement) {
         if (target.matches("[data-featured-project-id]")) {
@@ -898,119 +860,4 @@ export function initPortfolioCustomization() {
   }
 
   renderPortfolioCustomizationPage();
-}
-
-// let users paste job descriptions in customization
-function renderJobTargetSection(customization) {
-  const container = document.getElementById("portfolio-job-target-container");
-  if (!container)
-    return;
-
-  const job = customization?.jobTarget ?? {
-    title: "",
-    company: "",
-    description: ""
-  };
-
-  container.innerHTML = `
-    <div class="customization-form-grid">
-
-        <label>
-          <span>Job Title</span>
-          <input
-            id="job-target-title"
-            type="text"
-            value="${escapeHtml(job.title || "")}"
-            placeholder="Example: Frontend Engineer"
-          />
-        </label>
-
-        <label>
-          <span>Company</span>
-          <input
-            id="job-target-company"
-            type="text"
-            value="${escapeHtml(job.company || "")}"
-            placeholder="Example: Shopify"
-          />
-        </label>
-
-        <label class="customization-full-row">
-          <span>Job Description</span>
-          <textarea
-            id="job-target-description"
-            rows="8"
-            placeholder="Paste the job description here to tailor your portfolio."
-          >${escapeHtml(job.description || "")}</textarea>
-        </label>
-
-        <button id="analyze-job-btn" class="primary-btn">
-          Analyze Job Match
-        </button>
-
-      </div>
-    `;
-}
-
-// connect backend to ranking endpoint (analyze + rank)
-async function analyzeJobMatch() {
-
-  const jd = document.getElementById("job-target-description")?.value;
-
-  if (!jd || !jd.trim()) {
-    setStatus("Please paste a job description first.", "warning");
-    return [];
-  }
-
-  const res = await authFetch("/job-matching/rank", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      job_description: jd,
-    }),
-  });
-
-  // safety incase returned is not json
-  if (!res.ok) {
-    throw new Error(`Job matching API failed: ${res.status}`);
-  }
-
-  const data = await res.json();
-
-  console.log("Job match API response:", "data");
-
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.results)) return data.results;
-  if (Array.isArray(data.matches)) return data.matches;
-
-  return [];
-
-}
-
-// pick best projects based on job match ranking
-async function autoSelectFeaturedProjects(projects, customization) {
-
-  const matches = await analyzeJobMatch();
-
-  window.__jobMatchResults = matches;
-
-  if (!matches.length) return;
-
-  // select top 3 highest scoring projects for output
-  const topProjects = matches
-    .slice(0, 3)
-    .map((m) => m.project_id);
-
-  customization.featuredProjectIds = topProjects;
-
-  // save updated state
-  savePortfolioCustomization(customization);
-
-  // notify related ui of change
-  window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
-
-  setStatus("Featured projects selected based on job match.", "success");
 }

@@ -20,8 +20,9 @@
     <div class="nav">
       <span class="nav-tab active" data-tab="dashboard" data-page="dashboard-page">Dashboard</span>
       <span class="nav-tab" data-tab="projects" data-page="projects-page">Projects</span>
-      <span class="nav-tab" data-tab="portfolio-resume" data-page="portfolio-resume-page">Portfolio & Resume</span>
-      <span id="customization-tab" class="nav-tab hidden" data-tab="customization" data-page="customization-page">Customization</span>
+      <span class="nav-tab" data-tab="resume" data-page="resume-page">Resume</span>
+      <span class="nav-tab" data-tab="portfolio" data-page="portfolio-page">Portfolio</span>
+      <span id="job-match-tab" class="nav-tab hidden" data-tab="job-match" data-page="job-match-page">Job Match</span>
       <span class="nav-tab" data-tab="settings" data-page="settings-page">Settings</span>
     </div>
 
@@ -155,21 +156,20 @@
       </div>
 
 
-      <!-- PORTFOLIO & RESUME PAGE -->
- 
-      <div id="portfolio-resume-page" class="page">
+      <!-- RESUME PAGE -->
+
+      <div id="resume-page" class="page">
         <div class="portfolio-page-wrapper">
 
           <div class="portfolio-header">
             <div>
-              <h1>Portfolio & Resume</h1>
+              <h1>Resume</h1>
               <p class="portfolio-subtitle">
-                Showcase your strongest work, core skills, and one-page resume highlights.
+                Manage your resumes and view your resume snapshot.
               </p>
             </div>
             <div class="portfolio-actions">
               <button id="preview-resume-btn" class="secondary-btn">Preview Resume</button>
-              <button id="refresh-portfolio-btn" class="primary-btn">Refresh Summary</button>
             </div>
           </div>
 
@@ -186,12 +186,33 @@
             </div>
           </div>
 
-          <div class="portfolio-grid">
-            <div class="card portfolio-hero-card">
-              <h2 class="card-title">Resume Snapshot</h2>
-              <div id="resume-summary-container" class="resume-summary-container"></div>
-            </div>
+          <div class="card portfolio-hero-card">
+            <h2 class="card-title">Resume Snapshot</h2>
+            <div id="resume-summary-container" class="resume-summary-container"></div>
+          </div>
 
+        </div>
+      </div>
+
+
+      <!-- PORTFOLIO PAGE -->
+
+      <div id="portfolio-page" class="page">
+        <div class="portfolio-page-wrapper">
+
+          <div class="portfolio-header">
+            <div>
+              <h1>Portfolio</h1>
+              <p class="portfolio-subtitle">
+                Showcase your strongest work, core skills, and contribution stats.
+              </p>
+            </div>
+            <div class="portfolio-actions">
+              <button id="refresh-portfolio-btn" class="primary-btn">Refresh</button>
+            </div>
+          </div>
+
+          <div class="portfolio-grid">
             <div class="card portfolio-projects-card">
               <h2 class="card-title">Top 3 Project Showcase</h2>
               <div id="top-projects-container" class="top-projects-container"></div>
@@ -212,43 +233,24 @@
               <div id="activity-heatmap-container" class="activity-heatmap-container"></div>
             </div>
           </div>
-        </div>
-      </div>
 
-    
-      <!-- CUSTOMIZATION PAGE -->
- 
-      <div id="customization-page" class="page">
-          <div id="portfolio-customization-root" class="tab-panel customization-page-shell">
+          <!-- Portfolio Customization (inline) -->
+          <div id="portfolio-customization-root" class="customization-page-shell">
             <div class="customization-header">
               <div>
-                <h1>Portfolio Customization</h1>
+                <h2>Customization</h2>
                 <p class="resume-summary-text">
-                  Choose featured projects, edit portfolio-facing descriptions, and control which sections appear in your portfolio.
+                  Choose featured projects, edit portfolio-facing descriptions, and control which sections appear.
                 </p>
               </div>
             </div>
-        
-            <div id="portfolio-customization-status" class="customization-status"></div>
-        
-            <div class="customization-grid">
-              <div id="customization-job-card" class="card customization-card customization-card-wide">
-                <h2 class="card-title">Target Job</h2>
-                <div id="portfolio-job-target-container"></div>
-              </div>
 
+            <div id="portfolio-customization-status" class="customization-status"></div>
+
+            <div class="customization-grid">
               <div id="customization-sections-card" class="card customization-card">
                 <h2 class="card-title">Section Visibility</h2>
                 <div id="portfolio-section-toggle-container" class="customization-toggle-list"></div>
-              </div>
-        
-              <div id="customization-featured-card" class="card customization-card">
-                <h2 class="card-title">Featured Projects</h2>
-                <p class="resume-summary-text">
-                  Drag selected projects to control the Top 3 showcase order.
-                </p>
-                <div id="portfolio-featured-projects-container" class="customization-project-picker-list"></div>
-                <div id="portfolio-featured-order-container" class="customization-featured-order-list"></div>
               </div>
             </div>
 
@@ -262,6 +264,41 @@
               <div id="portfolio-live-preview-container" class="portfolio-live-preview-container"></div>
             </div>
           </div>
+
+        </div>
+      </div>
+
+
+      <!-- JOB MATCH PAGE -->
+
+      <div id="job-match-page" class="page">
+        <div class="portfolio-page-wrapper">
+
+          <div class="portfolio-header">
+            <div>
+              <h1>Job Match</h1>
+              <p class="portfolio-subtitle">
+                Paste a job description to analyze and auto-select your best matching projects.
+              </p>
+            </div>
+          </div>
+
+          <div id="job-match-status" class="customization-status"></div>
+
+          <div class="card customization-card customization-card-wide">
+            <h2 class="card-title">Target Job</h2>
+            <div id="portfolio-job-target-container"></div>
+          </div>
+
+          <div id="customization-featured-card" class="card customization-card customization-card-wide">
+            <h2 class="card-title">Featured Projects</h2>
+            <p class="resume-summary-text">
+              Drag selected projects to control the Top 3 showcase order.
+            </p>
+            <div id="portfolio-featured-projects-container" class="customization-project-picker-list"></div>
+            <div id="portfolio-featured-order-container" class="customization-featured-order-list"></div>
+          </div>
+
         </div>
       </div>
 

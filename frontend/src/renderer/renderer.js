@@ -1,4 +1,5 @@
 import { initPortfolioCustomization } from "./portfolioCustomization.js";
+import { initJobMatch } from "./jobMatch.js";
 import { initThemeToggle } from "./theme.js";
 import { initWindowControls } from "./windowControls.js";
 import { startMetrics } from "./metrics.js";
@@ -42,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initPortfolioResume();
   initPortfolioCustomization();
   initResumeManager();
+  initJobMatch();
 
   initDisplayPreferences();
   initConsentBanner();
