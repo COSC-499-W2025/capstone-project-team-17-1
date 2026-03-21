@@ -186,49 +186,71 @@ export async function openLoginFlow() {
 }
 
 function renderSettingsProfile() {
-  const el = document.getElementById("settings-profile");
-  if (!el) return;
-  if (!currentUser) {
-    el.innerHTML = "<h3>User Profile</h3><p>Login to view and edit your profile.</p>";
-    return;
+  // ── Account tab: profile form ──────────────────────────────────
+  const profileEl = document.getElementById("settings-profile");
+  if (profileEl) {
+    if (!currentUser) {
+      profileEl.innerHTML = `<p class="settings-login-prompt">Login to view and edit your profile.</p>`;
+    } else {
+      profileEl.innerHTML = `
+        <div class="settings-card-header">
+          <h3>User Profile</h3>
+          <p class="settings-card-desc">Update your personal information and public links.</p>
+        </div>
+        <div class="settings-form-grid">
+          <label class="settings-form-label">Username</label>
+          <div class="settings-form-value">${currentUser.username || "-"}</div>
+          <label class="settings-form-label" for="pf-email">Email</label>
+          <input id="pf-email" class="settings-input" value="${currentUser.email || ""}" />
+          <label class="settings-form-label" for="pf-full-name">Full Name</label>
+          <input id="pf-full-name" class="settings-input" value="${currentUser.full_name || ""}" />
+          <label class="settings-form-label" for="pf-phone">Phone</label>
+          <input id="pf-phone" class="settings-input" value="${currentUser.phone_number || ""}" />
+          <label class="settings-form-label" for="pf-city">City</label>
+          <input id="pf-city" class="settings-input" value="${currentUser.city || ""}" />
+          <label class="settings-form-label" for="pf-state">State / Region</label>
+          <input id="pf-state" class="settings-input" value="${currentUser.state_region || ""}" />
+          <label class="settings-form-label" for="pf-github">GitHub URL</label>
+          <input id="pf-github" class="settings-input" value="${currentUser.github_url || ""}" />
+          <label class="settings-form-label" for="pf-portfolio">Portfolio URL</label>
+          <input id="pf-portfolio" class="settings-input" value="${currentUser.portfolio_url || ""}" />
+        </div>
+        <div class="settings-form-actions">
+          <button id="profile-save-btn" class="settings-save-btn">Save Profile</button>
+          <span id="profile-msg" class="settings-feedback-msg"></span>
+        </div>
+      `;
+      document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
+    }
   }
 
-  el.innerHTML = `
-    <h3>User Profile</h3>
-    <div class="profile-grid">
-      <div class="label">Username</div><div>${currentUser.username || "-"}</div>
-      <div class="label">Email</div><input id="pf-email" value="${currentUser.email || ""}" />
-      <div class="label">Full Name</div><input id="pf-full-name" value="${currentUser.full_name || ""}" />
-      <div class="label">Phone</div><input id="pf-phone" value="${currentUser.phone_number || ""}" />
-      <div class="label">City</div><input id="pf-city" value="${currentUser.city || ""}" />
-      <div class="label">State/Region</div><input id="pf-state" value="${currentUser.state_region || ""}" />
-      <div class="label">GitHub</div><input id="pf-github" value="${currentUser.github_url || ""}" />
-      <div class="label">Portfolio</div><input id="pf-portfolio" value="${currentUser.portfolio_url || ""}" />
-    </div>
-    <div class="profile-actions">
-      <button id="profile-save-btn" class="auth-btn">Save Profile</button>
-      <span id="profile-msg"></span>
-    </div>
-    <div class="profile-actions">
-      <button id="show-tutorial-btn" class="auth-btn" type="button">Show Tutorial Again</button>
-    </div>
-    <hr />
-    <h4>Change Password</h4>
-    <div class="profile-grid">
-      <div class="label">Current Password</div><input id="pw-current" type="password" />
-      <div class="label">New Password</div><input id="pw-new" type="password" />
-    </div>
-    <div class="profile-actions">
-      <button id="password-save-btn" class="auth-btn">Update Password</button>
-      <span id="password-msg"></span>
-    </div>
-  `;
+  // ── Security tab: change password ────────────────────────────
+  const securityEl = document.getElementById("settings-security");
+  if (securityEl) {
+    if (!currentUser) {
+      securityEl.innerHTML = `<p class="settings-login-prompt">Login to manage security settings.</p>`;
+    } else {
+      securityEl.innerHTML = `
+        <div class="settings-card-header">
+          <h3>Change Password</h3>
+          <p class="settings-card-desc">Update your account password. New password must be at least 6 characters.</p>
+        </div>
+        <div class="settings-form-grid">
+          <label class="settings-form-label" for="pw-current">Current Password</label>
+          <input id="pw-current" class="settings-input" type="password" placeholder="Current password" />
+          <label class="settings-form-label" for="pw-new">New Password</label>
+          <input id="pw-new" class="settings-input" type="password" placeholder="New password (min 6 chars)" />
+        </div>
+        <div class="settings-form-actions">
+          <button id="password-save-btn" class="settings-save-btn">Update Password</button>
+          <span id="password-msg" class="settings-feedback-msg"></span>
+        </div>
+      `;
+      document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
+    }
+  }
 
-  document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
-  document.getElementById("show-tutorial-btn")?.addEventListener("click", () => {
-    reopenOnboarding();
-  });
-  document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
+  // ── Privacy tab: consent ──────────────────────────────────────
   renderConsentSettings();
 }
 
@@ -359,6 +381,75 @@ export async function initAuthFlow() {
   setAuthFormMode("login");
   restoreSavedPageOptimistically();
 
+  // ── Settings tab switching ────────────────────────────────────
+  document.querySelectorAll(".settings-nav-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.settingsTab;
+      document.querySelectorAll(".settings-nav-item").forEach((b) =>
+        b.classList.remove("active")
+      );
+      btn.classList.add("active");
+      document.querySelectorAll(".settings-tab-panel").forEach((p) =>
+        p.classList.remove("active")
+      );
+      document.getElementById(`settings-tab-${tab}`)?.classList.add("active");
+    });
+  });
+
+  // Tutorial button (static HTML — bound once here)
+  document.getElementById("show-tutorial-btn")?.addEventListener("click", () => {
+    reopenOnboarding();
+  });
+
+  // ── Logout confirmation modal ─────────────────────────────────
+  const logoutModal = document.getElementById("logout-confirm-modal");
+  const logoutCancelBtn = document.getElementById("logout-cancel-btn");
+  const logoutConfirmBtn = document.getElementById("logout-confirm-btn");
+
+  function showLogoutModal() {
+    logoutModal?.classList.remove("hidden");
+  }
+  function hideLogoutModal() {
+    logoutModal?.classList.add("hidden");
+  }
+
+  async function performLogout() {
+    logoutBtn.disabled = true;
+    setAuthToken(null);
+    setModeUI(false, null);
+    goToPage("dashboard", "dashboard-page");
+
+    try {
+      await authFetch("/auth/logout", { method: "POST" });
+    } catch (_) {}
+
+    await Promise.all([
+      loadProjects(),
+      loadRecentProjects(),
+      loadProjectHealth(),
+      loadErrorAnalysis(),
+      loadMostUsedSkills(),
+    ]);
+    notifyPortfolioDataUpdated();
+    await refreshConsentUI();
+
+    logoutBtn.disabled = false;
+  }
+
+  logoutCancelBtn?.addEventListener("click", hideLogoutModal);
+  logoutConfirmBtn?.addEventListener("click", async () => {
+    hideLogoutModal();
+    await performLogout();
+  });
+  logoutModal?.addEventListener("click", (e) => {
+    if (e.target === logoutModal) hideLogoutModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !logoutModal?.classList.contains("hidden")) {
+      hideLogoutModal();
+    }
+  });
+
   initNavigation({
     onBeforeNavigate: async ({ tabKey, target }) => {
       if (!target) return false;
@@ -480,29 +571,9 @@ export async function initAuthFlow() {
   }
 });
 
- logoutBtn.addEventListener("click", async () => {
-  logoutBtn.disabled = true;
-
-  setAuthToken(null);
-  setModeUI(false, null);
-  goToPage("dashboard", "dashboard-page");
-
-  try {
-    await authFetch("/auth/logout", { method: "POST" });
-  } catch (_) {}
-
-  await Promise.all([
-    loadProjects(),
-    loadRecentProjects(),
-    loadProjectHealth(),
-    loadErrorAnalysis(),
-    loadMostUsedSkills(),
-  ]);
-  notifyPortfolioDataUpdated();
-  await refreshConsentUI();
-
-  logoutBtn.disabled = false;
-});
+ logoutBtn.addEventListener("click", () => {
+    showLogoutModal();
+  });
 
  window.addEventListener("consent:state-changed", (event) => {
   if (event.detail?.bannerVisible) return;
