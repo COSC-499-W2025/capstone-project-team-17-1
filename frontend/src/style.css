@@ -90,6 +90,47 @@ body.light {
   z-index: 1000;
 }
 
+/* Windows: push titlebar below win-controls */
+body.win-platform .titlebar {
+  margin-top: 20px;
+}
+
+/* Windows custom window controls */
+.win-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  z-index: 9999;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.win-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.win-btn-close:hover {
+  background: #e81123;
+  color: white;
+}
+
 /* Disable drag where needed */
 .nav,
 .nav *,
