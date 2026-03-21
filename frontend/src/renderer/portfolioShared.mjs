@@ -348,7 +348,7 @@ function buildSkillsTimelineMarkup(timeline) {
     return `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
-        <p class="resume-summary-text">
+        <p class="muted-text">
           Upload projects with detected skills to generate a skills timeline.
         </p>
       </div>

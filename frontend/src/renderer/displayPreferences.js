@@ -9,11 +9,12 @@ const DASHBOARD_STATE_KEY = "loom_dashboard_state";
 const PORTFOLIO_STATE_KEY = "loom_portfolio_state";
 const PRIVATE_SELECTION_KEY = "loom_private_portfolio_selection";
 const PORTFOLIO_OPTIONS = [
-  { id: "resume-summary", label: "Resume Snapshot" },
+  { id: "project-details", label: "Project Portfolio Details" },
   { id: "top-projects", label: "Top 3 Project Showcase" },
   { id: "portfolio-stats", label: "Portfolio Stats" },
   { id: "skills-timeline", label: "Skills Timeline" },
   { id: "activity-heatmap", label: "Activity Heatmap" },
+  { id: "live-preview", label: "Live Preview" },
 ];
 
 function escapeHtml(value) {
@@ -104,26 +105,40 @@ function renderPrivateSelectionPanel() {
 
   // Re-render
   panel.innerHTML = `
-    <div class="dashboard-selection-content">
-      <div class="dashboard-selection-header">
-        <div class="dashboard-selection-title">Web Portfolio</div>
-        <div class="dashboard-selection-subtitle">Visible sections in private mode</div>
+    <div class="tab-selection-content">
+      <div class="tab-selection-header">
+        <div class="tab-selection-title">Web Portfolio</div>
+        <div class="tab-selection-subtitle">Click row to jump · toggle to show/hide</div>
       </div>
-      <div class="dashboard-selection-options">
+      <div class="tab-selection-options">
         ${PORTFOLIO_OPTIONS.map(
           (option) => `
-            <label class="dashboard-selection-option">
-              <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.includes(option.id) ? "checked" : ""} />
-              <span class="dashboard-selection-option-check"></span>
-              <span class="dashboard-selection-option-label">${escapeHtml(option.label)}</span>
-            </label>
+            <div class="tab-selection-option" data-section-id="${escapeHtml(option.id)}">
+              <label class="tab-selection-option-toggle" onclick="event.stopPropagation()">
+                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.includes(option.id) ? "checked" : ""} />
+                <span class="tab-selection-option-check"></span>
+              </label>
+              <span class="tab-selection-option-label">${escapeHtml(option.label)}</span>
+              <span class="tab-selection-option-jump" title="Jump to section">↗</span>
+            </div>
           `
         ).join("")}
       </div>
     </div>
   `;
 
-  panel.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+  panel.querySelectorAll(".tab-selection-option").forEach((row) => {
+    const sectionId = row.dataset.sectionId;
+    const input = row.querySelector('input[type="checkbox"]');
+
+    // Row click → jump to section
+    row.addEventListener("click", () => {
+      const target = document.querySelector(`[data-portfolio-section="${sectionId}"]`);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      panel.classList.add("hidden");
+    });
+
+    // Checkbox change → toggle visibility
     input.addEventListener("change", () => {
       const nextSelectedIds = Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(
         (checkbox) => checkbox.value
@@ -177,17 +192,12 @@ export function applyDisplayPreferences() {
 export function initDisplayPreferences() {
   const searchInput = document.getElementById("dashboard-search-input");
   const filterSelect = document.getElementById("dashboard-filter-select");
-  const portfolioSearchInput = document.getElementById("portfolio-search-input");
-  const portfolioFilterSelect = document.getElementById("portfolio-filter-select");
   const selectionToggle = document.getElementById("portfolio-selection-toggle");
   const selectionPanel = document.getElementById("portfolio-selection-panel");
   const initialState = loadDashboardState();
-  const initialPortfolioState = loadPortfolioState();
 
   if (searchInput) searchInput.value = initialState.search;
   if (filterSelect) filterSelect.value = initialState.category;
-  if (portfolioSearchInput) portfolioSearchInput.value = initialPortfolioState.search;
-  if (portfolioFilterSelect) portfolioFilterSelect.value = initialPortfolioState.category;
 
   searchInput?.addEventListener("input", () => {
     saveDashboardState({
@@ -205,32 +215,16 @@ export function initDisplayPreferences() {
     applyDisplayPreferences();
   });
 
-  portfolioSearchInput?.addEventListener("input", () => {
-    savePortfolioState({
-      search: portfolioSearchInput.value,
-      category: portfolioFilterSelect?.value || "all",
-    });
-    applyDisplayPreferences();
-  });
-
-  portfolioFilterSelect?.addEventListener("change", () => {
-    savePortfolioState({
-      search: portfolioSearchInput?.value || "",
-      category: portfolioFilterSelect.value,
-    });
-    applyDisplayPreferences();
-  });
-
-  selectionToggle?.addEventListener("click", () => {
+  selectionToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
     selectionPanel?.classList.toggle("hidden");
   });
 
   document.addEventListener("click", (event) => {
     const wrapper = document.getElementById("portfolio-selection-wrapper");
-    if (!wrapper || !selectionPanel || selectionPanel.classList.contains("hidden")) return;
-    // Close the popover
+    if (!wrapper) return;
     if (!wrapper.contains(event.target)) {
-      selectionPanel.classList.add("hidden");
+      selectionPanel?.classList.add("hidden");
     }
   });
 

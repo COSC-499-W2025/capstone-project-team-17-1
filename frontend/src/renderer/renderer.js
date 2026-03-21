@@ -1,4 +1,5 @@
-import { initPortfolioCustomization } from "./portfolioCustomization.js";
+import { initPortfolioEditor } from "./portfolioEditor.js";
+import { initJobMatch } from "./jobMatch.js";
 import { initThemeToggle } from "./theme.js";
 import { initWindowControls } from "./windowControls.js";
 import { startMetrics } from "./metrics.js";
@@ -10,8 +11,8 @@ import { loadErrorAnalysis } from "./errors.js";
 import { loadProjects } from "./projects.js";
 import { initAuthFlow } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
-import { initPortfolioResume } from "./portfolioResume.js";
-import { initResumeManager } from "./resumeManager.js";
+import { initPortfolio } from "./portfolio.js";
+import { initResume } from "./resume.js";
 import { initDisplayPreferences } from "./displayPreferences.js";
 import { initDashboard } from "./dashboardInit.js";
 import { initConsentBanner } from "./consentBanner.js";
@@ -39,9 +40,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initAuthFlow();
   
-  initPortfolioResume();
-  initPortfolioCustomization();
-  initResumeManager();
+  initPortfolio();
+  initPortfolioEditor();
+  initResume();
+  initJobMatch();
 
   initDisplayPreferences();
   initConsentBanner();

@@ -1,6 +1,6 @@
 import {setUploadTab, startImport} from "./githubImport.js";
 import { openProjectViewer } from "./projectViewer.js";
-import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
+import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 async function loadProjects() {
   try {

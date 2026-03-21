@@ -1,4 +1,5 @@
 import { authFetch } from "./auth.js";
+import { openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -80,6 +81,15 @@ function getSavedResumeOrder() {
 
 function saveResumeOrder(ids) {
   localStorage.setItem("resume_list_order", JSON.stringify(ids));
+}
+
+function getSavedStarred() {
+  try { return new Set(JSON.parse(localStorage.getItem("resume_list_starred") || "[]")); }
+  catch { return new Set(); }
+}
+
+function saveStarred(starredSet) {
+  localStorage.setItem("resume_list_starred", JSON.stringify([...starredSet]));
 }
 
 function applySavedOrder(resumes) {
@@ -164,26 +174,29 @@ async function renderResumeList() {
   const container = document.getElementById("resume-list-container");
   if (!container) return;
 
-  container.innerHTML = `<p class="resume-summary-text">Loading...</p>`;
+  container.innerHTML = `<p class="muted-text">Loading...</p>`;
   const rawResumes = await fetchResumes();
 
   if (!rawResumes.length) {
-    container.innerHTML = `<p class="resume-summary-text">No resumes yet. Click "New Resume" to generate one.</p>`;
+    container.innerHTML = `<p class="muted-text">No resumes yet. Click "New Resume" to generate one.</p>`;
     return;
   }
 
   const resumes = applySavedOrder(rawResumes);
 
+  const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
     const date = rawDate
       ? new Date(rawDate.replace(" ", "T") + "Z").toLocaleString()
       : "—";
     const sectionCount = r.section_count ?? (Array.isArray(r.sections) ? r.sections.length : 0);
+    const isStarred = starred.has(String(r.id));
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
         <div class="resume-list-card-header">
           <span class="resume-card-drag" title="Drag to reorder">⠿</span>
+          <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -193,6 +206,7 @@ async function renderResumeList() {
             </div>
           </div>
           <div class="resume-list-actions">
+            <button class="preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
             <button class="export-btn resume-export-action" data-resume-id="${r.id}" data-resume-title="${r.title || "Untitled Resume"}">Export</button>
             <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
             <span class="resume-expand-chevron">▾</span>
@@ -219,6 +233,8 @@ async function renderResumeList() {
       if (
         e.target.closest(".resume-delete-action") ||
         e.target.closest(".resume-export-action") ||
+        e.target.closest(".resume-preview-action") ||
+        e.target.closest(".resume-star-btn") ||
         e.target.closest(".resume-card-drag")
       ) return;
 
@@ -234,7 +250,7 @@ async function renderResumeList() {
       chevron.style.transform = "rotate(180deg)";
 
       if (!loaded) {
-        inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Loading...</p>`;
+        inner.innerHTML = `<p class="muted-text" style="padding:16px">Loading...</p>`;
         expandEl.style.maxHeight = "200px";
         try {
           const resume = await fetchResumeDetail(resumeId);
@@ -242,7 +258,7 @@ async function renderResumeList() {
           attachEditListeners(inner);
           loaded = true;
         } catch (_) {
-          inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Failed to load.</p>`;
+          inner.innerHTML = `<p class="muted-text" style="padding:16px">Failed to load.</p>`;
         }
       }
 
@@ -250,6 +266,29 @@ async function renderResumeList() {
       requestAnimationFrame(() => {
         expandEl.style.maxHeight = inner.scrollHeight + 32 + "px";
       });
+    });
+  });
+
+  container.querySelectorAll(".resume-star-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = String(btn.dataset.resumeId);
+      const currentStarred = getSavedStarred();
+      const nowStarred = !currentStarred.has(id);
+
+      if (nowStarred) currentStarred.add(id);
+      else currentStarred.delete(id);
+      saveStarred(currentStarred);
+
+      btn.classList.toggle("starred", nowStarred);
+      btn.title = nowStarred ? "Unstar" : "Star";
+    });
+  });
+
+  container.querySelectorAll(".resume-preview-action").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openResumePreview();
     });
   });
 
@@ -295,7 +334,7 @@ async function openNewResumeModal() {
           </label>
         `;
       }).join("")
-    : `<p class="resume-summary-text">No projects found. Upload a project first.</p>`;
+    : `<p class="muted-text">No projects found. Upload a project first.</p>`;
 
   const contributorListHtml = contributors.length
     ? contributors.map((c) => `
@@ -304,7 +343,7 @@ async function openNewResumeModal() {
           <span class="resume-modal-item-name">${c.username}</span>
         </label>
       `).join("")
-    : `<p class="resume-summary-text">No contributors found for these projects.</p>`;
+    : `<p class="muted-text">No contributors found for these projects.</p>`;
 
   const modal = document.createElement("div");
   modal.id = "new-resume-modal";
@@ -1144,7 +1183,7 @@ function attachEditListeners(container) {
 // Init
 // ---------------------------------------------------------------------------
 
-export function initResumeManager() {
+export function initResume() {
   document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
 
   document.addEventListener("auth:mode-changed", (e) => {
@@ -1155,7 +1194,7 @@ export function initResumeManager() {
       // Logged out / public mode
       const container = document.getElementById("resume-list-container");
       if (container) {
-        container.innerHTML = `<p class="resume-summary-text">Click "New Resume" to create your first resume.</p>`;
+        container.innerHTML = `<p class="muted-text">Click "New Resume" to create your first resume.</p>`;
       }
     }
   });

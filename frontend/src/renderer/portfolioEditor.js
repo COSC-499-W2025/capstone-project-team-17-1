@@ -1,32 +1,22 @@
 import { fetchProjects } from "./projects.js";
 import { authFetch, isPrivateMode } from "./auth.js";
-import { loadPortfolioResume } from "./portfolioResume.js";
+import { loadPortfolio } from "./portfolio.js";
 import {
   loadPortfolioCustomization,
   savePortfolioCustomization,
-} from "./portfolioCustomizationState.js";
+} from "./portfolioState.js";
 
-const SECTION_LABELS = [
-  { id: "resume-summary", label: "Resume Snapshot" },
-  { id: "top-projects", label: "Top 3 Project Showcase" },
-  { id: "portfolio-stats", label: "Portfolio Stats" },
-  { id: "skills-timeline", label: "Skills Timeline" },
-  { id: "activity-heatmap", label: "Activity Heatmap" },
-];
 
 const AUTOSAVE_DELAY_MS = 1200;
 
 let previewProjectsCache = [];
-let portfolioCustomizationInitialized = false;
+let portfolioEditorInitialized = false;
 let draggedFeaturedProjectId = null;
 let autosaveTimer = null;
 let isDirty = false;
 let isSaving = false;
 let lastSavedSnapshot = "";
 
-function isJobTargetField(target) {
-  return target instanceof HTMLElement && /^job-target-/.test(target.id || "");
-}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -36,6 +26,7 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
 
 function getStatusEl() {
   return document.getElementById("portfolio-customization-status");
@@ -68,10 +59,7 @@ function clearAutosaveTimer() {
 }
 
 function normalizeCustomization(customization) {
-  const sectionVisibility = {};
-  SECTION_LABELS.forEach((section) => {
-    sectionVisibility[section.id] = customization?.sectionVisibility?.[section.id] !== false;
-  });
+  const sectionVisibility = customization?.sectionVisibility || {};
 
   const featuredProjectIds = Array.isArray(customization?.featuredProjectIds)
     ? customization.featuredProjectIds.map((id) => String(id))
@@ -130,7 +118,6 @@ function updateSaveButtonState() {
     }
     projectSaveButtons.forEach((button) => {
       button.disabled = true;
-      button.textContent = "Saving...";
     });
     return;
   }
@@ -141,7 +128,6 @@ function updateSaveButtonState() {
   }
   projectSaveButtons.forEach((button) => {
     button.disabled = false;
-    button.textContent = isDirty ? "Save Project Details" : "Saved";
   });
 }
 
@@ -161,60 +147,38 @@ function markDirtyState(nextCustomization) {
 }
 
 function renderPublicModeMessage() {
-  const toggleContainer = document.getElementById("portfolio-section-toggle-container");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
   const editorContainer = document.getElementById("portfolio-project-editor-container");
   const saveBtn = document.getElementById("portfolio-customization-save-btn");
   const jobContainer = document.getElementById("portfolio-job-target-container");
 
-  if (toggleContainer) {
-    toggleContainer.innerHTML =
-      `<p class="resume-summary-text">Switch to Private Mode to customize your portfolio.</p>`;
-  }
   if (featuredContainer) {
     featuredContainer.innerHTML =
-      `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+      `<p class="muted-text">Featured project selection is only available in Private Mode.</p>`;
   }
   if (orderContainer) {
     orderContainer.innerHTML =
-      `<p class="resume-summary-text">Reordering is only available in Private Mode.</p>`;
+      `<p class="muted-text">Reordering is only available in Private Mode.</p>`;
   }
   if (editorContainer) {
     editorContainer.innerHTML =
-      `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+      `<p class="muted-text">Project portfolio edits are only available in Private Mode.</p>`;
   }
   const previewContainer = getPreviewContainer();
   if (previewContainer) {
     previewContainer.innerHTML =
-      `<p class="resume-summary-text">Live preview is only available in Private Mode.</p>`;
+      `<p class="muted-text">Live preview is only available in Private Mode.</p>`;
   }
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Save Customization";
   }
   if (jobContainer) {
-    jobContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to analyze job descriptions.</p>`;
+    jobContainer.innerHTML = `<p class="muted-text">Switch to Private Mode to analyze job descriptions.</p>`;
   }
 }
 
-function renderSectionToggles(customization) {
-  const container = document.getElementById("portfolio-section-toggle-container");
-  if (!container) return;
-
-  container.innerHTML = SECTION_LABELS.map(
-    (section) => `
-      <label class="customization-toggle-item">
-        <input
-          type="checkbox"
-          data-section-visibility="${section.id}"
-          ${customization.sectionVisibility?.[section.id] !== false ? "checked" : ""}
-        />
-        <span>${escapeHtml(section.label)}</span>
-      </label>
-    `
-  ).join("");
-}
 
 function renderFeaturedProjects(projects, customization) {
   const container = document.getElementById("portfolio-featured-projects-container");
@@ -224,7 +188,7 @@ function renderFeaturedProjects(projects, customization) {
 
   if (!projects.length) {
     container.innerHTML =
-      `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
+      `<p class="muted-text">Upload projects first to choose featured items.</p>`;
     return;
   }
 
@@ -245,7 +209,7 @@ function renderFeaturedProjects(projects, customization) {
             <div class="customization-project-meta">
               ${project.total_files || 0} files • ${project.total_skills || 0} skills
               ${scoreMap.has(project.project_id)
-                ? ` • <span class="job-match-score">${Math.round(scoreMap.get(project.project_id) * 100)}% match</span>`
+                ? ` • <span class="customization-job-match-score">${Math.round(scoreMap.get(project.project_id) * 100)}% match</span>`
                 : ""}
             </div>
           </div>
@@ -261,7 +225,7 @@ function renderProjectEditors(projects, customization) {
 
   if (!projects.length) {
     container.innerHTML =
-      `<p class="resume-summary-text">No projects available for customization yet.</p>`;
+      `<p class="muted-text">No projects available for customization yet.</p>`;
     return;
   }
 
@@ -272,29 +236,40 @@ function renderProjectEditors(projects, customization) {
       const index = (customization.featuredProjectIds || []).indexOf(project.project_id);
       const rank = index >= 0 ? index + 1 : 1;
 
+      const initialSnapshot = JSON.stringify({
+        keyRole: override.keyRole || "",
+        evidence: override.evidence || "",
+        portfolioBlurb: override.portfolioBlurb || "",
+        isFeatured,
+      });
+
       return `
-        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}">
+        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}" data-saved-snapshot="${escapeHtml(initialSnapshot)}">
           <div class="customization-project-editor-header">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
-              <p class="resume-summary-text">
+              <p class="muted-text">
                 ${project.total_files || 0} files analyzed • ${project.total_skills || 0} skill signals
               </p>
             </div>
 
             <div class="customization-project-editor-meta">
-              <label class="customization-inline-check">
-                <input
-                  type="checkbox"
-                  data-project-selected="${escapeHtml(project.project_id)}"
-                  ${isFeatured ? "checked" : ""}
-                />
-                <span>Featured</span>
-              </label>
+              <input
+                type="checkbox"
+                data-project-selected="${escapeHtml(project.project_id)}"
+                ${isFeatured ? "checked" : ""}
+                style="display:none"
+              />
+              <button
+                type="button"
+                class="portfolio-star-btn${isFeatured ? " starred" : ""}"
+                data-project-star="${escapeHtml(project.project_id)}"
+                title="Mark as featured"
+              >★</button>
             </div>
           </div>
 
-          <div class="customization-form-grid">
+          <div class="form-grid">
             <label>
               <span>Key role</span>
               <input
@@ -305,7 +280,7 @@ function renderProjectEditors(projects, customization) {
               />
             </label>
 
-            <label class="customization-full-row">
+            <label class="form-full-row">
               <span>Evidence of success</span>
               <textarea
                 data-field="evidence"
@@ -314,7 +289,7 @@ function renderProjectEditors(projects, customization) {
               >${escapeHtml(override.evidence || "")}</textarea>
             </label>
 
-            <label class="customization-full-row">
+            <label class="form-full-row">
               <span>Portfolio blurb</span>
               <textarea
                 data-field="portfolioBlurb"
@@ -325,12 +300,13 @@ function renderProjectEditors(projects, customization) {
           </div>
 
           <div class="customization-project-editor-actions">
+            <span class="customization-project-save-status"></span>
             <button
               type="button"
               class="secondary-btn customization-project-save-btn"
               data-project-save="${escapeHtml(project.project_id)}"
             >
-              Save Project Details
+              Save
             </button>
           </div>
         </div>
@@ -340,24 +316,63 @@ function renderProjectEditors(projects, customization) {
 
     const checkboxes = container.querySelectorAll("[data-project-selected]");
     const saveButtons = container.querySelectorAll("[data-project-save]");
+    const starButtons = container.querySelectorAll("[data-project-star]");
+
+    starButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const projectId = btn.dataset.projectStar;
+        const cb = container.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
+        if (!cb) return;
+
+        const wouldCheck = !cb.checked;
+        const checked = container.querySelectorAll("[data-project-selected]:checked");
+
+        if (wouldCheck && checked.length >= 3) {
+          setStatus("You can only feature up to 3 projects.", "warning");
+          return;
+        }
+
+        cb.checked = wouldCheck;
+        btn.classList.toggle("starred", wouldCheck);
+        setStatus(checked.length <= 3 ? "" : "");
+        cb.dispatchEvent(new Event("change"));
+      });
+    });
 
     checkboxes.forEach((cb) => {
       cb.addEventListener("change", () => {
         const checked = container.querySelectorAll("[data-project-selected]:checked");
-
-        if (checked.length <= 3) {
-          setStatus("");
-        }
         if (checked.length > 3) {
           cb.checked = false;
           setStatus("You can only feature up to 3 projects.", "warning");
+        } else {
+          setStatus("");
         }
       });
     });
 
     saveButtons.forEach((button) => {
+      const projectId = button.dataset.projectSave;
       button.addEventListener("click", async () => {
-        await performSave({ silent: false });
+        const statusSpan = button.parentElement?.querySelector(".customization-project-save-status");
+        const showLocal = (msg, kind) => {
+          if (!statusSpan) return;
+          statusSpan.textContent = msg;
+          statusSpan.dataset.kind = kind;
+        };
+
+        showLocal("Saving...", "info");
+        try {
+          const result = await saveProjectById(projectId);
+          if (result === "no-changes") {
+            showLocal("No changes to save", "info");
+          } else {
+            showLocal("Saved", "success");
+          }
+          setTimeout(() => showLocal("", ""), 2500);
+        } catch (_) {
+          showLocal("Failed to save", "error");
+        }
       });
     });
 }
@@ -435,13 +450,7 @@ function renderFeaturedOrderList(projects, customization) {
 function collectCustomization(projects) {
   const current = loadPortfolioCustomization();
 
-  const sectionVisibility = {};
-  SECTION_LABELS.forEach((section) => {
-    const input = document.querySelector(
-      `[data-section-visibility="${CSS.escape(section.id)}"]`
-    );
-    sectionVisibility[section.id] = input ? !!input.checked : true;
-  });
+  const sectionVisibility = current?.sectionVisibility || {};
 
   const selectedIds = projects
     .filter((project) => {
@@ -509,9 +518,7 @@ async function persistProjectOverrides(projects, customization) {
 
     return authFetch(`/projects/${encodeURIComponent(project.project_id)}/edit`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         key_role: override.keyRole || null,
         evidence: override.evidence || null,
@@ -523,6 +530,45 @@ async function persistProjectOverrides(projects, customization) {
   });
 
   await Promise.allSettled(updates);
+}
+
+async function saveProjectById(projectId) {
+  if (!isPrivateMode()) return "no-changes";
+
+  const editor = document.querySelector(`[data-project-editor-id="${CSS.escape(projectId)}"]`);
+  if (!editor) return "no-changes";
+
+  const keyRole = editor.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
+  const evidence = editor.querySelector('[data-field="evidence"]')?.value?.trim() || "";
+  const portfolioBlurb = editor.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
+  const isFeatured = !!editor.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`)?.checked;
+
+  const snapshot = JSON.stringify({ keyRole, evidence, portfolioBlurb, isFeatured });
+  if (editor.dataset.savedSnapshot === snapshot) return "no-changes";
+
+  const current = loadPortfolioCustomization();
+  const featuredIds = current?.featuredProjectIds || [];
+  const rank = featuredIds.indexOf(projectId);
+
+  await authFetch(`/projects/${encodeURIComponent(projectId)}/edit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      key_role: keyRole || null,
+      evidence: evidence || null,
+      portfolio_blurb: portfolioBlurb || null,
+      selected: isFeatured,
+      rank: rank >= 0 ? rank + 1 : null,
+    }),
+  });
+
+  // Update local customization store
+  const overrides = { ...(current?.projectOverrides || {}), [projectId]: { keyRole, evidence, portfolioBlurb } };
+  savePortfolioCustomization({ ...current, projectOverrides: overrides });
+
+  editor.dataset.savedSnapshot = snapshot;
+
+  await loadPortfolio();
 }
 
 function renderLivePreview(projects, draftCustomization) {
@@ -732,7 +778,7 @@ async function performSave({ silent = false } = {}) {
     } else {
       setStatus("Saved", "success");
     }
-    return;
+    return "no-changes";
   }
 
   try {
@@ -746,7 +792,7 @@ async function performSave({ silent = false } = {}) {
     lastSavedSnapshot = snapshotCustomization(nextCustomization);
     isDirty = false;
 
-    await loadPortfolioResume();
+    await loadPortfolio();
     window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
 
     setStatus("Saved", "success");
@@ -774,7 +820,6 @@ async function renderPortfolioCustomizationPage() {
     isSaving = false;
     lastSavedSnapshot = "";
     renderPublicModeMessage();
-    setStatus("Private Mode is required for portfolio customization.", "warning");
     return;
   }
 
@@ -785,41 +830,12 @@ async function renderPortfolioCustomizationPage() {
     previewProjectsCache = projects;
     lastSavedSnapshot = snapshotCustomization(customization);
 
-    renderJobTargetSection(customization);
-    renderSectionToggles(customization);
     renderFeaturedProjects(projects, customization);
     renderProjectEditors(projects, customization);
     renderFeaturedOrderList(projects, customization);
     renderLivePreview(projects, customization);
 
     updateSaveButtonState();
-
-    const analyzeBtn = document.getElementById("analyze-job-btn");
-    if (analyzeBtn) {
-      analyzeBtn.onclick = async () => {
-        try {
-          setStatus("Analyzing job description...", "info");
-          analyzeBtn.disabled = true;
-
-          const nextCustomization = loadPortfolioCustomization();
-          await autoSelectFeaturedProjects(projects, nextCustomization);
-
-          renderFeaturedProjects(projects, nextCustomization);
-          renderProjectEditors(projects, nextCustomization);
-          renderLivePreview(projects, nextCustomization);
-
-          lastSavedSnapshot = snapshotCustomization(nextCustomization);
-          isDirty = false;
-          await loadPortfolioResume();
-          updateSaveButtonState();
-        } catch (err) {
-          console.error(err);
-          setStatus("Job matching failed.", "error");
-        } finally {
-          analyzeBtn.disabled = false;
-        }
-      };
-    }
 
     const saveBtn = getSaveButton();
     if (saveBtn) {
@@ -833,13 +849,13 @@ async function renderPortfolioCustomizationPage() {
   }
 }
 
-export function initPortfolioCustomization() {
-  const tab = document.getElementById("customization-tab");
+export function initPortfolioEditor() {
+  const tab = document.getElementById("portfolio-tab");
   const root = document.getElementById("portfolio-customization-root");
   const orderContainer = getFeaturedOrderContainer();
 
-  if (!portfolioCustomizationInitialized) {
-    portfolioCustomizationInitialized = true;
+  if (!portfolioEditorInitialized) {
+    portfolioEditorInitialized = true;
 
     tab?.addEventListener("click", renderPortfolioCustomizationPage);
 
@@ -851,20 +867,13 @@ export function initPortfolioCustomization() {
       renderPortfolioCustomizationPage();
     });
 
-    root?.addEventListener("input", (event) => {
-      if (isJobTargetField(event.target)) {
-        return;
-      }
+    root?.addEventListener("input", () => {
       updateLivePreview();
       scheduleAutosave();
     });
 
     root?.addEventListener("change", (event) => {
       const target = event.target;
-
-      if (isJobTargetField(target)) {
-        return;
-      }
 
       if (target instanceof HTMLInputElement) {
         if (target.matches("[data-featured-project-id]")) {
@@ -898,119 +907,4 @@ export function initPortfolioCustomization() {
   }
 
   renderPortfolioCustomizationPage();
-}
-
-// let users paste job descriptions in customization
-function renderJobTargetSection(customization) {
-  const container = document.getElementById("portfolio-job-target-container");
-  if (!container)
-    return;
-
-  const job = customization?.jobTarget ?? {
-    title: "",
-    company: "",
-    description: ""
-  };
-
-  container.innerHTML = `
-    <div class="customization-form-grid">
-
-        <label>
-          <span>Job Title</span>
-          <input
-            id="job-target-title"
-            type="text"
-            value="${escapeHtml(job.title || "")}"
-            placeholder="Example: Frontend Engineer"
-          />
-        </label>
-
-        <label>
-          <span>Company</span>
-          <input
-            id="job-target-company"
-            type="text"
-            value="${escapeHtml(job.company || "")}"
-            placeholder="Example: Shopify"
-          />
-        </label>
-
-        <label class="customization-full-row">
-          <span>Job Description</span>
-          <textarea
-            id="job-target-description"
-            rows="8"
-            placeholder="Paste the job description here to tailor your portfolio."
-          >${escapeHtml(job.description || "")}</textarea>
-        </label>
-
-        <button id="analyze-job-btn" class="primary-btn">
-          Analyze Job Match
-        </button>
-
-      </div>
-    `;
-}
-
-// connect backend to ranking endpoint (analyze + rank)
-async function analyzeJobMatch() {
-
-  const jd = document.getElementById("job-target-description")?.value;
-
-  if (!jd || !jd.trim()) {
-    setStatus("Please paste a job description first.", "warning");
-    return [];
-  }
-
-  const res = await authFetch("/job-matching/rank", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      job_description: jd,
-    }),
-  });
-
-  // safety incase returned is not json
-  if (!res.ok) {
-    throw new Error(`Job matching API failed: ${res.status}`);
-  }
-
-  const data = await res.json();
-
-  console.log("Job match API response:", "data");
-
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.results)) return data.results;
-  if (Array.isArray(data.matches)) return data.matches;
-
-  return [];
-
-}
-
-// pick best projects based on job match ranking
-async function autoSelectFeaturedProjects(projects, customization) {
-
-  const matches = await analyzeJobMatch();
-
-  window.__jobMatchResults = matches;
-
-  if (!matches.length) return;
-
-  // select top 3 highest scoring projects for output
-  const topProjects = matches
-    .slice(0, 3)
-    .map((m) => m.project_id);
-
-  customization.featuredProjectIds = topProjects;
-
-  // save updated state
-  savePortfolioCustomization(customization);
-
-  // notify related ui of change
-  window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
-
-  setStatus("Featured projects selected based on job match.", "success");
 }

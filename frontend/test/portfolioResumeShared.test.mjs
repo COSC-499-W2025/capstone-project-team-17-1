@@ -6,7 +6,7 @@ import {
   buildTopProjectsMarkup,
   formatTimelineTimestamp,
   getTopProjects,
-} from "../src/renderer/portfolioResumeShared.mjs";
+} from "../src/renderer/portfolioShared.mjs";
 
 test("getTopProjects returns the top 3 projects ordered by skills then files", () => {
   const projects = [

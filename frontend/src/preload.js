@@ -3,7 +3,8 @@ const skills = require("./mostUsedSkills");
 contextBridge.exposeInMainWorld("api", {
   close: () => ipcRenderer.send("close"),
   minimize: () => ipcRenderer.send("minimize"),
-  maximize: () => ipcRenderer.send("maximize")
+  maximize: () => ipcRenderer.send("maximize"),
+  platform: process.platform,
 })
 
 contextBridge.exposeInMainWorld("backendAPI", {
