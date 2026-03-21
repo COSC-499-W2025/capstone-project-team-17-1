@@ -203,34 +203,54 @@ input:focus {
 ========================================================= */
 
 .theme-toggle {
-  width: 40px;
-  height: 20px;
-  border-radius: 20px;
-  background: var(--accent);
+  width: 52px;
+  height: 28px;
+  border-radius: 14px;
+  background: #1a2e4a;
   position: relative;
   cursor: pointer;
-  transition: 0.4s;
+  transition: background 0.35s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px;
+  box-sizing: border-box;
 }
 
+/* sliding knob */
 .theme-toggle::before {
   content: "";
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 23px;
+  height: 22px;
   background: white;
   border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: 0.4s;
+  top: 3px;
+  left: calc(100% - 23px - 3px);
+  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
 }
 
 body.light .theme-toggle {
-  background: #ccc;
+  background: #e2a020;
 }
 
 body.light .theme-toggle::before {
-  transform: translateX(20px);
+  left: 3px;
 }
+
+.theme-icon {
+  font-size: 13px;
+  line-height: 1;
+  z-index: 1;
+  user-select: none;
+  pointer-events: none;
+  color: white;
+  mix-blend-mode: difference;
+}
+
+.theme-sun { order: -1; }
+.theme-moon { order: 1; }
 
 /* =========================================================
    PAGE CONTAINER
