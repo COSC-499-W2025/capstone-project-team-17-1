@@ -1,5 +1,5 @@
 import { authFetch } from "./auth.js";
-import { openResumePreview } from "./portfolioResume.js";
+import { openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -1183,7 +1183,7 @@ function attachEditListeners(container) {
 // Init
 // ---------------------------------------------------------------------------
 
-export function initResumeManager() {
+export function initResume() {
   document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
 
   document.addEventListener("auth:mode-changed", (e) => {

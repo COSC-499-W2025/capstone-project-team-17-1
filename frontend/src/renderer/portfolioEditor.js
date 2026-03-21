@@ -1,16 +1,16 @@
 import { fetchProjects } from "./projects.js";
 import { authFetch, isPrivateMode } from "./auth.js";
-import { loadPortfolioResume } from "./portfolioResume.js";
+import { loadPortfolio } from "./portfolio.js";
 import {
   loadPortfolioCustomization,
   savePortfolioCustomization,
-} from "./portfolioCustomizationState.js";
+} from "./portfolioState.js";
 
 
 const AUTOSAVE_DELAY_MS = 1200;
 
 let previewProjectsCache = [];
-let portfolioCustomizationInitialized = false;
+let portfolioEditorInitialized = false;
 let draggedFeaturedProjectId = null;
 let autosaveTimer = null;
 let isDirty = false;
@@ -568,7 +568,7 @@ async function saveProjectById(projectId) {
 
   editor.dataset.savedSnapshot = snapshot;
 
-  await loadPortfolioResume();
+  await loadPortfolio();
 }
 
 function renderLivePreview(projects, draftCustomization) {
@@ -792,7 +792,7 @@ async function performSave({ silent = false } = {}) {
     lastSavedSnapshot = snapshotCustomization(nextCustomization);
     isDirty = false;
 
-    await loadPortfolioResume();
+    await loadPortfolio();
     window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
 
     setStatus("Saved", "success");
@@ -849,13 +849,13 @@ async function renderPortfolioCustomizationPage() {
   }
 }
 
-export function initPortfolioCustomization() {
+export function initPortfolioEditor() {
   const tab = document.getElementById("portfolio-tab");
   const root = document.getElementById("portfolio-customization-root");
   const orderContainer = getFeaturedOrderContainer();
 
-  if (!portfolioCustomizationInitialized) {
-    portfolioCustomizationInitialized = true;
+  if (!portfolioEditorInitialized) {
+    portfolioEditorInitialized = true;
 
     tab?.addEventListener("click", renderPortfolioCustomizationPage);
 

@@ -4,7 +4,7 @@ import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
-import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
+import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 async function checkGithubAuth() {
     const res = await fetch("http://127.0.0.1:8002/github/auth-status")
     const data = await res.json()

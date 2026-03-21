@@ -4,7 +4,7 @@ import {
   getFeaturedProjects,
   getProjectOverride,
   loadPortfolioCustomization,
-} from "./portfolioCustomizationState.js";
+} from "./portfolioState.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -15,7 +15,7 @@ const SECTION_SELECTOR_MAP = {
   "activity-heatmap": ".portfolio-heatmap-card",
 };
 
-let portfolioResumeInitialized = false;
+let portfolioInitialized = false;
 
 function getStaticProfile() {
   return {
@@ -977,7 +977,7 @@ function closeResumePreview() {
   modal?.classList.add("hidden");
 }
 
-export async function loadPortfolioResume() {
+export async function loadPortfolio() {
   const [projectsResult, timelineResult, summaryResult, heatmapResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
@@ -1018,14 +1018,14 @@ export async function loadPortfolioResume() {
   applyPortfolioSectionVisibility();
 }
 
-export function initPortfolioResume() {
-  loadPortfolioResume();
+export function initPortfolio() {
+  loadPortfolio();
 
-  if (portfolioResumeInitialized) return;
-  portfolioResumeInitialized = true;
+  if (portfolioInitialized) return;
+  portfolioInitialized = true;
 
   const refreshBtn = document.getElementById("refresh-portfolio-btn");
-  refreshBtn?.addEventListener("click", loadPortfolioResume);
+  refreshBtn?.addEventListener("click", loadPortfolio);
 
   const closeBtn = document.getElementById("resume-preview-close");
   closeBtn?.addEventListener("click", closeResumePreview);
@@ -1059,17 +1059,17 @@ export function initPortfolioResume() {
   });
 
   window.addEventListener("portfolio:customization-updated", () => {
-    loadPortfolioResume();
+    loadPortfolio();
   });
 
   window.addEventListener("portfolio:data-updated", () => {
-    loadPortfolioResume();
+    loadPortfolio();
   });
 
   document.addEventListener("navigation:page-changed", (event) => {
     const { pageId } = event.detail ?? {};
     if (pageId === "resume-page" || pageId === "portfolio-page") {
-      loadPortfolioResume();
+      loadPortfolio();
     }
   });
 }

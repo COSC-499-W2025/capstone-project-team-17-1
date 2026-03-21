@@ -2,7 +2,7 @@ import { authFetch, isPrivateMode } from "./auth.js";
 import {
   loadPortfolioCustomization,
   savePortfolioCustomization,
-} from "./portfolioCustomizationState.js";
+} from "./portfolioState.js";
 
 let jobMatchInitialized = false;
 

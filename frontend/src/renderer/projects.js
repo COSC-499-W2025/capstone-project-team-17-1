@@ -2,7 +2,7 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
-import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
+import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 export async function fetchProjects() {
   const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");

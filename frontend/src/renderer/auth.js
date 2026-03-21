@@ -7,7 +7,7 @@ import { loadMostUsedSkills } from "./skills.js";
 import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
 import { shouldRequireLoginForTab } from "./authShared.mjs";
-import { notifyPortfolioDataUpdated } from "./portfolioEvents.js";
+import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 const AUTH_TOKEN_KEY = "loom_auth_token";

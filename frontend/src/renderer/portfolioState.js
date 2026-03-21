@@ -144,3 +144,7 @@ export function getFeaturedProjects(projects = []) {
   const selected = projects.filter((p) => featuredIds.has(String(p.project_id)));
   return selected.slice(0, 3);
 }
+
+export function notifyPortfolioDataUpdated() {
+  window.dispatchEvent(new CustomEvent("portfolio:data-updated"));
+}
