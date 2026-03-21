@@ -155,27 +155,27 @@ function renderPublicModeMessage() {
 
   if (featuredContainer) {
     featuredContainer.innerHTML =
-      `<p class="resume-summary-text">Featured project selection is only available in Private Mode.</p>`;
+      `<p class="muted-text">Featured project selection is only available in Private Mode.</p>`;
   }
   if (orderContainer) {
     orderContainer.innerHTML =
-      `<p class="resume-summary-text">Reordering is only available in Private Mode.</p>`;
+      `<p class="muted-text">Reordering is only available in Private Mode.</p>`;
   }
   if (editorContainer) {
     editorContainer.innerHTML =
-      `<p class="resume-summary-text">Project portfolio edits are only available in Private Mode.</p>`;
+      `<p class="muted-text">Project portfolio edits are only available in Private Mode.</p>`;
   }
   const previewContainer = getPreviewContainer();
   if (previewContainer) {
     previewContainer.innerHTML =
-      `<p class="resume-summary-text">Live preview is only available in Private Mode.</p>`;
+      `<p class="muted-text">Live preview is only available in Private Mode.</p>`;
   }
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Save Customization";
   }
   if (jobContainer) {
-    jobContainer.innerHTML = `<p class="resume-summary-text">Switch to Private Mode to analyze job descriptions.</p>`;
+    jobContainer.innerHTML = `<p class="muted-text">Switch to Private Mode to analyze job descriptions.</p>`;
   }
 }
 
@@ -188,7 +188,7 @@ function renderFeaturedProjects(projects, customization) {
 
   if (!projects.length) {
     container.innerHTML =
-      `<p class="resume-summary-text">Upload projects first to choose featured items.</p>`;
+      `<p class="muted-text">Upload projects first to choose featured items.</p>`;
     return;
   }
 
@@ -209,7 +209,7 @@ function renderFeaturedProjects(projects, customization) {
             <div class="customization-project-meta">
               ${project.total_files || 0} files • ${project.total_skills || 0} skills
               ${scoreMap.has(project.project_id)
-                ? ` • <span class="job-match-score">${Math.round(scoreMap.get(project.project_id) * 100)}% match</span>`
+                ? ` • <span class="customization-job-match-score">${Math.round(scoreMap.get(project.project_id) * 100)}% match</span>`
                 : ""}
             </div>
           </div>
@@ -225,7 +225,7 @@ function renderProjectEditors(projects, customization) {
 
   if (!projects.length) {
     container.innerHTML =
-      `<p class="resume-summary-text">No projects available for customization yet.</p>`;
+      `<p class="muted-text">No projects available for customization yet.</p>`;
     return;
   }
 
@@ -248,7 +248,7 @@ function renderProjectEditors(projects, customization) {
           <div class="customization-project-editor-header">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
-              <p class="resume-summary-text">
+              <p class="muted-text">
                 ${project.total_files || 0} files analyzed • ${project.total_skills || 0} skill signals
               </p>
             </div>
@@ -262,14 +262,14 @@ function renderProjectEditors(projects, customization) {
               />
               <button
                 type="button"
-                class="resume-star-btn${isFeatured ? " starred" : ""}"
+                class="portfolio-star-btn${isFeatured ? " starred" : ""}"
                 data-project-star="${escapeHtml(project.project_id)}"
                 title="Mark as featured"
               >★</button>
             </div>
           </div>
 
-          <div class="customization-form-grid">
+          <div class="form-grid">
             <label>
               <span>Key role</span>
               <input
@@ -280,7 +280,7 @@ function renderProjectEditors(projects, customization) {
               />
             </label>
 
-            <label class="customization-full-row">
+            <label class="form-full-row">
               <span>Evidence of success</span>
               <textarea
                 data-field="evidence"
@@ -289,7 +289,7 @@ function renderProjectEditors(projects, customization) {
               >${escapeHtml(override.evidence || "")}</textarea>
             </label>
 
-            <label class="customization-full-row">
+            <label class="form-full-row">
               <span>Portfolio blurb</span>
               <textarea
                 data-field="portfolioBlurb"

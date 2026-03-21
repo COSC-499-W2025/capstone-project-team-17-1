@@ -418,7 +418,7 @@ function renderResumeSummary(profile, projects, summaryData) {
         </div>
       </div>
 
-      <p class="resume-summary-text">${escapeHtml(summary)}</p>
+      <p class="muted-text">${escapeHtml(summary)}</p>
 
       <div class="resume-meta-grid">
         <div class="resume-meta-box">
@@ -609,7 +609,7 @@ function renderPortfolioStats(projects, summaryData, timeline = []) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No portfolio data yet</h3>
-        <p class="resume-summary-text">
+        <p class="muted-text">
           Upload projects to generate skills, highlights, and portfolio statistics.
         </p>
       </div>
@@ -687,7 +687,7 @@ function renderPortfolioStats(projects, summaryData, timeline = []) {
         : `
           <div class="skills-group-card">
             <h3>No skills detected yet</h3>
-            <p class="resume-summary-text">
+            <p class="muted-text">
               Upload projects with detected skills to categorize portfolio skills by expertise level.
             </p>
           </div>
@@ -704,7 +704,7 @@ function renderSkillsTimeline(timeline) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
-        <p class="resume-summary-text">
+        <p class="muted-text">
           Upload projects with detected skills to generate a year-by-year skills timeline.
         </p>
       </div>
@@ -769,7 +769,7 @@ function renderActivityHeatmap(heatmapData) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No activity data yet</h3>
-        <p class="resume-summary-text">
+        <p class="muted-text">
           Upload projects with timeline or file activity data to generate a project activity heatmap.
         </p>
       </div>
@@ -797,7 +797,7 @@ function renderActivityHeatmap(heatmapData) {
   container.innerHTML = `
     <div class="heatmap-summary">
       <div>
-        <p class="resume-summary-text">
+        <p class="muted-text">
           Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
         </p>
         <div class="heatmap-chip-row">
@@ -956,7 +956,7 @@ export async function openResumePreview() {
   const body = document.getElementById("resume-preview-body");
   if (!modal || !body) return;
 
-  body.innerHTML = `<p class="resume-summary-text">Loading resume preview...</p>`;
+  body.innerHTML = `<p class="muted-text">Loading resume preview...</p>`;
   modal.classList.remove("hidden");
 
   try {
@@ -968,7 +968,7 @@ export async function openResumePreview() {
     body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
-    body.innerHTML = `<p class="resume-summary-text">Unable to load resume preview.</p>`;
+    body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
   }
 }
 

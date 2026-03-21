@@ -174,11 +174,11 @@ async function renderResumeList() {
   const container = document.getElementById("resume-list-container");
   if (!container) return;
 
-  container.innerHTML = `<p class="resume-summary-text">Loading...</p>`;
+  container.innerHTML = `<p class="muted-text">Loading...</p>`;
   const rawResumes = await fetchResumes();
 
   if (!rawResumes.length) {
-    container.innerHTML = `<p class="resume-summary-text">No resumes yet. Click "New Resume" to generate one.</p>`;
+    container.innerHTML = `<p class="muted-text">No resumes yet. Click "New Resume" to generate one.</p>`;
     return;
   }
 
@@ -250,7 +250,7 @@ async function renderResumeList() {
       chevron.style.transform = "rotate(180deg)";
 
       if (!loaded) {
-        inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Loading...</p>`;
+        inner.innerHTML = `<p class="muted-text" style="padding:16px">Loading...</p>`;
         expandEl.style.maxHeight = "200px";
         try {
           const resume = await fetchResumeDetail(resumeId);
@@ -258,7 +258,7 @@ async function renderResumeList() {
           attachEditListeners(inner);
           loaded = true;
         } catch (_) {
-          inner.innerHTML = `<p class="resume-summary-text" style="padding:16px">Failed to load.</p>`;
+          inner.innerHTML = `<p class="muted-text" style="padding:16px">Failed to load.</p>`;
         }
       }
 
@@ -334,7 +334,7 @@ async function openNewResumeModal() {
           </label>
         `;
       }).join("")
-    : `<p class="resume-summary-text">No projects found. Upload a project first.</p>`;
+    : `<p class="muted-text">No projects found. Upload a project first.</p>`;
 
   const contributorListHtml = contributors.length
     ? contributors.map((c) => `
@@ -343,7 +343,7 @@ async function openNewResumeModal() {
           <span class="resume-modal-item-name">${c.username}</span>
         </label>
       `).join("")
-    : `<p class="resume-summary-text">No contributors found for these projects.</p>`;
+    : `<p class="muted-text">No contributors found for these projects.</p>`;
 
   const modal = document.createElement("div");
   modal.id = "new-resume-modal";
@@ -1194,7 +1194,7 @@ export function initResumeManager() {
       // Logged out / public mode
       const container = document.getElementById("resume-list-container");
       if (container) {
-        container.innerHTML = `<p class="resume-summary-text">Click "New Resume" to create your first resume.</p>`;
+        container.innerHTML = `<p class="muted-text">Click "New Resume" to create your first resume.</p>`;
       }
     }
   });

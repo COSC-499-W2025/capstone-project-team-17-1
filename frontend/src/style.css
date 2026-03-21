@@ -2503,7 +2503,7 @@ transition: all 0.2s ease;
   font-size: 15px;
 }
 
-.resume-summary-text {
+.muted-text {
   margin: 0;
   line-height: 1.6;
   opacity: 0.92;
@@ -4147,18 +4147,40 @@ transition: all 0.2s ease;
   transition: color 0.15s;
   line-height: 1;
 }
-.resume-list-card:hover .resume-star-btn,
-.customization-project-editor:hover .resume-star-btn {
+.resume-list-card:hover .resume-star-btn {
   color: rgba(255,255,255,0.35);
 }
-.resume-list-card:hover .resume-star-btn.starred,
-.customization-project-editor:hover .resume-star-btn.starred {
+.resume-list-card:hover .resume-star-btn.starred {
+  color: #fbbf24;
+}
+.customization-project-editor:hover .portfolio-star-btn {
+  color: rgba(255,255,255,0.35);
+}
+.customization-project-editor:hover .portfolio-star-btn.starred {
   color: #fbbf24;
 }
 .resume-star-btn.starred {
   color: #fbbf24;
 }
 .resume-star-btn.starred:hover {
+  color: #f59e0b;
+}
+
+.portfolio-star-btn {
+  background: none;
+  border: none;
+  padding: 0 6px 0 0;
+  font-size: 1rem;
+  color: rgba(255,255,255,0.15);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.portfolio-star-btn.starred {
+  color: #fbbf24;
+}
+.portfolio-star-btn.starred:hover {
   color: #f59e0b;
 }
 
@@ -5061,17 +5083,6 @@ transition: all 0.2s ease;
   display: none;
 }
 
-.customization-status[data-kind="success"] {
-  color: #4ade80;
-}
-
-.customization-status[data-kind="error"] {
-  color: #f87171;
-}
-
-.customization-status[data-kind="warning"] {
-  color: #fbbf24;
-}
 
 .customization-grid {
   display: grid;
@@ -5167,20 +5178,20 @@ transition: all 0.2s ease;
   width: 70px;
 }
 
-.customization-form-grid {
+.form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
 
-.customization-form-grid label {
+.form-grid label {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.customization-form-grid input,
-.customization-form-grid textarea {
+.form-grid input,
+.form-grid textarea {
   border: none;
   border-radius: 12px;
   padding: 12px 14px;
@@ -5189,7 +5200,7 @@ transition: all 0.2s ease;
   resize: vertical;
 }
 
-.customization-full-row {
+.form-full-row {
   grid-column: 1 / -1;
 }
 
@@ -5235,7 +5246,7 @@ transition: all 0.2s ease;
 
 @media (max-width: 960px) {
   .customization-grid,
-  .customization-form-grid,
+  .form-grid,
   .customization-project-editor-list {
     grid-template-columns: 1fr;
   }
@@ -5245,7 +5256,7 @@ transition: all 0.2s ease;
     flex-direction: column;
   }
 
-  .customization-full-row {
+  .form-full-row {
     grid-column: auto;
   }
 }

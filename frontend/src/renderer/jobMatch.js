@@ -33,7 +33,7 @@ export function renderJobTargetSection(customization) {
   };
 
   container.innerHTML = `
-    <div class="customization-form-grid">
+    <div class="form-grid">
       <label>
         <span>Job Title</span>
         <input
@@ -54,7 +54,7 @@ export function renderJobTargetSection(customization) {
         />
       </label>
 
-      <label class="customization-full-row">
+      <label class="form-full-row">
         <span>Job Description</span>
         <textarea
           id="job-target-description"
@@ -146,7 +146,7 @@ function renderJobMatchPage() {
   if (!isPrivateMode()) {
     const container = document.getElementById("portfolio-job-target-container");
     if (container) {
-      container.innerHTML = `<p class="resume-summary-text">Private Mode is required for Job Match.</p>`;
+      container.innerHTML = `<p class="muted-text">Private Mode is required for Job Match.</p>`;
     }
     return;
   }
