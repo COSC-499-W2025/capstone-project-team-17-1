@@ -1,5 +1,9 @@
+import { authFetch } from "./auth.js";
+
+const API_BASE = "http://127.0.0.1:8002";
+
 async function fetchConsentState() {
-  const res = await fetch("http://127.0.0.1:8002/privacy-consent");
+  const res = await authFetch("/privacy-consent");
   if (!res.ok) {
     throw new Error(`Failed to fetch consent state: ${res.status}`);
   }
@@ -45,7 +49,7 @@ async function runErrorAnalysis(container) {
     </div>
   `;
 
-  const res = await fetch("http://127.0.0.1:8002/errors/analyze", {
+  const res = await authFetch("/errors/analyze", {
     method: "POST"
   });
   const payload = await res.json();
@@ -66,7 +70,7 @@ async function runErrorAnalysis(container) {
     `;
 
     document.getElementById("enable-ai-btn")?.addEventListener("click", async () => {
-      await fetch("http://127.0.0.1:8002/privacy-consent/external", {
+      await authFetch("/privacy-consent/external", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consent: true })
@@ -91,7 +95,7 @@ export async function loadErrorAnalysis() {
   `;
 
   try {
-    const res = await fetch("http://127.0.0.1:8002/errors");
+    const res = await authFetch("/errors");
     const data = await res.json();
 
     container.innerHTML = "";
@@ -110,7 +114,7 @@ export async function loadErrorAnalysis() {
       `;
 
       document.getElementById("enable-ai-btn")?.addEventListener("click", async () => {
-        await fetch("http://127.0.0.1:8002/privacy-consent/external", {
+        await authFetch("/privacy-consent/external", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ consent: true })
