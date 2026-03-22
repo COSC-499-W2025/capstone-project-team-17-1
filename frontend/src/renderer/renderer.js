@@ -1,4 +1,5 @@
 import { initPortfolioEditor } from "./portfolioEditor.js";
+import { initChat } from "./chat.js";
 import { initJobMatch } from "./jobMatch.js";
 import { initThemeToggle } from "./theme.js";
 import { initWindowControls } from "./windowControls.js";
@@ -37,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initThemeToggle();
 
   initWindowControls();
-
+  initChat();
   initAuthFlow();
   
   initPortfolio();
