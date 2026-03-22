@@ -843,6 +843,11 @@ def fetch_error_results(conn):
         FROM error_analysis_results
     """).fetchall()
 
+    # No rows means analysis has never been run; return None so the caller
+    # can distinguish "never analyzed" from "analyzed and clean" (empty list).
+    if not rows:
+        return None
+
     results = []
     for row in rows:
         project_id, errors_json = row
@@ -1153,6 +1158,8 @@ def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
     """
     Returns the latest snapshot + zip_path for each project.
     Used exclusively for AI error analysis.
+    Uses MAX(id) rowid-based selection to match recent_projects.py and avoid
+    datetime() parsing failures on rows with NULL or non-standard created_at.
     """
 
     rows = conn.execute(
@@ -1162,14 +1169,12 @@ def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
                pa.zip_path,
                pa.created_at
         FROM project_analysis pa
-        JOIN (
-            SELECT project_id, MAX(datetime(created_at)) AS max_created
+        WHERE pa.id IN (
+            SELECT MAX(id)
             FROM project_analysis
             GROUP BY project_id
-        ) latest
-          ON latest.project_id = pa.project_id
-         AND datetime(pa.created_at) = latest.max_created
-        ORDER BY datetime(pa.created_at) DESC
+        )
+        ORDER BY pa.id DESC
         """
     ).fetchall()
 

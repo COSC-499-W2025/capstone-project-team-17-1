@@ -88,6 +88,7 @@ export async function loadProjects() {
           }
 
           card.classList.add("removing");
+          notifyPortfolioDataUpdated();
 
           await Promise.all([
             loadProjects(),

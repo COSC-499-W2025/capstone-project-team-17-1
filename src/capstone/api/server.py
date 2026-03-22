@@ -101,7 +101,6 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(dashboard_router)
     app.include_router(activity_router)
     app.include_router(errors_router)
-    app.include_router(projects_router)
     app.include_router(health_router)
     app.include_router(github_router)
     app.include_router(cloud_router)

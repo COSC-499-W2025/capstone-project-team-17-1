@@ -90,9 +90,12 @@ body.light {
   z-index: 1000;
 }
 
-/* Windows: push titlebar below win-controls */
+/* Windows: reserve space at the top for win-controls without breaking drag.
+   padding-top keeps the titlebar starting at y=0 so its -webkit-app-region:drag
+   covers the full top strip. margin-top would have left a no-drag gap. */
 body.win-platform .titlebar {
-  margin-top: 20px;
+  padding-top: 20px;
+  box-sizing: border-box;
 }
 
 /* Windows custom window controls */
@@ -380,17 +383,15 @@ body.light .theme-toggle::before {
 .dashboard-loader {
   position: absolute;
   inset: 0;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   z-index: 1;
+  height: 100%;
 }
 .dashboard-content.hidden {
   display: none !important;
 }
 .dashboard-content:not(.hidden) {
-  display: grid;
+  display: block;
+  height: 100%;
 }
 #dashboard-page {
   position: relative;
