@@ -721,6 +721,7 @@ body.light .theme-toggle::before {
 #tab-settings {
   overflow-y: auto;
   padding-bottom: 24px;
+  /* legacy selector — settings now uses .settings-layout */
 }
 
 .profile-grid {
@@ -5468,3 +5469,345 @@ transition: all 0.2s ease;
 .customization-status[data-kind="info"] {
   color: #9ecbff;
 }
+
+/* ============================================================
+   SETTINGS PAGE — TABBED LAYOUT
+   ============================================================ */
+
+#settings-page {
+  overflow: hidden;
+}
+
+.settings-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.settings-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 15, 30, 0.55);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0 0 24px;
+}
+
+.settings-sidebar-header {
+  padding: 28px 20px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-sidebar-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  opacity: 0.9;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(219, 234, 254, 0.65);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbeafe;
+}
+
+.settings-nav-item.active {
+  background: rgba(77, 166, 255, 0.14);
+  color: #7dc8ff;
+  font-weight: 700;
+}
+
+.settings-nav-icon {
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+/* Right content area */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 36px 40px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.settings-tab-panel {
+  display: none;
+  max-width: 680px;
+}
+
+.settings-tab-panel.active {
+  display: block;
+}
+
+.settings-section-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 22px;
+  letter-spacing: 0.01em;
+}
+
+/* Settings card (replaces old .settings-card inside panels) */
+.settings-tab-panel .settings-card {
+  margin: 0 0 20px;
+  padding: 24px;
+  border-radius: 16px;
+  background: rgba(20, 30, 60, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-card-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-card-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-card-desc {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.65;
+  line-height: 1.5;
+}
+
+.settings-login-prompt {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.65;
+}
+
+/* Form grid used inside settings cards */
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.settings-form-label {
+  font-size: 13px;
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.settings-form-value {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.settings-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbeafe;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.settings-input:focus {
+  border-color: rgba(77, 166, 255, 0.55);
+}
+
+.settings-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.settings-save-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b1120;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.settings-save-btn:hover {
+  opacity: 0.88;
+}
+
+.settings-save-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-feedback-msg {
+  font-size: 13px;
+  opacity: 0.85;
+  min-height: 18px;
+}
+
+/* General tab field row */
+.settings-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.settings-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-field-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-field-label span:first-child {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.settings-field-hint {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.settings-action-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #dbeafe;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.settings-action-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ============================================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================================ */
+
+.logout-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 10, 20, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.logout-modal.hidden {
+  display: none;
+}
+
+.logout-modal-dialog {
+  width: min(380px, calc(100vw - 40px));
+  padding: 32px 28px 28px;
+  border-radius: 18px;
+  background: rgba(14, 20, 42, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+.logout-modal-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.logout-modal-body {
+  margin: 0 0 28px;
+  font-size: 14px;
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+.logout-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.logout-btn-cancel {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #dbeafe;
+  background: rgba(255, 255, 255, 0.09);
+  transition: background 0.15s;
+}
+
+.logout-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.logout-btn-confirm {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff0f0;
+  background: rgba(220, 60, 60, 0.75);
+  transition: background 0.15s;
+}
+
+.logout-btn-confirm:hover {
+  background: rgba(220, 60, 60, 0.92);
+}
+
