@@ -436,3 +436,24 @@ During the process, I discussed implementation details with team members to ensu
 
 - ### Completed Tasks Week 10
 - complete [Enhance Web Portfolio Presentation and Fix Project Deletion (#292](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/292)
+
+
+## Term2 week11 Personal LOG (Mar16 -Mar22, 2026)
+
+### 1. Weekly Goals Recap
+- complete [Improve portfolio heatmap, onboarding, and consent flows (#307)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/307)
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I completed improvements to the portfolio experience, onboarding flow, and consent system. [Improve portfolio heatmap, onboarding, and consent flows (#307)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/307). These updates enhance both public and private mode behavior and improve overall usability for milestone demonstrations.
+
+In the portfolio, I upgraded the activity heatmap into a GitHub-style daily contribution graph and fixed the data pipeline so it correctly reflects current user activity. I also improved portfolio refresh behavior after uploads, GitHub imports, authentication changes, and mode switching. The top-three project showcase was enhanced with clearer contribution/evidence display and a project evolution section, and skills are now grouped by inferred expertise levels.
+
+I added a guided tutorial mode for first-time users and implemented a cookie-style consent flow with settings-based management. I also improved navigation logic, including login gating for settings and customization features.
+
+Additionally, I fixed issues where the heatmap appeared empty, portfolio updates required manual refresh, and GitHub uploads from different branches caused errors.
+
+To verify these changes, I added and ran frontend tests covering onboarding, auth behavior, heatmap rendering, consent logic, and portfolio features. All tests passed, and I also performed manual testing across key user flows. I discussed implementation details with teammates and reviewed PRs to support smooth integration.
+
+### Completed Tasks Week 11
+- complete [Improve portfolio heatmap, onboarding, and consent flows (#307)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/307)

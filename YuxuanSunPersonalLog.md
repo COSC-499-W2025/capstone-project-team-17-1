@@ -10,7 +10,8 @@
 - [Milestone 2 - Week 7 [Feb 16 – Feb 22, 2026]](#week-7-m2)
 - [Milestone 2 - Week 8 [Feb 23 – Mar 1, 2026]](#week-8-m2)
 - [Milestone 2 - Week 9 [Mar 2 – Mar 8, 2026]](#week-9-m2)
-- [Milestone 2 - Week 10 [Mar 9 – Mar 15, 2026]](#week-10-m2)
+- [Milestone 3 - Week 10 [Mar 9 – Mar 15, 2026]](#week-10-m2)
+- [Milestone 3 - Week 10 [Mar 16 – Mar 22, 2026]](#week-11-m3)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -244,6 +245,17 @@ On the export side, I redesigned the workflow into a modal with separate JSON, M
  (#294)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/294)
 
 Next week, I plan to refactor the database to align it with the newly added login system. In addition, it will also be necessary to further polish the existing features more carefully. At the same time, remaining issues from Milestone 2, such as automatic detection of user roles, also need to be addressed and completed.
+
+<img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
+
+[Back](#table-of-contents)
+
+
+## Week 11 (M3)
+[Mar 16 – Mar 22, 2026]
+This week, I worked on refactoring and polishing the frontend across the Resume, Portfolio, and Job Match tabs. I simplified the Portfolio page into a unified grid and section system, improved the project editing workflow with per-project save feedback and a star-based featured toggle, and updated the card layout to display three projects per row. I also cleaned up parts of the frontend structure by normalizing legacy CSS class names and renaming renderer files to better align with the current three-tab organization. In addition, I refreshed the theme toggle design and added custom window controls for Windows while keeping the native behavior on Mac. [Refactoring the frontend architecture and renderer JS classes (#309)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/309)
+ 
+Since next week is the end of Milestone 3, I will focus on final project optimization, as well as checking for and fixing remaining bugs.
 
 <img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
 
