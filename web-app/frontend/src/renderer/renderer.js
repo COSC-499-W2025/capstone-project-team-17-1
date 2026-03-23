@@ -9,6 +9,7 @@ import { initAuthFlow, isAuthenticated } from "./auth.js";
 import { openUploadModal } from "./uploadModal.js";
 import { initNavigation } from "./navigation.js";
 import { initPortfolioResume } from "./portfolioResume.js";
+import { initDisplayPreferences } from "./displayPreferences.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const uploadBtn = document.getElementById("upload-project-btn");
@@ -20,6 +21,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (isAuthenticated()) {
     initNavigation();
+    initDisplayPreferences();
     initPortfolioResume();
 
     await loadMostUsedSkills();

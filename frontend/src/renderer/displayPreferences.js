@@ -107,8 +107,8 @@ function renderPrivateSelectionPanel() {
   panel.innerHTML = `
     <div class="tab-selection-content">
       <div class="tab-selection-header">
-        <div class="tab-selection-title">Web Portfolio</div>
-        <div class="tab-selection-subtitle">Click row to jump · toggle to show/hide</div>
+        <div class="tab-selection-title">Portfolio Filters</div>
+        <div class="tab-selection-subtitle">Click row to jump or toggle visibility</div>
       </div>
       <div class="tab-selection-options">
         ${PORTFOLIO_OPTIONS.map(
@@ -192,12 +192,16 @@ export function applyDisplayPreferences() {
 export function initDisplayPreferences() {
   const searchInput = document.getElementById("dashboard-search-input");
   const filterSelect = document.getElementById("dashboard-filter-select");
+  const portfolioSearchInput = document.getElementById("portfolio-search-input");
+  const portfolioFilterSelect = document.getElementById("portfolio-filter-select");
   const selectionToggle = document.getElementById("portfolio-selection-toggle");
   const selectionPanel = document.getElementById("portfolio-selection-panel");
   const initialState = loadDashboardState();
+  const initialPortfolioState = loadPortfolioState();
 
   if (searchInput) searchInput.value = initialState.search;
   if (filterSelect) filterSelect.value = initialState.category;
+  if (portfolioSearchInput) portfolioSearchInput.value = initialPortfolioState.search;
 
   searchInput?.addEventListener("input", () => {
     saveDashboardState({
@@ -211,6 +215,14 @@ export function initDisplayPreferences() {
     saveDashboardState({
       search: searchInput?.value || "",
       category: filterSelect.value,
+    });
+    applyDisplayPreferences();
+  });
+
+  portfolioSearchInput?.addEventListener("input", () => {
+    savePortfolioState({
+      search: portfolioSearchInput.value,
+      category: "all",
     });
     applyDisplayPreferences();
   });

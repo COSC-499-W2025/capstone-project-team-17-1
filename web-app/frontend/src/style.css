@@ -309,6 +309,62 @@ body.light .theme-toggle::before {
   z-index: 1;
 }
 
+.section-hidden {
+  display: none !important;
+}
+
+.dashboard-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 30px;
+}
+
+.dashboard-toolbar-copy h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.dashboard-toolbar-copy p {
+  margin: 8px 0 0;
+  opacity: 0.8;
+}
+
+.dashboard-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-search-input,
+.dashboard-filter-select {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 0 14px;
+  outline: none;
+}
+
+.dashboard-search-input {
+  min-width: 260px;
+}
+
+.dashboard-filter-select option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
 /* =========================================================
    DASHBOARD GRID
    Key fixes:
@@ -318,7 +374,8 @@ body.light .theme-toggle::before {
 ========================================================= */
 
 .dashboard {
-  height: 100%;
+  flex: 1;
+  height: auto;
   min-height: 0;
   display: grid;
 
@@ -327,7 +384,7 @@ body.light .theme-toggle::before {
 
   gap: 20px;
 
-  padding: 40px 30px;
+  padding: 0 30px 30px;
   box-sizing: border-box;
 
   overflow: hidden;
@@ -336,13 +393,13 @@ body.light .theme-toggle::before {
 
 @media (max-height: 900px) {
   .dashboard {
-    padding: 28px 26px;
+    padding: 0 26px 26px;
   }
 }
 
 @media (max-height: 760px) {
   .dashboard {
-    padding: 18px 18px;
+    padding: 0 18px 18px;
     gap: 14px;
   }
 }
@@ -432,6 +489,22 @@ body.light .theme-toggle::before {
 }
 
 @media (max-width: 700px) {
+  .dashboard-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 18px;
+  }
+
+  .dashboard-toolbar-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-search-input {
+    min-width: 0;
+    width: 100%;
+  }
+
   .dashboard {
     grid-template-columns: 1fr;
     grid-auto-rows: minmax(0, 1fr);
