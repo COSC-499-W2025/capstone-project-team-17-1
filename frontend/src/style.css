@@ -186,6 +186,8 @@ input,
 
 .nav {
   display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 40px;
   font-size: 15px;
   font-weight: 500;
@@ -200,10 +202,21 @@ input,
   transition: all 0.3s ease;
 }
 
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  color: inherit;
+}
+
 .nav span:hover {
   opacity: 1;
   color: var(--accent);
 }
+
 
 .nav .active::after {
   content: "";
@@ -1245,6 +1258,11 @@ svg {
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
 }
 
 .auth-modal {
