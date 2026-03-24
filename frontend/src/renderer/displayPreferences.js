@@ -11,6 +11,13 @@ const DASHBOARD_STATE_KEY = "loom_dashboard_state";
 const PORTFOLIO_STATE_KEY = "loom_portfolio_state";
 const PRIVATE_SELECTION_KEY = "loom_private_portfolio_selection";
 const PRIVATE_DASHBOARD_SELECTION_KEY = "loom_private_dashboard_selection";
+const DASHBOARD_FILTER_OPTIONS = [
+  { id: "all", label: "All widgets" },
+  { id: "insights", label: "Insights" },
+  { id: "projects", label: "Projects" },
+  { id: "system", label: "System" },
+  { id: "activity", label: "Activity" },
+];
 const PORTFOLIO_OPTIONS = [
   { id: "project-details", label: "Project Portfolio Details" },
   { id: "top-projects", label: "Top 3 Projects" },
@@ -49,6 +56,7 @@ function loadDashboardState() {
     const parsed = JSON.parse(raw);
     return {
       search: String(parsed?.search || ""),
+      category: String(parsed?.category || "all"),
     };
   } catch (_) {
     return { ...DEFAULT_DASHBOARD_STATE };
@@ -222,8 +230,53 @@ function renderPrivateDashboardSelectionPanel() {
   });
 }
 
+function renderDashboardFilterPanel() {
+  const wrapper = document.getElementById("dashboard-filter-wrapper");
+  const panel = document.getElementById("dashboard-filter-panel");
+  if (!wrapper || !panel) return;
+
+  wrapper.classList.toggle("hidden", isPrivateMode());
+  if (isPrivateMode()) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const { category } = loadDashboardState();
+
+  panel.innerHTML = `
+    <div class="tab-selection-content">
+      <div class="tab-selection-header">
+        <div class="tab-selection-title">Filter Widgets</div>
+        <div class="tab-selection-subtitle">Show widgets by dashboard category</div>
+      </div>
+      <div class="tab-selection-options">
+        ${DASHBOARD_FILTER_OPTIONS.map(
+          (option) => `
+            <label class="tab-selection-option dashboard-filter-option">
+              <input type="radio" name="dashboard-filter" value="${escapeHtml(option.id)}" ${category === option.id ? "checked" : ""} />
+              <span class="tab-selection-option-check"></span>
+              <span class="tab-selection-option-label">${escapeHtml(option.label)}</span>
+            </label>
+          `
+        ).join("")}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('input[name="dashboard-filter"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      saveDashboardState({
+        search: document.getElementById("dashboard-search-input")?.value || "",
+        category: input.value || "all",
+      });
+      applyDisplayPreferences();
+      panel.classList.add("hidden");
+    });
+  });
+}
+
 function applyDashboardVisibility() {
-  const { search } = loadDashboardState();
+  const { search, category } = loadDashboardState();
   const query = search.trim().toLowerCase();
   const selectedIds = loadPrivateDashboardWidgetSelection();
 
@@ -237,7 +290,7 @@ function applyDashboardVisibility() {
         widgetId,
         label,
         category: widgetCategory,
-        state: { search: query, category: "all" },
+        state: { search: query, category },
         isPrivateMode: isPrivateMode(),
         selectedIds,
       })
@@ -265,6 +318,8 @@ export function applyDisplayPreferences() {
 
 export function initDisplayPreferences() {
   const searchInput = document.getElementById("dashboard-search-input");
+  const dashboardFilterToggle = document.getElementById("dashboard-filter-toggle");
+  const dashboardFilterPanel = document.getElementById("dashboard-filter-panel");
   const portfolioSearchInput = document.getElementById("portfolio-search-input");
   const portfolioFilterSelect = document.getElementById("portfolio-filter-select");
   const dashboardSelectionToggle = document.getElementById("dashboard-selection-toggle");
@@ -280,8 +335,14 @@ export function initDisplayPreferences() {
   searchInput?.addEventListener("input", () => {
     saveDashboardState({
       search: searchInput.value,
+      category: loadDashboardState().category || "all",
     });
     applyDisplayPreferences();
+  });
+
+  dashboardFilterToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dashboardFilterPanel?.classList.toggle("hidden");
   });
 
   portfolioSearchInput?.addEventListener("input", () => {
@@ -305,21 +366,27 @@ export function initDisplayPreferences() {
   document.addEventListener("click", (event) => {
     const wrapper = document.getElementById("portfolio-selection-wrapper");
     const dashboardWrapper = document.getElementById("dashboard-selection-wrapper");
+    const dashboardFilterWrapper = document.getElementById("dashboard-filter-wrapper");
     if (wrapper && !wrapper.contains(event.target)) {
       selectionPanel?.classList.add("hidden");
     }
     if (dashboardWrapper && !dashboardWrapper.contains(event.target)) {
       dashboardSelectionPanel?.classList.add("hidden");
     }
+    if (dashboardFilterWrapper && !dashboardFilterWrapper.contains(event.target)) {
+      dashboardFilterPanel?.classList.add("hidden");
+    }
   });
 
   document.addEventListener("auth:mode-changed", () => {
     renderPrivateSelectionPanel();
+    renderDashboardFilterPanel();
     renderPrivateDashboardSelectionPanel();
     applyDisplayPreferences();
   });
 
   renderPrivateSelectionPanel();
+  renderDashboardFilterPanel();
   renderPrivateDashboardSelectionPanel();
   applyDisplayPreferences();
 }
