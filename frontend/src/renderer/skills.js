@@ -80,7 +80,7 @@ export async function loadMostUsedSkills() {
                 </span>
               </div>
               <div class="skill-right-modern">
-                ${capitalize(skill.topProject)}
+                
               </div>
             </div>
           `
@@ -119,7 +119,7 @@ export async function loadMostUsedSkills() {
           ${result.skills.slice(0, 5).map((skill) => `
             <div class="skills-pie-legend-row">
               <span class="skills-pie-legend-name">${capitalize(skill.skill)}</span>
-              <span class="skills-pie-legend-meta">${(skill.confidence * 100).toFixed(1)}% · ${capitalize(skill.topProject)}</span>
+              <span class="skills-pie-legend-meta">${(skill.confidence * 100).toFixed(1)}%</span>
             </div>
           `).join("")}
         </div>

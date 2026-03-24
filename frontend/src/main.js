@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 const os = require("os");
 const fs = require("fs");
 const net = require("net");
+const http = require("http");
 
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -58,7 +59,18 @@ async function startAPI() {
   }
 
   if (await isPortInUse(API_HOST, API_PORT)) {
-    console.log(`Backend already available at http://${API_HOST}:${API_PORT}; reusing it.`);
+    const existingBackend = await probeExistingBackend(API_HOST, API_PORT);
+    if (existingBackend.ok) {
+      console.log(`Backend already available at http://${API_HOST}:${API_PORT}; reusing verified Capstone API.`);
+      return;
+    }
+
+    const message =
+      `Port ${API_PORT} is already in use by a different service.\n\n` +
+      `The app will not reuse it because that can break features like starring/saving projects.\n\n` +
+      `Details: ${existingBackend.reason}`;
+    console.error(message);
+    dialog.showErrorBox("Backend Port Conflict", message);
     return;
   }
 
@@ -120,6 +132,71 @@ async function startAPI() {
   apiProcess.on("error", err => {
     console.error(`Failed to start backend (${apiProcessMode}):`, err);
   });
+}
+
+function httpGetJson(host, port, pathName) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(
+      {
+        host,
+        port,
+        path: pathName,
+        timeout: 1500,
+      },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          try {
+            resolve({
+              statusCode: res.statusCode || 0,
+              json: body ? JSON.parse(body) : null,
+            });
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error("request timed out"));
+    });
+    req.on("error", reject);
+  });
+}
+
+async function probeExistingBackend(host, port) {
+  try {
+    const [root, debug] = await Promise.all([
+      httpGetJson(host, port, "/"),
+      httpGetJson(host, port, "/__debug/routers"),
+    ]);
+
+    const rootOk = root.statusCode === 200 && root.json?.message === "Capstone API is running";
+    const debugOk =
+      debug.statusCode === 200 &&
+      Array.isArray(debug.json?.routes) &&
+      debug.json.routes.includes("/projects") &&
+      debug.json.routes.includes("/auth/me");
+
+    if (rootOk && debugOk) {
+      return { ok: true, reason: "verified Capstone API" };
+    }
+
+    return {
+      ok: false,
+      reason: `unexpected responses from existing service on ${host}:${port}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function stopAPI() {
