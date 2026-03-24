@@ -175,6 +175,16 @@ test("shouldHighlightTutorialSection disables white frames for projects, setting
   );
 
   assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "dashboard", sectionLabel: "Search" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "dashboard", sectionLabel: "Customize" }),
+    false
+  );
+
+  assert.equal(
     shouldHighlightTutorialSection({ tabKey: "customization", sectionLabel: "Live Preview" }),
     true
   );

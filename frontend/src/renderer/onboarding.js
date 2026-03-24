@@ -12,9 +12,19 @@ const TUTORIAL_STEPS = [
     description: "Dashboard gives you a quick view of recent projects, health signals, activity, and system status in one place.",
     sections: [
       {
+        label: "Search",
+        selectors: ["#dashboard-search-input", ".dashboard-toolbar"],
+        description: "Search lets you quickly narrow dashboard widgets by name while staying in the same public dashboard view.",
+      },
+      {
+        label: "Customize",
+        selectors: ["#dashboard-selection-wrapper", "#dashboard-selection-panel"],
+        description: "Customize is available in private mode and lets you choose which dashboard widgets appear before going live.",
+      },
+      {
         label: "Most Used Skills",
         selector: "#most-used-skills",
-        description: "Most Used Skills summarizes the tools and languages that appear most often across your analyzed projects.",
+        description: "Most Used Skills summarizes the tools and languages that appear most often across your analyzed projects, and now supports switching between Bar and Pie views.",
       },
       {
         label: "Error Analysis",

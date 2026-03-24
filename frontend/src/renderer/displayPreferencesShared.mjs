@@ -9,7 +9,6 @@ export const DASHBOARD_OPTIONS = [
 
 export const DEFAULT_DASHBOARD_STATE = {
   search: "",
-  category: "all",
 };
 
 export function getDefaultDashboardSelection() {

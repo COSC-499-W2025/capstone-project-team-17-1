@@ -21,5 +21,5 @@ export function shouldPlaceOnboardingPanelRight({ detailOpen, tabKey, sectionLab
 
 export function shouldHighlightTutorialSection({ tabKey, sectionLabel }) {
   return !["projects", "settings", "job-match", "chat"].includes(tabKey)
-    && !["Resume Generation", "My Starred Projects", "Project Detail Drafts"].includes(sectionLabel);
+    && !["Resume Generation", "My Starred Projects", "Project Detail Drafts", "Search", "Customize"].includes(sectionLabel);
 }

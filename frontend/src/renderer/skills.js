@@ -1,5 +1,8 @@
 import { isPrivateMode } from "./auth.js";
 
+const SKILLS_CHART_MODE_KEY = "loom_dashboard_skills_chart_mode";
+let skillsChart = null;
+
 export async function loadMostUsedSkills() {
 
   const container = document.getElementById("most-used-skills");
@@ -30,55 +33,149 @@ export async function loadMostUsedSkills() {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
-  container.innerHTML = `
-  <h3 class="skills-title">Most Used Skills</h3>
-  <div class="skills-wrapper">
-    ${result.skills
-      .slice(0, 5)
-      .map(
-        (skill) => `
-        <div class="skill-row-modern">
-          
-          <div class="skill-left-modern">
-            ${capitalize(skill.skill)}
-          </div>
+  function getChartMode() {
+    const saved = localStorage.getItem(SKILLS_CHART_MODE_KEY);
+    return saved === "pie" ? "pie" : "bar";
+  }
 
-          <div class="skill-middle-modern">
-            <div class="skill-bar-modern">
-              <div 
-                class="skill-bar-fill-modern"
-                data-width="${(skill.confidence * 100).toFixed(1)}%"
-                style="width: 0%"
-              ></div>
-            </div>
-            <span class="skill-percentage-modern">
-              ${(skill.confidence * 100).toFixed(1)}%
-            </span>
-          </div>
+  function saveChartMode(mode) {
+    localStorage.setItem(SKILLS_CHART_MODE_KEY, mode === "pie" ? "pie" : "bar");
+  }
 
-          <div class="skill-right-modern">
-            ${capitalize(skill.topProject)}
-          </div>
+  function destroyChart() {
+    if (skillsChart) {
+      skillsChart.destroy();
+      skillsChart = null;
+    }
+  }
 
+  function renderBarView() {
+    container.innerHTML = `
+      <div class="skills-header-row">
+        <h3 class="skills-title">Most Used Skills</h3>
+        <div class="skills-view-toggle" role="tablist" aria-label="Most used skills chart type">
+          <button type="button" class="skills-view-btn active" data-skills-view="bar">Bar</button>
+          <button type="button" class="skills-view-btn" data-skills-view="pie">Pie</button>
         </div>
-      `
-      )
-      .join("")}
-  </div>
-`;
+      </div>
+      <div class="skills-wrapper">
+        ${result.skills
+          .slice(0, 5)
+          .map(
+            (skill) => `
+            <div class="skill-row-modern">
+              <div class="skill-left-modern">
+                ${capitalize(skill.skill)}
+              </div>
+              <div class="skill-middle-modern">
+                <div class="skill-bar-modern">
+                  <div 
+                    class="skill-bar-fill-modern"
+                    data-width="${(skill.confidence * 100).toFixed(1)}%"
+                    style="width: 0%"
+                  ></div>
+                </div>
+                <span class="skill-percentage-modern">
+                  ${(skill.confidence * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div class="skill-right-modern">
+                ${capitalize(skill.topProject)}
+              </div>
+            </div>
+          `
+          )
+          .join("")}
+      </div>
+    `;
 
-const bars = document.querySelectorAll(".skill-bar-fill-modern");
+    const bars = container.querySelectorAll(".skill-bar-fill-modern");
+    bars.forEach((bar) => {
+      bar.style.width = "0%";
+    });
 
-bars.forEach(bar => {
-  bar.style.width = "0%";
-});
+    void document.body.offsetHeight;
 
-void document.body.offsetHeight;
+    bars.forEach((bar) => {
+      const targetWidth = bar.dataset.width;
+      bar.style.width = targetWidth;
+    });
+  }
 
-bars.forEach(bar => {
-  const targetWidth = bar.dataset.width;
-  bar.style.width = targetWidth;
-});
+  function renderPieView() {
+    container.innerHTML = `
+      <div class="skills-header-row">
+        <h3 class="skills-title">Most Used Skills</h3>
+        <div class="skills-view-toggle" role="tablist" aria-label="Most used skills chart type">
+          <button type="button" class="skills-view-btn" data-skills-view="bar">Bar</button>
+          <button type="button" class="skills-view-btn active" data-skills-view="pie">Pie</button>
+        </div>
+      </div>
+      <div class="skills-pie-layout">
+        <div class="skills-pie-canvas-wrap">
+          <canvas id="most-used-skills-pie"></canvas>
+        </div>
+        <div class="skills-pie-legend">
+          ${result.skills.slice(0, 5).map((skill) => `
+            <div class="skills-pie-legend-row">
+              <span class="skills-pie-legend-name">${capitalize(skill.skill)}</span>
+              <span class="skills-pie-legend-meta">${(skill.confidence * 100).toFixed(1)}% · ${capitalize(skill.topProject)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+
+    const canvas = container.querySelector("#most-used-skills-pie");
+    if (canvas && window.Chart) {
+      skillsChart = new window.Chart(canvas, {
+        type: "pie",
+        data: {
+          labels: result.skills.slice(0, 5).map((skill) => capitalize(skill.skill)),
+          datasets: [
+            {
+              data: result.skills.slice(0, 5).map((skill) => Number((skill.confidence * 100).toFixed(1))),
+              backgroundColor: ["#38bdf8", "#22c55e", "#f59e0b", "#f97316", "#a78bfa"],
+              borderColor: "#0f172a",
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false,
+            },
+          },
+        },
+      });
+    }
+  }
+
+  function bindViewToggle() {
+    container.querySelectorAll("[data-skills-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextMode = button.dataset.skillsView === "pie" ? "pie" : "bar";
+        if (nextMode === getChartMode()) return;
+        saveChartMode(nextMode);
+        renderCurrentView();
+      });
+    });
+  }
+
+  function renderCurrentView() {
+    destroyChart();
+    if (getChartMode() === "pie") {
+      renderPieView();
+    } else {
+      renderBarView();
+    }
+    bindViewToggle();
+  }
+
+  renderCurrentView();
 
 }
 

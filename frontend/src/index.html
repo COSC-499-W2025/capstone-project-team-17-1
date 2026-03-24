@@ -76,7 +76,7 @@
             <div class="dashboard-toolbar">
               <div class="dashboard-toolbar-copy">
                 <h1>Dashboard</h1>
-                <p>Search and filter dashboard widgets by section.</p>
+                <p>Search dashboard widgets and customize them in private mode.</p>
               </div>
               <div class="dashboard-toolbar-controls">
                 <input
@@ -85,13 +85,10 @@
                   type="text"
                   placeholder="Search widgets..."
                 />
-                <select id="dashboard-filter-select" class="dashboard-filter-select">
-                  <option value="all">All sections</option>
-                  <option value="insights">Insights</option>
-                  <option value="projects">Projects</option>
-                  <option value="system">System</option>
-                  <option value="activity">Activity</option>
-                </select>
+                <div id="dashboard-selection-wrapper" class="tab-selection-wrapper hidden">
+                  <button id="dashboard-selection-toggle" class="export-btn">Customize</button>
+                  <div id="dashboard-selection-panel" class="tab-selection-panel hidden"></div>
+                </div>
               </div>
             </div>
 

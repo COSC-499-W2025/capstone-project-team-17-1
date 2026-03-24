@@ -2,12 +2,15 @@ import { getCurrentUser, isPrivateMode } from "./auth.js";
 import {
   DASHBOARD_OPTIONS,
   DEFAULT_DASHBOARD_STATE,
+  getDefaultDashboardSelection,
+  normalizeSelectedIds,
   shouldShowDashboardWidget,
 } from "./displayPreferencesShared.mjs";
 
 const DASHBOARD_STATE_KEY = "loom_dashboard_state";
 const PORTFOLIO_STATE_KEY = "loom_portfolio_state";
 const PRIVATE_SELECTION_KEY = "loom_private_portfolio_selection";
+const PRIVATE_DASHBOARD_SELECTION_KEY = "loom_private_dashboard_selection";
 const PORTFOLIO_OPTIONS = [
   { id: "project-details", label: "Project Portfolio Details" },
   { id: "top-projects", label: "Top 3 Projects" },
@@ -33,6 +36,12 @@ function getPrivateSelectionKey() {
   return `${PRIVATE_SELECTION_KEY}:${scope}`;
 }
 
+function getPrivateDashboardSelectionKey() {
+  const user = getCurrentUser();
+  const scope = user?.id || user?.username || "private";
+  return `${PRIVATE_DASHBOARD_SELECTION_KEY}:${scope}`;
+}
+
 function loadDashboardState() {
   try {
     const raw = localStorage.getItem(DASHBOARD_STATE_KEY);
@@ -40,7 +49,6 @@ function loadDashboardState() {
     const parsed = JSON.parse(raw);
     return {
       search: String(parsed?.search || ""),
-      category: String(parsed?.category || "all"),
     };
   } catch (_) {
     return { ...DEFAULT_DASHBOARD_STATE };
@@ -88,6 +96,25 @@ function loadPrivateDashboardSelection() {
 function savePrivateDashboardSelection(selectedIds) {
   if (!isPrivateMode()) return;
   localStorage.setItem(getPrivateSelectionKey(), JSON.stringify({ selectedIds }));
+}
+
+function loadPrivateDashboardWidgetSelection() {
+  try {
+    const raw = localStorage.getItem(getPrivateDashboardSelectionKey());
+    if (!raw) return getDefaultDashboardSelection();
+    const parsed = JSON.parse(raw);
+    return normalizeSelectedIds(parsed?.selectedIds);
+  } catch (_) {
+    return getDefaultDashboardSelection();
+  }
+}
+
+function savePrivateDashboardWidgetSelection(selectedIds) {
+  if (!isPrivateMode()) return;
+  localStorage.setItem(
+    getPrivateDashboardSelectionKey(),
+    JSON.stringify({ selectedIds: normalizeSelectedIds(selectedIds) })
+  );
 }
 
 function renderPrivateSelectionPanel() {
@@ -149,9 +176,56 @@ function renderPrivateSelectionPanel() {
   });
 }
 
+function renderPrivateDashboardSelectionPanel() {
+  const wrapper = document.getElementById("dashboard-selection-wrapper");
+  const panel = document.getElementById("dashboard-selection-panel");
+  if (!wrapper || !panel) return;
+
+  wrapper.classList.toggle("hidden", !isPrivateMode());
+  if (!isPrivateMode()) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const selectedIds = loadPrivateDashboardWidgetSelection();
+
+  panel.innerHTML = `
+    <div class="tab-selection-content">
+      <div class="tab-selection-header">
+        <div class="tab-selection-title">Dashboard Customize</div>
+        <div class="tab-selection-subtitle">Choose which dashboard widgets appear before going live</div>
+      </div>
+      <div class="tab-selection-options">
+        ${DASHBOARD_OPTIONS.map(
+          (option) => `
+            <div class="tab-selection-option">
+              <label class="tab-selection-option-toggle">
+                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.includes(option.id) ? "checked" : ""} />
+                <span class="tab-selection-option-check"></span>
+              </label>
+              <span class="tab-selection-option-label">${escapeHtml(option.label)}</span>
+            </div>
+          `
+        ).join("")}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const nextSelectedIds = Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(
+        (checkbox) => checkbox.value
+      );
+      savePrivateDashboardWidgetSelection(nextSelectedIds);
+      applyDisplayPreferences();
+    });
+  });
+}
+
 function applyDashboardVisibility() {
-  const { search, category } = loadDashboardState();
+  const { search } = loadDashboardState();
   const query = search.trim().toLowerCase();
+  const selectedIds = loadPrivateDashboardWidgetSelection();
 
   document.querySelectorAll(".dashboard-widget").forEach((element) => {
     const widgetId = element.dataset.widgetId || "";
@@ -163,9 +237,9 @@ function applyDashboardVisibility() {
         widgetId,
         label,
         category: widgetCategory,
-        state: { search: query, category },
-        isPrivateMode: false,
-        selectedIds: [],
+        state: { search: query, category: "all" },
+        isPrivateMode: isPrivateMode(),
+        selectedIds,
       })
     );
   });
@@ -191,30 +265,21 @@ export function applyDisplayPreferences() {
 
 export function initDisplayPreferences() {
   const searchInput = document.getElementById("dashboard-search-input");
-  const filterSelect = document.getElementById("dashboard-filter-select");
   const portfolioSearchInput = document.getElementById("portfolio-search-input");
   const portfolioFilterSelect = document.getElementById("portfolio-filter-select");
+  const dashboardSelectionToggle = document.getElementById("dashboard-selection-toggle");
+  const dashboardSelectionPanel = document.getElementById("dashboard-selection-panel");
   const selectionToggle = document.getElementById("portfolio-selection-toggle");
   const selectionPanel = document.getElementById("portfolio-selection-panel");
   const initialState = loadDashboardState();
   const initialPortfolioState = loadPortfolioState();
 
   if (searchInput) searchInput.value = initialState.search;
-  if (filterSelect) filterSelect.value = initialState.category;
   if (portfolioSearchInput) portfolioSearchInput.value = initialPortfolioState.search;
 
   searchInput?.addEventListener("input", () => {
     saveDashboardState({
       search: searchInput.value,
-      category: filterSelect?.value || "all",
-    });
-    applyDisplayPreferences();
-  });
-
-  filterSelect?.addEventListener("change", () => {
-    saveDashboardState({
-      search: searchInput?.value || "",
-      category: filterSelect.value,
     });
     applyDisplayPreferences();
   });
@@ -232,19 +297,29 @@ export function initDisplayPreferences() {
     selectionPanel?.classList.toggle("hidden");
   });
 
+  dashboardSelectionToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dashboardSelectionPanel?.classList.toggle("hidden");
+  });
+
   document.addEventListener("click", (event) => {
     const wrapper = document.getElementById("portfolio-selection-wrapper");
-    if (!wrapper) return;
-    if (!wrapper.contains(event.target)) {
+    const dashboardWrapper = document.getElementById("dashboard-selection-wrapper");
+    if (wrapper && !wrapper.contains(event.target)) {
       selectionPanel?.classList.add("hidden");
+    }
+    if (dashboardWrapper && !dashboardWrapper.contains(event.target)) {
+      dashboardSelectionPanel?.classList.add("hidden");
     }
   });
 
   document.addEventListener("auth:mode-changed", () => {
     renderPrivateSelectionPanel();
+    renderPrivateDashboardSelectionPanel();
     applyDisplayPreferences();
   });
 
   renderPrivateSelectionPanel();
+  renderPrivateDashboardSelectionPanel();
   applyDisplayPreferences();
 }

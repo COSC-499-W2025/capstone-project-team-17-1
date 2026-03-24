@@ -893,14 +893,14 @@ function renderActivityHeatmap(heatmapData) {
   `;
 }
 
-function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = []) {
+function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
   const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
   const projectDetailsMap = getProjectDetailsMap(summaryData);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
   const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
-  const backendSkills = dedupeStrings(summaryData?.skills);
 
   return `
     <div class="resume-preview-sheet">
@@ -933,16 +933,23 @@ function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProject
         </div>
       </div>
 
-      ${
-        backendSkills.length
-          ? `
-            <div class="resume-preview-section">
-              <h3>Core Skills</h3>
-              <p>${escapeHtml(backendSkills.join(", "))}</p>
-            </div>
-          `
-          : ""
-      }
+      <div class="resume-preview-section">
+        <h3>Skills by Expertise Level</h3>
+        <div class="resume-preview-grid">
+          <div>
+            <strong>Advanced</strong>
+            <p>${expertiseGroups.Advanced.length ? escapeHtml(expertiseGroups.Advanced.join(", ")) : "No advanced skills yet."}</p>
+          </div>
+          <div>
+            <strong>Intermediate</strong>
+            <p>${expertiseGroups.Intermediate.length ? escapeHtml(expertiseGroups.Intermediate.join(", ")) : "No intermediate skills yet."}</p>
+          </div>
+          <div>
+            <strong>Foundation</strong>
+            <p>${expertiseGroups.Foundation.length ? escapeHtml(expertiseGroups.Foundation.join(", ")) : "No foundation skills yet."}</p>
+          </div>
+        </div>
+      </div>
 
       <div class="resume-preview-section">
         <h3>Selected Projects</h3>
@@ -982,6 +989,163 @@ function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProject
   `;
 }
 
+function buildOnePageResumeSnapshot(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
+  const projectDetailsMap = getProjectDetailsMap(summaryData);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
+
+  return {
+    title: "One-Page Resume",
+    owner: profile.name,
+    target_role: profile.title,
+    education: profile.education,
+    awards: [...profile.awards],
+    skills_by_expertise: {
+      Advanced: [...expertiseGroups.Advanced],
+      Intermediate: [...expertiseGroups.Intermediate],
+      Foundation: [...expertiseGroups.Foundation],
+    },
+    projects: topProjects.map((project) => {
+      const details = projectDetailsMap.get(project.project_id);
+      const override = getProjectOverride(project.project_id) || {};
+      const title = details?.title || project.project_id;
+      const summary =
+        override.portfolioBlurb ||
+        details?.summary ||
+        `${project.total_files} files analyzed • ${project.total_skills} skill signals • ${project.is_github ? "GitHub import" : "ZIP upload"}`;
+      const contribution = buildContributionSummary(project, details, override);
+      const impact = buildImpactSummary(project, details, override);
+
+      return {
+        project_id: project.project_id,
+        title,
+        summary,
+        contribution,
+        impact,
+      };
+    }),
+  };
+}
+
+function buildOnePageResumeMarkdown(snapshot) {
+  const sections = [
+    `# ${snapshot.title}`,
+    "",
+    `**Name:** ${snapshot.owner}`,
+    `**Target Role:** ${snapshot.target_role}`,
+    "",
+    "## Education",
+    snapshot.education,
+    "",
+    "## Awards",
+    ...(snapshot.awards.length ? snapshot.awards.map((item) => `- ${item}`) : ["- None listed"]),
+    "",
+    "## Skills by Expertise Level",
+    `**Advanced:** ${snapshot.skills_by_expertise.Advanced.length ? snapshot.skills_by_expertise.Advanced.join(", ") : "None yet"}`,
+    `**Intermediate:** ${snapshot.skills_by_expertise.Intermediate.length ? snapshot.skills_by_expertise.Intermediate.join(", ") : "None yet"}`,
+    `**Foundation:** ${snapshot.skills_by_expertise.Foundation.length ? snapshot.skills_by_expertise.Foundation.join(", ") : "None yet"}`,
+    "",
+    "## Projects",
+    ...(
+      snapshot.projects.length
+        ? snapshot.projects.flatMap((project) => [
+            `### ${project.title}`,
+            project.summary,
+            `- Contribution: ${project.contribution}`,
+            `- Evidence of Success: ${project.impact}`,
+            "",
+          ])
+        : ["No projects uploaded yet.", ""]
+    ),
+  ];
+
+  return sections.join("\n").trim();
+}
+
+function buildOnePageResumePdfPayload(snapshot) {
+  return {
+    title: snapshot.title,
+    target_role: snapshot.target_role,
+    fullName: snapshot.owner,
+    sections: [
+      {
+        name: "education",
+        items: [
+          {
+            title: snapshot.education,
+            content: snapshot.education,
+          },
+        ],
+      },
+      {
+        name: "awards",
+        items: snapshot.awards.map((award) => ({
+          title: award,
+          content: award,
+        })),
+      },
+      {
+        name: "core_skill",
+        items: [
+          {
+            title: "Advanced",
+            content: snapshot.skills_by_expertise.Advanced.length
+              ? snapshot.skills_by_expertise.Advanced.join(", ")
+              : "None yet",
+          },
+          {
+            title: "Intermediate",
+            content: snapshot.skills_by_expertise.Intermediate.length
+              ? snapshot.skills_by_expertise.Intermediate.join(", ")
+              : "None yet",
+          },
+          {
+            title: "Foundation",
+            content: snapshot.skills_by_expertise.Foundation.length
+              ? snapshot.skills_by_expertise.Foundation.join(", ")
+              : "None yet",
+          },
+        ],
+      },
+      {
+        name: "projects",
+        items: snapshot.projects.map((project) => ({
+          title: project.title,
+          content: project.summary,
+          bullets: [
+            `Contribution: ${project.contribution}`,
+            `Evidence of Success: ${project.impact}`,
+          ],
+        })),
+      },
+    ],
+  };
+}
+
+export async function buildOnePageResumeExportBundle() {
+  const [projects, summaryData, rankedTopProjectIds, timeline] = await Promise.all([
+    fetchProjects(),
+    fetchPortfolioResumeSummary(),
+    fetchRankedTopProjectIds().catch(() => []),
+    fetchSkillsTimeline().catch(() => []),
+  ]);
+
+  const profile = buildProfile(summaryData);
+  const snapshot = buildOnePageResumeSnapshot(
+    profile,
+    projects,
+    summaryData,
+    rankedTopProjectIds,
+    timeline
+  );
+
+  return {
+    snapshot,
+    markdown: buildOnePageResumeMarkdown(snapshot),
+    pdfPayload: buildOnePageResumePdfPayload(snapshot),
+  };
+}
+
 
 export async function openResumePreview() {
   const modal = document.getElementById("resume-preview-modal");
@@ -992,13 +1156,14 @@ export async function openResumePreview() {
   modal.classList.remove("hidden");
 
   try {
-    const [projects, summaryData, rankedTopProjectIds] = await Promise.all([
+    const [projects, summaryData, rankedTopProjectIds, timeline] = await Promise.all([
       fetchProjects(),
       fetchPortfolioResumeSummary(),
       fetchRankedTopProjectIds().catch(() => []),
+      fetchSkillsTimeline().catch(() => []),
     ]);
     const profile = buildProfile(summaryData);
-    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds);
+    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds, timeline);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
     body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
