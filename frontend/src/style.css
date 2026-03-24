@@ -186,6 +186,8 @@ input,
 
 .nav {
   display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 40px;
   font-size: 15px;
   font-weight: 500;
@@ -200,10 +202,21 @@ input,
   transition: all 0.3s ease;
 }
 
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  color: inherit;
+}
+
 .nav span:hover {
   opacity: 1;
   color: var(--accent);
 }
+
 
 .nav .active::after {
   content: "";
@@ -940,6 +953,18 @@ svg {
   margin-bottom: 20px;
 }
 
+#most-used-skills {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.skills-wrapper {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .skill-row-modern {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -1245,6 +1270,11 @@ svg {
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
 }
 
 .auth-modal {
@@ -2177,6 +2207,73 @@ transition: all 0.2s ease;
   font-weight: 500;
   color: rgba(236,245,255,0.9);
   flex: 1;
+}
+
+.skills-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.skills-view-toggle {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.skills-view-btn {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.6);
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.skills-view-btn.active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.skills-pie-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 18px;
+  align-items: center;
+  min-height: 0;
+}
+
+.skills-pie-canvas-wrap {
+  position: relative;
+  min-height: 220px;
+}
+
+.skills-pie-legend {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.skills-pie-legend-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.skills-pie-legend-name {
+  font-weight: 600;
+}
+
+.skills-pie-legend-meta {
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 .tab-selection-option-toggle {
@@ -4232,8 +4329,13 @@ transition: all 0.2s ease;
 .portfolio-star-btn {
   background: none;
   border: none;
-  padding: 0 6px 0 0;
-  font-size: 1rem;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
   color: rgba(255,255,255,0.15);
   cursor: pointer;
   flex-shrink: 0;
@@ -4245,6 +4347,15 @@ transition: all 0.2s ease;
 }
 .portfolio-star-btn.starred:hover {
   color: #f59e0b;
+}
+@keyframes star-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.45); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.portfolio-star-btn.star-pop {
+  animation: star-pop 0.28s ease-out;
 }
 
 .resume-list-card-header {
@@ -5215,6 +5326,8 @@ transition: all 0.2s ease;
 
 .customization-project-editor h3 {
   overflow-wrap: break-word;
+  word-break: break-word;
+  margin: 0 0 6px 0;
 }
 
 .customization-project-editor-header {
@@ -5225,10 +5338,16 @@ transition: all 0.2s ease;
   margin-bottom: 16px;
 }
 
+.customization-project-editor-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .customization-project-editor-meta {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
 }
 
 .customization-rank-wrap {
@@ -5355,6 +5474,20 @@ transition: all 0.2s ease;
 
 .live-preview-project-card h4 {
   margin: 0 0 8px 0;
+}
+
+.live-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 .live-preview-meta {

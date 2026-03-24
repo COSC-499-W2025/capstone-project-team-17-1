@@ -2,15 +2,25 @@ import { getCurrentUser, isPrivateMode } from "./auth.js";
 import {
   DASHBOARD_OPTIONS,
   DEFAULT_DASHBOARD_STATE,
+  getDefaultDashboardSelection,
+  normalizeSelectedIds,
   shouldShowDashboardWidget,
 } from "./displayPreferencesShared.mjs";
 
 const DASHBOARD_STATE_KEY = "loom_dashboard_state";
 const PORTFOLIO_STATE_KEY = "loom_portfolio_state";
 const PRIVATE_SELECTION_KEY = "loom_private_portfolio_selection";
+const PRIVATE_DASHBOARD_SELECTION_KEY = "loom_private_dashboard_selection";
+const DASHBOARD_FILTER_OPTIONS = [
+  { id: "all", label: "All widgets" },
+  { id: "insights", label: "Insights" },
+  { id: "projects", label: "Projects" },
+  { id: "system", label: "System" },
+  { id: "activity", label: "Activity" },
+];
 const PORTFOLIO_OPTIONS = [
   { id: "project-details", label: "Project Portfolio Details" },
-  { id: "top-projects", label: "Top 3 Project Showcase" },
+  { id: "top-projects", label: "Top 3 Projects" },
   { id: "portfolio-stats", label: "Portfolio Stats" },
   { id: "skills-timeline", label: "Skills Timeline" },
   { id: "activity-heatmap", label: "Activity Heatmap" },
@@ -31,6 +41,12 @@ function getPrivateSelectionKey() {
   // Keep private portfolio selections scoped to the logged-in user
   const scope = user?.id || user?.username || "private";
   return `${PRIVATE_SELECTION_KEY}:${scope}`;
+}
+
+function getPrivateDashboardSelectionKey() {
+  const user = getCurrentUser();
+  const scope = user?.id || user?.username || "private";
+  return `${PRIVATE_DASHBOARD_SELECTION_KEY}:${scope}`;
 }
 
 function loadDashboardState() {
@@ -90,6 +106,25 @@ function savePrivateDashboardSelection(selectedIds) {
   localStorage.setItem(getPrivateSelectionKey(), JSON.stringify({ selectedIds }));
 }
 
+function loadPrivateDashboardWidgetSelection() {
+  try {
+    const raw = localStorage.getItem(getPrivateDashboardSelectionKey());
+    if (!raw) return getDefaultDashboardSelection();
+    const parsed = JSON.parse(raw);
+    return normalizeSelectedIds(parsed?.selectedIds);
+  } catch (_) {
+    return getDefaultDashboardSelection();
+  }
+}
+
+function savePrivateDashboardWidgetSelection(selectedIds) {
+  if (!isPrivateMode()) return;
+  localStorage.setItem(
+    getPrivateDashboardSelectionKey(),
+    JSON.stringify({ selectedIds: normalizeSelectedIds(selectedIds) })
+  );
+}
+
 function renderPrivateSelectionPanel() {
   const wrapper = document.getElementById("portfolio-selection-wrapper");
   const panel = document.getElementById("portfolio-selection-panel");
@@ -107,8 +142,8 @@ function renderPrivateSelectionPanel() {
   panel.innerHTML = `
     <div class="tab-selection-content">
       <div class="tab-selection-header">
-        <div class="tab-selection-title">Web Portfolio</div>
-        <div class="tab-selection-subtitle">Click row to jump · toggle to show/hide</div>
+        <div class="tab-selection-title">Portfolio Filters</div>
+        <div class="tab-selection-subtitle">Click row to jump or toggle visibility</div>
       </div>
       <div class="tab-selection-options">
         ${PORTFOLIO_OPTIONS.map(
@@ -149,9 +184,101 @@ function renderPrivateSelectionPanel() {
   });
 }
 
+function renderPrivateDashboardSelectionPanel() {
+  const wrapper = document.getElementById("dashboard-selection-wrapper");
+  const panel = document.getElementById("dashboard-selection-panel");
+  if (!wrapper || !panel) return;
+
+  wrapper.classList.toggle("hidden", !isPrivateMode());
+  if (!isPrivateMode()) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const selectedIds = loadPrivateDashboardWidgetSelection();
+
+  panel.innerHTML = `
+    <div class="tab-selection-content">
+      <div class="tab-selection-header">
+        <div class="tab-selection-title">Dashboard Customize</div>
+        <div class="tab-selection-subtitle">Choose which dashboard widgets appear before going live</div>
+      </div>
+      <div class="tab-selection-options">
+        ${DASHBOARD_OPTIONS.map(
+          (option) => `
+            <div class="tab-selection-option">
+              <label class="tab-selection-option-toggle">
+                <input type="checkbox" value="${escapeHtml(option.id)}" ${selectedIds.includes(option.id) ? "checked" : ""} />
+                <span class="tab-selection-option-check"></span>
+              </label>
+              <span class="tab-selection-option-label">${escapeHtml(option.label)}</span>
+            </div>
+          `
+        ).join("")}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      const nextSelectedIds = Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(
+        (checkbox) => checkbox.value
+      );
+      savePrivateDashboardWidgetSelection(nextSelectedIds);
+      applyDisplayPreferences();
+    });
+  });
+}
+
+function renderDashboardFilterPanel() {
+  const wrapper = document.getElementById("dashboard-filter-wrapper");
+  const panel = document.getElementById("dashboard-filter-panel");
+  if (!wrapper || !panel) return;
+
+  wrapper.classList.toggle("hidden", isPrivateMode());
+  if (isPrivateMode()) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const { category } = loadDashboardState();
+
+  panel.innerHTML = `
+    <div class="tab-selection-content">
+      <div class="tab-selection-header">
+        <div class="tab-selection-title">Filter Widgets</div>
+        <div class="tab-selection-subtitle">Show widgets by dashboard category</div>
+      </div>
+      <div class="tab-selection-options">
+        ${DASHBOARD_FILTER_OPTIONS.map(
+          (option) => `
+            <label class="tab-selection-option dashboard-filter-option">
+              <input type="radio" name="dashboard-filter" value="${escapeHtml(option.id)}" ${category === option.id ? "checked" : ""} />
+              <span class="tab-selection-option-check"></span>
+              <span class="tab-selection-option-label">${escapeHtml(option.label)}</span>
+            </label>
+          `
+        ).join("")}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('input[name="dashboard-filter"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      saveDashboardState({
+        search: document.getElementById("dashboard-search-input")?.value || "",
+        category: input.value || "all",
+      });
+      applyDisplayPreferences();
+      panel.classList.add("hidden");
+    });
+  });
+}
+
 function applyDashboardVisibility() {
   const { search, category } = loadDashboardState();
   const query = search.trim().toLowerCase();
+  const selectedIds = loadPrivateDashboardWidgetSelection();
 
   document.querySelectorAll(".dashboard-widget").forEach((element) => {
     const widgetId = element.dataset.widgetId || "";
@@ -164,8 +291,8 @@ function applyDashboardVisibility() {
         label,
         category: widgetCategory,
         state: { search: query, category },
-        isPrivateMode: false,
-        selectedIds: [],
+        isPrivateMode: isPrivateMode(),
+        selectedIds,
       })
     );
   });
@@ -191,26 +318,37 @@ export function applyDisplayPreferences() {
 
 export function initDisplayPreferences() {
   const searchInput = document.getElementById("dashboard-search-input");
-  const filterSelect = document.getElementById("dashboard-filter-select");
+  const dashboardFilterToggle = document.getElementById("dashboard-filter-toggle");
+  const dashboardFilterPanel = document.getElementById("dashboard-filter-panel");
+  const portfolioSearchInput = document.getElementById("portfolio-search-input");
+  const portfolioFilterSelect = document.getElementById("portfolio-filter-select");
+  const dashboardSelectionToggle = document.getElementById("dashboard-selection-toggle");
+  const dashboardSelectionPanel = document.getElementById("dashboard-selection-panel");
   const selectionToggle = document.getElementById("portfolio-selection-toggle");
   const selectionPanel = document.getElementById("portfolio-selection-panel");
   const initialState = loadDashboardState();
+  const initialPortfolioState = loadPortfolioState();
 
   if (searchInput) searchInput.value = initialState.search;
-  if (filterSelect) filterSelect.value = initialState.category;
+  if (portfolioSearchInput) portfolioSearchInput.value = initialPortfolioState.search;
 
   searchInput?.addEventListener("input", () => {
     saveDashboardState({
       search: searchInput.value,
-      category: filterSelect?.value || "all",
+      category: loadDashboardState().category || "all",
     });
     applyDisplayPreferences();
   });
 
-  filterSelect?.addEventListener("change", () => {
-    saveDashboardState({
-      search: searchInput?.value || "",
-      category: filterSelect.value,
+  dashboardFilterToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dashboardFilterPanel?.classList.toggle("hidden");
+  });
+
+  portfolioSearchInput?.addEventListener("input", () => {
+    savePortfolioState({
+      search: portfolioSearchInput.value,
+      category: "all",
     });
     applyDisplayPreferences();
   });
@@ -220,19 +358,35 @@ export function initDisplayPreferences() {
     selectionPanel?.classList.toggle("hidden");
   });
 
+  dashboardSelectionToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dashboardSelectionPanel?.classList.toggle("hidden");
+  });
+
   document.addEventListener("click", (event) => {
     const wrapper = document.getElementById("portfolio-selection-wrapper");
-    if (!wrapper) return;
-    if (!wrapper.contains(event.target)) {
+    const dashboardWrapper = document.getElementById("dashboard-selection-wrapper");
+    const dashboardFilterWrapper = document.getElementById("dashboard-filter-wrapper");
+    if (wrapper && !wrapper.contains(event.target)) {
       selectionPanel?.classList.add("hidden");
+    }
+    if (dashboardWrapper && !dashboardWrapper.contains(event.target)) {
+      dashboardSelectionPanel?.classList.add("hidden");
+    }
+    if (dashboardFilterWrapper && !dashboardFilterWrapper.contains(event.target)) {
+      dashboardFilterPanel?.classList.add("hidden");
     }
   });
 
   document.addEventListener("auth:mode-changed", () => {
     renderPrivateSelectionPanel();
+    renderDashboardFilterPanel();
+    renderPrivateDashboardSelectionPanel();
     applyDisplayPreferences();
   });
 
   renderPrivateSelectionPanel();
+  renderDashboardFilterPanel();
+  renderPrivateDashboardSelectionPanel();
   applyDisplayPreferences();
 }

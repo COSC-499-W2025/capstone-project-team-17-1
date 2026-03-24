@@ -27,6 +27,67 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+async function fetchProjectOverride(projectId) {
+  const res = await authFetch(`/projects/${encodeURIComponent(projectId)}/overrides`);
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch overrides for ${projectId}: ${res.status}`);
+  }
+  const payload = await res.json();
+  return payload?.data || null;
+}
+
+async function hydrateCustomizationFromBackend(projects) {
+  const current = loadPortfolioCustomization();
+
+  if (!Array.isArray(projects) || !projects.length) {
+    return current;
+  }
+
+  const overrideResults = await Promise.allSettled(
+    projects.map((project) => fetchProjectOverride(project.project_id))
+  );
+
+  const backendOverrides = {};
+  const featuredFromBackend = [];
+
+  overrideResults.forEach((result, index) => {
+    if (result.status !== "fulfilled" || !result.value) return;
+
+    const projectId = String(projects[index]?.project_id || "");
+    if (!projectId) return;
+
+    const data = result.value;
+    backendOverrides[projectId] = {
+      keyRole: String(data.key_role || ""),
+      evidence: String(data.evidence || ""),
+      portfolioBlurb: String(data.portfolio_blurb || ""),
+    };
+
+    if (data.selected) {
+      // Rebuild starred ordering
+      featuredFromBackend.push({
+        projectId,
+        rank: Number.isFinite(Number(data.rank)) ? Number(data.rank) : Number.MAX_SAFE_INTEGER,
+      });
+    }
+  });
+
+  featuredFromBackend.sort((a, b) => a.rank - b.rank || a.projectId.localeCompare(b.projectId));
+
+  const nextCustomization = {
+    ...current,
+    featuredProjectIds: featuredFromBackend.map((item) => item.projectId).slice(0, 3),
+    projectOverrides: {
+      ...(current?.projectOverrides || {}),
+      ...backendOverrides,
+    },
+  };
+
+  savePortfolioCustomization(nextCustomization);
+  return nextCustomization;
+}
+
 
 function getStatusEl() {
   return document.getElementById("portfolio-customization-status");
@@ -185,6 +246,7 @@ function renderFeaturedProjects(projects, customization) {
   if (!container) return;
 
   const selected = new Set(customization.featuredProjectIds || []);
+  const featuredOrder = customization.featuredProjectIds || [];
 
   if (!projects.length) {
     container.innerHTML =
@@ -194,8 +256,20 @@ function renderFeaturedProjects(projects, customization) {
 
   const matchScores = window.__jobMatchResults || [];
   const scoreMap = new Map(matchScores.map(m => [m.project_id, m.score]));
+  // Keep starred projects visible at the top 
+  const orderedProjects = [...projects].sort((a, b) => {
+    const aIndex = featuredOrder.indexOf(String(a.project_id));
+    const bIndex = featuredOrder.indexOf(String(b.project_id));
+    const aFeatured = aIndex >= 0;
+    const bFeatured = bIndex >= 0;
 
-  container.innerHTML = projects
+    if (aFeatured && bFeatured) return aIndex - bIndex;
+    if (aFeatured) return -1;
+    if (bFeatured) return 1;
+    return String(a.project_id).localeCompare(String(b.project_id));
+  });
+
+  container.innerHTML = orderedProjects
     .map(
       (project) => `
         <label class="customization-project-pick">
@@ -229,7 +303,21 @@ function renderProjectEditors(projects, customization) {
     return;
   }
 
-  container.innerHTML = projects
+  // Mirror the starred ordering in the editor list 
+  const featuredOrder = customization.featuredProjectIds || [];
+  const orderedProjects = [...projects].sort((a, b) => {
+    const aIndex = featuredOrder.indexOf(String(a.project_id));
+    const bIndex = featuredOrder.indexOf(String(b.project_id));
+    const aFeatured = aIndex >= 0;
+    const bFeatured = bIndex >= 0;
+
+    if (aFeatured && bFeatured) return aIndex - bIndex;
+    if (aFeatured) return -1;
+    if (bFeatured) return 1;
+    return String(a.project_id).localeCompare(String(b.project_id));
+  });
+
+  container.innerHTML = orderedProjects
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
       const isFeatured = (customization.featuredProjectIds || []).includes(project.project_id);
@@ -319,7 +407,7 @@ function renderProjectEditors(projects, customization) {
     const starButtons = container.querySelectorAll("[data-project-star]");
 
     starButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const projectId = btn.dataset.projectStar;
         const cb = container.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
         if (!cb) return;
@@ -335,7 +423,8 @@ function renderProjectEditors(projects, customization) {
         cb.checked = wouldCheck;
         btn.classList.toggle("starred", wouldCheck);
         setStatus(checked.length <= 3 ? "" : "");
-        cb.dispatchEvent(new Event("change"));
+        cb.dispatchEvent(new Event("change", { bubbles: true }));
+        await rerenderFeaturedOrdering({ saveNow: true });
       });
     });
 
@@ -576,11 +665,7 @@ function renderLivePreview(projects, draftCustomization) {
   if (!container) return;
 
   const sectionVisibility = {
-    "resume-summary": true,
     "top-projects": true,
-    "portfolio-stats": true,
-    "skills-timeline": true,
-    "activity-heatmap": true,
     ...(draftCustomization.sectionVisibility || {}),
   };
 
@@ -592,19 +677,69 @@ function renderLivePreview(projects, draftCustomization) {
     .map((id) => projectMap.get(String(id)))
     .filter(Boolean)
     .slice(0, 3);
+  const draftProjects = projects
+    .map((project) => {
+      const override = draftCustomization.projectOverrides?.[project.project_id] || {};
+      const hasDraftContent = Boolean(
+        String(override.portfolioBlurb || "").trim() ||
+        String(override.keyRole || "").trim() ||
+        String(override.evidence || "").trim()
+      );
 
-  const totalProjects = projects.length;
-  const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
-  const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
+      return {
+        project,
+        override,
+        isFeatured: (draftCustomization.featuredProjectIds || []).includes(project.project_id),
+        hasDraftContent,
+      };
+    })
+    .filter((item) => item.hasDraftContent)
+    .sort((a, b) => {
+      if (a.isFeatured && !b.isFeatured) return -1;
+      if (!a.isFeatured && b.isFeatured) return 1;
+      return String(a.project.project_id).localeCompare(String(b.project.project_id));
+    });
 
+  // Keep drafts separate from starred showcase 
   container.innerHTML = `
-    <div class="live-preview-section ${sectionVisibility["resume-summary"] ? "" : "hidden"}">
-      <h3>Resume Snapshot</h3>
-      <p>${totalProjects} project${totalProjects === 1 ? "" : "s"} • ${totalFiles} files • ${totalSkills} skill signals</p>
+    <div id="live-preview-drafts-section" class="live-preview-section">
+      <h3>Project Detail Drafts</h3>
+      ${
+        draftProjects.length
+          ? draftProjects
+              .map(({ project, override, isFeatured }) => `
+                <div class="live-preview-project-card">
+                  <h4>
+                    ${escapeHtml(project.project_id)}
+                    ${isFeatured ? `<span class="live-preview-badge">Starred</span>` : ""}
+                  </h4>
+                  ${
+                    override.portfolioBlurb
+                      ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
+                      : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
+                  }
+                  ${
+                    override.keyRole
+                      ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
+                      : ""
+                  }
+                  ${
+                    override.evidence
+                      ? `<p><strong>Evidence:</strong> ${escapeHtml(override.evidence)}</p>`
+                      : ""
+                  }
+                </div>
+              `)
+              .join("")
+          : `<p class="live-preview-empty">Edit a project in Project Portfolio Details to preview its draft here.</p>`
+      }
     </div>
 
-    <div class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}">
-      <h3>Top 3 Project Showcase</h3>
+    <div
+      id="live-preview-starred-section"
+      class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}"
+    >
+      <h3>My Starred Projects</h3>
       ${
         featuredProjects.length
           ? featuredProjects
@@ -640,21 +775,6 @@ function renderLivePreview(projects, draftCustomization) {
           : `<p class="live-preview-empty">No featured projects selected.</p>`
       }
     </div>
-
-    <div class="live-preview-section ${sectionVisibility["portfolio-stats"] ? "" : "hidden"}">
-      <h3>Portfolio Stats</h3>
-      <p>${totalProjects} Projects • ${totalFiles} Files • ${totalSkills} Skill Signals</p>
-    </div>
-
-    <div class="live-preview-section ${sectionVisibility["skills-timeline"] ? "" : "hidden"}">
-      <h3>Skills Timeline</h3>
-      <p class="live-preview-empty">Timeline preview follows the saved portfolio layout.</p>
-    </div>
-
-    <div class="live-preview-section ${sectionVisibility["activity-heatmap"] ? "" : "hidden"}">
-      <h3>Activity Heatmap</h3>
-      <p class="live-preview-empty">Heatmap preview follows the saved portfolio layout.</p>
-    </div>
   `;
 }
 
@@ -685,11 +805,17 @@ function syncFeaturedCheckboxes(projectId, checked) {
   if (editor) editor.checked = checked;
 }
 
-function rerenderFeaturedOrdering() {
+async function rerenderFeaturedOrdering({ saveNow = false } = {}) {
   const draftCustomization = collectDraftCustomization();
   renderFeaturedOrderList(previewProjectsCache, draftCustomization);
   updateLivePreview();
-  scheduleAutosave();
+  markDirtyState(draftCustomization);
+  if (saveNow) {
+    // Star/unstar should feel immediate
+    await performSave({ silent: true });
+  } else {
+    scheduleAutosave();
+  }
 }
 
 function handleFeaturedOrderDragStart(event) {
@@ -824,8 +950,8 @@ async function renderPortfolioCustomizationPage() {
   }
 
   try {
-    const customization = loadPortfolioCustomization();
     const projects = await fetchProjects();
+    const customization = await hydrateCustomizationFromBackend(projects);
 
     previewProjectsCache = projects;
     lastSavedSnapshot = snapshotCustomization(customization);
@@ -851,7 +977,8 @@ async function renderPortfolioCustomizationPage() {
 
 export function initPortfolioEditor() {
   const tab = document.getElementById("portfolio-tab");
-  const root = document.getElementById("portfolio-customization-root");
+  const editorContainer = document.getElementById("portfolio-project-editor-container");
+  const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
 
   if (!portfolioEditorInitialized) {
@@ -867,24 +994,29 @@ export function initPortfolioEditor() {
       renderPortfolioCustomizationPage();
     });
 
-    root?.addEventListener("input", () => {
+    editorContainer?.addEventListener("input", () => {
       updateLivePreview();
       scheduleAutosave();
     });
 
-    root?.addEventListener("change", (event) => {
+    editorContainer?.addEventListener("change", (event) => {
+      updateLivePreview();
+      scheduleAutosave();
+    });
+
+    featuredContainer?.addEventListener("change", async (event) => {
       const target = event.target;
 
       if (target instanceof HTMLInputElement) {
         if (target.matches("[data-featured-project-id]")) {
           syncFeaturedCheckboxes(target.dataset.featuredProjectId, target.checked);
-          rerenderFeaturedOrdering();
+          await rerenderFeaturedOrdering({ saveNow: true });
           return;
         }
 
         if (target.matches("[data-project-selected]")) {
           syncFeaturedCheckboxes(target.dataset.projectSelected, target.checked);
-          rerenderFeaturedOrdering();
+          await rerenderFeaturedOrdering({ saveNow: true });
           return;
         }
       }

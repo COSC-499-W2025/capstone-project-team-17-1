@@ -1,5 +1,5 @@
 import { authFetch } from "./auth.js";
-import { openResumePreview } from "./portfolio.js";
+import { buildOnePageResumeExportBundle, openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -541,20 +541,34 @@ function openExportModal(resumeId, resumeTitle) {
     area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
 
     try {
-      const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error (${res.status})`);
-      }
+      const bundle = await buildOnePageResumeExportBundle();
 
       if (format === "pdf") {
-        const blob = await res.blob();
+        const res = await authFetch("/resumes/render-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume: bundle.pdfPayload }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error (${res.status})`);
+        }
+        const payload = await res.json();
+        const encoded = payload?.data?.payload;
+        if (!encoded) {
+          throw new Error("PDF payload missing.");
+        }
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "application/pdf" });
         cache[format] = { blob, url: URL.createObjectURL(blob) };
       } else if (format === "json") {
-        const data = await res.json();
-        cache[format] = { text: JSON.stringify(data.data || data, null, 2) };
+        cache[format] = { text: JSON.stringify(bundle.snapshot, null, 2) };
       } else {
-        cache[format] = { text: await res.text() };
+        cache[format] = { text: bundle.markdown };
       }
 
       renderPreview(format, cache[format]);

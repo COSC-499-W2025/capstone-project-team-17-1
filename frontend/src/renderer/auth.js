@@ -46,7 +46,9 @@ function setModeUI(isPrivate, user) {
   modeBadge.classList.toggle("public", !isPrivate);
   loginBtn.classList.toggle("hidden", isPrivate);
   logoutBtn.classList.toggle("hidden", !isPrivate);
-  jobMatchTab.classList.toggle("hidden", !isPrivate);
+  jobMatchTab.classList.remove("hidden");
+  jobMatchTab.setAttribute("aria-hidden", "false");
+  jobMatchTab.tabIndex = 0;
 
   if (isPrivate && user) {
     profilePill.textContent = user.username || `User ${user.id || ""}`;
@@ -453,6 +455,10 @@ export async function initAuthFlow() {
   initNavigation({
     onBeforeNavigate: async ({ tabKey, target }) => {
       if (!target) return false;
+      if (tabKey === "job-match" && !isPrivateMode()) {
+        await openLoginFlow();
+        return false;
+      }
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
         if (shouldRequireLoginForTab(tabKey, user)) {

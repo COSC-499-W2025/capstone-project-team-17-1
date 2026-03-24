@@ -1,10 +1,10 @@
 import { fetchProjects } from "./projects.js";
 import { authFetch, getCurrentUser } from "./auth.js";
 import {
-  getFeaturedProjects,
   getProjectOverride,
   loadPortfolioCustomization,
 } from "./portfolioState.js";
+import { sortProjectsByRankedIds } from "./portfolioShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -129,6 +129,39 @@ function getTopProjects(projects) {
       return (b.total_files || 0) - (a.total_files || 0);
     })
     .slice(0, 3);
+}
+
+async function fetchRankedTopProjectIds(limit = 3) {
+  const currentUser = getCurrentUser();
+  const username =
+    String(currentUser?.username || "").trim() ||
+    String(currentUser?.full_name || "").trim();
+
+  if (!username) {
+    return [];
+  }
+
+  const res = await authFetch(
+    `/showcase/portfolio/summary?user=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ranked top projects: ${res.status}`);
+  }
+
+  const payload = await res.json();
+  return Array.isArray(payload?.data)
+    ? payload.data
+        .map((item) => String(item?.project_id || "").trim())
+        .filter(Boolean)
+        .slice(0, limit)
+    : [];
+}
+
+function getRankedTopProjects(projects, rankedIds = [], limit = 3) {
+  if (Array.isArray(rankedIds) && rankedIds.length) {
+    return sortProjectsByRankedIds(projects, rankedIds).slice(0, limit);
+  }
+  return getTopProjects(projects).slice(0, limit);
 }
 
 async function fetchSkillsTimeline() {
@@ -391,11 +424,11 @@ function applyPortfolioSectionVisibility() {
   });
 }
 
-function renderResumeSummary(profile, projects, summaryData) {
+function renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds = []) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
 
-  const featuredProjects = getFeaturedProjects(projects);
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -474,12 +507,12 @@ function renderResumeSummary(profile, projects, summaryData) {
       }
 
       ${
-        featuredProjects.length
+        topProjects.length
           ? `
             <div class="resume-meta-box">
-              <span class="resume-meta-label">Featured Projects</span>
+              <span class="resume-meta-label">Top 3 Projects</span>
               <div class="skills-pill-row">
-                ${featuredProjects
+                ${topProjects
                   .map((project) => `<span class="skills-pill">${escapeHtml(project.project_id)}</span>`)
                   .join("")}
               </div>
@@ -491,7 +524,7 @@ function renderResumeSummary(profile, projects, summaryData) {
   `;
 }
 
-function renderTopProjects(projects, summaryData) {
+function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
   const container = document.getElementById("top-projects-container");
   if (!container) return;
 
@@ -505,8 +538,7 @@ function renderTopProjects(projects, summaryData) {
   }
 
   const projectDetailsMap = getProjectDetailsMap(summaryData);
-  const featuredProjects = getFeaturedProjects(projects);
-  const topProjects = featuredProjects.length ? featuredProjects : getTopProjects(projects);
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
 
   container.innerHTML = topProjects
     .map((project, index) => {
@@ -861,14 +893,14 @@ function renderActivityHeatmap(heatmapData) {
   `;
 }
 
-function buildResumePreviewHtml(profile, projects, summaryData) {
-  const topProjects = getFeaturedProjects(projects);
+function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
   const projectDetailsMap = getProjectDetailsMap(summaryData);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
   const totalSkills = projects.reduce((sum, p) => sum + (p.total_skills || 0), 0);
-  const backendSkills = dedupeStrings(summaryData?.skills);
 
   return `
     <div class="resume-preview-sheet">
@@ -901,16 +933,23 @@ function buildResumePreviewHtml(profile, projects, summaryData) {
         </div>
       </div>
 
-      ${
-        backendSkills.length
-          ? `
-            <div class="resume-preview-section">
-              <h3>Core Skills</h3>
-              <p>${escapeHtml(backendSkills.join(", "))}</p>
-            </div>
-          `
-          : ""
-      }
+      <div class="resume-preview-section">
+        <h3>Skills by Expertise Level</h3>
+        <div class="resume-preview-grid">
+          <div>
+            <strong>Advanced</strong>
+            <p>${expertiseGroups.Advanced.length ? escapeHtml(expertiseGroups.Advanced.join(", ")) : "No advanced skills yet."}</p>
+          </div>
+          <div>
+            <strong>Intermediate</strong>
+            <p>${expertiseGroups.Intermediate.length ? escapeHtml(expertiseGroups.Intermediate.join(", ")) : "No intermediate skills yet."}</p>
+          </div>
+          <div>
+            <strong>Foundation</strong>
+            <p>${expertiseGroups.Foundation.length ? escapeHtml(expertiseGroups.Foundation.join(", ")) : "No foundation skills yet."}</p>
+          </div>
+        </div>
+      </div>
 
       <div class="resume-preview-section">
         <h3>Selected Projects</h3>
@@ -950,6 +989,163 @@ function buildResumePreviewHtml(profile, projects, summaryData) {
   `;
 }
 
+function buildOnePageResumeSnapshot(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
+  const projectDetailsMap = getProjectDetailsMap(summaryData);
+  const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
+
+  return {
+    title: "One-Page Resume",
+    owner: profile.name,
+    target_role: profile.title,
+    education: profile.education,
+    awards: [...profile.awards],
+    skills_by_expertise: {
+      Advanced: [...expertiseGroups.Advanced],
+      Intermediate: [...expertiseGroups.Intermediate],
+      Foundation: [...expertiseGroups.Foundation],
+    },
+    projects: topProjects.map((project) => {
+      const details = projectDetailsMap.get(project.project_id);
+      const override = getProjectOverride(project.project_id) || {};
+      const title = details?.title || project.project_id;
+      const summary =
+        override.portfolioBlurb ||
+        details?.summary ||
+        `${project.total_files} files analyzed • ${project.total_skills} skill signals • ${project.is_github ? "GitHub import" : "ZIP upload"}`;
+      const contribution = buildContributionSummary(project, details, override);
+      const impact = buildImpactSummary(project, details, override);
+
+      return {
+        project_id: project.project_id,
+        title,
+        summary,
+        contribution,
+        impact,
+      };
+    }),
+  };
+}
+
+function buildOnePageResumeMarkdown(snapshot) {
+  const sections = [
+    `# ${snapshot.title}`,
+    "",
+    `**Name:** ${snapshot.owner}`,
+    `**Target Role:** ${snapshot.target_role}`,
+    "",
+    "## Education",
+    snapshot.education,
+    "",
+    "## Awards",
+    ...(snapshot.awards.length ? snapshot.awards.map((item) => `- ${item}`) : ["- None listed"]),
+    "",
+    "## Skills by Expertise Level",
+    `**Advanced:** ${snapshot.skills_by_expertise.Advanced.length ? snapshot.skills_by_expertise.Advanced.join(", ") : "None yet"}`,
+    `**Intermediate:** ${snapshot.skills_by_expertise.Intermediate.length ? snapshot.skills_by_expertise.Intermediate.join(", ") : "None yet"}`,
+    `**Foundation:** ${snapshot.skills_by_expertise.Foundation.length ? snapshot.skills_by_expertise.Foundation.join(", ") : "None yet"}`,
+    "",
+    "## Projects",
+    ...(
+      snapshot.projects.length
+        ? snapshot.projects.flatMap((project) => [
+            `### ${project.title}`,
+            project.summary,
+            `- Contribution: ${project.contribution}`,
+            `- Evidence of Success: ${project.impact}`,
+            "",
+          ])
+        : ["No projects uploaded yet.", ""]
+    ),
+  ];
+
+  return sections.join("\n").trim();
+}
+
+function buildOnePageResumePdfPayload(snapshot) {
+  return {
+    title: snapshot.title,
+    target_role: snapshot.target_role,
+    fullName: snapshot.owner,
+    sections: [
+      {
+        name: "education",
+        items: [
+          {
+            title: snapshot.education,
+            content: snapshot.education,
+          },
+        ],
+      },
+      {
+        name: "awards",
+        items: snapshot.awards.map((award) => ({
+          title: award,
+          content: award,
+        })),
+      },
+      {
+        name: "core_skill",
+        items: [
+          {
+            title: "Advanced",
+            content: snapshot.skills_by_expertise.Advanced.length
+              ? snapshot.skills_by_expertise.Advanced.join(", ")
+              : "None yet",
+          },
+          {
+            title: "Intermediate",
+            content: snapshot.skills_by_expertise.Intermediate.length
+              ? snapshot.skills_by_expertise.Intermediate.join(", ")
+              : "None yet",
+          },
+          {
+            title: "Foundation",
+            content: snapshot.skills_by_expertise.Foundation.length
+              ? snapshot.skills_by_expertise.Foundation.join(", ")
+              : "None yet",
+          },
+        ],
+      },
+      {
+        name: "projects",
+        items: snapshot.projects.map((project) => ({
+          title: project.title,
+          content: project.summary,
+          bullets: [
+            `Contribution: ${project.contribution}`,
+            `Evidence of Success: ${project.impact}`,
+          ],
+        })),
+      },
+    ],
+  };
+}
+
+export async function buildOnePageResumeExportBundle() {
+  const [projects, summaryData, rankedTopProjectIds, timeline] = await Promise.all([
+    fetchProjects(),
+    fetchPortfolioResumeSummary(),
+    fetchRankedTopProjectIds().catch(() => []),
+    fetchSkillsTimeline().catch(() => []),
+  ]);
+
+  const profile = buildProfile(summaryData);
+  const snapshot = buildOnePageResumeSnapshot(
+    profile,
+    projects,
+    summaryData,
+    rankedTopProjectIds,
+    timeline
+  );
+
+  return {
+    snapshot,
+    markdown: buildOnePageResumeMarkdown(snapshot),
+    pdfPayload: buildOnePageResumePdfPayload(snapshot),
+  };
+}
+
 
 export async function openResumePreview() {
   const modal = document.getElementById("resume-preview-modal");
@@ -960,12 +1156,14 @@ export async function openResumePreview() {
   modal.classList.remove("hidden");
 
   try {
-    const [projects, summaryData] = await Promise.all([
+    const [projects, summaryData, rankedTopProjectIds, timeline] = await Promise.all([
       fetchProjects(),
       fetchPortfolioResumeSummary(),
+      fetchRankedTopProjectIds().catch(() => []),
+      fetchSkillsTimeline().catch(() => []),
     ]);
     const profile = buildProfile(summaryData);
-    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData);
+    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds, timeline);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
     body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
@@ -978,11 +1176,12 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolio() {
-  const [projectsResult, timelineResult, summaryResult, heatmapResult] = await Promise.allSettled([
+  const [projectsResult, timelineResult, summaryResult, heatmapResult, rankedTopProjectsResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
     fetchPortfolioResumeSummary(),
     fetchActivityHeatmap(),
+    fetchRankedTopProjectIds(),
   ]);
 
   const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
@@ -992,6 +1191,8 @@ export async function loadPortfolio() {
     heatmapResult.status === "fulfilled"
       ? heatmapResult.value
       : { cells: [], maxCount: 0, projectCount: 0 };
+  const rankedTopProjectIds =
+    rankedTopProjectsResult.status === "fulfilled" ? rankedTopProjectsResult.value : [];
 
   const profile = buildProfile(summaryData);
 
@@ -1010,8 +1211,12 @@ export async function loadPortfolio() {
   if (heatmapResult.status === "rejected") {
     console.error("Failed to load activity heatmap:", heatmapResult.reason);
   }
+  if (rankedTopProjectsResult.status === "rejected") {
+    console.error("Failed to load ranked top projects:", rankedTopProjectsResult.reason);
+  }
 
-  renderTopProjects(projects, summaryData);
+  renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds);
+  renderTopProjects(projects, summaryData, rankedTopProjectIds);
   renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);

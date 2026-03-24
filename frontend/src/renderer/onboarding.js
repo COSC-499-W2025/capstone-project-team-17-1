@@ -12,9 +12,19 @@ const TUTORIAL_STEPS = [
     description: "Dashboard gives you a quick view of recent projects, health signals, activity, and system status in one place.",
     sections: [
       {
+        label: "Search",
+        selectors: ["#dashboard-search-input", ".dashboard-toolbar"],
+        description: "Search lets you quickly narrow dashboard widgets by name while staying in the same public dashboard view.",
+      },
+      {
+        label: "Customize",
+        selectors: ["#dashboard-selection-wrapper", "#dashboard-selection-panel"],
+        description: "Customize is available in private mode and lets you choose which dashboard widgets appear before going live.",
+      },
+      {
         label: "Most Used Skills",
         selector: "#most-used-skills",
-        description: "Most Used Skills summarizes the tools and languages that appear most often across your analyzed projects.",
+        description: "Most Used Skills summarizes the tools and languages that appear most often across your analyzed projects, and now supports switching between Bar and Pie views.",
       },
       {
         label: "Error Analysis",
@@ -93,7 +103,7 @@ const TUTORIAL_STEPS = [
       {
         label: "Top Projects",
         selector: ".portfolio-projects-card",
-        description: "Top Projects highlights your strongest projects with contribution evidence and success details.",
+        description: "Top 3 Projects highlights the strongest projects in your portfolio based on analyzed depth, contribution evidence, and success details.",
       },
       {
         label: "Portfolio Stats",
@@ -112,8 +122,8 @@ const TUTORIAL_STEPS = [
       },
       {
         label: "Sections",
-        selectors: ["#customization-sections-card"],
-        description: "Choose which sections appear publicly and control the structure of the portfolio view.",
+        selectors: ["#portfolio-selection-wrapper", ".portfolio-actions"],
+        description: "Selection lets you control which portfolio sections are visible in the public-facing portfolio view.",
       },
       {
         label: "Evidence Editing",
@@ -121,9 +131,49 @@ const TUTORIAL_STEPS = [
         description: "Edit contribution and evidence text before sharing.",
       },
       {
-        label: "Live Preview",
-        selectors: [".portfolio-preview-card"],
-        description: "Live Preview shows how your portfolio changes will look before you share them publicly.",
+        label: "Project Detail Drafts",
+        // Target the drafts subsection directly so tutorial copy changes when users switch within Live Preview.
+        selectors: ["#live-preview-drafts-section"],
+        description: "Project Detail Drafts shows the draft text you are editing in Project Portfolio Details, including portfolio blurbs, key roles, and evidence for changed projects.",
+      },
+      {
+        label: "My Starred Projects",
+        // Keep this separate from drafts so the tutorial can explain showcase content independently.
+        selectors: ["#live-preview-starred-section"],
+        description: "My Starred Projects shows the starred projects that currently appear in your portfolio showcase and reflects their draft text in the preview.",
+      },
+    ],
+  },
+  {
+    tabKey: "chat",
+    pageId: "chat-page",
+    title: "Chat",
+    description: "Chat gives you an AI workspace for resume, portfolio, project, and interview guidance based on your Loom data.",
+    sections: [
+      {
+        label: "Quick Prompts",
+        selectors: ["#chat-quick-prompts-card", ".chat-suggestions-row"],
+        description: "Quick Prompts provides one-click starter questions for common tasks like resume review, project positioning, and interview prep.",
+      },
+      {
+        label: "Conversation",
+        selectors: ["#chat-conversation-card", "#chat-messages"],
+        description: "Conversation shows the running back-and-forth between you and Loom Copilot so you can continue refining the same topic.",
+      },
+      {
+        label: "Message Composer",
+        selectors: ["#chat-input", ".chat-composer-row"],
+        description: "Message Composer is where you type multi-line questions and send them to the assistant.",
+      },
+      {
+        label: "Send",
+        selectors: ["#chat-send-btn"],
+        description: "Send submits the current prompt to the assistant and appends the reply to the conversation history.",
+      },
+      {
+        label: "Clear Chat",
+        selectors: ["#chat-clear-btn"],
+        description: "Clear Chat resets the current conversation and starts you with a fresh assistant greeting.",
       },
     ],
   },
@@ -149,22 +199,27 @@ const TUTORIAL_STEPS = [
     tabKey: "settings",
     pageId: "settings-page",
     title: "Settings",
-    description: "Settings lets you manage your profile and control local-processing and external-AI consent.",
+    description: "Settings is organized into General, Account, Privacy & Consent, and Security so you can manage app preferences and personal controls in one place.",
     sections: [
       {
-        label: "Profile",
+        label: "General",
+        selectors: ["#settings-tab-general", "#show-tutorial-btn"],
+        description: "General contains app-level preferences, including the option to replay the guided tutorial at any time.",
+      },
+      {
+        label: "Account",
         selector: "#settings-profile",
-        description: "Edit your name and profile information used throughout the app and portfolio.",
+        description: "Account is where you view and update your profile details, contact information, and public links used across Loom.",
       },
       {
-        label: "Consent",
+        label: "Privacy & Consent",
         selector: "#settings-consent",
-        description: "Manage local-processing and external-AI consent. If analysis features are blocked, grant consent here.",
+        description: "Privacy & Consent lets you review and manage local-processing and optional external-AI permissions for the app.",
       },
       {
-        label: "Tutorial",
-        selectors: ["#show-tutorial-btn", "#settings-profile"],
-        description: "Use Settings to update personal information, change your password, and reopen this tutorial whenever you want a guided walkthrough again.",
+        label: "Security",
+        selector: "#settings-security",
+        description: "Security is where signed-in users manage account protection details such as password-related settings.",
       },
     ],
   },
@@ -226,6 +281,24 @@ function setTutorialTabState(tabKey) {
   });
 }
 
+function syncSettingsTutorialTab(sectionLabel) {
+  const tabMap = {
+    General: "general",
+    Account: "account",
+    "Privacy & Consent": "privacy",
+    Security: "security",
+  };
+  const activeTab = tabMap[sectionLabel] || "general";
+
+  document.querySelectorAll(".settings-nav-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === activeTab);
+  });
+
+  document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `settings-tab-${activeTab}`);
+  });
+}
+
 function renderStep() {
   const panel = getPanel();
   if (!panel) return;
@@ -244,6 +317,9 @@ function renderStep() {
 
   switchPage(detailOpen ? step.pageId : "dashboard-page");
   setTutorialTabState(step.tabKey);
+  if (step.tabKey === "settings") {
+    syncSettingsTutorialTab(currentSection?.label || "");
+  }
   clearSectionFocus();
   panel.classList.toggle(
     "onboarding-panel-right",
@@ -424,6 +500,27 @@ function bindTutorialControls() {
 
       if (tutorialActive && detailOpen) {
         const currentStep = getStep(currentStepIndex);
+        if (currentStep.tabKey === "settings") {
+          const settingsNavTrigger = event.target.closest(".settings-nav-item");
+          if (settingsNavTrigger) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            const settingsTab = settingsNavTrigger.dataset.settingsTab || "";
+            const sectionIndex = currentStep.sections.findIndex((section) => {
+              if (settingsTab === "general") return section.label === "General";
+              if (settingsTab === "account") return section.label === "Account";
+              if (settingsTab === "privacy") return section.label === "Privacy & Consent";
+              if (settingsTab === "security") return section.label === "Security";
+              return false;
+            });
+            if (sectionIndex >= 0) {
+              currentSectionIndex = sectionIndex;
+              renderStep();
+            }
+            return;
+          }
+        }
+
         if (currentStep.tabKey === "projects") {
           const pullTrigger = event.target.closest(".pull-btn");
           if (pullTrigger) {

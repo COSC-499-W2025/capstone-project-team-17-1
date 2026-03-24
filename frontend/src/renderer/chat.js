@@ -1,4 +1,27 @@
+import { switchPage } from "./navigation.js";
+
 const CHAT_STORAGE_KEY = "loom-chat-history";
+const API_BASE = "http://127.0.0.1:8002";
+const AUTH_TOKEN_KEY = "loom_auth_token";
+
+function buildAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+async function fetchConsentState() {
+  const res = await fetch(`${API_BASE}/privacy-consent`, {
+    headers: buildAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch consent state: ${res.status}`);
+  }
+  return res.json();
+}
 
 export function initChat() {
   const chatPage = document.getElementById("chat-page");
@@ -16,6 +39,7 @@ export function initChat() {
 
   let messages = [];
   let sending = false;
+  let externalConsentGranted = true;
 
   try {
     const saved = localStorage.getItem(CHAT_STORAGE_KEY);
@@ -54,6 +78,48 @@ export function initChat() {
     errorEl.classList.remove("hidden");
   }
 
+  function openSettingsConsent() {
+    document.querySelectorAll(".nav-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === "settings");
+    });
+    switchPage("settings-page");
+
+    document.querySelectorAll(".settings-nav-item").forEach((button) => {
+      const isPrivacy = button.dataset.settingsTab === "privacy";
+      button.classList.toggle("active", isPrivacy);
+    });
+    document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
+      panel.classList.toggle("active", panel.id === "settings-tab-privacy");
+    });
+  }
+
+  function updateConsentGate() {
+    const blockedMessage = "External AI consent is required to use chat normally. Grant it in Settings > Privacy & Consent.";
+
+    inputEl.disabled = !externalConsentGranted;
+    sendBtn.disabled = sending || !externalConsentGranted;
+    suggestionBtns.forEach((button) => {
+      button.disabled = !externalConsentGranted;
+    });
+
+    if (!externalConsentGranted) {
+      setError(blockedMessage);
+      if (!chatPage.querySelector("[data-chat-consent-cta]")) {
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "ai-consent-btn";
+        action.dataset.chatConsentCta = "true";
+        action.textContent = "Open Settings";
+        action.addEventListener("click", openSettingsConsent);
+        errorEl?.insertAdjacentElement("afterend", action);
+      }
+      return;
+    }
+
+    setError("");
+    chatPage.querySelector("[data-chat-consent-cta]")?.remove();
+  }
+
   function renderMessages(showTyping = false) {
     messagesEl.innerHTML = "";
 
@@ -86,6 +152,10 @@ export function initChat() {
 
   async function sendMessage(prefilled = "") {
     if (sending) return;
+    if (!externalConsentGranted) {
+      updateConsentGate();
+      return;
+    }
 
     const text = (prefilled || inputEl.value || "").trim();
     if (!text) return;
@@ -170,6 +240,21 @@ export function initChat() {
       sendMessage(prompt);
     });
   });
+
+  window.addEventListener("consent:state-changed", (event) => {
+    externalConsentGranted = Boolean(event.detail?.external_consent);
+    updateConsentGate();
+  });
+
+  fetchConsentState()
+    .then((state) => {
+      externalConsentGranted = Boolean(state?.external_consent);
+      updateConsentGate();
+    })
+    .catch(() => {
+      externalConsentGranted = false;
+      updateConsentGate();
+    });
 
   renderMessages();
 }

@@ -17,7 +17,7 @@ test("shouldPlaceOnboardingPanelRight keeps collapsed tutorial on the left", () 
   );
 });
 
-test("shouldPlaceOnboardingPanelRight moves projects, settings, and customization detail panels to the right", () => {
+test("shouldPlaceOnboardingPanelRight moves projects, settings, customization, chat, and job match detail panels to the right", () => {
   assert.equal(
     shouldPlaceOnboardingPanelRight({
       detailOpen: true,
@@ -40,6 +40,24 @@ test("shouldPlaceOnboardingPanelRight moves projects, settings, and customizatio
     shouldPlaceOnboardingPanelRight({
       detailOpen: true,
       tabKey: "customization",
+      sectionLabel: "Featured Projects",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "chat",
+      sectionLabel: "Conversation",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "job-match",
       sectionLabel: "Featured Projects",
     }),
     true
@@ -73,9 +91,54 @@ test("shouldPlaceOnboardingPanelRight moves selected dashboard and portfolio det
     }),
     false
   );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "Evidence Editing",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "Activity Heatmap",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "Live Preview",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "Project Detail Drafts",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "My Starred Projects",
+    }),
+    true
+  );
 });
 
-test("shouldHighlightTutorialSection disables white frames for projects, settings, and resume generation", () => {
+test("shouldHighlightTutorialSection disables white frames for projects, settings, job match, chat, and resume generation", () => {
   assert.equal(
     shouldHighlightTutorialSection({ tabKey: "projects", sectionLabel: "Upload Project" }),
     false
@@ -87,7 +150,37 @@ test("shouldHighlightTutorialSection disables white frames for projects, setting
   );
 
   assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "job-match", sectionLabel: "Featured Projects" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "chat", sectionLabel: "Conversation" }),
+    false
+  );
+
+  assert.equal(
     shouldHighlightTutorialSection({ tabKey: "portfolio-resume", sectionLabel: "Resume Generation" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "portfolio", sectionLabel: "Project Detail Drafts" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "portfolio", sectionLabel: "My Starred Projects" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "dashboard", sectionLabel: "Search" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "dashboard", sectionLabel: "Customize" }),
     false
   );
 
