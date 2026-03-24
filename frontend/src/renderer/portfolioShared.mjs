@@ -54,6 +54,27 @@ function getTopProjects(projects) {
     .slice(0, 3);
 }
 
+function sortProjectsByRankedIds(projects, rankedIds = []) {
+  const rankMap = new Map(
+    rankedIds.map((projectId, index) => [String(projectId), index])
+  );
+
+  return [...projects].sort((a, b) => {
+    const aRank = rankMap.get(String(a.project_id));
+    const bRank = rankMap.get(String(b.project_id));
+    const aHasRank = aRank !== undefined;
+    const bHasRank = bRank !== undefined;
+
+    if (aHasRank && bHasRank) return aRank - bRank;
+    if (aHasRank) return -1;
+    if (bHasRank) return 1;
+
+    const skillDiff = (b.total_skills || 0) - (a.total_skills || 0);
+    if (skillDiff !== 0) return skillDiff;
+    return (b.total_files || 0) - (a.total_files || 0);
+  });
+}
+
 function formatTimelineTimestamp(timestamp) {
   const raw = String(timestamp || "").trim();
   if (!raw) return "Unknown";
@@ -420,4 +441,5 @@ export {
   buildTopProjectsMarkup,
   formatTimelineTimestamp,
   getTopProjects,
+  sortProjectsByRankedIds,
 };

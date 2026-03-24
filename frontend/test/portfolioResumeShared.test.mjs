@@ -6,6 +6,7 @@ import {
   buildTopProjectsMarkup,
   formatTimelineTimestamp,
   getTopProjects,
+  sortProjectsByRankedIds,
 } from "../src/renderer/portfolioShared.mjs";
 
 test("getTopProjects returns the top 3 projects ordered by skills then files", () => {
@@ -19,6 +20,20 @@ test("getTopProjects returns the top 3 projects ordered by skills then files", (
   assert.deepEqual(
     getTopProjects(projects).map((project) => project.project_id),
     ["beta", "alpha", "gamma"]
+  );
+});
+
+test("sortProjectsByRankedIds respects backend ranked ids before local fallbacks", () => {
+  const projects = [
+    { project_id: "delta", total_skills: 1, total_files: 40 },
+    { project_id: "alpha", total_skills: 5, total_files: 10 },
+    { project_id: "beta", total_skills: 5, total_files: 22 },
+    { project_id: "gamma", total_skills: 3, total_files: 50 },
+  ];
+
+  assert.deepEqual(
+    sortProjectsByRankedIds(projects, ["gamma", "alpha"]).map((project) => project.project_id),
+    ["gamma", "alpha", "beta", "delta"]
   );
 });
 

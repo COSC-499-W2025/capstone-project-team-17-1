@@ -140,9 +140,14 @@ export function getFeaturedProjects(projects = []) {
     return projects.slice(0, 3);
   }
 
-  const featuredIds = new Set(customization.featuredProjectIds);
-  const selected = projects.filter((p) => featuredIds.has(String(p.project_id)));
-  return selected.slice(0, 3);
+  const projectMap = new Map(
+    projects.map((project) => [String(project.project_id), project])
+  );
+
+  return customization.featuredProjectIds
+    .map((projectId) => projectMap.get(String(projectId)))
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 export function notifyPortfolioDataUpdated() {

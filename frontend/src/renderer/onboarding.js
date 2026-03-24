@@ -93,7 +93,7 @@ const TUTORIAL_STEPS = [
       {
         label: "Top Projects",
         selector: ".portfolio-projects-card",
-        description: "My Starred Projects shows the projects you starred for your portfolio, including contribution evidence and success details.",
+        description: "Top 3 Projects highlights the strongest projects in your portfolio based on analyzed depth, contribution evidence, and success details.",
       },
       {
         label: "Portfolio Stats",

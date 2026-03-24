@@ -1,10 +1,10 @@
 import { fetchProjects } from "./projects.js";
 import { authFetch, getCurrentUser } from "./auth.js";
 import {
-  getFeaturedProjects,
   getProjectOverride,
   loadPortfolioCustomization,
 } from "./portfolioState.js";
+import { sortProjectsByRankedIds } from "./portfolioShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -129,6 +129,39 @@ function getTopProjects(projects) {
       return (b.total_files || 0) - (a.total_files || 0);
     })
     .slice(0, 3);
+}
+
+async function fetchRankedTopProjectIds(limit = 3) {
+  const currentUser = getCurrentUser();
+  const username =
+    String(currentUser?.username || "").trim() ||
+    String(currentUser?.full_name || "").trim();
+
+  if (!username) {
+    return [];
+  }
+
+  const res = await authFetch(
+    `/showcase/portfolio/summary?user=${encodeURIComponent(username)}&limit=${encodeURIComponent(limit)}`
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ranked top projects: ${res.status}`);
+  }
+
+  const payload = await res.json();
+  return Array.isArray(payload?.data)
+    ? payload.data
+        .map((item) => String(item?.project_id || "").trim())
+        .filter(Boolean)
+        .slice(0, limit)
+    : [];
+}
+
+function getRankedTopProjects(projects, rankedIds = [], limit = 3) {
+  if (Array.isArray(rankedIds) && rankedIds.length) {
+    return sortProjectsByRankedIds(projects, rankedIds).slice(0, limit);
+  }
+  return getTopProjects(projects).slice(0, limit);
 }
 
 async function fetchSkillsTimeline() {
@@ -391,11 +424,11 @@ function applyPortfolioSectionVisibility() {
   });
 }
 
-function renderResumeSummary(profile, projects, summaryData) {
+function renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds = []) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
 
-  const featuredProjects = getFeaturedProjects(projects);
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -474,12 +507,12 @@ function renderResumeSummary(profile, projects, summaryData) {
       }
 
       ${
-        featuredProjects.length
+        topProjects.length
           ? `
             <div class="resume-meta-box">
-              <span class="resume-meta-label">Featured Projects</span>
+              <span class="resume-meta-label">Top 3 Projects</span>
               <div class="skills-pill-row">
-                ${featuredProjects
+                ${topProjects
                   .map((project) => `<span class="skills-pill">${escapeHtml(project.project_id)}</span>`)
                   .join("")}
               </div>
@@ -491,7 +524,7 @@ function renderResumeSummary(profile, projects, summaryData) {
   `;
 }
 
-function renderTopProjects(projects, summaryData) {
+function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
   const container = document.getElementById("top-projects-container");
   if (!container) return;
 
@@ -505,8 +538,7 @@ function renderTopProjects(projects, summaryData) {
   }
 
   const projectDetailsMap = getProjectDetailsMap(summaryData);
-  const featuredProjects = getFeaturedProjects(projects);
-  const topProjects = featuredProjects.length ? featuredProjects : getTopProjects(projects);
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
 
   container.innerHTML = topProjects
     .map((project, index) => {
@@ -861,8 +893,8 @@ function renderActivityHeatmap(heatmapData) {
   `;
 }
 
-function buildResumePreviewHtml(profile, projects, summaryData) {
-  const topProjects = getFeaturedProjects(projects);
+function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = []) {
+  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
   const projectDetailsMap = getProjectDetailsMap(summaryData);
 
   const totalProjects = projects.length;
@@ -960,12 +992,13 @@ export async function openResumePreview() {
   modal.classList.remove("hidden");
 
   try {
-    const [projects, summaryData] = await Promise.all([
+    const [projects, summaryData, rankedTopProjectIds] = await Promise.all([
       fetchProjects(),
       fetchPortfolioResumeSummary(),
+      fetchRankedTopProjectIds().catch(() => []),
     ]);
     const profile = buildProfile(summaryData);
-    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData);
+    body.innerHTML = buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds);
   } catch (err) {
     console.error("Failed to open resume preview:", err);
     body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
@@ -978,11 +1011,12 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolio() {
-  const [projectsResult, timelineResult, summaryResult, heatmapResult] = await Promise.allSettled([
+  const [projectsResult, timelineResult, summaryResult, heatmapResult, rankedTopProjectsResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
     fetchPortfolioResumeSummary(),
     fetchActivityHeatmap(),
+    fetchRankedTopProjectIds(),
   ]);
 
   const projects = projectsResult.status === "fulfilled" ? projectsResult.value : [];
@@ -992,6 +1026,8 @@ export async function loadPortfolio() {
     heatmapResult.status === "fulfilled"
       ? heatmapResult.value
       : { cells: [], maxCount: 0, projectCount: 0 };
+  const rankedTopProjectIds =
+    rankedTopProjectsResult.status === "fulfilled" ? rankedTopProjectsResult.value : [];
 
   const profile = buildProfile(summaryData);
 
@@ -1010,8 +1046,12 @@ export async function loadPortfolio() {
   if (heatmapResult.status === "rejected") {
     console.error("Failed to load activity heatmap:", heatmapResult.reason);
   }
+  if (rankedTopProjectsResult.status === "rejected") {
+    console.error("Failed to load ranked top projects:", rankedTopProjectsResult.reason);
+  }
 
-  renderTopProjects(projects, summaryData);
+  renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds);
+  renderTopProjects(projects, summaryData, rankedTopProjectIds);
   renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
