@@ -4232,8 +4232,13 @@ transition: all 0.2s ease;
 .portfolio-star-btn {
   background: none;
   border: none;
-  padding: 0 6px 0 0;
-  font-size: 1rem;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
   color: rgba(255,255,255,0.15);
   cursor: pointer;
   flex-shrink: 0;
@@ -5215,6 +5220,8 @@ transition: all 0.2s ease;
 
 .customization-project-editor h3 {
   overflow-wrap: break-word;
+  word-break: break-word;
+  margin: 0 0 6px 0;
 }
 
 .customization-project-editor-header {
@@ -5225,10 +5232,16 @@ transition: all 0.2s ease;
   margin-bottom: 16px;
 }
 
+.customization-project-editor-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .customization-project-editor-meta {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
 }
 
 .customization-rank-wrap {
@@ -5355,6 +5368,20 @@ transition: all 0.2s ease;
 
 .live-preview-project-card h4 {
   margin: 0 0 8px 0;
+}
+
+.live-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 .live-preview-meta {

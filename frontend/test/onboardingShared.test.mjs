@@ -118,6 +118,24 @@ test("shouldPlaceOnboardingPanelRight moves selected dashboard and portfolio det
     }),
     true
   );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "Project Detail Drafts",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldPlaceOnboardingPanelRight({
+      detailOpen: true,
+      tabKey: "portfolio",
+      sectionLabel: "My Starred Projects",
+    }),
+    true
+  );
 });
 
 test("shouldHighlightTutorialSection disables white frames for projects, settings, job match, chat, and resume generation", () => {
@@ -143,6 +161,16 @@ test("shouldHighlightTutorialSection disables white frames for projects, setting
 
   assert.equal(
     shouldHighlightTutorialSection({ tabKey: "portfolio-resume", sectionLabel: "Resume Generation" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "portfolio", sectionLabel: "Project Detail Drafts" }),
+    false
+  );
+
+  assert.equal(
+    shouldHighlightTutorialSection({ tabKey: "portfolio", sectionLabel: "My Starred Projects" }),
     false
   );
 

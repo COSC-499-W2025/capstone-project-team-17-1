@@ -93,7 +93,7 @@ const TUTORIAL_STEPS = [
       {
         label: "Top Projects",
         selector: ".portfolio-projects-card",
-        description: "Top Projects highlights your strongest projects with contribution evidence and success details.",
+        description: "My Starred Projects shows the projects you starred for your portfolio, including contribution evidence and success details.",
       },
       {
         label: "Portfolio Stats",
@@ -121,9 +121,16 @@ const TUTORIAL_STEPS = [
         description: "Edit contribution and evidence text before sharing.",
       },
       {
-        label: "Live Preview",
-        selectors: [".portfolio-preview-card"],
-        description: "Live Preview shows how your portfolio changes will look before you share them publicly.",
+        label: "Project Detail Drafts",
+        // Target the drafts subsection directly so tutorial copy changes when users switch within Live Preview.
+        selectors: ["#live-preview-drafts-section"],
+        description: "Project Detail Drafts shows the draft text you are editing in Project Portfolio Details, including portfolio blurbs, key roles, and evidence for changed projects.",
+      },
+      {
+        label: "My Starred Projects",
+        // Keep this separate from drafts so the tutorial can explain showcase content independently.
+        selectors: ["#live-preview-starred-section"],
+        description: "My Starred Projects shows the starred projects that currently appear in your portfolio showcase and reflects their draft text in the preview.",
       },
     ],
   },
