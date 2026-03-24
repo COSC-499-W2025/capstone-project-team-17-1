@@ -4348,6 +4348,15 @@ transition: all 0.2s ease;
 .portfolio-star-btn.starred:hover {
   color: #f59e0b;
 }
+@keyframes star-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.45); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.portfolio-star-btn.star-pop {
+  animation: star-pop 0.28s ease-out;
+}
 
 .resume-list-card-header {
   display: flex;

@@ -846,7 +846,7 @@ def _build_upload_diff(conn, rows, earlier_index: int = 0, later_index: int = -1
 def edit_project(id: str, payload: ProjectEdit):
     conn = storage.open_db()
     exists = conn.execute(
-        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
         (id,),
     ).fetchone()
     if not exists:
