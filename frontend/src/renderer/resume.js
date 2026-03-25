@@ -94,13 +94,19 @@ function saveStarred(starredSet) {
 
 function applySavedOrder(resumes) {
   const saved = getSavedResumeOrder();
-  if (!saved.length) return resumes;
+  if (!saved.length) {
+    // No saved order: newest first (highest id = most recently created)
+    return [...resumes].sort((a, b) => b.id - a.id);
+  }
   const rank = new Map(saved.map((id, i) => [String(id), i]));
-  return [...resumes].sort((a, b) => {
-    const ai = rank.has(String(a.id)) ? rank.get(String(a.id)) : Infinity;
-    const bi = rank.has(String(b.id)) ? rank.get(String(b.id)) : Infinity;
-    return ai - bi;
-  });
+  const inOrder = [];
+  const newItems = [];
+  for (const r of resumes) {
+    (rank.has(String(r.id)) ? inOrder : newItems).push(r);
+  }
+  inOrder.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
+  newItems.sort((a, b) => b.id - a.id);
+  return [...newItems, ...inOrder];
 }
 
 function setupListDragDrop(container) {
