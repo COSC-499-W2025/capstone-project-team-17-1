@@ -609,11 +609,13 @@ def get_project(id: str):
 @router.delete("/{id}")
 def delete_project(id: str):
     """
-    Deletes a project upload and its associated stored file.
+    Deletes a project and its associated stored file (ZIP upload) or
+    GitHub-imported entry (no local blob).
     """
     conn = storage.open_db()
 
-    row = conn.execute(
+    # --- ZIP-upload path: project lives in uploads + files tables ---
+    upload_row = conn.execute(
         """
         SELECT u.file_id, f.path, u.original_name
         FROM uploads u
@@ -623,42 +625,59 @@ def delete_project(id: str):
         (id,),
     ).fetchone()
 
-    if not row:
-        log_event("ERROR", "Project not found · Project: ")
-        raise HTTPException(status_code=404, detail="Project not found")
+    # --- GitHub-import path: project lives only in github_projects / project_analysis ---
+    github_row = conn.execute(
+        "SELECT project_id FROM github_projects WHERE project_id = ?",
+        (id,),
+    ).fetchone() if not upload_row else None
 
-    file_id, file_path, original_name = row
+    if not upload_row and not github_row:
+        # Last chance: project may exist only in project_analysis (e.g. older imports)
+        analysis_row = conn.execute(
+            "SELECT project_id FROM project_analysis WHERE project_id = ? LIMIT 1",
+            (id,),
+        ).fetchone()
+        if not analysis_row:
+            log_event("ERROR", "Project not found · Project: ")
+            raise HTTPException(status_code=404, detail="Project not found")
 
-    # Remove project-level records first, then decide whether the shared file blob can be deleted.
-    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
+    file_id = None
+    original_name = None
+
+    if upload_row:
+        file_id, file_path, original_name = upload_row
+
+        conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
+
+        remaining_refs = conn.execute(
+            "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
+            (file_id,),
+        ).fetchone()[0]
+
+        should_delete_blob = remaining_refs == 0
+
+        if should_delete_blob:
+            conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+        else:
+            conn.execute(
+                "UPDATE files SET ref_count = CASE WHEN ref_count > 0 THEN ref_count - 1 ELSE 0 END WHERE file_id = ?",
+                (file_id,),
+            )
+
+    # Always remove shared analysis / contributor records
     conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
-
-    remaining_refs = conn.execute(
-        "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
-        (file_id,),
-    ).fetchone()[0]
-
-    should_delete_blob = remaining_refs == 0
-
-    if should_delete_blob:
-        conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
-    else:
-        conn.execute(
-            "UPDATE files SET ref_count = CASE WHEN ref_count > 0 THEN ref_count - 1 ELSE 0 END WHERE file_id = ?",
-            (file_id,),
-        )
-
+    conn.execute("DELETE FROM github_projects WHERE project_id = ?", (id,))
     conn.commit()
 
-    # Only remove the physical blob when no uploads reference it anymore.
-    if should_delete_blob:
+    # Remove physical blob only when no other upload references it
+    if upload_row and should_delete_blob:
         try:
             Path(file_path).unlink(missing_ok=True)
         except Exception:
             pass
 
-    # best effort cloud zip removal
+    # Best-effort cloud cleanup
     if storage_module.CURRENT_USER:
         try:
             delete_project_zip(
