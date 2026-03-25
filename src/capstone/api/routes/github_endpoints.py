@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import requests
 import tempfile
 from pathlib import Path
@@ -16,6 +18,98 @@ from capstone.system.cloud_storage import upload_database, upload_project_zip
 router = APIRouter(prefix="/github", tags=["github"])
 
 GITHUB_API = "https://api.github.com"
+
+
+def _patch_github_commit_dates(
+    conn,
+    project_id: str,
+    owner: str,
+    repo: str,
+    branch: str,
+    headers: dict,
+    summary: dict,
+) -> None:
+    """Fetch first/last commit dates from GitHub API and update the stored snapshot.
+
+    GitHub zipballs contain only the working tree (no .git directory), so
+    ZipAnalyzer cannot extract commit timestamps.  This function patches the
+    project_analysis row that was just written by the analyzer.
+    """
+    try:
+        commits_url = f"{GITHUB_API}/repos/{owner}/{repo}/commits"
+
+        # Newest commit (first item, per_page=1)
+        latest_res = requests.get(
+            commits_url,
+            headers=headers,
+            params={"sha": branch, "per_page": 1},
+            timeout=10,
+        )
+        if latest_res.status_code != 200:
+            return
+
+        latest_data = latest_res.json()
+        last_commit_date: str | None = None
+        first_commit_date: str | None = None
+
+        if latest_data:
+            last_commit_date = latest_data[0]["commit"]["author"]["date"]
+
+        # Oldest commit: follow Link header rel="last" to the final page
+        link_header = latest_res.headers.get("Link", "")
+        last_page_url: str | None = None
+        for part in link_header.split(","):
+            if 'rel="last"' in part:
+                m = re.search(r"<([^>]+)>", part)
+                if m:
+                    last_page_url = m.group(1)
+                break
+
+        if last_page_url:
+            oldest_res = requests.get(last_page_url, headers=headers, timeout=10)
+            if oldest_res.status_code == 200:
+                oldest_data = oldest_res.json()
+                if oldest_data:
+                    first_commit_date = oldest_data[-1]["commit"]["author"]["date"]
+        elif last_commit_date:
+            # Only one page — first commit == last commit
+            first_commit_date = last_commit_date
+
+        if not first_commit_date and not last_commit_date:
+            return
+
+        # Update the snapshot row that was just inserted by ZipAnalyzer
+        row = conn.execute(
+            "SELECT id, snapshot FROM project_analysis WHERE project_id = ? ORDER BY id DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        if not row:
+            return
+
+        snap = json.loads(row[1])
+        collab = snap.get("collaboration", {})
+        if first_commit_date:
+            collab["first_commit_date"] = first_commit_date
+        if last_commit_date:
+            collab["last_commit_date"] = last_commit_date
+        snap["collaboration"] = collab
+
+        # Also update the in-memory summary so the API response is consistent
+        if isinstance(summary.get("collaboration"), dict):
+            if first_commit_date:
+                summary["collaboration"]["first_commit_date"] = first_commit_date
+            if last_commit_date:
+                summary["collaboration"]["last_commit_date"] = last_commit_date
+
+        conn.execute(
+            "UPDATE project_analysis SET snapshot = ? WHERE id = ?",
+            (json.dumps(snap), row[0]),
+        )
+        conn.commit()
+
+    except Exception:
+        # Non-fatal — import succeeds even if commit-date patching fails
+        pass
 
 
 # ------------------------------------------------
@@ -136,6 +230,11 @@ def import_repository(
                 (project_id, owner, repo, branch)
             )
             conn.commit()
+
+            # Patch snapshot with real commit dates from GitHub API.
+            # GitHub zipballs have no .git directory, so ZipAnalyzer cannot
+            # extract timestamps from git log — we fetch them here instead.
+            _patch_github_commit_dates(conn, project_id, owner, repo, branch, headers, summary)
             if storage_module.CURRENT_USER:
                 upload_project_zip(
                     storage_module.CURRENT_USER,
