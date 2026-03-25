@@ -70,6 +70,9 @@ async function fetchResumeDetail(resumeId) {
 // Resume list
 // ---------------------------------------------------------------------------
 
+// ID of the most-recently generated resume — used to flash the card on render
+let _newResumeId = null;
+
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
 // ---------------------------------------------------------------------------
@@ -226,6 +229,16 @@ async function renderResumeList() {
   }).join("");
 
   setupListDragDrop(container);
+
+  // Flash newly generated card
+  if (_newResumeId) {
+    const newCard = container.querySelector(`[data-resume-id="${_newResumeId}"]`);
+    if (newCard) {
+      newCard.classList.add("resume-card-new");
+      newCard.addEventListener("animationend", () => newCard.classList.remove("resume-card-new"), { once: true });
+    }
+    _newResumeId = null;
+  }
 
   container.querySelectorAll(".resume-list-card").forEach((card) => {
     const header = card.querySelector(".resume-list-card-header");
@@ -466,7 +479,8 @@ async function openNewResumeModal() {
     const contributorId = selectedContributor?.value || null;
 
     try {
-      await generateResume(projectIds, title, contributorId);
+      const newResume = await generateResume(projectIds, title, contributorId);
+      _newResumeId = newResume?.id ?? null;
       modal.remove();
       await renderResumeList();
     } catch (err) {

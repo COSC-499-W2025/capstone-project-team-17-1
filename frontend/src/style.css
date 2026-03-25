@@ -4265,6 +4265,16 @@ transition: all 0.2s ease;
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+@keyframes resume-card-new-flash {
+  0%   { background: rgba(80, 160, 255, 0.22); border-color: rgba(80, 160, 255, 0.55); box-shadow: 0 0 18px rgba(80, 160, 255, 0.35); }
+  60%  { background: rgba(80, 160, 255, 0.18); border-color: rgba(80, 160, 255, 0.45); box-shadow: 0 0 14px rgba(80, 160, 255, 0.25); }
+  100% { background: rgba(255,255,255,0.05);   border-color: rgba(255,255,255,0.08);   box-shadow: none; }
+}
+
+.resume-card-new {
+  animation: resume-card-new-flash 3s ease-out forwards;
+}
+
 .resume-list-card.resume-card-dragging {
   opacity: 0.4;
   transform: scale(1.01);
