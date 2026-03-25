@@ -788,7 +788,8 @@ def build_resume_project_summary(project_id: str, snapshot: Mapping[str, Any]) -
     stack_items: List[str] = []
     for name_item in _normalise_list(frameworks):
         stack_items.append(name_item)
-    for name_item in _pick_top_language_names(languages, limit=2):
+    _lang_list = [{"skill": k, "confidence": float(v)} for k, v in languages.items()]
+    for name_item in _pick_top_skill_names(_lang_list, limit=2):
         stack_items.append(name_item)
     for name_item in _pick_top_skill_names(skills, limit=2):
         stack_items.append(name_item)
@@ -834,12 +835,18 @@ def build_resume_project_item(
     languages = snapshot.get("languages") if isinstance(snapshot.get("languages"), dict) else {}
     frameworks = snapshot.get("frameworks") or []
 
-    # --- subtitle: frameworks first, then top languages ---
+    # --- subtitle: frameworks first, then top languages, then skills ---
     stack_items: List[str] = []
     for fw in _normalise_list(frameworks):
         stack_items.append(fw)
-    for lang in _pick_top_language_names(languages, limit=3):
+    _lang_list = [{"skill": k, "confidence": float(v)} for k, v in languages.items()]
+    for lang in _pick_top_skill_names(_lang_list, limit=3):
         stack_items.append(lang)
+    _raw_skills = snapshot.get("skills") or []
+    if isinstance(_raw_skills, dict):
+        _raw_skills = [{"skill": k, "confidence": float(v)} for k, v in _raw_skills.items()]
+    for sk in _pick_top_skill_names(_raw_skills, limit=3):
+        stack_items.append(sk)
     stack_items = _dedupe_preserve_order(stack_items)[:5]
     subtitle = ", ".join(stack_items)
 
@@ -891,7 +898,7 @@ def build_resume_project_item(
             except Exception:
                 pass
     _skill_counts.sort(key=lambda x: -x[1])
-    top_langs = [s for s, _ in _skill_counts[:2] if s]
+    top_langs = [_normalise_lang_name(s) for s, _ in _skill_counts[:2] if s]
     lang_sentence = ""
     if top_langs:
         lang_sentence = f" Primarily built with {' and '.join(top_langs)}."
@@ -1282,6 +1289,24 @@ def _coerce_int(value: Any) -> int:
         return 0
 
 
+# Canonical display names for languages (lowercase key → display name).
+# Built from language_detection._EXTENSION_LANGUAGE values plus extras.
+_LANG_DISPLAY: dict[str, str] = {
+    "python": "Python", "javascript": "JavaScript", "typescript": "TypeScript",
+    "java": "Java", "ruby": "Ruby", "go": "Go", "rust": "Rust",
+    "c": "C", "c++": "C++", "c#": "C#", "swift": "Swift", "kotlin": "Kotlin",
+    "objective-c": "Objective-C", "php": "PHP", "html": "HTML", "css": "CSS",
+    "scss": "CSS", "markdown": "Markdown", "json": "JSON", "yaml": "YAML",
+    "sql": "SQL", "shell": "Shell", "batchfile": "Batchfile",
+    "powershell": "PowerShell", "scala": "Scala", "r": "R",
+}
+
+
+def _normalise_lang_name(name: str) -> str:
+    """Return the canonical display name for a language, preserving case for unknowns."""
+    return _LANG_DISPLAY.get(name.strip().lower(), name.strip())
+
+
 def _normalise_list(value: Any) -> List[str]:
     if isinstance(value, list):
         items = value
@@ -1296,18 +1321,6 @@ def _normalise_list(value: Any) -> List[str]:
         results.append(str(item))
     return results
 
-
-def _pick_top_language_names(languages: Mapping[str, Any], limit: int = 2) -> List[str]:
-    items = []
-    for name, value in languages.items():
-        score = 0.0
-        try:
-            score = float(value)
-        except Exception:
-            score = 0.0
-        items.append((name, score))
-    items.sort(key=lambda item: (-item[1], str(item[0]).lower()))
-    return [str(name) for name, _ in items[:limit]]
 
 
 def _pick_top_skill_names(skills: Any, limit: int = 2) -> List[str]:
@@ -1329,7 +1342,7 @@ def _pick_top_skill_names(skills: Any, limit: int = 2) -> List[str]:
         if skill is not None:
             items.append((str(skill), 0.0))
     items.sort(key=lambda item: (-item[1], item[0].lower()))
-    return [name for name, _ in items[:limit]]
+    return [_normalise_lang_name(name) for name, _ in items[:limit]]
 
 
 def _dedupe_preserve_order(items: List[str]) -> List[str]:
