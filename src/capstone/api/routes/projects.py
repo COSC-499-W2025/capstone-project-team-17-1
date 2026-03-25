@@ -13,7 +13,7 @@ from capstone.activity_log import log_event
 from capstone import file_store, storage
 from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
-from capstone.resume_retrieval import build_resume_project_summary
+from capstone.resume_retrieval import build_resume_project_item
 from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
 import capstone.storage as storage_module
 class ProjectEdit(BaseModel):
@@ -973,15 +973,12 @@ async def generate_project_resume(project_id: str, request: Request):
         for name in raw_skills:
             _add_skill(name)
 
-    # 5. Build project summary text from snapshot
-    project_summary = build_resume_project_summary(project_id, snap)
-    project_title = (
-        snap.get("project_name")
-        or snap.get("root_name")
-        or project_id
-    )
+    # 5. Build project item from snapshot
+    project_item = build_resume_project_item(project_id, snap)
+    if not project_item.get("title"):
+        project_item["title"] = snap.get("project_name") or snap.get("root_name") or project_id
 
-    project_items = [{"title": project_title, "content": project_summary}]
+    project_items = [project_item]
 
     # 6. Build header from user profile
     user_profile = storage.get_user_profile(conn, user_id) or {}

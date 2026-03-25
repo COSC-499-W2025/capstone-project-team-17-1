@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
-from capstone.resume_retrieval import build_resume_project_summary
+from capstone.resume_retrieval import build_resume_project_item
 import capstone.storage as storage
 
 
@@ -292,9 +292,10 @@ async def generate_resume(request: Request):
             elif isinstance(raw_skills, dict):
                 for name in raw_skills:
                     _add_skill(name)
-            summary = build_resume_project_summary(pid, snap)
-            title = snap.get("project_name") or snap.get("root_name") or pid
-            project_items.append({"title": title, "content": summary})
+            item = build_resume_project_item(pid, snap)
+            if not item.get("title"):
+                item["title"] = snap.get("project_name") or snap.get("root_name") or pid
+            project_items.append(item)
 
         # --- build header ---
         # Auth profile is only used when generating for the logged-in user themselves.

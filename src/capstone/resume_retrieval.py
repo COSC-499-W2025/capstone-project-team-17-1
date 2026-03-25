@@ -810,6 +810,119 @@ def build_resume_project_summary(project_id: str, snapshot: Mapping[str, Any]) -
     return opening
 
 
+def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> dict:
+    """Return a rich project item dict for resume sections.
+
+    Populates title, subtitle, start_date, end_date, content, and bullets
+    from the analysis snapshot, replacing the bare single-sentence summary.
+    """
+    name = str(snapshot.get("project_name") or snapshot.get("project") or snapshot.get("project_id") or project_id)
+    classification = snapshot.get("classification") or snapshot.get("project_type")
+    file_summary = snapshot.get("file_summary") if isinstance(snapshot.get("file_summary"), dict) else {}
+    collaboration = snapshot.get("collaboration") if isinstance(snapshot.get("collaboration"), dict) else {}
+
+    file_count = _coerce_int(file_summary.get("file_count"))
+    duration_days = _coerce_int(file_summary.get("duration_days"))
+    active_days = _coerce_int(file_summary.get("active_days"))
+    earliest = str(file_summary.get("earliest_modification") or "")
+    latest = str(file_summary.get("latest_modification") or "")
+
+    languages = snapshot.get("languages") if isinstance(snapshot.get("languages"), dict) else {}
+    frameworks = snapshot.get("frameworks") or []
+
+    # --- subtitle: frameworks first, then top languages ---
+    stack_items: List[str] = []
+    for fw in _normalise_list(frameworks):
+        stack_items.append(fw)
+    for lang in _pick_top_language_names(languages, limit=3):
+        stack_items.append(lang)
+    stack_items = _dedupe_preserve_order(stack_items)[:5]
+    subtitle = ", ".join(stack_items)
+
+    # --- dates: YYYY-MM ---
+    start_date = earliest[:7] if len(earliest) >= 7 else ""
+    end_date = latest[:7] if len(latest) >= 7 else ""
+
+    # --- duration phrasing helper ---
+    def _duration_text(days: int) -> str:
+        if days <= 0:
+            return ""
+        months = round(days / 30)
+        if months < 1:
+            weeks = max(1, round(days / 7))
+            return f"{weeks} week{'s' if weeks != 1 else ''}"
+        return f"{months} month{'s' if months != 1 else ''}"
+
+    # --- content: one professional sentence ---
+    stack_text = f" using {', '.join(stack_items[:3])}" if stack_items else ""
+    type_label = f"{classification} " if classification else ""
+    dur = _duration_text(duration_days)
+    dur_clause = f" over {dur}" if dur else ""
+    file_clause = f", spanning {file_count} files" if file_count else ""
+    content = f"Developed {type_label}project{stack_text}{dur_clause}{file_clause}."
+
+    # --- bullets from collaboration + metrics ---
+    bullets: List[str] = []
+
+    contrib_raw = (
+        collaboration.get("contributors (commits, PRs, issues, reviews)")
+        or collaboration.get("contributors (commits, line changes, reviews)")
+        or {}
+    )
+    primary = str(collaboration.get("primary_contributor") or "")
+    total_commits = 0
+    contributor_count = 0
+    primary_commits = 0
+    if isinstance(contrib_raw, dict):
+        contributor_count = len(contrib_raw)
+        for cname, cdata in contrib_raw.items():
+            # cdata may be [commits, lines, reviews] list/tuple or bare int
+            if isinstance(cdata, (list, tuple)) and cdata:
+                c = _coerce_int(cdata[0])
+            else:
+                c = _coerce_int(cdata)
+            total_commits += c
+            if cname == primary:
+                primary_commits = c
+
+    # Bullet 1: contribution role
+    if primary and primary_commits:
+        collab_note = (
+            f"; {contributor_count} contributor{'s' if contributor_count != 1 else ''} total"
+            if contributor_count > 1 else ""
+        )
+        bullets.append(
+            f"Led by {primary} with {primary_commits} commit{'s' if primary_commits != 1 else ''}{collab_note}"
+        )
+    elif total_commits:
+        bullets.append(
+            f"{total_commits} commit{'s' if total_commits != 1 else ''} across "
+            f"{contributor_count or 1} contributor{'s' if (contributor_count or 1) != 1 else ''}"
+        )
+
+    # Bullet 2: tech stack
+    if len(stack_items) >= 2:
+        bullets.append(f"Tech stack: {', '.join(stack_items[:4])}")
+
+    # Bullet 3: scope
+    if file_count and duration_days:
+        span = _duration_text(duration_days)
+        bullets.append(f"{file_count} files across a {span} development span")
+    elif file_count:
+        bullets.append(f"Codebase spans {file_count} files")
+    elif active_days:
+        bullets.append(f"Active development over {active_days} days")
+
+    return {
+        "title": name,
+        "subtitle": subtitle,
+        "start_date": start_date,
+        "end_date": end_date,
+        "content": content,
+        "bullets": bullets,
+    }
+
+
 def generate_resume_project_descriptions(
     conn: sqlite3.Connection,
     *,
