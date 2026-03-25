@@ -1018,6 +1018,23 @@ def build_resume_project_item(
         type_label = "collaborative "
     content = f"Developed {type_label}project.{lang_sentence}{role_sentence}{contrib_sentence}"
 
+    # --- contribution pct for summary aggregation ---
+    if contributor_count <= 1:
+        _contrib_pct = 100
+    elif _has_prs_schema:
+        _total_activity = total_prs + total_issues + total_reviews
+        _primary_activity = primary_prs + primary_issues + primary_reviews
+        if _total_activity:
+            _contrib_pct = round(_primary_activity / _total_activity * 100)
+        elif total_commits:
+            _contrib_pct = round(primary_commits / total_commits * 100) if primary_commits else round(100 / contributor_count)
+        else:
+            _contrib_pct = round(100 / contributor_count)
+    elif total_commits:
+        _contrib_pct = round(primary_commits / total_commits * 100) if primary_commits else round(100 / contributor_count)
+    else:
+        _contrib_pct = round(100 / contributor_count) if contributor_count else 0
+
     # --- bullets ---
     bullets: List[str] = []
 
@@ -1028,6 +1045,8 @@ def build_resume_project_item(
         "end_date": end_date,
         "content": content,
         "bullets": bullets,
+        "_contribution_pct": _contrib_pct,
+        "_team_size": contributor_count,
     }
 
 
@@ -1300,6 +1319,135 @@ _LANG_DISPLAY: dict[str, str] = {
     "sql": "SQL", "shell": "Shell", "batchfile": "Batchfile",
     "powershell": "PowerShell", "scala": "Scala", "r": "R",
 }
+
+
+_SUMMARY_NOISE_SKILLS = {
+    "json", "markdown", "yaml", "batchfile", "powershell", "shell",
+    "makefile", "text", "rst", "csv", "xml", "svg",
+}
+
+_DEGREE_PREFIX_RE = None  # lazy-compiled
+
+
+def _extract_major(degree: str) -> str:
+    """Strip common degree prefixes (BSc, M.Sc, Bachelor of …) and return the major."""
+    import re as _re
+    global _DEGREE_PREFIX_RE
+    if _DEGREE_PREFIX_RE is None:
+        _DEGREE_PREFIX_RE = _re.compile(
+            r"^(b\.?\s*sc\.?|b\.?\s*a\.?|b\.?\s*eng\.?|b\.?\s*cs\.?|"
+            r"bachelor\s+of\s+\S+\s*|m\.?\s*sc\.?|m\.?\s*a\.?|m\.?\s*eng\.?|"
+            r"master\s+of\s+\S+\s*|ph\.?\s*d\.?)\s*",
+            _re.IGNORECASE,
+        )
+    cleaned = _DEGREE_PREFIX_RE.sub("", degree.strip()).strip()
+    return cleaned if cleaned and cleaned.lower() != degree.strip().lower() else ""
+
+
+def build_resume_summary(
+    education: List[dict],
+    skills: List[str],
+    projects: List[dict],
+    *,
+    role_label: str = "",
+) -> str:
+    """Generate a 2–3 sentence professional summary from available profile data.
+
+    Sentence 1 — identity (degree + university + role, if education available).
+    Sentence 2 — top skills.
+    Sentence 3 — project count + notable names.
+    """
+    import re as _re
+
+    parts: List[str] = []
+
+    # ── Sentence 1: identity ─────────────────────────────────────
+    edu = education[0] if education else None
+    role = role_label.strip().rstrip()
+    role_desc = f"{role} development" if role else "software development"
+
+    if edu:
+        university = (edu.get("university") or "").strip()
+        degree     = (edu.get("degree")     or "").strip()
+        end_date   = (edu.get("end_date")   or "").strip().lower()
+        start_date = (edu.get("start_date") or "").strip()
+
+        is_current = not end_date or end_date == "present"
+
+        # Infer year label from start_date
+        year_label = "student" if is_current else "graduate"
+        if is_current and start_date:
+            m = _re.search(r"\d{4}", start_date)
+            if m:
+                elapsed = datetime.now().year - int(m.group())
+                year_label = {0: "freshman", 1: "sophomore", 2: "junior", 3: "senior"}.get(elapsed, "senior")
+
+        major = _extract_major(degree) if degree else ""
+        label = major or degree
+
+        if label and university:
+            s1 = f"{label} {year_label} at {university} with experience in {role_desc}."
+        elif university:
+            s1 = f"{year_label.capitalize()} at {university} with experience in {role_desc}."
+        else:
+            s1 = f"Experienced in {role_desc}."
+    else:
+        role_word = role or "software"
+        s1 = f"Experienced {role_word} developer with hands-on project experience."
+
+    parts.append(s1)
+
+    # ── Sentence 2: skills ───────────────────────────────────────
+    clean_skills = [s for s in skills if s.lower() not in _SUMMARY_NOISE_SKILLS][:5]
+    if clean_skills:
+        if len(clean_skills) == 1:
+            parts.append(f"Skilled in {clean_skills[0]}.")
+        elif len(clean_skills) == 2:
+            parts.append(f"Skilled in {clean_skills[0]} and {clean_skills[1]}.")
+        else:
+            parts.append(
+                f"Skilled in {', '.join(clean_skills[:-1])}, and {clean_skills[-1]}."
+            )
+
+    # ── Sentence 3: projects ─────────────────────────────────────
+    n = len(projects)
+    if n > 0:
+        max_team = max((p.get("_team_size", 0) for p in projects), default=0)
+
+        # Projects where user contributed above average (>= 100/team_size)
+        def _is_primary(p: dict) -> bool:
+            pct = p.get("_contribution_pct") or 0
+            team = p.get("_team_size") or 1
+            return pct >= (100 / team)
+
+        primary_projects = [
+            p.get("title", "").strip()
+            for p in projects
+            if _is_primary(p) and (p.get("title") or "").strip()
+        ]
+
+        base = f"Developed {n} project{'s' if n > 1 else ''}"
+
+        primary_phrase = ""
+        if primary_projects:
+            joined = " and ".join(primary_projects[:2])
+            primary_phrase = f"as a primary contributor of {joined}"
+
+        team_phrase = (
+            f"collaborating with teams of up to {max_team} developer{'s' if max_team != 1 else ''}"
+            if max_team > 1 else ""
+        )
+
+        if primary_phrase and team_phrase:
+            parts.append(f"{base}, {primary_phrase}, {team_phrase}.")
+        elif primary_phrase:
+            parts.append(f"{base}, {primary_phrase}.")
+        elif team_phrase:
+            parts.append(f"{base}, {team_phrase}.")
+        else:
+            parts.append(f"{base}.")
+
+    return " ".join(parts)
 
 
 def _normalise_lang_name(name: str) -> str:

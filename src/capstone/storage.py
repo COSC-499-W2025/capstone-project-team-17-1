@@ -2141,6 +2141,7 @@ def upsert_default_resume_modules(
     core_skills: list[str],
     projects: list[dict[str, str]],
     education: list[dict] | None = None,
+    summary: str | None = None,
     resume_title: str | None = None,
     create_new: bool = False,
 ) -> str:
@@ -2148,7 +2149,8 @@ def upsert_default_resume_modules(
     Ensure a draft modular resume exists for the user and persist default modules.
     - header/core_skill/project are refreshed from latest generated data.
     - education is populated from user profile data when provided.
-    - summary/experience are ensured as empty templates (insert only when missing).
+    - summary is auto-populated when provided, else ensured as an empty template.
+    - experience is ensured as an empty template (insert only when missing).
     """
     row = None
     if not create_new:
@@ -2334,8 +2336,29 @@ def upsert_default_resume_modules(
                 (str(uuid.uuid4()), section_id),
             )
 
-    # Ensure empty templates for summary/experience (insert only if missing).
-    for key, title in (("summary", "Summary"), ("experience", "Event")):
+    # Summary: populate from generated text when provided, else ensure empty template.
+    if summary:
+        _replace_items("summary", [{"title": "Summary", "content": summary}])
+    else:
+        section_id = section_ids["summary"]
+        existing = conn.execute(
+            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
+            (section_id,),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled
+                )
+                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                """,
+                (str(uuid.uuid4()), section_id),
+            )
+
+    # Ensure empty template for experience (insert only if missing).
+    for key, title in (("experience", "Event"),):
         section_id = section_ids[key]
         existing = conn.execute(
             "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",

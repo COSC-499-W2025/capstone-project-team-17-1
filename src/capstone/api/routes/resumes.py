@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
-from capstone.resume_retrieval import build_resume_project_item
+from capstone.resume_retrieval import build_resume_project_item, build_resume_summary
 from capstone.github_contributors import _is_bot_contributor, _is_noreply_email
 import capstone.storage as storage
 
@@ -373,6 +373,22 @@ async def generate_resume(request: Request):
         # Fetch education from user profile (keyed to owner, not data_user)
         education = storage.get_user_education(conn, owner_id) or None
 
+        # Build auto-generated summary
+        _BACKEND  = {"python", "java", "go", "rust", "c", "c++", "c#", "ruby", "php", "kotlin", "swift", "scala"}
+        _FRONTEND = {"javascript", "typescript", "css", "html", "react", "vue", "angular", "sass", "less"}
+        all_lower = {s.lower() for s in skill_names}
+        has_backend  = bool(all_lower & _BACKEND)
+        has_frontend = bool(all_lower & _FRONTEND)
+        overall_role = (
+            "full-stack" if (has_backend and has_frontend)
+            else "backend" if has_backend
+            else "frontend" if has_frontend
+            else ""
+        )
+        summary_text = build_resume_summary(
+            education or [], skill_names, project_items, role_label=overall_role
+        ) or None
+
         # Resume always owned by the logged-in user (owner_id),
         # regardless of whose data was used to generate it.
         resume_id = storage.upsert_default_resume_modules(
@@ -382,6 +398,7 @@ async def generate_resume(request: Request):
             core_skills=skill_names,
             projects=project_items,
             education=education,
+            summary=summary_text,
             resume_title=resume_title,
             create_new=create_new,
         )
