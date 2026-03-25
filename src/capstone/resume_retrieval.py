@@ -839,9 +839,19 @@ def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> d
     stack_items = _dedupe_preserve_order(stack_items)[:5]
     subtitle = ", ".join(stack_items)
 
-    # --- dates: YYYY-MM ---
-    start_date = earliest[:7] if len(earliest) >= 7 else ""
-    end_date = latest[:7] if len(latest) >= 7 else ""
+    # --- dates: Mon YYYY (e.g. "Jan 2026") ---
+    _MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+
+    def _to_mon_year(iso: str) -> str:
+        try:
+            year = int(iso[:4])
+            month = int(iso[5:7])
+            return f"{_MONTHS[month - 1]} {year}"
+        except Exception:
+            return ""
+
+    start_date = _to_mon_year(earliest)
+    end_date = _to_mon_year(latest)
 
     # --- duration phrasing helper ---
     def _duration_text(days: int) -> str:
@@ -855,7 +865,8 @@ def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> d
 
     # --- content: one professional sentence ---
     stack_text = f" using {', '.join(stack_items[:3])}" if stack_items else ""
-    type_label = f"{classification} " if classification else ""
+    _valid_cls = classification if classification and classification.lower() not in ("unknown", "none") else None
+    type_label = f"{_valid_cls} " if _valid_cls else ""
     dur = _duration_text(duration_days)
     dur_clause = f" over {dur}" if dur else ""
     file_clause = f", spanning {file_count} files" if file_count else ""

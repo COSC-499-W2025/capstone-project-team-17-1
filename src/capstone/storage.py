@@ -2219,7 +2219,7 @@ def upsert_default_resume_modules(
         project_items.append(
             {
                 "title": project.get("title") or "Project",
-                "subtitle": project.get("stack") or "",
+                "subtitle": project.get("subtitle") or project.get("stack") or "",
                 "start_date": project.get("start_date") or "",
                 "end_date": project.get("end_date") or "",
                 "location": project.get("location") or "",
