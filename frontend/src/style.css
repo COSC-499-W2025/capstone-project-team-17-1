@@ -5132,6 +5132,7 @@ transition: all 0.2s ease;
 
 .re-item-subtitle {
   font-size: 0.85rem;
+  font-style: italic;
   color: #64748b;
   flex: 1;
   min-width: 0;
@@ -5145,6 +5146,7 @@ transition: all 0.2s ease;
 
 .re-item-location {
   font-size: 0.8rem;
+  font-style: italic;
   color: #64748b;
   white-space: nowrap;
   flex-shrink: 0;
