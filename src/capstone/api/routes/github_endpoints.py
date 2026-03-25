@@ -14,6 +14,7 @@ from capstone.modes import ModeResolution
 from capstone.storage import open_db, save_github_token, get_github_token
 import capstone.storage as storage_module
 from capstone.system.cloud_storage import upload_database, upload_project_zip
+from capstone.github_contributors import sync_contributor_stats
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -219,7 +220,8 @@ def import_repository(
                 mode=mode,
                 preferences=preferences,
                 project_id=project_id,
-                conn=conn
+                conn=conn,
+                skip_contributor_storage=True,
             )
             conn.execute(
                 """
@@ -235,6 +237,19 @@ def import_repository(
             # GitHub zipballs have no .git directory, so ZipAnalyzer cannot
             # extract timestamps from git log — we fetch them here instead.
             _patch_github_commit_dates(conn, project_id, owner, repo, branch, headers, summary)
+
+            # Sync full contributor stats (commits, PRs, issues, reviews) via GitHub API.
+            # This enriches the contributor_stats table so resume generation can show
+            # PR/issue/review breakdowns instead of git-log-only commit counts.
+            try:
+                repo_url = f"https://github.com/{owner}/{repo}"
+                sync_contributor_stats(
+                    repo_url=repo_url,
+                    token=token,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass  # non-fatal — resume will fall back to git-log commit data
             if storage_module.CURRENT_USER:
                 upload_project_zip(
                     storage_module.CURRENT_USER,
@@ -305,8 +320,19 @@ def pull_repository(project_id: str):
             summary_path=Path("data") / f"{project_id}_summary.json",
             mode=ModeResolution(requested="local", resolved="local", reason="git pull"),
             preferences=Preferences(),
-            project_id=project_id
+            project_id=project_id,
+            skip_contributor_storage=True,
         )
+
+        try:
+            repo_url = f"https://github.com/{owner}/{repo}"
+            sync_contributor_stats(
+                repo_url=repo_url,
+                token=token,
+                project_id=project_id,
+            )
+        except Exception:
+            pass  # non-fatal
 
         if storage_module.CURRENT_USER:
             upload_project_zip(

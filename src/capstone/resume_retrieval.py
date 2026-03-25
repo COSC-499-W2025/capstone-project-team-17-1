@@ -810,33 +810,26 @@ def build_resume_project_summary(project_id: str, snapshot: Mapping[str, Any]) -
     return opening
 
 
-def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> dict:
+def build_resume_project_item(
+    project_id: str,
+    snapshot: Mapping[str, Any],
+    *,
+    contributor_name: str = "",
+    data_user_id: Optional[int] = None,
+    contributor_stats_map: Optional[Mapping[str, Any]] = None,
+) -> dict:
     """Return a rich project item dict for resume sections.
 
     Populates title, subtitle, start_date, end_date, content, and bullets
     from the analysis snapshot, replacing the bare single-sentence summary.
     """
     name = str(snapshot.get("project_name") or snapshot.get("project") or snapshot.get("project_id") or project_id)
-    classification = snapshot.get("classification") or snapshot.get("project_type")
     file_summary = snapshot.get("file_summary") if isinstance(snapshot.get("file_summary"), dict) else {}
     collaboration = snapshot.get("collaboration") if isinstance(snapshot.get("collaboration"), dict) else {}
 
-    file_count = _coerce_int(file_summary.get("file_count"))
-    active_days = _coerce_int(file_summary.get("active_days"))
     # Prefer git commit dates (accurate) over ZIP file modification timestamps (unreliable)
     earliest = str(collaboration.get("first_commit_date") or file_summary.get("earliest_modification") or "")
     latest = str(collaboration.get("last_commit_date") or file_summary.get("latest_modification") or "")
-    # Derive duration from commit date range when available, fall back to file_summary
-    if earliest and latest:
-        try:
-            from datetime import datetime as _dt
-            _fmt = "%Y-%m-%dT%H:%M:%SZ" if earliest.endswith("Z") else "%Y-%m-%dT%H:%M:%S"
-            duration_days = (_dt.strptime(latest[:19].replace("Z",""), "%Y-%m-%dT%H:%M:%S") -
-                             _dt.strptime(earliest[:19].replace("Z",""), "%Y-%m-%dT%H:%M:%S")).days
-        except Exception:
-            duration_days = _coerce_int(file_summary.get("duration_days"))
-    else:
-        duration_days = _coerce_int(file_summary.get("duration_days"))
 
     languages = snapshot.get("languages") if isinstance(snapshot.get("languages"), dict) else {}
     frameworks = snapshot.get("frameworks") or []
@@ -864,76 +857,162 @@ def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> d
     start_date = _to_mon_year(earliest)
     end_date = _to_mon_year(latest)
 
-    # --- duration phrasing helper ---
-    def _duration_text(days: int) -> str:
-        if days <= 0:
-            return ""
-        months = round(days / 30)
-        if months < 1:
-            weeks = max(1, round(days / 7))
-            return f"{weeks} week{'s' if weeks != 1 else ''}"
-        return f"{months} month{'s' if months != 1 else ''}"
+    # --- role inference from skills ---
+    _BACKEND_SKILLS = {"python", "java", "go", "rust", "php", "ruby", "c", "c++",
+                       "kotlin", "swift", "scala", "shell", "sql", "r"}
+    _FRONTEND_SKILLS = {"javascript", "typescript", "css", "html", "scss", "less",
+                        "vue", "svelte"}
+    skills_dict = snapshot.get("skills") if isinstance(snapshot.get("skills"), dict) else {}
+    # Merge with languages for role detection
+    all_skill_keys = {k.lower() for k in list(skills_dict.keys()) + list(languages.keys())}
+    _has_backend = bool(all_skill_keys & _BACKEND_SKILLS)
+    _has_frontend = bool(all_skill_keys & _FRONTEND_SKILLS)
+    if _has_backend and _has_frontend:
+        role_label = "full-stack "
+    elif _has_backend:
+        role_label = "backend "
+    elif _has_frontend:
+        role_label = "frontend "
+    else:
+        role_label = ""
 
-    # --- content: one professional sentence ---
-    stack_text = f" using {', '.join(stack_items[:3])}" if stack_items else ""
-    _valid_cls = classification if classification and classification.lower() not in ("unknown", "none") else None
-    type_label = f"{_valid_cls} " if _valid_cls else ""
-    dur = _duration_text(duration_days)
-    dur_clause = f" over {dur}" if dur else ""
-    file_clause = f", spanning {file_count} files" if file_count else ""
-    content = f"Developed {type_label}project{stack_text}{dur_clause}{file_clause}."
+    # --- primary language phrase (Template 1) ---
+    # Prefer skills dict (ZIP) or languages dict (GitHub), pick top 2 by count
+    _skill_counts: List[tuple] = []
+    for k, v in skills_dict.items():
+        try:
+            _skill_counts.append((k, int(v)))
+        except Exception:
+            pass
+    for k, v in languages.items():
+        if not any(k == s for s, _ in _skill_counts):
+            try:
+                _skill_counts.append((k, int(float(v))))
+            except Exception:
+                pass
+    _skill_counts.sort(key=lambda x: -x[1])
+    top_langs = [s for s, _ in _skill_counts[:2] if s]
+    lang_sentence = ""
+    if top_langs:
+        lang_sentence = f" Primarily built with {' and '.join(top_langs)}."
 
-    # --- bullets from collaboration + metrics ---
-    bullets: List[str] = []
+    # --- contribution stats ---
+    # contributor_name (passed in) takes priority; fall back to snapshot's primary_contributor
+    _snapshot_primary = str(collaboration.get("primary_contributor") or "")
+    target_contributor = contributor_name.strip() or _snapshot_primary
 
-    contrib_raw = (
-        collaboration.get("contributors (commits, PRs, issues, reviews)")
-        or collaboration.get("contributors (commits, line changes, reviews)")
-        or {}
-    )
-    primary = str(collaboration.get("primary_contributor") or "")
-    total_commits = 0
-    contributor_count = 0
-    primary_commits = 0
-    if isinstance(contrib_raw, dict):
-        contributor_count = len(contrib_raw)
-        for cname, cdata in contrib_raw.items():
-            # cdata may be [commits, lines, reviews] list/tuple or bare int
-            if isinstance(cdata, (list, tuple)) and cdata:
-                c = _coerce_int(cdata[0])
-            else:
-                c = _coerce_int(cdata)
+    total_commits = primary_commits = contributor_count = 0
+    total_prs = primary_prs = total_issues = primary_issues = total_reviews = primary_reviews = 0
+    _has_prs_schema = False
+
+    if contributor_stats_map:
+        # contributor_stats table has full GitHub API data (commits + PRs + issues + reviews)
+        _has_prs_schema = True
+        contributor_count = len(contributor_stats_map)
+        for cname, cstats in contributor_stats_map.items():
+            c  = _coerce_int(cstats.get("commits"))
+            p  = _coerce_int(cstats.get("pull_requests"))
+            ii = _coerce_int(cstats.get("issues"))
+            rv = _coerce_int(cstats.get("reviews"))
             total_commits += c
-            if cname == primary:
+            total_prs     += p
+            total_issues  += ii
+            total_reviews += rv
+            # Match by user_id first (reliable), then fall back to name comparison
+            uid_set = cstats.get("user_ids") or set()
+            is_target = (
+                (data_user_id and data_user_id in uid_set)
+                or (target_contributor and cname.lower() == target_contributor.lower())
+            )
+            if is_target:
                 primary_commits = c
+                primary_prs     = p
+                primary_issues  = ii
+                primary_reviews = rv
+    else:
+        # Fall back to snapshot collaboration dict (git-log only: commits + line_changes)
+        _prs_key = "contributors (commits, PRs, issues, reviews)"
+        _lines_key = "contributors (commits, line changes, reviews)"
+        contrib_raw = collaboration.get(_prs_key) or collaboration.get(_lines_key) or {}
+        _has_prs_schema = _prs_key in collaboration
 
-    # Bullet 1: contribution role
-    if primary and primary_commits:
-        collab_note = (
-            f"; {contributor_count} contributor{'s' if contributor_count != 1 else ''} total"
-            if contributor_count > 1 else ""
-        )
-        bullets.append(
-            f"Led by {primary} with {primary_commits} commit{'s' if primary_commits != 1 else ''}{collab_note}"
-        )
+        if isinstance(contrib_raw, dict):
+            contributor_count = len(contrib_raw)
+            for cname, cdata in contrib_raw.items():
+                if isinstance(cdata, str):
+                    import ast as _ast
+                    try:
+                        cdata = _ast.literal_eval(cdata)
+                    except Exception:
+                        cdata = _coerce_int(cdata)
+                if isinstance(cdata, (list, tuple)):
+                    c  = _coerce_int(cdata[0]) if len(cdata) > 0 else 0
+                    p  = _coerce_int(cdata[1]) if len(cdata) > 1 else 0
+                    ii = _coerce_int(cdata[2]) if len(cdata) > 2 and _has_prs_schema else 0
+                    rv = _coerce_int(cdata[3] if _has_prs_schema else cdata[2]) if len(cdata) > (3 if _has_prs_schema else 2) else 0
+                else:
+                    c = _coerce_int(cdata)
+                    p = ii = rv = 0
+                total_commits += c
+                total_prs     += p
+                total_issues  += ii
+                total_reviews += rv
+                if target_contributor and cname.lower() == target_contributor.lower():
+                    primary_commits = c
+                    primary_prs     = p
+                    primary_issues  = ii
+                    primary_reviews = rv
+
+    # --- contribution sentence ---
+    contrib_sentence = ""
+    if contributor_count <= 1:
+        contrib_sentence = " Sole contributor with 100% contribution."
     elif total_commits:
-        bullets.append(
-            f"{total_commits} commit{'s' if total_commits != 1 else ''} across "
-            f"{contributor_count or 1} contributor{'s' if (contributor_count or 1) != 1 else ''}"
-        )
+        if _has_prs_schema:
+            _total_activity = total_prs + total_issues + total_reviews
+            _primary_activity = primary_prs + primary_issues + primary_reviews
+            if _total_activity:
+                pct = round(_primary_activity / _total_activity * 100)
+            elif primary_commits:
+                pct = round(primary_commits / total_commits * 100)
+            else:
+                pct = round(100 / contributor_count)
+        elif primary_commits:
+            pct = round(primary_commits / total_commits * 100)
+        else:
+            pct = round(100 / contributor_count)
+        details: List[str] = []
+        if _has_prs_schema:
+            # GitHub API data: show PRs / issues / reviews
+            if total_prs:     details.append(f"{primary_prs}/{total_prs} PRs")
+            if total_issues:  details.append(f"{primary_issues}/{total_issues} issues")
+            if total_reviews: details.append(f"{primary_reviews}/{total_reviews} reviews")
+        else:
+            # git-log data: show commits count as the breakdown
+            details.append(f"{primary_commits}/{total_commits} commits")
+        detail_str = f" ({', '.join(details)})" if details else ""
+        _article = "an" if str(contributor_count)[0] in "8" or contributor_count in (11, 18) else "a"
+        contrib_sentence = f" Contributed ~{pct}% in {_article} {contributor_count}-person team{detail_str}."
 
-    # Bullet 2: tech stack
-    if len(stack_items) >= 2:
-        bullets.append(f"Tech stack: {', '.join(stack_items[:4])}")
+    # --- role sentence (separate, omit if undetected) ---
+    if role_label == "full-stack ":
+        role_sentence = " Worked as a full-stack developer."
+    elif role_label == "backend ":
+        role_sentence = " Worked as a backend developer."
+    elif role_label == "frontend ":
+        role_sentence = " Worked as a frontend developer."
+    else:
+        role_sentence = ""
 
-    # Bullet 3: scope
-    if file_count and duration_days:
-        span = _duration_text(duration_days)
-        bullets.append(f"{file_count} files across a {span} development span")
-    elif file_count:
-        bullets.append(f"Codebase spans {file_count} files")
-    elif active_days:
-        bullets.append(f"Active development over {active_days} days")
+    # --- content: professional sentences ---
+    if contributor_count <= 1:
+        type_label = "individual "
+    else:
+        type_label = "collaborative "
+    content = f"Developed {type_label}project.{lang_sentence}{role_sentence}{contrib_sentence}"
+
+    # --- bullets ---
+    bullets: List[str] = []
 
     return {
         "title": name,
