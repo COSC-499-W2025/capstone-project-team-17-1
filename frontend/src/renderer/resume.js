@@ -549,14 +549,22 @@ function openExportModal(resumeId, resumeTitle) {
         }
         const blob = await res.blob();
         cache[format] = { blob, url: URL.createObjectURL(blob) };
+      } else if (format === "json") {
+        const res = await authFetch(`/resumes/${resumeId}/export?format=json`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error (${res.status})`);
+        }
+        const payload = await res.json();
+        const resume = payload?.data ?? payload;
+        cache[format] = { text: JSON.stringify(resume, null, 2) };
       } else {
         const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || `Server error (${res.status})`);
         }
-        const text = await res.text();
-        cache[format] = { text };
+        cache[format] = { text: await res.text() };
       }
 
       renderPreview(format, cache[format]);
