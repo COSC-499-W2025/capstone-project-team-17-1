@@ -73,6 +73,10 @@ async function fetchResumeDetail(resumeId) {
 // ID of the most-recently generated resume — used to flash the card on render
 let _newResumeId = null;
 
+// Multi-select state: Set of selected resume IDs + id→title map for naming exports
+let _selectedResumeIds = new Set();
+let _resumeTitleMap = {};  // id → title
+
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
 // ---------------------------------------------------------------------------
@@ -176,6 +180,23 @@ function setupListDragDrop(container) {
 }
 
 // ---------------------------------------------------------------------------
+// Bulk select helpers
+// ---------------------------------------------------------------------------
+
+async function _openExportSequential(ids) {
+  for (const id of ids) {
+    await new Promise((resolve) => openExportModal(id, _resumeTitleMap[id] || "", resolve));
+  }
+}
+
+async function _bulkDelete(ids) {
+  if (!confirm(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
+  await Promise.all(ids.map((id) => deleteResume(id).catch(() => {})));
+  _selectedResumeIds.clear();
+  await renderResumeList();
+}
+
+// ---------------------------------------------------------------------------
 // Resume list rendering
 // ---------------------------------------------------------------------------
 
@@ -193,6 +214,10 @@ async function renderResumeList() {
 
   const resumes = applySavedOrder(rawResumes);
 
+  // Reset selection when list re-renders; rebuild title map
+  _selectedResumeIds.clear();
+  _resumeTitleMap = Object.fromEntries(resumes.map((r) => [r.id, r.title || "Untitled Resume"]));
+
   const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -203,6 +228,10 @@ async function renderResumeList() {
     const isStarred = starred.has(String(r.id));
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
+        <span class="resume-cb-wrapper">
+          <input type="checkbox" class="resume-select-cb" data-resume-id="${r.id}">
+          <span class="resume-cb-visual"></span>
+        </span>
         <div class="resume-list-card-header">
           <span class="resume-card-drag" title="Drag to reorder">⠿</span>
           <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
@@ -254,7 +283,8 @@ async function renderResumeList() {
         e.target.closest(".resume-export-action") ||
         e.target.closest(".resume-preview-action") ||
         e.target.closest(".resume-star-btn") ||
-        e.target.closest(".resume-card-drag")
+        e.target.closest(".resume-card-drag") ||
+        e.target.closest(".resume-cb-wrapper")
       ) return;
 
       const isOpen = card.classList.contains("expanded");
@@ -314,12 +344,39 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-export-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openExportModal(btn.dataset.resumeId, btn.dataset.resumeTitle);
+      const id = btn.dataset.resumeId;
+      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
+        _openExportSequential([..._selectedResumeIds]);
+      } else {
+        openExportModal(id, btn.dataset.resumeTitle);
+      }
     });
   });
 
   container.querySelectorAll(".resume-delete-action").forEach((btn) => {
-    btn.addEventListener("click", () => confirmDeleteResume(btn.dataset.resumeId));
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.resumeId;
+      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
+        _bulkDelete([..._selectedResumeIds]);
+      } else {
+        confirmDeleteResume(id);
+      }
+    });
+  });
+
+  container.querySelectorAll(".resume-select-cb").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const id = cb.dataset.resumeId;
+      const card = cb.closest(".resume-list-card");
+      if (cb.checked) {
+        _selectedResumeIds.add(id);
+        card.classList.add("re-selected");
+      } else {
+        _selectedResumeIds.delete(id);
+        card.classList.remove("re-selected");
+      }
+    });
   });
 }
 
@@ -507,7 +564,7 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function openExportModal(resumeId, resumeTitle) {
+function openExportModal(resumeId, resumeTitle, onClose) {
   document.getElementById("export-modal")?.remove();
 
   const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
@@ -609,6 +666,7 @@ function openExportModal(resumeId, resumeTitle) {
   function cleanup() {
     if (cache.pdf?.url) URL.revokeObjectURL(cache.pdf.url);
     modal.remove();
+    onClose?.();
   }
 
   modal.querySelector(".export-modal-close").onclick = cleanup;
