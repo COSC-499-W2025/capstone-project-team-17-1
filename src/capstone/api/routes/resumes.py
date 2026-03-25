@@ -40,7 +40,7 @@ def _resume_to_pdf_payload(resume: dict) -> dict:
         start = item.get("start_date") or ""
         end = item.get("end_date") or ""
         if start or end:
-            out["dateRange"] = " – ".join(filter(None, [start, end]))
+            out["dateRange"] = " - ".join(filter(None, [start, end]))
         return out
 
     payload: dict = {

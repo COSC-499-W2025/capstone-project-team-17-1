@@ -477,7 +477,23 @@ class ZipAnalyzer:
             if any(line.startswith("commit:") for line in logs):
                 entries = parse_git_log_stream("\n".join(logs))
                 analysis = build_collaboration_analysis(entries)
-                return to_compact_collaboration(analysis)
+                result = to_compact_collaboration(analysis)
+                # Extract first/last commit dates directly from raw log lines (format: commit:SHA|author|email|TIMESTAMP|subject)
+                timestamps: list[int] = []
+                for line in logs:
+                    if line.startswith("commit:"):
+                        try:
+                            parts = line.split(":", 1)[1].split("|")
+                            if len(parts) >= 4:
+                                ts = int(parts[3])
+                                if ts > 0:
+                                    timestamps.append(ts)
+                        except (ValueError, IndexError):
+                            pass
+                if timestamps:
+                    result["first_commit_date"] = datetime.utcfromtimestamp(min(timestamps)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    result["last_commit_date"] = datetime.utcfromtimestamp(max(timestamps)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                return result
         except Exception as exc:  # pragma: no cover - defensive fallback
             self._logger.warning("Failed rich collaboration parse; falling back to basic: %s", exc)
 

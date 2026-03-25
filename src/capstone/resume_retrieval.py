@@ -822,10 +822,21 @@ def build_resume_project_item(project_id: str, snapshot: Mapping[str, Any]) -> d
     collaboration = snapshot.get("collaboration") if isinstance(snapshot.get("collaboration"), dict) else {}
 
     file_count = _coerce_int(file_summary.get("file_count"))
-    duration_days = _coerce_int(file_summary.get("duration_days"))
     active_days = _coerce_int(file_summary.get("active_days"))
-    earliest = str(file_summary.get("earliest_modification") or "")
-    latest = str(file_summary.get("latest_modification") or "")
+    # Prefer git commit dates (accurate) over ZIP file modification timestamps (unreliable)
+    earliest = str(collaboration.get("first_commit_date") or file_summary.get("earliest_modification") or "")
+    latest = str(collaboration.get("last_commit_date") or file_summary.get("latest_modification") or "")
+    # Derive duration from commit date range when available, fall back to file_summary
+    if earliest and latest:
+        try:
+            from datetime import datetime as _dt
+            _fmt = "%Y-%m-%dT%H:%M:%SZ" if earliest.endswith("Z") else "%Y-%m-%dT%H:%M:%S"
+            duration_days = (_dt.strptime(latest[:19].replace("Z",""), "%Y-%m-%dT%H:%M:%S") -
+                             _dt.strptime(earliest[:19].replace("Z",""), "%Y-%m-%dT%H:%M:%S")).days
+        except Exception:
+            duration_days = _coerce_int(file_summary.get("duration_days"))
+    else:
+        duration_days = _coerce_int(file_summary.get("duration_days"))
 
     languages = snapshot.get("languages") if isinstance(snapshot.get("languages"), dict) else {}
     frameworks = snapshot.get("frameworks") or []
