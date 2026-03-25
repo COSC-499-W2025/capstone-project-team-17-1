@@ -370,6 +370,9 @@ async def generate_resume(request: Request):
             "portfolio_url": _pick("portfolio_url"),
         }
 
+        # Fetch education from user profile (keyed to owner, not data_user)
+        education = storage.get_user_education(conn, owner_id) or None
+
         # Resume always owned by the logged-in user (owner_id),
         # regardless of whose data was used to generate it.
         resume_id = storage.upsert_default_resume_modules(
@@ -378,6 +381,7 @@ async def generate_resume(request: Request):
             header=header,
             core_skills=skill_names,
             projects=project_items,
+            education=education,
             resume_title=resume_title,
             create_new=create_new,
         )

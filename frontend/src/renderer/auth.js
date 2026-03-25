@@ -14,6 +14,7 @@ const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
 let privateModeEnabled = false;
+let _educationEntries = [];
 
 function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -217,12 +218,33 @@ function renderSettingsProfile() {
           <label class="settings-form-label" for="pf-portfolio">Portfolio URL</label>
           <input id="pf-portfolio" class="settings-input" value="${currentUser.portfolio_url || ""}" />
         </div>
+
+        <div class="settings-edu-section">
+          <div class="settings-edu-section-header">
+            <span class="settings-edu-section-title">Education</span>
+            <span class="settings-edu-section-desc">Optional. Add your academic background.</span>
+          </div>
+          <div id="edu-cards-container" class="edu-cards-container"></div>
+          <div class="edu-add-zone" id="edu-add-zone">
+            <button class="edu-add-btn" id="edu-add-btn" title="Add education">＋</button>
+          </div>
+        </div>
+
         <div class="settings-form-actions">
           <button id="profile-save-btn" class="settings-save-btn">Save Profile</button>
           <span id="profile-msg" class="settings-feedback-msg"></span>
         </div>
       `;
       document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
+      document.getElementById("edu-add-btn")?.addEventListener("click", () => {
+        _educationEntries.push({ university: "", degree: "", start_date: "", end_date: "" });
+        _renderEduCards();
+      });
+      // Load education from backend then render
+      authFetch("/auth/me/education").then(r => r.json()).then(data => {
+        _educationEntries = Array.isArray(data.data) ? data.data : [];
+        _renderEduCards();
+      }).catch(() => { _educationEntries = []; _renderEduCards(); });
     }
   }
 
@@ -256,6 +278,58 @@ function renderSettingsProfile() {
   renderConsentSettings();
 }
 
+function _renderEduCards() {
+  const container = document.getElementById("edu-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+  _educationEntries.forEach((entry, idx) => {
+    const isCurrent = !entry.end_date || entry.end_date.toLowerCase() === "present";
+    const card = document.createElement("div");
+    card.className = "edu-card";
+    card.innerHTML = `
+      <button class="edu-card-delete" title="Remove" data-idx="${idx}">×</button>
+      <div class="edu-card-fields">
+        <input class="settings-input edu-university" placeholder="University / School" value="${entry.university || ""}" data-idx="${idx}" data-field="university" />
+        <input class="settings-input edu-degree" placeholder="Degree (e.g. BSc Computer Science)" value="${entry.degree || ""}" data-idx="${idx}" data-field="degree" />
+        <div class="edu-card-dates">
+          <input class="settings-input edu-start" placeholder="Start (e.g. Sep 2020)" value="${entry.start_date || ""}" data-idx="${idx}" data-field="start_date" />
+          <input class="settings-input edu-end" placeholder="End (e.g. May 2024)" value="${isCurrent ? "" : (entry.end_date || "")}" data-idx="${idx}" data-field="end_date" ${isCurrent ? "disabled" : ""} />
+          <label class="edu-current-label">
+            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent && entry.university ? "checked" : ""} />
+            <span>Current</span>
+          </label>
+        </div>
+        <div class="edu-card-location">
+          <input class="settings-input edu-city" placeholder="City" value="${entry.city || ""}" data-idx="${idx}" data-field="city" />
+          <input class="settings-input edu-state" placeholder="State / Province" value="${entry.state || ""}" data-idx="${idx}" data-field="state" />
+        </div>
+      </div>
+    `;
+    // delete
+    card.querySelector(".edu-card-delete").addEventListener("click", () => {
+      _educationEntries.splice(idx, 1);
+      _renderEduCards();
+    });
+    // field edits
+    card.querySelectorAll("[data-field]").forEach(input => {
+      input.addEventListener("input", e => {
+        _educationEntries[e.target.dataset.idx][e.target.dataset.field] = e.target.value;
+      });
+    });
+    // current checkbox
+    card.querySelector(".edu-current-chk").addEventListener("change", e => {
+      const i = parseInt(e.target.dataset.idx);
+      if (e.target.checked) {
+        _educationEntries[i].end_date = "Present";
+      } else {
+        _educationEntries[i].end_date = "";
+      }
+      _renderEduCards();
+    });
+    container.appendChild(card);
+  });
+}
+
 async function saveProfile() {
   const msg = document.getElementById("profile-msg");
   if (msg) msg.textContent = "Saving...";
@@ -270,11 +344,20 @@ async function saveProfile() {
   };
 
   try {
-    const res = await authFetch("/auth/me", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const [res, eduRes] = await Promise.all([
+      authFetch("/auth/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      authFetch("/auth/me/education", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          education: _educationEntries.filter(e => (e.university || "").trim()),
+        }),
+      }),
+    ]);
     const data = await res.json();
     if (!res.ok) {
       if (msg) msg.textContent = `Failed: ${data.detail || "save failed"}`;

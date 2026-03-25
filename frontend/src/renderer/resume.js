@@ -695,8 +695,11 @@ function buildItemHtml(rid, sid, sectionKey, item) {
           ${ce("end_date", item.end_date || "", ctx)}
         </span>
       </div>
-      ${item.subtitle !== undefined ? `<div class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</div>` : ""}
-      ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
+      ${(item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) ? `
+      <div class="re-item-sub-row">
+        ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
+        ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
+      </div>` : ""}
       ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
         <ul class="re-bullets">
