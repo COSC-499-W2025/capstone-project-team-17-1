@@ -147,6 +147,15 @@ def skills_timeline(top_n: int = 5):
             snapshot = snapshot or {}
             raw_skills = snapshot.get("skills") or []
             skills = []
+            file_summary = snapshot.get("file_summary") or {}
+            file_count = 0
+            active_days = 0
+
+            if isinstance(file_summary, dict):
+                file_count = int(file_summary.get("file_count", 0) or 0)
+                active_days = int(file_summary.get("active_days", 0) or 0)
+
+            skill_count = 0
 
             if isinstance(raw_skills, dict):
                 ranked = sorted(raw_skills.items(), key=lambda item: (-float(item[1] or 0), item[0]))
@@ -154,6 +163,7 @@ def skills_timeline(top_n: int = 5):
                     {"skill": name, "weight": float(weight or 0.0)}
                     for name, weight in ranked[: max(1, top_n)]
                 ]
+                skill_count = len(raw_skills)
             elif isinstance(raw_skills, list):
                 normalized = []
                 for skill in raw_skills:
@@ -167,11 +177,25 @@ def skills_timeline(top_n: int = 5):
                     {"skill": name, "weight": weight}
                     for name, weight in normalized[: max(1, top_n)]
                 ]
+                skill_count = len(normalized)
+
+            complexity_score = round(
+                file_count * 0.04
+                + active_days * 0.35
+                + skill_count * 0.45,
+                2,
+            )
 
             timeline.append({
                 "project_id": str(project_id),
                 "timestamp": str(created_at),
                 "skills": skills,
+                "project_metrics": {
+                    "file_count": file_count,
+                    "active_days": active_days,
+                    "skill_count": skill_count,
+                    "complexity_score": complexity_score,
+                },
             })
 
         log_event("INFO", f"Skills timeline generated · Nodes: {len(timeline)}")

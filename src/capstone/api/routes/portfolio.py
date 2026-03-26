@@ -20,7 +20,12 @@ from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip
+from capstone.storage import (
+    fetch_latest_snapshot,
+    fetch_latest_snapshots,
+    fetch_latest_snapshots_with_zip,
+    fetch_project_snapshot_history,
+)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -235,6 +240,76 @@ def _default_portfolio_summary() -> dict[str, Any]:
         "projects": [],
         "highlights": [],
     }
+
+
+def _snapshot_file_count(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("file_count"))
+    return _safe_int(snapshot.get("file_count"))
+
+
+def _snapshot_active_days(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("active_days"))
+    return 0
+
+
+def _snapshot_skill_names(snapshot: dict[str, Any]) -> list[str]:
+    return _extract_skill_names(snapshot.get("skills")) or _extract_technologies(snapshot)
+
+
+def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = list(reversed(history))
+    milestones: list[dict[str, Any]] = []
+    previous_skills: set[str] = set()
+    previous_file_count = 0
+    previous_active_days = 0
+
+    for index, item in enumerate(ordered):
+        snapshot = item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {}
+        created_at = str(item.get("created_at") or "").strip()
+        summary = _extract_summary(snapshot) or ""
+        file_count = _snapshot_file_count(snapshot)
+        active_days = _snapshot_active_days(snapshot)
+        skills = _snapshot_skill_names(snapshot)
+        skill_set = {skill.lower(): skill for skill in skills}
+        new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
+
+        milestone_type = "Current State"
+        if index == 0:
+            milestone_type = "Initial Snapshot"
+        elif index == len(ordered) - 1:
+            milestone_type = "Latest Snapshot"
+        else:
+            milestone_type = f"Iteration {index + 1}"
+
+        milestones.append(
+            {
+                "label": milestone_type,
+                "timestamp": created_at,
+                "summary": summary,
+                "metrics": {
+                    "files": file_count,
+                    "skills": len(skills),
+                    "active_days": active_days,
+                },
+                "delta": {
+                    "files": file_count - previous_file_count if index > 0 else file_count,
+                    "skills": len(skills) - len(previous_skills) if index > 0 else len(skills),
+                    "active_days": active_days - previous_active_days if index > 0 else active_days,
+                },
+                "new_skills": new_skills,
+                "highlights": _extract_highlights(snapshot)[:3],
+            }
+        )
+
+        previous_skills = set(skill_set.keys())
+        previous_file_count = file_count
+        previous_active_days = active_days
+
+    return milestones
 
 
 def _load_export_projects(portfolio_id: str, db_dir: str) -> list[PortfolioProject]:
@@ -669,6 +744,50 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
             "data": data,
             "error": None,
         }
+
+    except Exception as exc:
+        return {
+            "data": None,
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        }
+
+
+@router.get("/project-evolution")
+def portfolio_project_evolution(
+    request: Request,
+    project_ids: str = "",
+    limit: int = 6,
+) -> dict[str, Any]:
+    try:
+        _check_auth(request)
+        _bind_current_user_from_session(request)
+
+        db_dir = _resolve_db_dir(request)
+        if not db_dir:
+            raise HTTPException(status_code=500, detail="Database not configured")
+
+        cleaned_ids = [
+            str(project_id).strip()
+            for project_id in str(project_ids or "").split(",")
+            if str(project_id).strip()
+        ][:10]
+
+        if not cleaned_ids:
+            return {"data": {}, "error": None}
+
+        payload: dict[str, Any] = {}
+        with _db_session(db_dir) as c:
+            for project_id in cleaned_ids:
+                history = fetch_project_snapshot_history(c, project_id, limit=max(1, min(int(limit), 12)))
+                payload[project_id] = {
+                    "projectId": project_id,
+                    "steps": _build_project_evolution_steps(history),
+                    "snapshotCount": len(history),
+                }
+
+        log_event("SUCCESS", f"Portfolio project evolution generated · Projects: {len(payload)}")
+        return {"data": payload, "error": None}
 
     except Exception as exc:
         return {

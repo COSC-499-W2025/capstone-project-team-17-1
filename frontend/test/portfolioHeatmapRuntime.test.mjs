@@ -92,7 +92,7 @@ function formatHeatmapPeriod(period, granularity) {
   return raw;
 }
 
-function buildAggregatedHeatmapGrid(cells, granularity) {
+function buildAggregatedHeatmapCalendar(cells, granularity) {
   const entries = [...cells]
     .map((cell) => ({
       key: String(cell.period || "").trim(),
@@ -103,20 +103,57 @@ function buildAggregatedHeatmapGrid(cells, granularity) {
     .filter((cell) => cell.key)
     .sort((a, b) => a.key.localeCompare(b.key));
 
-  const columns = [];
-  for (let index = 0; index < entries.length; index += 4) {
-    columns.push({
-      index: columns.length,
-      days: entries.slice(index, index + 4).map((entry) => ({
-        key: entry.key,
-        label: entry.label,
-        count: entry.count,
-        bucket: entry.bucket,
-        inRange: true,
-      })),
+  if (!entries.length) {
+    return { columnLabels: [], rows: [] };
+  }
+
+  if (granularity === "month") {
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const years = [...new Set(entries.map((entry) => entry.key.slice(0, 4)))].sort();
+    const columnLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const rows = years.map((year) => ({
+      label: year,
+      cells: columnLabels.map((monthLabel, index) => {
+        const key = `${year}-${String(index + 1).padStart(2, "0")}`;
+        const entry = byKey.get(key);
+        return {
+          key,
+          label: entry?.label || `${monthLabel} ${year}`,
+          count: entry?.count || 0,
+          bucket: entry?.bucket || 0,
+          inRange: Boolean(entry),
+        };
+      }),
+    }));
+    return { columnLabels, rows };
+  }
+
+  const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+  const years = entries.map((entry) => Number(entry.key)).filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  const startYear = years[0];
+  const endYear = years[years.length - 1];
+  const columnLabels = Array.from({ length: 12 }, (_, index) => `+${index}`);
+  const rows = [];
+
+  for (let cursor = startYear; cursor <= endYear; cursor += 12) {
+    const rowYears = Array.from({ length: 12 }, (_, index) => cursor + index).filter((year) => year <= endYear);
+    rows.push({
+      label: `${cursor}${rowYears.length > 1 ? `-${rowYears[rowYears.length - 1]}` : ""}`,
+      cells: rowYears.map((year) => {
+        const key = String(year);
+        const entry = byKey.get(key);
+        return {
+          key,
+          label: entry?.label || key,
+          count: entry?.count || 0,
+          bucket: entry?.bucket || 0,
+          inRange: Boolean(entry),
+        };
+      }),
     });
   }
-  return columns;
+
+  return { columnLabels, rows };
 }
 
 test("buildContributionHeatmapModel does not throw for daily heatmap data", () => {
@@ -131,19 +168,27 @@ test("buildContributionHeatmapModel does not throw for daily heatmap data", () =
   assert.ok(Array.isArray(model.monthLabels));
 });
 
-test("buildAggregatedHeatmapGrid supports month and year filters", () => {
-  const monthGrid = buildAggregatedHeatmapGrid([
+test("buildAggregatedHeatmapCalendar supports month and year calendar layouts", () => {
+  const monthCalendar = buildAggregatedHeatmapCalendar([
     { period: "2026-01", count: 3, intensity: 0.3 },
     { period: "2026-02", count: 8, intensity: 0.9 },
+    { period: "2027-03", count: 4, intensity: 0.5 },
   ], "month");
 
-  const yearGrid = buildAggregatedHeatmapGrid([
+  const yearCalendar = buildAggregatedHeatmapCalendar([
     { period: "2025", count: 10, intensity: 0.6 },
     { period: "2026", count: 12, intensity: 0.8 },
+    { period: "2031", count: 5, intensity: 0.3 },
   ], "year");
 
-  assert.equal(monthGrid.length, 1);
-  assert.equal(monthGrid[0].days.length, 2);
-  assert.equal(monthGrid[0].days[0].label, "Jan 2026");
-  assert.equal(yearGrid[0].days[1].label, "2026");
+  assert.equal(monthCalendar.columnLabels.length, 12);
+  assert.equal(monthCalendar.rows.length, 2);
+  assert.equal(monthCalendar.rows[0].label, "2026");
+  assert.equal(monthCalendar.rows[0].cells[0].label, "Jan 2026");
+  assert.equal(monthCalendar.rows[0].cells[2].inRange, false);
+
+  assert.equal(yearCalendar.columnLabels.length, 12);
+  assert.equal(yearCalendar.rows.length, 1);
+  assert.equal(yearCalendar.rows[0].label, "2025-2031");
+  assert.equal(yearCalendar.rows[0].cells[1].label, "2026");
 });

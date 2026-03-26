@@ -2481,6 +2481,78 @@ transition: all 0.2s ease;
   align-items: flex-start;
 }
 
+.heatmap-calendar-aggregated {
+  overflow-x: auto;
+}
+
+.heatmap-aggregated-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: max-content;
+}
+
+.heatmap-aggregated-topbar {
+  display: grid;
+  grid-template-columns: 88px auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.heatmap-aggregated-corner {
+  width: 88px;
+}
+
+.heatmap-aggregated-columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 16px;
+  gap: 6px;
+}
+
+.heatmap-aggregated-column-label {
+  font-size: 11px;
+  color: rgba(223, 237, 255, 0.68);
+  text-align: center;
+}
+
+.heatmap-aggregated-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.heatmap-aggregated-row {
+  display: grid;
+  grid-template-columns: 88px auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.heatmap-aggregated-row-label {
+  font-size: 12px;
+  color: rgba(223, 237, 255, 0.72);
+}
+
+.heatmap-aggregated-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 16px;
+  gap: 6px;
+}
+
+.heatmap-calendar-aggregated-year .heatmap-aggregated-columns {
+  grid-auto-columns: 34px;
+}
+
+.heatmap-calendar-aggregated-year .heatmap-aggregated-grid {
+  grid-auto-columns: 34px;
+}
+
+.heatmap-calendar-aggregated-year .heatmap-square {
+  justify-self: center;
+}
+
 .heatmap-aggregated-header {
   display: flex;
   flex-wrap: wrap;
@@ -3069,6 +3141,46 @@ transition: all 0.2s ease;
   opacity: 0.92;
 }
 
+.project-evolution-content {
+  min-width: 0;
+}
+
+.project-evolution-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+}
+
+.project-evolution-time {
+  font-size: 12px;
+  color: rgba(223, 237, 255, 0.7);
+  word-break: break-word;
+}
+
+.project-evolution-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.project-evolution-delta-row,
+.project-evolution-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.project-evolution-detail-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .project-stack,
 .skills-pill-row {
   display: flex;
@@ -3136,6 +3248,14 @@ transition: all 0.2s ease;
 
   .top-project-media {
     width: 100%;
+  }
+
+  .project-evolution-headline {
+    flex-direction: column;
+  }
+
+  .project-evolution-metrics {
+    justify-content: flex-start;
   }
 
   .dashboard-toolbar {
