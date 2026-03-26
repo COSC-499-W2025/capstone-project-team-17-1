@@ -6,7 +6,7 @@ import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
 import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
-import { shouldRequireLoginForTab } from "./authShared.mjs";
+import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 const API_BASE = "http://127.0.0.1:8002";
@@ -208,11 +208,18 @@ export async function openLoginFlow() {
 }
 
 export async function openSettingsAndPromptLogin(settingsTab = "account") {
-  pendingPublicPage = getActivePageSnapshot() || getLastPage();
   showSavedPage("settings", "settings-page");
+  const fallbackSettingsTab = shouldRequireLoginForSettingsTab(settingsTab, currentUser)
+    ? "privacy"
+    : settingsTab;
+  pendingPublicPage = {
+    tabKey: "settings",
+    pageId: "settings-page",
+    settingsTab: fallbackSettingsTab,
+  };
   activateSettingsTab(settingsTab);
   renderSettingsProfile();
-  if (!currentUser) {
+  if (shouldRequireLoginForSettingsTab(settingsTab, currentUser)) {
     await openLoginFlow();
   }
 }
@@ -459,6 +466,10 @@ function closeModalToPublic() {
   showAuthModal(false);
   if (!currentUser && pendingPublicPage?.tabKey && pendingPublicPage?.pageId) {
     showSavedPage(pendingPublicPage.tabKey, pendingPublicPage.pageId);
+    if (pendingPublicPage.tabKey === "settings") {
+      activateSettingsTab(pendingPublicPage.settingsTab || "privacy");
+      renderSettingsProfile();
+    }
     pendingPublicPage = null;
     return;
   }
@@ -505,6 +516,10 @@ export async function initAuthFlow() {
   document.querySelectorAll(".settings-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
+      if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
+        openSettingsAndPromptLogin(tab);
+        return;
+      }
       activateSettingsTab(tab);
     });
   });
@@ -572,11 +587,12 @@ export async function initAuthFlow() {
       }
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
-        if (shouldRequireLoginForTab(tabKey, user)) {
-          await openSettingsAndPromptLogin("account");
-          return false;
-        }
         renderSettingsProfile();
+        if (user) {
+          activateSettingsTab("general");
+        } else {
+          activateSettingsTab("privacy");
+        }
       }
       if (tabKey === "customization") {
         const user = await ensureCurrentUser();
