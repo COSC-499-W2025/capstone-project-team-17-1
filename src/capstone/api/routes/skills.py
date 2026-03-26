@@ -63,10 +63,12 @@ def skills_for_project(project_id: str):
     ).fetchone()
     if not row:
         log_event("WARNING", f"Skills lookup skipped · No stored upload found for project · {project_id}")
-        raise HTTPException(
-            status_code=404,
-            detail="No stored upload was found for this project in the current workspace.",
-        )
+        return {
+            "project_id": project_id,
+            "skills": [],
+            "skipped": True,
+            "detail": "No stored upload was found for this project in the current workspace.",
+        }
 
     file_id = row[0]
     try:

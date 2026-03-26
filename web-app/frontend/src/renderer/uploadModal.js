@@ -51,9 +51,13 @@ deleteBtn?.addEventListener("click", async (e) => {
 
   try {
 
-    await fetch(`${API_BASE}/projects/${projectId}`, { 
+    const res = await fetch(`${API_BASE}/projects/${projectId}`, { 
       method: "DELETE"
     });
+
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`Delete failed: ${res.status}`);
+    }
 
     loadProjects();
     loadRecentProjects(); // also refresh dashboard widget if it is visible
@@ -420,4 +424,3 @@ startImport(owner, name, projectId, selectedBranch);
     draw(filtered);
   });
 }
-
