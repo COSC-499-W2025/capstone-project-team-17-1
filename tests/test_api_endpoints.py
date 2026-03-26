@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS project_analysis(
   classification TEXT,
   primary_contributor TEXT,
   snapshot TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  zip_path TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS contributor_stats(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,9 +68,14 @@ class ApiEndpointTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
-        storage.DB_DIR = self.dbdir
-        storage.open_db(self.dbdir)
-        self.con = sqlite3.connect(self.dbdir / "capstone.db")
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.CURRENT_USER
+        storage.close_db()
+        storage.BASE_DIR = self.dbdir
+        storage.CURRENT_USER = None
+        db_path = self.dbdir / "data" / "guest" / "capstone.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.con = sqlite3.connect(db_path)
         self.con.executescript(SCHEMA)
         ensure_indexes(self.con)
         ensure_resume_schema(self.con)
@@ -83,6 +89,8 @@ class ApiEndpointTests(unittest.TestCase):
     def tearDown(self):
         self.con.close()
         storage.close_db()
+        storage.BASE_DIR = self._original_base_dir
+        storage.CURRENT_USER = self._original_current_user
         self.tmp.cleanup()
 
     def _client(self):

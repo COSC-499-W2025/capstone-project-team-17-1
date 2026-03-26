@@ -1,4 +1,4 @@
-import { authFetch } from "./auth.js";
+import { authFetch, openSettingsAndPromptLogin } from "./auth.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -22,12 +22,7 @@ function renderLocalConsentPrompt(container, { inline = false } = {}) {
   `;
 
   document.getElementById("open-settings-consent-btn")?.addEventListener("click", () => {
-    document.querySelectorAll(".nav-tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === "settings");
-    });
-    document.querySelectorAll(".page").forEach((page) => {
-      page.classList.toggle("active", page.id === "settings-page");
-    });
+    openSettingsAndPromptLogin("privacy");
   });
 }
 

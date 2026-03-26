@@ -1,4 +1,4 @@
-import { switchPage } from "./navigation.js";
+import { openSettingsAndPromptLogin } from "./auth.js";
 
 const CHAT_STORAGE_KEY = "loom-chat-history";
 const API_BASE = "http://127.0.0.1:8002";
@@ -79,18 +79,7 @@ export function initChat() {
   }
 
   function openSettingsConsent() {
-    document.querySelectorAll(".nav-tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === "settings");
-    });
-    switchPage("settings-page");
-
-    document.querySelectorAll(".settings-nav-item").forEach((button) => {
-      const isPrivacy = button.dataset.settingsTab === "privacy";
-      button.classList.toggle("active", isPrivacy);
-    });
-    document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
-      panel.classList.toggle("active", panel.id === "settings-tab-privacy");
-    });
+    openSettingsAndPromptLogin("privacy");
   }
 
   function updateConsentGate() {

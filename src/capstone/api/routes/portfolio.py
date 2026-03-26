@@ -63,6 +63,24 @@ def _bind_current_user_from_session(request: Request) -> None:
         storage_module.CURRENT_USER = username
 
 
+def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
+    with _db_session(db_dir) as c:
+        return fetch_latest_snapshots_with_zip(c) or []
+
+
+def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
+    rows = _load_heatmap_rows(db_dir)
+    if rows:
+        return rows
+
+    previous_user = storage_module.CURRENT_USER
+    try:
+        storage_module.CURRENT_USER = None
+        return _load_heatmap_rows(db_dir)
+    finally:
+        storage_module.CURRENT_USER = previous_user
+
+
 class PortfolioProject(BaseModel):
     project_id: str
     title: str
@@ -752,11 +770,16 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
         if not db_dir:
             raise HTTPException(status_code=500, detail="Database not configured")
 
-        with _db_session(db_dir) as c:
-            rows = fetch_latest_snapshots_with_zip(c) or []
         granularity = _normalize_heatmap_granularity(request.query_params.get("granularity"))
         selected_project_id = str(request.query_params.get("project_id") or "").strip()
+        rows = _load_heatmap_rows(db_dir)
         data = _build_heatmap_response(rows, granularity, selected_project_id)
+
+        if not data["cells"] and get_authenticated_username(request):
+            guest_rows = _load_heatmap_rows_with_guest_fallback(db_dir)
+            guest_data = _build_heatmap_response(guest_rows, granularity, selected_project_id)
+            if guest_data["cells"]:
+                data = guest_data
 
         log_event(
             "SUCCESS",
