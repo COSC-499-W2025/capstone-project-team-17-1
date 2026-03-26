@@ -83,7 +83,7 @@ export async function loadProjects() {
             method: "DELETE",
           });
 
-          if (!res.ok) {
+          if (!res.ok && res.status !== 404) {
             throw new Error(`Delete failed: ${res.status}`);
           }
 

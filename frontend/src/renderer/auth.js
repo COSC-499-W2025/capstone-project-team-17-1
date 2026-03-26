@@ -6,7 +6,7 @@ import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
 import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
-import { shouldRequireLoginForTab } from "./authShared.mjs";
+import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 const API_BASE = "http://127.0.0.1:8002";
@@ -14,6 +14,7 @@ const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
 let privateModeEnabled = false;
+let pendingPublicPage = null;
 let _educationEntries = [];
 
 function getAuthToken() {
@@ -116,6 +117,15 @@ function setActiveTabByKey(tabKey) {
   });
 }
 
+function activateSettingsTab(tab = "general") {
+  document.querySelectorAll(".settings-nav-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === tab);
+  });
+  document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `settings-tab-${tab}`);
+  });
+}
+
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
@@ -126,6 +136,15 @@ function showSavedPage(tabKey, pageId) {
   if (!tabKey || !pageId) return;
   switchPage(pageId);
   setActiveTabByKey(tabKey);
+}
+
+function getActivePageSnapshot() {
+  const activeTab = document.querySelector(".nav-tab.active");
+  const activePage = document.querySelector(".page.active");
+  const tabKey = activeTab?.dataset.tab || "";
+  const pageId = activePage?.id || activeTab?.dataset.page || "";
+  if (!tabKey || !pageId) return null;
+  return { tabKey, pageId };
 }
 
 function restoreLastAllowedPage({ requirePrivate = false } = {}) {
@@ -186,6 +205,23 @@ export async function openLoginFlow() {
   } catch (_) {}
   setAuthFormMode(mode);
   showAuthModal(true);
+}
+
+export async function openSettingsAndPromptLogin(settingsTab = "account") {
+  showSavedPage("settings", "settings-page");
+  const fallbackSettingsTab = shouldRequireLoginForSettingsTab(settingsTab, currentUser)
+    ? "privacy"
+    : settingsTab;
+  pendingPublicPage = {
+    tabKey: "settings",
+    pageId: "settings-page",
+    settingsTab: fallbackSettingsTab,
+  };
+  activateSettingsTab(settingsTab);
+  renderSettingsProfile();
+  if (shouldRequireLoginForSettingsTab(settingsTab, currentUser)) {
+    await openLoginFlow();
+  }
 }
 
 function renderSettingsProfile() {
@@ -428,6 +464,16 @@ function closeModalToPublic() {
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
   showAuthModal(false);
+  if (!currentUser && pendingPublicPage?.tabKey && pendingPublicPage?.pageId) {
+    showSavedPage(pendingPublicPage.tabKey, pendingPublicPage.pageId);
+    if (pendingPublicPage.tabKey === "settings") {
+      activateSettingsTab(pendingPublicPage.settingsTab || "privacy");
+      renderSettingsProfile();
+    }
+    pendingPublicPage = null;
+    return;
+  }
+  pendingPublicPage = null;
   if (!currentUser && !restoreLastAllowedPage()) {
     goToPage("dashboard", "dashboard-page");
   }
@@ -470,14 +516,11 @@ export async function initAuthFlow() {
   document.querySelectorAll(".settings-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
-      document.querySelectorAll(".settings-nav-item").forEach((b) =>
-        b.classList.remove("active")
-      );
-      btn.classList.add("active");
-      document.querySelectorAll(".settings-tab-panel").forEach((p) =>
-        p.classList.remove("active")
-      );
-      document.getElementById(`settings-tab-${tab}`)?.classList.add("active");
+      if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
+        openSettingsAndPromptLogin(tab);
+        return;
+      }
+      activateSettingsTab(tab);
     });
   });
 
@@ -544,11 +587,12 @@ export async function initAuthFlow() {
       }
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
-        if (shouldRequireLoginForTab(tabKey, user)) {
-          await openLoginFlow();
-          return false;
-        }
         renderSettingsProfile();
+        if (user) {
+          activateSettingsTab("general");
+        } else {
+          activateSettingsTab("privacy");
+        }
       }
       if (tabKey === "customization") {
         const user = await ensureCurrentUser();
@@ -648,6 +692,7 @@ export async function initAuthFlow() {
     setAuthToken(data.token);
     setModeUI(true, data.user);
     showAuthModal(false);
+    pendingPublicPage = null;
     goToPage("dashboard", "dashboard-page");
 
     await syncCloudDbAndRefresh();

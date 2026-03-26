@@ -45,6 +45,20 @@ _EXT_TO_SKILL = {
 }
 
 
+def _restore_user_from_request(request: Request | None) -> None:
+    """Restore storage.CURRENT_USER from the Bearer session when available."""
+    if request is None:
+        return
+    try:
+        from capstone.api.routes.auth import get_authenticated_username
+
+        username = get_authenticated_username(request)
+        if username:
+            storage_module.CURRENT_USER = username
+    except Exception:
+        pass
+
+
 def _normalize_token(value: str | None) -> str:
     token = (value or "").strip().lower()
     out = []
@@ -544,20 +558,26 @@ async def upload_project_bundle(file: UploadFile = File(...)):
 
 
 @router.get("")
-def list_projects():
+def list_projects(request: Request):
     """
     Lists uploaded .zip projects from CAS storage.
     """
+    _restore_user_from_request(request)
     conn = storage.open_db()
-    rows = conn.execute(
-        """
-        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-               f.size_bytes, f.path
-        FROM uploads u
-        JOIN files f ON f.file_id = u.file_id
-        ORDER BY datetime(u.created_at) DESC
-        """
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+                   f.size_bytes, f.path
+            FROM uploads u
+            JOIN files f ON f.file_id = u.file_id
+            ORDER BY datetime(u.created_at) DESC
+            """
+        ).fetchall()
+    except Exception as exc:
+        if "no such table" not in str(exc).lower():
+            raise
+        rows = []
     return {
         "count": len(rows),
         "projects": [
@@ -576,22 +596,28 @@ def list_projects():
 
 
 @router.get("/{id}")
-def get_project(id: str):
+def get_project(id: str, request: Request):
     """
     Returns info for a specific uploaded project zip by upload_id.
     """
+    _restore_user_from_request(request)
     conn = storage.open_db()
-    row = conn.execute(
-        """
-        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-               f.size_bytes, f.path
-        FROM uploads u
-        JOIN files f ON f.file_id = u.file_id
-        WHERE u.upload_id = ?
-        LIMIT 1
-        """,
-        (id,),
-    ).fetchone()
+    try:
+        row = conn.execute(
+            """
+            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+                   f.size_bytes, f.path
+            FROM uploads u
+            JOIN files f ON f.file_id = u.file_id
+            WHERE u.upload_id = ?
+            LIMIT 1
+            """,
+            (id,),
+        ).fetchone()
+    except Exception as exc:
+        if "no such table" not in str(exc).lower():
+            raise
+        row = None
 
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")

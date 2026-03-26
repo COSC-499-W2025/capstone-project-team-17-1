@@ -4,6 +4,7 @@ import types
 import re
 from pathlib import Path
 from unittest.mock import patch
+from capstone import consent as consent_module
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -12,6 +13,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+if not hasattr(consent_module, "ensure_or_prompt_consent"):
+    consent_module.ensure_or_prompt_consent = lambda *args, **kwargs: "granted_existing"
+if not hasattr(consent_module, "clear_external_permission"):
+    consent_module.clear_external_permission = lambda *args, **kwargs: None
+if not hasattr(consent_module, "request_external_service_permission"):
+    consent_module.request_external_service_permission = lambda *args, **kwargs: True
 
 # Avoid importing the real capstone.cli (pulls UI/LLM deps).
 dummy_cli = types.ModuleType("capstone.cli")
