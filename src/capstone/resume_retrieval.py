@@ -1335,9 +1335,10 @@ def _extract_major(degree: str) -> str:
     global _DEGREE_PREFIX_RE
     if _DEGREE_PREFIX_RE is None:
         _DEGREE_PREFIX_RE = _re.compile(
-            r"^(b\.?\s*sc\.?|b\.?\s*a\.?|b\.?\s*eng\.?|b\.?\s*cs\.?|"
-            r"bachelor\s+of\s+\S+\s*|m\.?\s*sc\.?|m\.?\s*a\.?|m\.?\s*eng\.?|"
-            r"master\s+of\s+\S+\s*|ph\.?\s*d\.?)\s*",
+            r"^(bachelor\s+of\s+\S+\s*|master\s+of\s+\S+\s*|"
+            r"b\.?\s*sc\.?|b\.?\s*a\.?|b\.?\s*eng\.?|b\.?\s*cs\.?|"
+            r"m\.?\s*sc\.?|m\.?\s*a\.?|m\.?\s*eng\.?|"
+            r"ph\.?\s*d\.?)\s*",
             _re.IGNORECASE,
         )
     cleaned = _DEGREE_PREFIX_RE.sub("", degree.strip()).strip()
