@@ -5,11 +5,17 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from capstone.api.server import create_app
+from capstone import storage
 
 @pytest.fixture()
 def client(tmp_path):
+    original_base_dir = storage.BASE_DIR
+    storage.close_db()
+    storage.BASE_DIR = tmp_path
+    storage.CURRENT_USER = None
     db_dir = str(tmp_path)
-    db_path = str(Path(db_dir) / "capstone.db")
+    db_path = str(Path(db_dir) / "data" / "guest" / "capstone.db")
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     
     conn = sqlite3.connect(db_path)
     try:
@@ -41,7 +47,12 @@ def client(tmp_path):
         conn.close()
     
     app = create_app(db_dir=db_dir, auth_token=None)
-    return TestClient(app)
+    test_client = TestClient(app)
+    try:
+        yield test_client
+    finally:
+        storage.close_db()
+        storage.BASE_DIR = original_base_dir
 
 
 def test_generate_portfolio_success(client):

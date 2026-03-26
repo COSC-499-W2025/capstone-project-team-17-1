@@ -3,6 +3,7 @@ from typing import List
 from pydantic import BaseModel
 from datetime import datetime
 from capstone.portfolio_retrieval import _db_session
+from capstone.activity_log import log_event
 
 router = APIRouter()
 
@@ -62,7 +63,11 @@ ORDER BY pa.created_at DESC
         is_github = bool(row[5])
         contributor_count = int(row[6])
 
-        snapshot = json.loads(snapshot_raw)
+        try:
+            snapshot = json.loads(snapshot_raw)
+        except Exception:
+            log_event("WARNING", f"Skipping invalid project snapshot in recent projects · Project: {project_id}")
+            continue
 
         # --- FILE COUNT ---
         file_summary = snapshot.get("file_summary")

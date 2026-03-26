@@ -25,6 +25,29 @@ EXT_TO_SKILL = {
     ".md": "markdown",
 }
 
+
+def _skills_from_snapshot(conn, project_id: str):
+    latest = storage.fetch_latest_snapshot(conn, project_id)
+    if not latest:
+        return []
+
+    raw_skills = latest.get("snapshot", {}).get("skills", [])
+    results = []
+    if isinstance(raw_skills, list):
+        for item in raw_skills:
+            if isinstance(item, dict):
+                name = str(item.get("skill") or item.get("name") or "").strip()
+                if name:
+                    results.append({"name": name, "evidence": "Recovered from stored snapshot"})
+            else:
+                name = str(item).strip()
+                if name:
+                    results.append({"name": name, "evidence": "Recovered from stored snapshot"})
+    elif isinstance(raw_skills, dict):
+        for name, value in raw_skills.items():
+            results.append({"name": str(name), "evidence": f"Recovered from stored snapshot ({value})"})
+    return results
+
 @router.get("/projects/{project_id}/skills")
 def skills_for_project(project_id: str):
     conn = storage.open_db()
@@ -39,8 +62,11 @@ def skills_for_project(project_id: str):
         (project_id,),
     ).fetchone()
     if not row:
-        log_event("ERROR", f"Skills lookup failed · Project not found · {project_id}")
-        raise HTTPException(status_code=404, detail="Project not found")
+        log_event("WARNING", f"Skills lookup skipped · No stored upload found for project · {project_id}")
+        raise HTTPException(
+            status_code=404,
+            detail="No stored upload was found for this project in the current workspace.",
+        )
 
     file_id = row[0]
     try:
@@ -52,13 +78,32 @@ def skills_for_project(project_id: str):
                     skill = EXT_TO_SKILL[suffix]
                     skills[skill] = skills.get(skill, 0) + 1
     except zipfile.BadZipFile:
-        log_event("ERROR", f"Invalid zip during skills extraction · Project: {project_id}")
-        raise HTTPException(status_code=400, detail="Stored file is not a valid zip")
+        log_event("WARNING", f"Invalid zip during skills extraction; falling back to snapshot skills · Project: {project_id}")
+        snapshot_skills = _skills_from_snapshot(conn, project_id)
+        if snapshot_skills:
+            return {
+                "project_id": project_id,
+                "file_id": file_id,
+                "skills": snapshot_skills,
+                "fallback": "snapshot",
+            }
+        raise HTTPException(
+            status_code=400,
+            detail="The stored project file is no longer a valid zip archive.",
+        )
     except FileNotFoundError:
-        log_event("ERROR", f"Missing stored file during skills extraction · Project: {project_id}")
+        log_event("WARNING", f"Missing stored file during skills extraction; falling back to snapshot skills · Project: {project_id}")
+        snapshot_skills = _skills_from_snapshot(conn, project_id)
+        if snapshot_skills:
+            return {
+                "project_id": project_id,
+                "file_id": file_id,
+                "skills": snapshot_skills,
+                "fallback": "snapshot",
+            }
         raise HTTPException(
             status_code=409,
-            detail="Stored upload file not found on this machine. Re-upload the project zip.",
+            detail="The stored project file is missing on this machine. Re-upload the project zip to refresh skills.",
         )
 
     return {

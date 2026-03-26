@@ -101,7 +101,10 @@ async function buildMostUsedSkills() {
       `${API_BASE}/projects/${encodeURIComponent(projectId)}/skills`
     );
 
-    if (!skillsRes.ok) continue;
+    if (!skillsRes.ok) {
+      if ([400, 404, 409].includes(skillsRes.status)) continue;
+      continue;
+    }
 
     const skillsData = await skillsRes.json();
 

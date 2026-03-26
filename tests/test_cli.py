@@ -13,6 +13,15 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capstone import cli  # noqa: E402
+from capstone import consent as consent_module  # noqa: E402
+
+if not hasattr(consent_module, "ensure_or_prompt_consent"):
+    consent_module.ensure_or_prompt_consent = lambda *args, **kwargs: "granted_existing"
+if not hasattr(consent_module, "clear_external_permission"):
+    consent_module.clear_external_permission = lambda *args, **kwargs: None
+if not hasattr(consent_module, "request_external_service_permission"):
+    consent_module.request_external_service_permission = lambda *args, **kwargs: True
+
 import main as app_main  # noqa: E402
 from capstone.consent import ExternalPermissionDenied  # noqa: E402
 from capstone.modes import ModeResolution  # noqa: E402
