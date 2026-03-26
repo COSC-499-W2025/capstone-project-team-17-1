@@ -379,6 +379,122 @@ def _expand_monthly_timeline_to_daily(monthly_timeline: dict[str, Any]) -> dict[
 
     return daily_counts
 
+
+def _normalize_heatmap_granularity(value: Any) -> str:
+    raw = str(value or "day").strip().lower()
+    if raw in {"year", "month", "day"}:
+        return raw
+    return "day"
+
+
+def _build_heatmap_period_key(period: str, granularity: str) -> Optional[str]:
+    raw = str(period or "").strip()
+    if granularity == "day":
+        if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+            return raw
+        return None
+    if granularity == "month":
+        if len(raw) >= 7 and raw[4] == "-":
+            return raw[:7]
+        return None
+    if granularity == "year":
+        if len(raw) >= 4:
+            return raw[:4]
+        return None
+    return None
+
+
+def _collect_heatmap_project_activity(row: dict[str, Any]) -> dict[str, int]:
+    snapshot = row.get("snapshot") or {}
+    zip_path = row.get("zip_path")
+
+    if not isinstance(snapshot, dict):
+        return {}
+
+    file_summary = snapshot.get("file_summary") or {}
+    monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
+    activity_by_day = {}
+    if isinstance(file_summary, dict):
+        activity_by_day = file_summary.get("daily_timeline") or {}
+
+    if not isinstance(activity_by_day, dict) or not activity_by_day:
+        activity_by_day = _build_daily_activity_from_zip_path(zip_path)
+
+    if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
+        activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
+
+    if not isinstance(activity_by_day, dict):
+        return {}
+
+    return activity_by_day
+
+
+def _build_heatmap_response(
+    rows: list[dict[str, Any]],
+    granularity: str,
+    selected_project_id: str,
+) -> dict[str, Any]:
+    activity_counts: dict[str, int] = {}
+    available_projects: list[str] = []
+    contributing_projects: set[str] = set()
+
+    for row in rows:
+        project_id = str(row.get("project_id") or "").strip()
+        if not project_id:
+            continue
+
+        available_projects.append(project_id)
+
+        if selected_project_id and project_id != selected_project_id:
+            continue
+
+        activity_by_day = _collect_heatmap_project_activity(row)
+        if not activity_by_day:
+            continue
+
+        contributing_projects.add(project_id)
+
+        for period, count in activity_by_day.items():
+            key = _build_heatmap_period_key(str(period), granularity)
+            if not key:
+                continue
+            activity_counts[key] = activity_counts.get(key, 0) + _safe_int(count)
+
+    project_ids = sorted(set(available_projects))
+
+    if not activity_counts:
+        return {
+            "cells": [],
+            "maxCount": 0,
+            "projectCount": len(contributing_projects),
+            "granularity": granularity,
+            "selectedProjectId": selected_project_id,
+            "projects": project_ids,
+        }
+
+    ordered_periods = sorted(activity_counts.items(), key=lambda item: item[0])
+    max_count = max(activity_counts.values()) if activity_counts else 0
+    cells = []
+
+    for period, count in ordered_periods:
+        intensity = round(count / max_count, 3) if max_count > 0 else 0.0
+        cells.append(
+            {
+                "period": period,
+                "count": count,
+                "intensity": intensity,
+            }
+        )
+
+    return {
+        "cells": cells,
+        "maxCount": max_count,
+        "projectCount": len(contributing_projects),
+        "granularity": granularity,
+        "selectedProjectId": selected_project_id,
+        "projects": project_ids,
+    }
+
     if isinstance(row, (tuple, list)):
         if len(row) >= 1 and row[0] is not None:
             project_id = str(row[0])
@@ -536,81 +652,21 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
 
         with _db_session(db_dir) as c:
             rows = fetch_latest_snapshots_with_zip(c) or []
-
-        daily_counts: dict[str, int] = {}
-        project_count = 0
-
-        for row in rows:
-            project_id = str(row.get("project_id") or "").strip()
-            snapshot = row.get("snapshot") or {}
-            zip_path = row.get("zip_path")
-
-            if not project_id or not isinstance(snapshot, dict):
-                continue
-
-            file_summary = snapshot.get("file_summary") or {}
-            monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
-            activity_by_day = {}
-            if isinstance(file_summary, dict):
-                activity_by_day = file_summary.get("daily_timeline") or {}
-
-            if not isinstance(activity_by_day, dict) or not activity_by_day:
-                activity_by_day = _build_daily_activity_from_zip_path(zip_path)
-
-            if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
-                activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
-
-            if not isinstance(activity_by_day, dict):
-                continue
-
-            project_count += 1
-
-            for period, count in activity_by_day.items():
-                key = str(period).strip()
-                if not key:
-                    continue
-                daily_counts[key] = daily_counts.get(key, 0) + _safe_int(count)
-
-        if not daily_counts:
-            return {
-                "data": {
-                    "cells": [],
-                    "maxCount": 0,
-                    "projectCount": project_count,
-                    "granularity": "day",
-                },
-                "error": None,
-            }
-
-        ordered_periods = sorted(daily_counts.items(), key=lambda item: item[0])
-        max_count = max(daily_counts.values()) if daily_counts else 0
-
-        cells = []
-        for period, count in ordered_periods:
-            intensity = 0.0
-            if max_count > 0:
-                intensity = round(count / max_count, 3)
-
-            cells.append(
-                {
-                    "period": period,
-                    "count": count,
-                    "intensity": intensity,
-                }
-            )
+        granularity = _normalize_heatmap_granularity(request.query_params.get("granularity"))
+        selected_project_id = str(request.query_params.get("project_id") or "").strip()
+        data = _build_heatmap_response(rows, granularity, selected_project_id)
 
         log_event(
             "SUCCESS",
-            f"Portfolio activity heatmap generated · Days: {len(cells)} · Projects: {project_count}",
+            "Portfolio activity heatmap generated"
+            f" · Granularity: {granularity}"
+            f" · Cells: {len(data['cells'])}"
+            f" · Projects: {data['projectCount']}"
+            + (f" · Selected Project: {selected_project_id}" if selected_project_id else ""),
         )
 
         return {
-            "data": {
-                "cells": cells,
-                "maxCount": max_count,
-                "projectCount": project_count,
-                "granularity": "day",
-            },
+            "data": data,
             "error": None,
         }
 

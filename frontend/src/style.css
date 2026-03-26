@@ -2356,6 +2356,33 @@ transition: all 0.2s ease;
   gap: 16px;
 }
 
+.heatmap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+}
+
+.heatmap-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.heatmap-filter span {
+  font-size: 12px;
+  color: rgba(223, 237, 255, 0.72);
+}
+
+.heatmap-select {
+  border-radius: 12px;
+  border: 1px solid rgba(158, 207, 255, 0.14);
+  background: rgba(9, 18, 36, 0.68);
+  color: rgba(240, 247, 255, 0.96);
+  padding: 10px 12px;
+}
+
 .heatmap-summary {
   display: flex;
   align-items: flex-start;
@@ -2448,6 +2475,22 @@ transition: all 0.2s ease;
   gap: 6px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.heatmap-weeks-aggregated {
+  align-items: flex-start;
+}
+
+.heatmap-aggregated-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.heatmap-aggregated-label {
+  font-size: 12px;
+  color: rgba(223, 237, 255, 0.72);
 }
 
 .heatmap-week-column {

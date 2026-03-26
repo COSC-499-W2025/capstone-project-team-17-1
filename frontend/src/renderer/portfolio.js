@@ -16,6 +16,11 @@ const SECTION_SELECTOR_MAP = {
 };
 
 let portfolioInitialized = false;
+const heatmapState = {
+  granularity: "day",
+  projectId: "",
+  projects: [],
+};
 
 function getStaticProfile() {
   return {
@@ -182,13 +187,25 @@ async function fetchPortfolioResumeSummary() {
   return payload?.data || null;
 }
 
-async function fetchActivityHeatmap() {
-  const res = await authFetch(`/portfolio/activity-heatmap`);
+async function fetchActivityHeatmap(options = {}) {
+  const params = new URLSearchParams();
+  const granularity = String(options?.granularity || "day").trim().toLowerCase();
+  const projectId = String(options?.projectId || "").trim();
+
+  if (granularity) {
+    params.set("granularity", granularity);
+  }
+  if (projectId) {
+    params.set("project_id", projectId);
+  }
+
+  const query = params.toString();
+  const res = await authFetch(`/portfolio/activity-heatmap${query ? `?${query}` : ""}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch activity heatmap: ${res.status}`);
   }
   const payload = await res.json();
-  return payload?.data || { cells: [], maxCount: 0, projectCount: 0 };
+  return payload?.data || { cells: [], maxCount: 0, projectCount: 0, projects: [], granularity };
 }
 
 function buildProfile(summaryData) {
@@ -403,6 +420,119 @@ function buildContributionHeatmapModel(cells) {
   }
 
   return { monthLabels, weeks };
+}
+
+function formatHeatmapPeriod(period, granularity) {
+  const raw = String(period || "").trim();
+  if (!raw) return "Unknown";
+
+  if (granularity === "year" && /^\d{4}$/.test(raw)) {
+    return raw;
+  }
+
+  if (granularity === "month" && /^\d{4}-\d{2}$/.test(raw)) {
+    const [year, month] = raw.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    }
+  }
+
+  if (granularity === "day" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+  }
+
+  return raw;
+}
+
+function buildAggregatedHeatmapGrid(cells, granularity) {
+  const entries = [...cells]
+    .map((cell) => ({
+      key: String(cell.period || "").trim(),
+      count: Number(cell.count || 0),
+      bucket: getHeatmapBucket(Number(cell.intensity || 0)),
+      label: formatHeatmapPeriod(cell.period, granularity),
+    }))
+    .filter((cell) => cell.key)
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const columns = [];
+  for (let index = 0; index < entries.length; index += 4) {
+    columns.push({
+      index: columns.length,
+      days: entries.slice(index, index + 4).map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        count: entry.count,
+        bucket: entry.bucket,
+        inRange: true,
+      })),
+    });
+  }
+  return columns;
+}
+
+function renderHeatmapFilters(heatmapData) {
+  const projects = Array.isArray(heatmapData?.projects) ? heatmapData.projects : [];
+  heatmapState.projects = projects;
+
+  return `
+    <div class="heatmap-toolbar">
+      <label class="heatmap-filter">
+        <span>Time Filter</span>
+        <select id="heatmap-granularity-select" class="heatmap-select">
+          <option value="year" ${heatmapState.granularity === "year" ? "selected" : ""}>Year</option>
+          <option value="month" ${heatmapState.granularity === "month" ? "selected" : ""}>Month</option>
+          <option value="day" ${heatmapState.granularity === "day" ? "selected" : ""}>Day</option>
+        </select>
+      </label>
+      <label class="heatmap-filter">
+        <span>Project Map</span>
+        <select id="heatmap-project-select" class="heatmap-select">
+          <option value="" ${!heatmapState.projectId ? "selected" : ""}>All Projects</option>
+          ${projects
+            .map(
+              (projectId) => `
+                <option value="${escapeHtml(projectId)}" ${heatmapState.projectId === projectId ? "selected" : ""}>
+                  ${escapeHtml(projectId)}
+                </option>
+              `
+            )
+            .join("")}
+        </select>
+      </label>
+    </div>
+  `;
+}
+
+async function refreshActivityHeatmap() {
+  try {
+    const heatmapData = await fetchActivityHeatmap({
+      granularity: heatmapState.granularity,
+      projectId: heatmapState.projectId,
+    });
+    renderActivityHeatmap(heatmapData);
+  } catch (error) {
+    console.error("Failed to refresh activity heatmap:", error);
+  }
+}
+
+function bindHeatmapFilterEvents() {
+  const granularitySelect = document.getElementById("heatmap-granularity-select");
+  const projectSelect = document.getElementById("heatmap-project-select");
+
+  granularitySelect?.addEventListener("change", async (event) => {
+    heatmapState.granularity = String(event.target.value || "day").trim().toLowerCase() || "day";
+    await refreshActivityHeatmap();
+  });
+
+  projectSelect?.addEventListener("change", async (event) => {
+    heatmapState.projectId = String(event.target.value || "").trim();
+    await refreshActivityHeatmap();
+  });
 }
 
 function applyPortfolioSectionVisibility() {
@@ -796,9 +926,14 @@ function renderActivityHeatmap(heatmapData) {
 
   const cells = Array.isArray(heatmapData?.cells) ? heatmapData.cells : [];
   const projectCount = Number(heatmapData?.projectCount || 0);
+  const granularity = String(heatmapData?.granularity || heatmapState.granularity || "day").trim().toLowerCase();
+  const selectedProjectId = String(heatmapData?.selectedProjectId || heatmapState.projectId || "").trim();
+  heatmapState.granularity = granularity;
+  heatmapState.projectId = selectedProjectId;
 
   if (!cells.length) {
     container.innerHTML = `
+      ${renderHeatmapFilters(heatmapData)}
       <div class="skills-group-card">
         <h3>No activity data yet</h3>
         <p class="muted-text">
@@ -806,6 +941,7 @@ function renderActivityHeatmap(heatmapData) {
         </p>
       </div>
     `;
+    bindHeatmapFilterEvents();
     return;
   }
 
@@ -817,7 +953,8 @@ function renderActivityHeatmap(heatmapData) {
   const totalActivity = cells.reduce((sum, cell) => sum + Number(cell.count || 0), 0);
   const averageActivity = cells.length ? Math.round(totalActivity / cells.length) : 0;
   const peakCell = [...cells].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
-  const heatmap = buildContributionHeatmapModel(cells);
+  const heatmap = granularity === "day" ? buildContributionHeatmapModel(cells) : null;
+  const aggregatedColumns = granularity === "day" ? [] : buildAggregatedHeatmapGrid(cells, granularity);
   const legendLevels = [
     { label: "Low", bucket: 0 },
     { label: "", bucket: 1 },
@@ -827,15 +964,16 @@ function renderActivityHeatmap(heatmapData) {
   ];
 
   container.innerHTML = `
+    ${renderHeatmapFilters(heatmapData)}
     <div class="heatmap-summary">
       <div>
         <p class="muted-text">
-          Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
+          ${selectedProjectId ? `Showing ${escapeHtml(selectedProjectId)}.` : `Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.`}
         </p>
         <div class="heatmap-chip-row">
           <span class="hero-stat-chip">${totalActivity} total activity events</span>
-          <span class="hero-stat-chip">${averageActivity} avg / active day</span>
-          <span class="hero-stat-chip">Peak: ${escapeHtml(peakCell?.period || "")}</span>
+          <span class="hero-stat-chip">${averageActivity} avg / active ${escapeHtml(granularity)}</span>
+          <span class="hero-stat-chip">Peak: ${escapeHtml(formatHeatmapPeriod(peakCell?.period || "", granularity))}</span>
         </div>
       </div>
     </div>
@@ -854,43 +992,86 @@ function renderActivityHeatmap(heatmapData) {
       <span class="heatmap-legend-label">More</span>
     </div>
 
-    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
-      <div class="heatmap-month-row">
-        <div class="heatmap-month-spacer"></div>
-        <div class="heatmap-month-labels">
-          ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
-        </div>
-      </div>
-      <div class="heatmap-body">
-        <div class="heatmap-weekday-labels">
-          <span>Sun</span>
-          <span>Tue</span>
-          <span>Thu</span>
-          <span>Sat</span>
-        </div>
-        <div class="heatmap-weeks">
-          ${heatmap.weeks
-            .map(
-              (week) => `
-                <div class="heatmap-week-column">
-                  ${week.days
-                    .map(
-                      (day) => `
-                        <div
-                          class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
-                          title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
-                        ></div>
-                      `
-                    )
-                    .join("")}
-                </div>
-              `
-            )
-            .join("")}
-        </div>
-      </div>
-    </div>
+    ${
+      granularity === "day"
+        ? `
+          <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
+            <div class="heatmap-month-row">
+              <div class="heatmap-month-spacer"></div>
+              <div class="heatmap-month-labels">
+                ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
+              </div>
+            </div>
+            <div class="heatmap-body">
+              <div class="heatmap-weekday-labels">
+                <span>Sun</span>
+                <span>Tue</span>
+                <span>Thu</span>
+                <span>Sat</span>
+              </div>
+              <div class="heatmap-weeks">
+                ${heatmap.weeks
+                  .map(
+                    (week) => `
+                      <div class="heatmap-week-column">
+                        ${week.days
+                          .map(
+                            (day) => `
+                              <div
+                                class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
+                                title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
+                              ></div>
+                            `
+                          )
+                          .join("")}
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          </div>
+        `
+        : `
+          <div
+            class="heatmap-calendar heatmap-calendar-aggregated"
+            role="img"
+            aria-label="Project activity heatmap by ${escapeHtml(granularity)}"
+          >
+            <div class="heatmap-aggregated-header">
+              ${cells
+                .map(
+                  (cell) => `
+                    <span class="heatmap-aggregated-label">${escapeHtml(formatHeatmapPeriod(cell.period, granularity))}</span>
+                  `
+                )
+                .join("")}
+            </div>
+            <div class="heatmap-weeks heatmap-weeks-aggregated">
+              ${aggregatedColumns
+                .map(
+                  (column) => `
+                    <div class="heatmap-week-column">
+                      ${column.days
+                        .map(
+                          (entry) => `
+                            <div
+                              class="heatmap-square bucket-${entry.bucket}"
+                              title="${escapeHtml(entry.label)} · ${entry.count} activity event${entry.count === 1 ? "" : "s"}"
+                            ></div>
+                          `
+                        )
+                        .join("")}
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          </div>
+        `
+    }
   `;
+  bindHeatmapFilterEvents();
 }
 
 function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
@@ -1176,6 +1357,8 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolio() {
+  heatmapState.granularity = "day";
+  heatmapState.projectId = "";
   const [projectsResult, timelineResult, summaryResult, heatmapResult, rankedTopProjectsResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),

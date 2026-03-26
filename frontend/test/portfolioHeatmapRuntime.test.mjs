@@ -73,6 +73,52 @@ function buildContributionHeatmapModel(cells) {
   return { monthLabels, weeks };
 }
 
+function formatHeatmapPeriod(period, granularity) {
+  const raw = String(period || "").trim();
+  if (!raw) return "Unknown";
+
+  if (granularity === "year" && /^\d{4}$/.test(raw)) {
+    return raw;
+  }
+
+  if (granularity === "month" && /^\d{4}-\d{2}$/.test(raw)) {
+    const [year, month] = raw.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    }
+  }
+
+  return raw;
+}
+
+function buildAggregatedHeatmapGrid(cells, granularity) {
+  const entries = [...cells]
+    .map((cell) => ({
+      key: String(cell.period || "").trim(),
+      count: Number(cell.count || 0),
+      bucket: getHeatmapBucket(Number(cell.intensity || 0)),
+      label: formatHeatmapPeriod(cell.period, granularity),
+    }))
+    .filter((cell) => cell.key)
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const columns = [];
+  for (let index = 0; index < entries.length; index += 4) {
+    columns.push({
+      index: columns.length,
+      days: entries.slice(index, index + 4).map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        count: entry.count,
+        bucket: entry.bucket,
+        inRange: true,
+      })),
+    });
+  }
+  return columns;
+}
+
 test("buildContributionHeatmapModel does not throw for daily heatmap data", () => {
   const model = buildContributionHeatmapModel([
     { period: "2026-03-01", count: 2, intensity: 0.2 },
@@ -83,4 +129,21 @@ test("buildContributionHeatmapModel does not throw for daily heatmap data", () =
   assert.ok(model.weeks.length > 0);
   assert.equal(model.weeks[0].days.length, 7);
   assert.ok(Array.isArray(model.monthLabels));
+});
+
+test("buildAggregatedHeatmapGrid supports month and year filters", () => {
+  const monthGrid = buildAggregatedHeatmapGrid([
+    { period: "2026-01", count: 3, intensity: 0.3 },
+    { period: "2026-02", count: 8, intensity: 0.9 },
+  ], "month");
+
+  const yearGrid = buildAggregatedHeatmapGrid([
+    { period: "2025", count: 10, intensity: 0.6 },
+    { period: "2026", count: 12, intensity: 0.8 },
+  ], "year");
+
+  assert.equal(monthGrid.length, 1);
+  assert.equal(monthGrid[0].days.length, 2);
+  assert.equal(monthGrid[0].days[0].label, "Jan 2026");
+  assert.equal(yearGrid[0].days[1].label, "2026");
 });
