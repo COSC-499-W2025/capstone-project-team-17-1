@@ -379,9 +379,6 @@ def test_store_contributor_stats_updates_latest_user_id():
             latest = storage.fetch_latest_contributor_stats(conn, "demo")
             assert latest and latest[0]["user_id"] == uid1
             assert latest[0]["commits"] == 2
-        latest = storage.fetch_latest_contributor_stats(conn, "demo")
-        assert latest and latest[0]["user_id"] == uid1
-        assert latest[0]["commits"] == 2
 
         conn.close()
 
