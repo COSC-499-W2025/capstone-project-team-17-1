@@ -129,7 +129,7 @@ async function initGithubSection() {
   } catch (e) {
     console.error("GitHub import failed:", e);
     closeProgressModal();
-    alert("GitHub import failed.");
+    alert(`GitHub import failed: ${e.message || e}`);
   }
 
 }

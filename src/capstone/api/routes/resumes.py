@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
-from capstone.resume_retrieval import build_resume_project_summary
+from capstone.resume_retrieval import build_resume_project_item, build_resume_summary
+from capstone.github_contributors import _is_bot_contributor, _is_noreply_email
 import capstone.storage as storage
 
 
@@ -40,7 +41,7 @@ def _resume_to_pdf_payload(resume: dict) -> dict:
         start = item.get("start_date") or ""
         end = item.get("end_date") or ""
         if start or end:
-            out["dateRange"] = " – ".join(filter(None, [start, end]))
+            out["dateRange"] = " - ".join(filter(None, [start, end]))
         return out
 
     payload: dict = {
@@ -250,6 +251,14 @@ async def generate_resume(request: Request):
             username = auth_user.get("username") or "guestuser"
             resume_title = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
+        # --- resolve data user's username for contributor matching ---
+        data_user_profile = storage.get_user_profile(conn, data_user_id) or {}
+        data_username = (
+            data_user_profile.get("username")
+            or data_user_profile.get("full_name")
+            or ""
+        )
+
         # --- collect projects: use selected list if provided, else all linked to data_user_id ---
         if selected_project_ids:
             project_ids = [str(p) for p in selected_project_ids]
@@ -292,9 +301,44 @@ async def generate_resume(request: Request):
             elif isinstance(raw_skills, dict):
                 for name in raw_skills:
                     _add_skill(name)
-            summary = build_resume_project_summary(pid, snap)
-            title = snap.get("project_name") or snap.get("root_name") or pid
-            project_items.append({"title": title, "content": summary})
+            # Fetch contributor_stats rows for this project.
+            # Prefer GitHub API rows (source="github") over zip-derived rows;
+            # if any github rows exist, ignore zip rows entirely to avoid double-counting.
+            cs_rows = conn.execute(
+                """SELECT contributor, user_id, commits, pull_requests, issues, reviews, source
+                   FROM contributor_stats WHERE project_id = ?""",
+                (pid,),
+            ).fetchall()
+            contributor_stats_map: dict = {}
+            if cs_rows:
+                _has_github = any(r[6] == "github" for r in cs_rows)
+                _agg: dict = {}
+                for cname, uid, c, p, i, rv, src in cs_rows:
+                    if _has_github and src != "github":
+                        continue
+                    if not cname or _is_bot_contributor(cname) or _is_noreply_email(cname):
+                        continue
+                    key = cname
+                    if key not in _agg:
+                        _agg[key] = {"commits": 0, "pull_requests": 0,
+                                     "issues": 0, "reviews": 0, "user_ids": set()}
+                    _agg[key]["commits"]       += c or 0
+                    _agg[key]["pull_requests"] += p or 0
+                    _agg[key]["issues"]        += i or 0
+                    _agg[key]["reviews"]       += rv or 0
+                    if uid:
+                        _agg[key]["user_ids"].add(uid)
+                contributor_stats_map = _agg
+
+            item = build_resume_project_item(
+                pid, snap,
+                contributor_name=data_username,
+                data_user_id=data_user_id,
+                contributor_stats_map=contributor_stats_map,
+            )
+            if not item.get("title"):
+                item["title"] = snap.get("project_name") or snap.get("root_name") or pid
+            project_items.append(item)
 
         # --- build header ---
         # Auth profile is only used when generating for the logged-in user themselves.
@@ -326,6 +370,25 @@ async def generate_resume(request: Request):
             "portfolio_url": _pick("portfolio_url"),
         }
 
+        # Fetch education from user profile (keyed to owner, not data_user)
+        education = storage.get_user_education(conn, owner_id) or None
+
+        # Build auto-generated summary
+        _BACKEND  = {"python", "java", "go", "rust", "c", "c++", "c#", "ruby", "php", "kotlin", "swift", "scala"}
+        _FRONTEND = {"javascript", "typescript", "css", "html", "react", "vue", "angular", "sass", "less"}
+        all_lower = {s.lower() for s in skill_names}
+        has_backend  = bool(all_lower & _BACKEND)
+        has_frontend = bool(all_lower & _FRONTEND)
+        overall_role = (
+            "full-stack" if (has_backend and has_frontend)
+            else "backend" if has_backend
+            else "frontend" if has_frontend
+            else ""
+        )
+        summary_text = build_resume_summary(
+            education or [], skill_names, project_items, role_label=overall_role
+        ) or None
+
         # Resume always owned by the logged-in user (owner_id),
         # regardless of whose data was used to generate it.
         resume_id = storage.upsert_default_resume_modules(
@@ -334,6 +397,8 @@ async def generate_resume(request: Request):
             header=header,
             core_skills=skill_names,
             projects=project_items,
+            education=education,
+            summary=summary_text,
             resume_title=resume_title,
             create_new=create_new,
         )

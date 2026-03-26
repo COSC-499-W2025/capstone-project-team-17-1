@@ -1,5 +1,5 @@
 import { authFetch } from "./auth.js";
-import { buildOnePageResumeExportBundle, openResumePreview } from "./portfolio.js";
+import { openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -70,6 +70,13 @@ async function fetchResumeDetail(resumeId) {
 // Resume list
 // ---------------------------------------------------------------------------
 
+// ID of the most-recently generated resume — used to flash the card on render
+let _newResumeId = null;
+
+// Multi-select state: Set of selected resume IDs + id→title map for naming exports
+let _selectedResumeIds = new Set();
+let _resumeTitleMap = {};  // id → title
+
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
 // ---------------------------------------------------------------------------
@@ -94,13 +101,19 @@ function saveStarred(starredSet) {
 
 function applySavedOrder(resumes) {
   const saved = getSavedResumeOrder();
-  if (!saved.length) return resumes;
+  if (!saved.length) {
+    // No saved order: newest first (highest id = most recently created)
+    return [...resumes].sort((a, b) => b.id - a.id);
+  }
   const rank = new Map(saved.map((id, i) => [String(id), i]));
-  return [...resumes].sort((a, b) => {
-    const ai = rank.has(String(a.id)) ? rank.get(String(a.id)) : Infinity;
-    const bi = rank.has(String(b.id)) ? rank.get(String(b.id)) : Infinity;
-    return ai - bi;
-  });
+  const inOrder = [];
+  const newItems = [];
+  for (const r of resumes) {
+    (rank.has(String(r.id)) ? inOrder : newItems).push(r);
+  }
+  inOrder.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
+  newItems.sort((a, b) => b.id - a.id);
+  return [...newItems, ...inOrder];
 }
 
 function setupListDragDrop(container) {
@@ -167,6 +180,23 @@ function setupListDragDrop(container) {
 }
 
 // ---------------------------------------------------------------------------
+// Bulk select helpers
+// ---------------------------------------------------------------------------
+
+async function _openExportSequential(ids) {
+  for (const id of ids) {
+    await new Promise((resolve) => openExportModal(id, _resumeTitleMap[id] || "", resolve));
+  }
+}
+
+async function _bulkDelete(ids) {
+  if (!confirm(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
+  await Promise.all(ids.map((id) => deleteResume(id).catch(() => {})));
+  _selectedResumeIds.clear();
+  await renderResumeList();
+}
+
+// ---------------------------------------------------------------------------
 // Resume list rendering
 // ---------------------------------------------------------------------------
 
@@ -184,6 +214,10 @@ async function renderResumeList() {
 
   const resumes = applySavedOrder(rawResumes);
 
+  // Reset selection when list re-renders; rebuild title map
+  _selectedResumeIds.clear();
+  _resumeTitleMap = Object.fromEntries(resumes.map((r) => [r.id, r.title || "Untitled Resume"]));
+
   const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -194,6 +228,10 @@ async function renderResumeList() {
     const isStarred = starred.has(String(r.id));
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
+        <span class="resume-cb-wrapper">
+          <input type="checkbox" class="resume-select-cb" data-resume-id="${r.id}">
+          <span class="resume-cb-visual"></span>
+        </span>
         <div class="resume-list-card-header">
           <span class="resume-card-drag" title="Drag to reorder">⠿</span>
           <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
@@ -221,6 +259,16 @@ async function renderResumeList() {
 
   setupListDragDrop(container);
 
+  // Flash newly generated card
+  if (_newResumeId) {
+    const newCard = container.querySelector(`[data-resume-id="${_newResumeId}"]`);
+    if (newCard) {
+      newCard.classList.add("resume-card-new");
+      newCard.addEventListener("animationend", () => newCard.classList.remove("resume-card-new"), { once: true });
+    }
+    _newResumeId = null;
+  }
+
   container.querySelectorAll(".resume-list-card").forEach((card) => {
     const header = card.querySelector(".resume-list-card-header");
     const expandEl = card.querySelector(".resume-list-expand");
@@ -235,7 +283,8 @@ async function renderResumeList() {
         e.target.closest(".resume-export-action") ||
         e.target.closest(".resume-preview-action") ||
         e.target.closest(".resume-star-btn") ||
-        e.target.closest(".resume-card-drag")
+        e.target.closest(".resume-card-drag") ||
+        e.target.closest(".resume-cb-wrapper")
       ) return;
 
       const isOpen = card.classList.contains("expanded");
@@ -295,12 +344,39 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-export-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openExportModal(btn.dataset.resumeId, btn.dataset.resumeTitle);
+      const id = btn.dataset.resumeId;
+      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
+        _openExportSequential([..._selectedResumeIds]);
+      } else {
+        openExportModal(id, btn.dataset.resumeTitle);
+      }
     });
   });
 
   container.querySelectorAll(".resume-delete-action").forEach((btn) => {
-    btn.addEventListener("click", () => confirmDeleteResume(btn.dataset.resumeId));
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.resumeId;
+      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
+        _bulkDelete([..._selectedResumeIds]);
+      } else {
+        confirmDeleteResume(id);
+      }
+    });
+  });
+
+  container.querySelectorAll(".resume-select-cb").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const id = cb.dataset.resumeId;
+      const card = cb.closest(".resume-list-card");
+      if (cb.checked) {
+        _selectedResumeIds.add(id);
+        card.classList.add("re-selected");
+      } else {
+        _selectedResumeIds.delete(id);
+        card.classList.remove("re-selected");
+      }
+    });
   });
 }
 
@@ -460,7 +536,8 @@ async function openNewResumeModal() {
     const contributorId = selectedContributor?.value || null;
 
     try {
-      await generateResume(projectIds, title, contributorId);
+      const newResume = await generateResume(projectIds, title, contributorId);
+      _newResumeId = newResume?.id ?? null;
       modal.remove();
       await renderResumeList();
     } catch (err) {
@@ -487,7 +564,7 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function openExportModal(resumeId, resumeTitle) {
+function openExportModal(resumeId, resumeTitle, onClose) {
   document.getElementById("export-modal")?.remove();
 
   const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
@@ -541,34 +618,30 @@ function openExportModal(resumeId, resumeTitle) {
     area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
 
     try {
-      const bundle = await buildOnePageResumeExportBundle();
-
       if (format === "pdf") {
-        const res = await authFetch("/resumes/render-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resume: bundle.pdfPayload }),
-        });
+        const res = await authFetch(`/resumes/${resumeId}/export?format=pdf`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error (${res.status})`);
+        }
+        const blob = await res.blob();
+        cache[format] = { blob, url: URL.createObjectURL(blob) };
+      } else if (format === "json") {
+        const res = await authFetch(`/resumes/${resumeId}/export?format=json`);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || `Server error (${res.status})`);
         }
         const payload = await res.json();
-        const encoded = payload?.data?.payload;
-        if (!encoded) {
-          throw new Error("PDF payload missing.");
-        }
-        const binary = atob(encoded);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "application/pdf" });
-        cache[format] = { blob, url: URL.createObjectURL(blob) };
-      } else if (format === "json") {
-        cache[format] = { text: JSON.stringify(bundle.snapshot, null, 2) };
+        const resume = payload?.data ?? payload;
+        cache[format] = { text: JSON.stringify(resume, null, 2) };
       } else {
-        cache[format] = { text: bundle.markdown };
+        const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error (${res.status})`);
+        }
+        cache[format] = { text: await res.text() };
       }
 
       renderPreview(format, cache[format]);
@@ -593,6 +666,7 @@ function openExportModal(resumeId, resumeTitle) {
   function cleanup() {
     if (cache.pdf?.url) URL.revokeObjectURL(cache.pdf.url);
     modal.remove();
+    onClose?.();
   }
 
   modal.querySelector(".export-modal-close").onclick = cleanup;
@@ -681,6 +755,7 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   }
 
   // education / experience / project / custom
+  const showDateSep = item.start_date || item.end_date;
   return `
     <div class="re-item" data-item-id="${iid}">
       ${drag}${del}
@@ -688,12 +763,15 @@ function buildItemHtml(rid, sid, sectionKey, item) {
         <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
         <span class="re-item-date">
           ${ce("start_date", item.start_date || "", ctx)}
-          <span class="re-date-sep"> – </span>
+          <span class="re-date-sep"${showDateSep ? "" : ' style="display:none"'}> – </span>
           ${ce("end_date", item.end_date || "", ctx)}
         </span>
       </div>
-      ${item.subtitle !== undefined ? `<div class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</div>` : ""}
-      ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
+      ${(item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) ? `
+      <div class="re-item-sub-row">
+        ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
+        ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
+      </div>` : ""}
       ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
         <ul class="re-bullets">
