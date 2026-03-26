@@ -3141,6 +3141,13 @@ transition: all 0.2s ease;
   opacity: 0.92;
 }
 
+.project-evolution-change-summary {
+  margin: 0 0 8px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: rgba(234, 246, 255, 0.95);
+}
+
 .project-evolution-content {
   min-width: 0;
 }

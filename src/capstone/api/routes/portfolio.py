@@ -276,29 +276,56 @@ def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[s
         skills = _snapshot_skill_names(snapshot)
         skill_set = {skill.lower(): skill for skill in skills}
         new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
+        file_delta = file_count - previous_file_count if index > 0 else file_count
+        skill_delta = len(skills) - len(previous_skills) if index > 0 else len(skills)
+        active_days_delta = active_days - previous_active_days if index > 0 else active_days
 
-        milestone_type = "Current State"
         if index == 0:
-            milestone_type = "Initial Snapshot"
+            milestone_type = "Baseline"
         elif index == len(ordered) - 1:
-            milestone_type = "Latest Snapshot"
+            milestone_type = "Current State"
+        elif file_delta >= 5 or skill_delta >= 2:
+            milestone_type = "Expansion"
+        elif active_days_delta > 0 or new_skills:
+            milestone_type = "Refinement"
         else:
             milestone_type = f"Iteration {index + 1}"
+
+        change_summary_parts: list[str] = []
+        if file_delta > 0:
+            change_summary_parts.append(f"Added {file_delta} file{'s' if file_delta != 1 else ''}")
+        elif file_delta < 0:
+            change_summary_parts.append(f"Reduced file scope by {abs(file_delta)}")
+
+        if skill_delta > 0:
+            change_summary_parts.append(f"Expanded into {skill_delta} more skill signal{'s' if skill_delta != 1 else ''}")
+        elif skill_delta < 0:
+            change_summary_parts.append(f"Focused down by {abs(skill_delta)} skill signal{'s' if skill_delta != 1 else ''}")
+
+        if active_days_delta > 0:
+            change_summary_parts.append(f"Increased active span by {active_days_delta} day{'s' if active_days_delta != 1 else ''}")
+
+        if new_skills:
+            change_summary_parts.append(f"Introduced {', '.join(new_skills[:3])}")
+
+        if not change_summary_parts:
+            change_summary_parts.append("Maintained the implementation baseline")
 
         milestones.append(
             {
                 "label": milestone_type,
                 "timestamp": created_at,
                 "summary": summary,
+                "changeSummary": ". ".join(change_summary_parts) + ".",
                 "metrics": {
                     "files": file_count,
                     "skills": len(skills),
                     "active_days": active_days,
                 },
                 "delta": {
-                    "files": file_count - previous_file_count if index > 0 else file_count,
-                    "skills": len(skills) - len(previous_skills) if index > 0 else len(skills),
-                    "active_days": active_days - previous_active_days if index > 0 else active_days,
+                    "files": file_delta,
+                    "skills": skill_delta,
+                    "active_days": active_days_delta,
                 },
                 "new_skills": new_skills,
                 "highlights": _extract_highlights(snapshot)[:3],

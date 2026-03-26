@@ -423,6 +423,11 @@ function renderEvolutionTimeline(project, details, override) {
                     </div>
                   </div>
                   ${
+                    step?.changeSummary
+                      ? `<p class="project-evolution-change-summary">${escapeHtml(step.changeSummary)}</p>`
+                      : ""
+                  }
+                  ${
                     step?.summary
                       ? `<p class="project-evolution-text">${escapeHtml(step.summary)}</p>`
                       : ""
