@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from capstone.api.server import create_app
 from capstone import storage
 from capstone.api.routes import auth as auth_routes
+from capstone.api.server import create_app, get_app_for_tests
+from capstone import storage
 
 
 def _client(tmp_path) -> TestClient:
@@ -14,6 +16,12 @@ def _client(tmp_path) -> TestClient:
     storage.CURRENT_USER = None
     auth_routes._SESSIONS.clear()
     app = create_app(db_dir=str(tmp_path), auth_token=None)
+    return TestClient(app)
+
+
+def _isolated_client(tmp_path) -> TestClient:
+    """Use get_app_for_tests for proper DB isolation in pytest tmp_path fixtures."""
+    app = get_app_for_tests(db_dir=str(tmp_path))
     return TestClient(app)
 
 
@@ -136,3 +144,60 @@ def test_auth_me_requires_token(tmp_path):
     assert client.get("/auth/me").status_code == 401
     assert client.put("/auth/me", json={"full_name": "X"}).status_code == 401
     assert client.post("/auth/password", json={"current_password": "a", "new_password": "b"}).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Education API — GET /auth/me/education  &  PUT /auth/me/education
+# ---------------------------------------------------------------------------
+
+
+def _register_and_token(client, username="alice", password="pass1234"):
+    r = client.post("/auth/register", json={"username": username, "password": password})
+    assert r.status_code == 200
+    return r.json()["token"]
+
+
+def test_education_get_requires_auth(tmp_path):
+    client = _isolated_client(tmp_path)
+    storage.close_db()
+    assert client.get("/auth/me/education").status_code == 401
+
+
+def test_education_put_requires_auth(tmp_path):
+    client = _isolated_client(tmp_path)
+    storage.close_db()
+    assert client.put("/auth/me/education", json=[]).status_code == 401
+
+
+
+def test_education_get_and_put_endpoints_return_correct_shape(tmp_path):
+    """Smoke-test that get/replace_user_education return the expected field shape.
+    Full persistence and ordering is covered in test_storage_users.py.
+    """
+    from pathlib import Path as _Path
+    from capstone import storage as _st
+
+    conn = _st.open_db()
+    try:
+        uid = _st.upsert_user(conn, "edu_shape_smoke_user", email="edu_smoke@example.com")
+        # Reset education so the test is idempotent against prior runs
+        _st.replace_user_education(conn, uid, [])
+
+        _st.replace_user_education(conn, uid, [{
+            "university": "UBCO",
+            "degree": "BSc Computer Science",
+            "start_date": "2022",
+            "end_date": "Present",
+            "city": "Kelowna",
+            "state": "BC",
+        }])
+        result = _st.get_user_education(conn, uid)
+        assert len(result) == 1
+        assert set(result[0].keys()) >= {"id", "university", "degree", "start_date", "end_date", "city", "state"}
+        assert result[0]["university"] == "UBCO"
+        assert result[0]["city"] == "Kelowna"
+
+        # Cleanup
+        _st.replace_user_education(conn, uid, [])
+    finally:
+        _st.close_db()

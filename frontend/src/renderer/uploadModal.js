@@ -180,9 +180,9 @@ export function renderRepoCards(repos) {
     <div id="github-repo-list" class="github-repo-list"></div>
   `;
 
-  const list = document.getElementById("github-repo-list");
-
   function draw(filtered) {
+    const list = githubContainer.querySelector("#github-repo-list");
+    if (!list) return;
     list.innerHTML = "";
 
     filtered.forEach(repo => {
@@ -315,7 +315,7 @@ startImport(owner, name, buildProjectId(selectedBranch), selectedBranch);
 
   draw(repos);
 
-  document.getElementById("github-repo-search")?.addEventListener("input", (e) => {
+  githubContainer.querySelector("#github-repo-search")?.addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
 
     const filtered = repos.filter(r => {

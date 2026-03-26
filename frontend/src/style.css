@@ -4435,6 +4435,16 @@ transition: all 0.2s ease;
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+@keyframes resume-card-new-flash {
+  0%   { background: rgba(80, 160, 255, 0.22); border-color: rgba(80, 160, 255, 0.55); box-shadow: 0 0 18px rgba(80, 160, 255, 0.35); }
+  60%  { background: rgba(80, 160, 255, 0.18); border-color: rgba(80, 160, 255, 0.45); box-shadow: 0 0 14px rgba(80, 160, 255, 0.25); }
+  100% { background: rgba(255,255,255,0.05);   border-color: rgba(255,255,255,0.08);   box-shadow: none; }
+}
+
+.resume-card-new {
+  animation: resume-card-new-flash 3s ease-out forwards;
+}
+
 .resume-list-card.resume-card-dragging {
   opacity: 0.4;
   transform: scale(1.01);
@@ -4526,6 +4536,80 @@ transition: all 0.2s ease;
 }
 .portfolio-star-btn.star-pop {
   animation: star-pop 0.28s ease-out;
+}
+
+/* ── Bulk-select checkbox wrapper (absolute top-right corner) ── */
+.resume-list-card {
+  position: relative;
+}
+
+/* Invisible wrapper — positions the visual checkbox on the corner */
+.resume-cb-wrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(30%, -30%);
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.resume-list-card:hover .resume-cb-wrapper,
+.resume-select-cb:checked ~ .resume-cb-visual,
+.resume-cb-wrapper:has(.resume-select-cb:checked) {
+  opacity: 1;
+}
+.resume-list-card:hover .resume-cb-wrapper {
+  opacity: 1;
+}
+
+/* Hide native input but keep it clickable via the wrapper */
+.resume-select-cb {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+/* Visual square */
+.resume-cb-visual {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: #151d2e;
+  box-shadow: 0 0 0 2.5px rgba(10, 15, 28, 0.7);
+  transition: background 0.15s, border-color 0.15s;
+  pointer-events: none;
+}
+.resume-select-cb:checked + .resume-cb-visual {
+  background: #4f8ef7;
+  border-color: #4f8ef7;
+}
+.resume-select-cb:checked + .resume-cb-visual::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 5px; height: 9px;
+  border: 2px solid #fff;
+  border-top: none; border-left: none;
+  transform: rotate(45deg);
+}
+
+/* Show wrapper when checkbox is checked (even without hover) */
+.resume-cb-wrapper:has(.resume-select-cb:checked) {
+  opacity: 1;
+}
+
+.resume-list-card.re-selected {
+  border-color: rgba(79, 142, 247, 0.5);
+  background: rgba(79, 142, 247, 0.07);
 }
 
 .resume-list-card-header {
@@ -5250,7 +5334,7 @@ transition: all 0.2s ease;
   font-weight: 600;
   color: #0f172a;
   font-size: 0.95rem;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .re-item-header-left {
@@ -5291,15 +5375,39 @@ transition: all 0.2s ease;
   font-weight: 400;
 }
 
+.re-item-sub-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
 .re-item-subtitle {
   font-size: 0.85rem;
+  font-style: italic;
   color: #64748b;
-  margin-top: 1px;
-  margin-bottom: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .re-item-subtitle .re-editable:empty::before {
   content: "Subtitle";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
+.re-item-location {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.re-item-location .re-editable:empty::before {
+  content: "Location";
   color: #b0b8c4;
   pointer-events: none;
 }
@@ -5979,6 +6087,145 @@ transition: all 0.2s ease;
   font-size: 13px;
   opacity: 0.85;
   min-height: 18px;
+}
+
+/* ── Education section ─────────────────────────────────────────── */
+.settings-edu-section {
+  margin-bottom: 20px;
+}
+
+.settings-edu-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.settings-edu-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.settings-edu-section-desc {
+  font-size: 12px;
+  opacity: 0.45;
+}
+
+.edu-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.edu-card {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  transition: border-color 0.15s;
+}
+
+.edu-card:hover {
+  border-color: rgba(77, 166, 255, 0.3);
+}
+
+.edu-card-delete {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.edu-card-delete:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.edu-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 24px;
+}
+
+.edu-card-dates {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.edu-card-location {
+  display: flex;
+  gap: 8px;
+}
+
+.edu-card-location .settings-input {
+  flex: 1;
+}
+
+.edu-card-dates .settings-input {
+  flex: 1;
+}
+
+.edu-current-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.edu-current-chk {
+  accent-color: #4da6ff;
+  cursor: pointer;
+}
+
+/* Add zone — always present, "+" appears on hover */
+.edu-add-zone {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 36px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.edu-add-zone:hover,
+.edu-cards-container:empty ~ .edu-add-zone {
+  opacity: 1;
+}
+
+.edu-add-btn {
+  background: none;
+  border: 1px dashed rgba(77, 166, 255, 0.4);
+  border-radius: 8px;
+  color: rgba(77, 166, 255, 0.7);
+  font-size: 18px;
+  width: 100%;
+  height: 32px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.edu-add-btn:hover {
+  border-color: #4da6ff;
+  color: #4da6ff;
+  background: rgba(77, 166, 255, 0.06);
 }
 
 /* General tab field row */
