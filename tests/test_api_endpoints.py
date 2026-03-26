@@ -162,6 +162,13 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
 
+    def test_recent_projects_works_without_uploads_table(self):
+        client = self._client()
+
+        r = client.get("/dashboard/recent-projects")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.json(), list)
+
     def test_resume_endpoints(self):
         client = self._client()
         headers = {"Authorization": "Bearer t"}

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
+import sqlite3
 from capstone.portfolio_retrieval import _db_session
 from capstone.activity_log import log_event
 
@@ -20,6 +21,20 @@ class RecentProject(BaseModel):
 
 
 import json
+
+
+def _load_upload_ids(db) -> set[str]:
+    try:
+        return {
+            str(row[0]).strip()
+            for row in db.execute("SELECT DISTINCT upload_id FROM uploads").fetchall()
+            if str(row[0]).strip()
+        }
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower() and "uploads" in str(exc).lower():
+            log_event("WARNING", "Recent projects loaded without uploads table; falling back to snapshot-only filtering")
+            return set()
+        raise
 
 @router.get("/dashboard/recent-projects", response_model=List[RecentProject])
 def get_recent_projects():
@@ -52,11 +67,7 @@ WHERE pa.rowid IN (
 ORDER BY pa.created_at DESC
 """).fetchall()
 
-        upload_ids = {
-            str(row[0]).strip()
-            for row in db.execute("SELECT DISTINCT upload_id FROM uploads").fetchall()
-            if str(row[0]).strip()
-        }
+        upload_ids = _load_upload_ids(db)
 
     projects = []
 
