@@ -132,6 +132,7 @@ function activateSettingsTab(tab = "general") {
 }
 
 async function ensureConsentState() {
+  // Reuse the shared consent 
   try {
     latestConsentState = await refreshConsentUI();
   } catch (_) {
@@ -145,6 +146,7 @@ async function ensureConsentState() {
 }
 
 function showConsentRequiredSettings(message = "Grant consent in Privacy & Consent before using Ask Sienna.") {
+  // Ask Sienna is gated by consent
   showSavedPage("settings", "settings-page");
   activateSettingsTab("privacy");
   renderSettingsProfile();
@@ -547,6 +549,7 @@ export async function initAuthFlow() {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
       if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
+        // Public mode can only stay on the consent tab inside Setting
         activateSettingsTab("privacy");
         renderSettingsProfile();
         openSettingsAndPromptLogin(tab);
@@ -621,6 +624,7 @@ export async function initAuthFlow() {
       if (tabKey === "chat") {
         const consentState = await ensureConsentState();
         if (!consentState?.external_consent) {
+          // Block Sienna before opening the page 
           showConsentRequiredSettings();
           return false;
         }

@@ -80,6 +80,7 @@ function setConsentSummary(state) {
 }
 
 export function setConsentSettingsMessage(message = "") {
+  // Keep the latest message 
   pendingConsentSettingsMessage = message;
   const msg = document.getElementById("consent-settings-msg");
   if (!msg) return;
