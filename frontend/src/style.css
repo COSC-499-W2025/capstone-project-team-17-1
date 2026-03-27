@@ -6609,6 +6609,21 @@ body.light .export-modal-footer {
   border-color: rgba(24, 216, 255, 0.5);
 }
 
+.sienna-project-select.attention {
+  border-color: rgba(255, 120, 120, 0.92);
+  box-shadow: 0 0 0 3px rgba(255, 120, 120, 0.18);
+}
+
+.sienna-project-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #fca5a5;
+}
+
+.sienna-project-hint.hidden {
+  display: none;
+}
+
 .sienna-voice-toggle {
   display: inline-flex;
   align-items: center;
