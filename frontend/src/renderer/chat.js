@@ -8,6 +8,7 @@ const PROJECT_STORAGE_KEY = "loom_sienna_project_id_v1";
 const VOICE_STORAGE_KEY = "loom_sienna_voice_v1";
 
 const SIENNA_GREETING = "Hello, I'm Sienna, your Loom AI copilot. How can I help you today?";
+const SELECT_PROJECT_MESSAGE = "Select a project first to chat with Sienna.";
 
 function safeParse(raw, fallback) {
   try {
@@ -58,10 +59,12 @@ export function initChat() {
   const clearBtn = document.getElementById("sienna-clear-btn");
   const errorEl = document.getElementById("sienna-error");
   const projectSelectEl = document.getElementById("sienna-project-select");
+  const projectHintEl = document.getElementById("sienna-project-hint");
   const voiceToggleEl = document.getElementById("sienna-voice-toggle");
   const emptyStateEl = document.getElementById("sienna-empty-state");
+  const composerEl = document.querySelector(".sienna-composer");
 
-  if (!chatPage || !messagesEl || !inputEl || !sendBtn || !micBtn || !inputShellEl || !projectSelectEl || !voiceToggleEl || !emptyStateEl) {
+  if (!chatPage || !messagesEl || !inputEl || !sendBtn || !micBtn || !inputShellEl || !projectSelectEl || !projectHintEl || !voiceToggleEl || !emptyStateEl || !composerEl) {
     console.warn("[sienna] Ask Sienna elements not found. Skipping init.");
     return;
   }
@@ -203,6 +206,36 @@ export function initChat() {
     scrollToBottom(true);
   }
 
+  function ensureSystemAssistantMessage(content) {
+    const text = String(content || "").trim();
+    if (!text) return;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === "assistant" && String(lastMessage.content || "").trim() === text) {
+      return;
+    }
+    messages.push({ role: "assistant", content: text });
+    saveState();
+    renderMessages(false);
+  }
+
+  function promptProjectSelection() {
+    setError(SELECT_PROJECT_MESSAGE, "warning");
+    projectHintEl.classList.remove("hidden");
+    projectSelectEl.classList.add("attention");
+    ensureSystemAssistantMessage(SELECT_PROJECT_MESSAGE);
+  }
+
+  function maybePromptProjectSelection() {
+    if (!selectedProjectId) {
+      promptProjectSelection();
+    }
+  }
+
+  function clearProjectSelectionPrompt() {
+    projectHintEl.classList.add("hidden");
+    projectSelectEl.classList.remove("attention");
+  }
+
   async function playReplyAudio(payload) {
     if (!voiceEnabled) return;
     void voicePlayer.playReplyAudio({
@@ -312,7 +345,7 @@ export function initChat() {
 
     if (!selectedProjectId) {
       setComposerEnabled(false);
-      setError("Select a project first to chat with Sienna.", "warning");
+      promptProjectSelection();
       return;
     }
     if (!externalConsentGranted) {
@@ -398,6 +431,7 @@ export function initChat() {
     selectedProjectId = projectId;
     projectSelectEl.value = projectId;
     saveState();
+    clearProjectSelectionPrompt();
     setComposerEnabled(true);
     updateSendEnabled();
     setError("");
@@ -420,10 +454,26 @@ export function initChat() {
   }
 
   sendBtn.addEventListener("click", () => sendMessage());
+  sendBtn.addEventListener("click", () => {
+    if (!selectedProjectId) {
+      promptProjectSelection();
+    }
+  });
   micBtn.addEventListener("click", () => {
     if (!speechInput.supported) return;
     setError("");
     speechInput.toggle();
+  });
+  inputShellEl.addEventListener("click", () => {
+    if (!selectedProjectId) {
+      promptProjectSelection();
+    }
+  });
+  composerEl.addEventListener("pointerdown", () => {
+    maybePromptProjectSelection();
+  }, true);
+  inputEl.addEventListener("focus", () => {
+    maybePromptProjectSelection();
   });
   inputEl.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -461,8 +511,9 @@ export function initChat() {
     saveState();
     setComposerEnabled(Boolean(selectedProjectId));
     if (!selectedProjectId) {
-      setError("Select a project first to chat with Sienna.", "warning");
+      promptProjectSelection();
     } else if (externalConsentGranted) {
+      clearProjectSelectionPrompt();
       setError("");
     }
   });
@@ -480,10 +531,12 @@ export function initChat() {
     await Promise.all([loadConsentState(), loadProjects()]);
     await ensureGreeting();
     if (!selectedProjectId) {
-      setError("Select a project first to chat with Sienna.", "warning");
+      promptProjectSelection();
     } else if (!externalConsentGranted) {
+      clearProjectSelectionPrompt();
       setError("External AI consent is required for Ask Sienna. Open Settings > Privacy & Consent.", "warning");
     } else {
+      clearProjectSelectionPrompt();
       setError("");
     }
     renderMessages(false);
@@ -510,6 +563,7 @@ export function initChat() {
     if (!externalConsentGranted) {
       setError("External AI consent is required for Ask Sienna. Open Settings > Privacy & Consent.", "warning");
     } else if (selectedProjectId) {
+      clearProjectSelectionPrompt();
       setError("");
     }
     setComposerEnabled(Boolean(selectedProjectId));

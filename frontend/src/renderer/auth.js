@@ -4,7 +4,7 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
-import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
+import { refreshConsentUI, renderConsentSettings, setConsentSettingsMessage } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
 import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
@@ -16,6 +16,11 @@ let currentUser = null;
 let privateModeEnabled = false;
 let pendingPublicPage = null;
 let _educationEntries = [];
+let latestConsentState = {
+  local_consent: false,
+  external_consent: false,
+  bannerVisible: false,
+};
 
 function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -126,6 +131,28 @@ function activateSettingsTab(tab = "general") {
   });
 }
 
+async function ensureConsentState() {
+  // Reuse the shared consent 
+  try {
+    latestConsentState = await refreshConsentUI();
+  } catch (_) {
+    latestConsentState = {
+      local_consent: false,
+      external_consent: false,
+      bannerVisible: false,
+    };
+  }
+  return latestConsentState;
+}
+
+function showConsentRequiredSettings(message = "Grant consent in Privacy & Consent before using Ask Sienna.") {
+  // Ask Sienna is gated by consent
+  showSavedPage("settings", "settings-page");
+  activateSettingsTab("privacy");
+  renderSettingsProfile();
+  setConsentSettingsMessage(message);
+}
+
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
@@ -221,9 +248,10 @@ export async function openSettingsAndPromptLogin(settingsTab = "account") {
     pageId: "settings-page",
     settingsTab: fallbackSettingsTab,
   };
-  activateSettingsTab(settingsTab);
+  activateSettingsTab(fallbackSettingsTab);
   renderSettingsProfile();
   if (shouldRequireLoginForSettingsTab(settingsTab, currentUser)) {
+    setConsentSettingsMessage("");
     await openLoginFlow();
   }
 }
@@ -521,9 +549,13 @@ export async function initAuthFlow() {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
       if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
+        // Public mode can only stay on the consent tab inside Setting
+        activateSettingsTab("privacy");
+        renderSettingsProfile();
         openSettingsAndPromptLogin(tab);
         return;
       }
+      setConsentSettingsMessage("");
       activateSettingsTab(tab);
     });
   });
@@ -589,6 +621,14 @@ export async function initAuthFlow() {
         await openLoginFlow();
         return false;
       }
+      if (tabKey === "chat") {
+        const consentState = await ensureConsentState();
+        if (!consentState?.external_consent) {
+          // Block Sienna before opening the page 
+          showConsentRequiredSettings();
+          return false;
+        }
+      }
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
         renderSettingsProfile();
@@ -596,6 +636,7 @@ export async function initAuthFlow() {
           activateSettingsTab("general");
         } else {
           activateSettingsTab("privacy");
+          setConsentSettingsMessage("");
         }
       }
       if (tabKey === "customization") {
@@ -615,7 +656,7 @@ export async function initAuthFlow() {
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      const consentState = await refreshConsentUI();
+      const consentState = await ensureConsentState();
       if (!consentState?.bannerVisible) {
         maybeShowOnboardingForAudience(user.username || user.id || "guest");
       }
@@ -637,7 +678,7 @@ export async function initAuthFlow() {
         loadMostUsedSkills(),
       ]);
       notifyPortfolioDataUpdated();
-      const consentState = await refreshConsentUI();
+      const consentState = await ensureConsentState();
       if (!consentState?.bannerVisible) {
         maybeShowOnboardingForAudience("guest");
       }
@@ -700,7 +741,7 @@ export async function initAuthFlow() {
     goToPage("dashboard", "dashboard-page");
 
     await syncCloudDbAndRefresh();
-    const consentState = await refreshConsentUI();
+    const consentState = await ensureConsentState();
     if (!consentState?.bannerVisible) {
       maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
     }
@@ -714,6 +755,11 @@ export async function initAuthFlow() {
   });
 
  window.addEventListener("consent:state-changed", (event) => {
+  latestConsentState = {
+    local_consent: Boolean(event.detail?.local_consent),
+    external_consent: Boolean(event.detail?.external_consent),
+    bannerVisible: Boolean(event.detail?.bannerVisible),
+  };
   if (event.detail?.bannerVisible) return;
   maybeShowOnboardingForAudience(currentUser?.username || currentUser?.id || "guest");
  });
