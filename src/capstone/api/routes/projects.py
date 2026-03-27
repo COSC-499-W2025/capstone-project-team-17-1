@@ -13,6 +13,9 @@ from capstone.activity_log import log_event
 from capstone import file_store, storage
 from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
+from capstone.zip_analyzer import ZipAnalyzer
+from capstone.config import Preferences
+from capstone.modes import ModeResolution
 from capstone.resume_retrieval import build_resume_project_item
 from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
 import capstone.storage as storage_module
@@ -302,9 +305,11 @@ def _generate_project_id_from_zip(conn, tmp_zip_path: Path, filename: str) -> st
 
 @router.post("/upload")
 async def upload_project(
-    project_id: str,
-    file: UploadFile = File(...),   
+    request: Request,
+    project_id: str = "",
+    file: UploadFile = File(...),
 ):
+    _restore_user_from_request(request)
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -348,25 +353,17 @@ async def upload_project(
 
     project_id = stored["upload_id"]
     
-    manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
-    
-    snapshot = {
-        "project_id": project_id,
-        "skills": manifest.get("skills", {}),
-        "root_name": manifest.get("root_name"),
-        "file_count": len(manifest.get("files", [])),
-        "file_summary": _build_file_summary_from_zip(Path(stored["path"])),
-    }
-    
-    storage.store_analysis_snapshot(
-        conn,
+    analyzer = ZipAnalyzer()
+    analyzer.analyze(
+        zip_path=Path(stored["path"]),
+        metadata_path=Path("data") / f"{project_id}_metadata.jsonl",
+        summary_path=Path("data") / f"{project_id}_summary.json",
+        mode=ModeResolution(requested="local", resolved="local", reason="project upload"),
+        preferences=Preferences(),
         project_id=project_id,
-        classification="unknown",
-        primary_contributor=None,
-        snapshot=snapshot,
-        zip_path = stored["path"] 
+        conn=conn,
     )
-    log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
+    log_event("SUCCESS", f"Full analysis snapshot stored · Project: {project_id}")
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
     # Pass email alongside the git author name so upsert_user can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
@@ -411,7 +408,7 @@ async def upload_project(
 
 
 @router.post("/upload-bundle")
-async def upload_project_bundle(file: UploadFile = File(...)):
+async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
     """Upload a multi-project zip bundle.
 
     Each top-level directory inside the zip is treated as a separate project
@@ -420,6 +417,7 @@ async def upload_project_bundle(file: UploadFile = File(...)):
     If the zip contains only one top-level directory it is stored the same as
     a regular ``POST /projects/upload`` call.
     """
+    _restore_user_from_request(request)
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -485,20 +483,15 @@ async def upload_project_bundle(file: UploadFile = File(...)):
                 project_id = stored["upload_id"]
 
                 manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
-                snapshot = {
-                    "project_id": project_id,
-                    "skills": manifest.get("skills", {}),
-                    "root_name": manifest.get("root_name") or sub_name,
-                    "file_count": len(manifest.get("files", [])),
-                    "source": "multi_project_zip",
-                    "file_summary": _build_file_summary_from_zip(sub_tmp_path),
-                }
-                storage.store_analysis_snapshot(
-                    conn,
+                analyzer = ZipAnalyzer()
+                summary = analyzer.analyze(
+                    zip_path=Path(stored["path"]),
+                    metadata_path=Path("data") / f"{project_id}_metadata.jsonl",
+                    summary_path=Path("data") / f"{project_id}_summary.json",
+                    mode=ModeResolution(requested="local", resolved="local", reason="bundle upload"),
+                    preferences=Preferences(),
                     project_id=project_id,
-                    classification="unknown",
-                    primary_contributor=None,
-                    snapshot=snapshot,
+                    conn=conn,
                 )
 
                 try:
@@ -518,8 +511,8 @@ async def upload_project_bundle(file: UploadFile = File(...)):
                         "hash": stored["hash"],
                         "dedup": stored["dedup"],
                         "size_bytes": stored["size_bytes"],
-                        "file_count": snapshot["file_count"],
-                        "skills": snapshot["skills"],
+                        "file_count": int((summary.get("file_summary") or {}).get("file_count", 0)),
+                        "skills": summary.get("skills", []),
                     }
                 )
                 if storage_module.CURRENT_USER:
@@ -690,8 +683,14 @@ def delete_project(id: str):
                 (file_id,),
             )
 
-    # Always remove shared analysis / contributor records
+    # Always remove shared analysis / contributor records and related metadata
     conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM error_analysis_results WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM project_metadata WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM contributor_stats WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM github_projects WHERE project_id = ?", (id,))
     conn.commit()

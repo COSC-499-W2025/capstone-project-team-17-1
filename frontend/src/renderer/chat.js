@@ -1,6 +1,7 @@
 import { authFetch } from "./auth.js";
 import { createSiennaVoicePlayer } from "./AskSienna/voicePlayer.js";
 import { createSiennaSpeechInput } from "./AskSienna/speechInput.mjs";
+import { renderMarkdown } from "./AskSienna/markdown.js";
 
 const CHAT_STORAGE_KEY = "loom_sienna_history_v1";
 const PROJECT_STORAGE_KEY = "loom_sienna_project_id_v1";
@@ -22,6 +23,12 @@ function messageHtmlSafe(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function renderAssistantMessageHtml(content, index) {
+  const markdownHtml = renderMarkdown(content || "");
+  return `<div class="sienna-markdown">${markdownHtml}</div>
+    <div class="sienna-message-actions"><button class="sienna-replay-btn" data-replay-index="${index}" type="button">Replay</button></div>`;
 }
 
 function isDebugIntent(text) {
@@ -97,6 +104,7 @@ export function initChat() {
   let sending = false;
   let greeted = false;
   let availableProjects = [];
+  let pendingAutoPrompt = null;
 
   voiceToggleEl.checked = voiceEnabled;
 
@@ -174,13 +182,10 @@ export function initChat() {
 
       const bubble = document.createElement("div");
       bubble.className = `sienna-bubble ${isUser ? "user" : "assistant"}`;
-      bubble.innerHTML = messageHtmlSafe(message.content).replaceAll("\n", "<br>");
-
-      if (!isUser) {
-        const actions = document.createElement("div");
-        actions.className = "sienna-message-actions";
-        actions.innerHTML = `<button class="sienna-replay-btn" data-replay-index="${index}" type="button">Replay</button>`;
-        bubble.appendChild(actions);
+      if (isUser) {
+        bubble.innerHTML = messageHtmlSafe(message.content).replaceAll("\n", "<br>");
+      } else {
+        bubble.innerHTML = renderAssistantMessageHtml(message.content, index);
       }
 
       row.appendChild(bubble);
@@ -226,7 +231,7 @@ export function initChat() {
       const bubble = messagesEl.querySelector(".sienna-message-row:last-child .sienna-bubble.assistant");
       if (bubble) {
         // Keep replay action pinned at the bottom while text streams.
-        bubble.innerHTML = `${messageHtmlSafe(message.content).replaceAll("\n", "<br>")}<div class="sienna-message-actions"><button class="sienna-replay-btn" data-replay-index="${messages.length - 1}" type="button">Replay</button></div>`;
+        bubble.innerHTML = renderAssistantMessageHtml(message.content, messages.length - 1);
       }
       scrollToBottom();
       // eslint-disable-next-line no-await-in-loop
@@ -377,6 +382,29 @@ export function initChat() {
     }
   }
 
+  async function handleAutoPrompt(detail = {}) {
+    const projectId = String(detail.projectId || "").trim();
+    const message = String(detail.message || "").trim();
+    if (!projectId || !message) return;
+
+    if (!availableProjects.length) {
+      await Promise.all([loadConsentState(), loadProjects()]);
+    }
+    const exists = availableProjects.some((p) => p.project_id === projectId);
+    if (!exists) {
+      setError(`Project "${projectId}" is not available for Ask Sienna.`, "warning");
+      return;
+    }
+
+    selectedProjectId = projectId;
+    projectSelectEl.value = projectId;
+    saveState();
+    setComposerEnabled(true);
+    updateSendEnabled();
+    setError("");
+    await sendMessage(message);
+  }
+
   function clearConversation() {
     voicePlayer.stop();
     speechInput.stop();
@@ -462,6 +490,20 @@ export function initChat() {
     renderMessages(false);
     autoResizeComposer();
     updateSendEnabled();
+    if (pendingAutoPrompt) {
+      const queued = pendingAutoPrompt;
+      pendingAutoPrompt = null;
+      await handleAutoPrompt(queued);
+    }
+  });
+
+  document.addEventListener("sienna:autoprompt", (event) => {
+    const detail = event?.detail || {};
+    if (!chatPage.classList.contains("active")) {
+      pendingAutoPrompt = detail;
+      return;
+    }
+    void handleAutoPrompt(detail);
   });
 
   window.addEventListener("consent:state-changed", (event) => {

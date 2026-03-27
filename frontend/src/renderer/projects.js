@@ -3,6 +3,7 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
+import { authFetch, hasAuthToken } from "./auth.js";
 
 export async function fetchProjects() {
   const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
@@ -120,9 +121,9 @@ export async function loadProjects() {
             throw new Error("Pull failed");
           }
 
-          await fetch("http://127.0.0.1:8002/cloud/db/upload", {
-            method: "POST",
-          });
+          if (hasAuthToken()) {
+            await authFetch("/cloud/db/upload", { method: "POST" });
+          }
 
           pullBtn.innerText = "Updated ✓";
 

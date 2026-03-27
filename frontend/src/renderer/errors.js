@@ -1,4 +1,5 @@
 import { authFetch, openSettingsAndPromptLogin } from "./auth.js";
+import { switchPage } from "./navigation.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -205,9 +206,18 @@ if (data.status === "ok") {
       </div>
     `;
 
-    // Fake fix button behavior (future hook)
     box.querySelector(".fix-btn")?.addEventListener("click", () => {
-      alert(`Opening fix flow for "${error.title}" 🚀`);
+      const prompt = `Please help me fix this issue in project "${error.project_id}".\n\nError: ${error.title}\nDetails: ${error.detail}`;
+      const siennaTab = document.querySelector('.nav-tab[data-tab="chat"]');
+      document.querySelectorAll(".nav-tab").forEach((t) => t.classList.remove("active"));
+      siennaTab?.classList.add("active");
+      switchPage("chat-page");
+      document.dispatchEvent(new CustomEvent("sienna:autoprompt", {
+        detail: {
+          projectId: error.project_id,
+          message: prompt,
+        },
+      }));
     });
 
     container.appendChild(box);

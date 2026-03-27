@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
-from capstone.storage import open_db, save_github_token, get_github_token
+from capstone.storage import open_db, save_github_token, get_github_token, fetch_latest_snapshot, store_analysis_snapshot
 import capstone.storage as storage_module
 from capstone.system.cloud_storage import upload_database, upload_project_zip
 from capstone.github_contributors import sync_contributor_stats
@@ -19,6 +19,45 @@ from capstone.github_contributors import sync_contributor_stats
 router = APIRouter(prefix="/github", tags=["github"])
 
 GITHUB_API = "https://api.github.com"
+def _is_cloud_sync_user(username: str | None) -> bool:
+    lowered = (username or "").strip().lower()
+    return bool(lowered and lowered not in {"guest", "guestuser"})
+
+
+def _fetch_latest_commit_sha(owner: str, repo: str, branch: str, headers: dict) -> str | None:
+    try:
+        commits_url = f"{GITHUB_API}/repos/{owner}/{repo}/commits"
+        latest_res = requests.get(
+            commits_url,
+            headers=headers,
+            params={"sha": branch, "per_page": 1},
+            timeout=10,
+        )
+        if latest_res.status_code != 200:
+            return None
+        latest_data = latest_res.json()
+        if not latest_data:
+            return None
+        return str(latest_data[0].get("sha") or "").strip() or None
+    except Exception:
+        return None
+
+
+def _store_commit_sha_in_latest_snapshot(conn, project_id: str, commit_sha: str | None) -> None:
+    if not commit_sha:
+        return
+    current = fetch_latest_snapshot(conn, project_id) or {}
+    current["github_latest_commit_sha"] = commit_sha
+    classification = ((current.get("collaboration") or {}).get("classification") or "unknown")
+    primary_contributor = (current.get("collaboration") or {}).get("primary_contributor")
+    store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification=classification,
+        primary_contributor=primary_contributor,
+        snapshot=current,
+    )
+
 
 
 def _patch_github_commit_dates(
@@ -169,7 +208,8 @@ def import_repository(
     owner: str,
     repo: str,
     project_id: str,
-    branch: str = "main"
+    branch: str = "main",
+    refresh: bool = False,
 ):
     """
     Downloads a GitHub repository as a zip archive and runs the ZipAnalyzer.
@@ -180,6 +220,24 @@ def import_repository(
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     headers = {"Authorization": f"Bearer {token}"}
+    conn = open_db()
+    try:
+        existing_snapshot = fetch_latest_snapshot(conn, project_id) or {}
+        existing_github = conn.execute(
+            "SELECT 1 FROM github_projects WHERE project_id = ? LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        if existing_snapshot and existing_github and not refresh:
+            return {
+                "status": "cached",
+                "project_id": project_id,
+                "repository": f"https://github.com/{owner}/{repo}",
+                "summary": existing_snapshot,
+                "reason": "snapshot_exists",
+            }
+    finally:
+        conn.close()
+    latest_commit_sha = _fetch_latest_commit_sha(owner, repo, branch, headers)
 
     zip_url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{branch}"
 
@@ -237,6 +295,7 @@ def import_repository(
             # GitHub zipballs have no .git directory, so ZipAnalyzer cannot
             # extract timestamps from git log — we fetch them here instead.
             _patch_github_commit_dates(conn, project_id, owner, repo, branch, headers, summary)
+            _store_commit_sha_in_latest_snapshot(conn, project_id, latest_commit_sha)
 
             # Sync full contributor stats (commits, PRs, issues, reviews) via GitHub API.
             # This enriches the contributor_stats table so resume generation can show
@@ -250,7 +309,7 @@ def import_repository(
                 )
             except Exception:
                 pass  # non-fatal — resume will fall back to git-log commit data
-            if storage_module.CURRENT_USER:
+            if _is_cloud_sync_user(storage_module.CURRENT_USER):
                 upload_project_zip(
                     storage_module.CURRENT_USER,
                     project_id,
@@ -276,7 +335,7 @@ def import_repository(
 # ------------------------------------------------
 
 @router.post("/pull")
-def pull_repository(project_id: str):
+def pull_repository(project_id: str, refresh: bool = False):
 
     token = get_github_token()
     if not token:
@@ -292,9 +351,32 @@ def pull_repository(project_id: str):
     ).fetchone()
 
     if not row:
+        conn.close()
         raise HTTPException(404, "Project is not a GitHub project")
 
+    existing_snapshot = fetch_latest_snapshot(conn, project_id) or {}
+    if existing_snapshot and not refresh:
+        conn.close()
+        return {
+            "status": "cached",
+            "project_id": project_id,
+            "summary": existing_snapshot,
+            "reason": "snapshot_exists",
+        }
+
     owner, repo, branch = row
+    latest_commit_sha = _fetch_latest_commit_sha(owner, repo, branch, headers)
+    cached_sha = str(existing_snapshot.get("github_latest_commit_sha") or "").strip() or None
+
+    if latest_commit_sha and cached_sha and latest_commit_sha == cached_sha:
+        conn.close()
+        return {
+            "status": "cached",
+            "project_id": project_id,
+            "summary": existing_snapshot,
+            "reason": "no_remote_changes",
+            "commit_sha": latest_commit_sha,
+        }
 
     zip_url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{branch}"
 
@@ -321,8 +403,10 @@ def pull_repository(project_id: str):
             mode=ModeResolution(requested="local", resolved="local", reason="git pull"),
             preferences=Preferences(),
             project_id=project_id,
+            conn=conn,
             skip_contributor_storage=True,
         )
+        _store_commit_sha_in_latest_snapshot(conn, project_id, latest_commit_sha)
 
         try:
             repo_url = f"https://github.com/{owner}/{repo}"
@@ -334,7 +418,7 @@ def pull_repository(project_id: str):
         except Exception:
             pass  # non-fatal
 
-        if storage_module.CURRENT_USER:
+        if _is_cloud_sync_user(storage_module.CURRENT_USER):
             upload_project_zip(
                 storage_module.CURRENT_USER,
                 project_id,
@@ -366,7 +450,7 @@ def github_auth_status():
 def github_login(token: str):
     save_github_token(token)
 
-    if storage_module.CURRENT_USER:
+    if _is_cloud_sync_user(storage_module.CURRENT_USER):
         upload_database(storage_module.CURRENT_USER)
 
     return {

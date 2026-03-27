@@ -6583,6 +6583,45 @@ transition: all 0.2s ease;
   background: rgba(255, 255, 255, 0.12);
 }
 
+.sienna-markdown h1,
+.sienna-markdown h2,
+.sienna-markdown h3,
+.sienna-markdown h4,
+.sienna-markdown h5,
+.sienna-markdown h6 {
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+.sienna-markdown p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.sienna-markdown ul,
+.sienna-markdown ol,
+.pv-sienna-msg ul,
+.pv-sienna-msg ol {
+  margin: 6px 0 8px 18px;
+  padding: 0;
+}
+
+.sienna-markdown pre,
+.pv-sienna-msg pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sienna-markdown code,
+.pv-sienna-msg code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.9em;
+}
+
 .sienna-composer {
   position: sticky;
   bottom: 0;
