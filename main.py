@@ -38,15 +38,6 @@ import capstone.consent as consent_mod
 import capstone.config as config_mod 
 from capstone.resume_retrieval import (
     build_resume_project_summary,
-    build_resume_preview,
-    delete_resume_project_description,
-    generate_resume_project_descriptions,
-    get_resume_entry,
-    get_resume_project_description,
-    insert_resume_entry,
-    query_resume_entries,
-    update_resume_entry,
-    upsert_resume_project_description,
 )
 from capstone.storage import (
     fetch_github_source,

@@ -679,6 +679,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE uploads_old")
         conn.commit()
 
+    # M14: drop old resume system tables
+    for old_table in ("resume_entries", "resume_entry_links", "resume_project_descriptions"):
+        if conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{old_table}'").fetchone():
+            conn.execute(f"DROP TABLE {old_table}")
+    conn.commit()
+
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""

@@ -4,12 +4,6 @@ from fastapi import APIRouter, HTTPException, Request
 from capstone.activity_log import log_event
 
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, _parse_view
-from capstone.resume_retrieval import (
-    build_resume_project_summary,
-    ensure_resume_schema,
-    get_resume_project_description,
-    upsert_resume_project_description,
-)
 from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots
 from capstone.top_project_summaries import generate_top_project_summaries, export_markdown
 
@@ -128,21 +122,6 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
         if row:
             user_role = "primary_contributor"
 
-    if view == "resume":
-        with _db_session(_require_db()) as c:
-            ensure_resume_schema(c)
-            item = get_resume_project_description(c, projectId)
-        if not item:
-            log_event("ERROR", f"No resume found · Project: {projectId}")
-            raise HTTPException(status_code=404, detail="No resume project found")
-        
-        log_event("INFO", f"Resume accessed · Project: {projectId}")
-        return {
-            "data": item.to_dict(),
-            "meta": {"projectId": projectId, "view": "resume", "user": user, "userRole": user_role},
-            "error": None,
-        }
-
     with _db_session(_require_db()) as c:
         ensure_indexes(c)
         data = get_latest_snapshot(c, projectId)
@@ -187,94 +166,3 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
         "error": None,
     }
 
-@router.get("/portfolio/showcase")
-def get_portfolio_showcase_query(request: Request, projectId: str, user: Optional[str] = None):
-    return get_portfolio_showcase(projectId, request, user=user)
-
-@router.get("/portfolio/{id}")
-def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None):
-    _check_auth(request)
-    user_role = None
-    if user:
-        with _db_session(_require_db()) as c:
-            row = c.execute(
-                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
-                (id, user),
-            ).fetchone()
-        if row:
-            user_role = "primary_contributor"
-    with _db_session(_require_db()) as c:
-        ensure_resume_schema(c)
-        item = get_resume_project_description(c, id, variant_name="portfolio_showcase")
-        if item:
-            payload = item.to_dict()
-            if user_role:
-                payload["user_role"] = user_role
-            return {"data": payload, "error": None}
-        snap = get_latest_snapshot(c, id)
-    if not snap:
-        log_event("ERROR", f"Snapshot not found · Project: {project_id}")
-        raise HTTPException(status_code=404, detail="No snapshots found")
-    summary = build_resume_project_summary(id, snap)
-    payload = {"project_id": id, "summary": summary}
-    if user_role:
-        payload["user_role"] = user_role
-    return {"data": payload, "error": None}
-
-@router.post("/portfolio/generate")
-async def generate_portfolio_showcase(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_ids = payload.get("projectIds") or []
-    if not project_ids or not isinstance(project_ids, list):
-        raise HTTPException(status_code=400, detail="projectIds must be a list")
-    results = []
-    with _db_session(_require_db()) as c:
-        ensure_resume_schema(c)
-        for pid in project_ids:
-            snap = get_latest_snapshot(c, str(pid))
-            if not snap:
-                log_event("WARNING", f"Portfolio generation skipped · No snapshot · {pid}")
-                continue
-            summary = build_resume_project_summary(str(pid), snap)
-            item = upsert_resume_project_description(
-                c,
-                project_id=str(pid),
-                summary=summary,
-                variant_name="portfolio_showcase",
-                metadata={"source": "auto"},
-            )
-            results.append(item.to_dict())
-
-            log_event("SUCCESS", f"Portfolio generated · Project: {pid}")
-    return {"data": results, "error": None}
-
-@router.post("/portfolio/showcase/edit")
-async def edit_portfolio_showcase_query(request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    project_id = (payload.get("projectId") or "").strip()
-    summary = (payload.get("summary") or "").strip()
-    if not project_id or not summary:
-        raise HTTPException(status_code=400, detail="projectId and summary are required")
-    return await edit_portfolio_showcase(project_id, request)
-
-@router.post("/portfolio/{id}/edit")
-async def edit_portfolio_showcase(id: str, request: Request):
-    _check_auth(request)
-    payload = await _get_payload(request)
-    summary = (payload.get("summary") or "").strip()
-    if not summary:
-        raise HTTPException(status_code=400, detail="summary is required")
-    with _db_session(_require_db()) as c:
-        ensure_resume_schema(c)
-        item = upsert_resume_project_description(
-            c,
-            project_id=id,
-            summary=summary,
-            variant_name="portfolio_showcase",
-            metadata={"source": "custom"},
-        )
-
-    log_event("INFO", f"Portfolio updated · Project: {project_id}")
-    return {"data": item.to_dict(), "error": None}

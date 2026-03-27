@@ -16,7 +16,6 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from capstone.api.server import create_app
 from capstone.api.portfolio_helpers import ensure_indexes
-from capstone.resume_retrieval import ensure_resume_schema
 from capstone import storage
 from fastapi.testclient import TestClient
 
@@ -78,7 +77,6 @@ class ApiEndpointTests(unittest.TestCase):
         self.con = sqlite3.connect(db_path)
         self.con.executescript(SCHEMA)
         ensure_indexes(self.con)
-        ensure_resume_schema(self.con)
         seed_project(self.con, "demo")
 
         try:
