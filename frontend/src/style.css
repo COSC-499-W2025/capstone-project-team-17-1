@@ -2337,9 +2337,18 @@ transition: all 0.2s ease;
   backdrop-filter: blur(12px);
 }
 
-.portfolio-hero-card {
-  grid-column: 1 / -1;
+.live-preview-project-card {
+  width: 100%;
   overflow: hidden;
+}
+
+.live-preview-hero-image {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
 }
 
 .portfolio-timeline-card {
@@ -5498,6 +5507,162 @@ transition: all 0.2s ease;
 
 .live-preview-empty {
   opacity: 0.75;
+}
+
+/* ============================================================
+   Portfolio Template Customization
+   ============================================================ */
+
+.portfolio-template-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.portfolio-template-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 14px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.portfolio-template-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(158, 207, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.portfolio-template-card.active {
+  border-color: rgba(77, 166, 255, 0.55);
+  background: rgba(30, 144, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(77, 166, 255, 0.18);
+}
+
+.portfolio-template-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.portfolio-template-copy {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.45;
+}
+
+.portfolio-upload-block {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.portfolio-upload-dropzone {
+  border: 1px dashed rgba(158, 207, 255, 0.24);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 18px;
+  text-align: center;
+}
+
+.portfolio-upload-dropzone input[type="file"] {
+  display: none;
+}
+
+.portfolio-upload-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.portfolio-upload-help {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.portfolio-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-image-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.portfolio-image-preview-wrap {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.portfolio-image-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.portfolio-image-cover-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.26);
+  color: #a7f3d0;
+}
+
+.portfolio-image-meta {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portfolio-image-caption {
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.86;
+}
+
+.portfolio-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.portfolio-image-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portfolio-image-btn.danger {
+  border-color: rgba(255, 107, 107, 0.24);
+  color: #ff9b9b;
 }
 
 /* featured order  */
