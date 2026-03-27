@@ -4,7 +4,12 @@ import {
   getProjectOverride,
   loadPortfolioCustomization,
 } from "./portfolioState.js";
-import { sortProjectsByRankedIds } from "./portfolioShared.mjs";
+import { 
+  buildPortfolioEntryMap,
+  buildSkillsTimelineMarkup,
+  buildTopProjectsMarkup,
+  sortProjectsByRankedIds 
+} from "./portfolioShared.mjs";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -189,6 +194,35 @@ async function fetchActivityHeatmap() {
   }
   const payload = await res.json();
   return payload?.data || { cells: [], maxCount: 0, projectCount: 0 };
+}
+
+async function fetchProjectPortfolioEntry(projectId) {
+  const res = await authFetch(`/portfolio/${encodeURIComponent(projectId)}`);
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch portfolio entry for ${projectId}: ${res.status}`);
+  }
+  const payload = await res.json();
+  return payload?.data || null;
+}
+
+async function fetchPortfolioEntryMap(projects) {
+  const results = await Promise.allSettled(
+    projects.map((project) => fetchProjectPortfolioEntry(project.project_id))
+  );
+
+  const entries = [];
+
+  results.forEach((result) => {
+    if (result.status !== "fulfilled" || !result.value) return;
+    entries.push(result.value);
+  });
+
+  return buildPortfolioEntryMap(entries);
+}
+
+function getPortfolioImageUrl(projectId, imageId) {
+  return `${API_BASE}/portfolio/${encodeURIComponent(projectId)}/images/${encodeURIComponent(imageId)}/file`;
 }
 
 function buildProfile(summaryData) {
@@ -524,7 +558,7 @@ function renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds
   `;
 }
 
-function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
+function renderTopProjects(projects, summaryData, rankedTopProjectIds = [], portfolioEntryMap = new Map()) {
   const container = document.getElementById("top-projects-container");
   if (!container) return;
 
@@ -537,100 +571,16 @@ function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
     return;
   }
 
-  const projectDetailsMap = getProjectDetailsMap(summaryData);
-  const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
+  const rankedProjects = getRankedTopProjects(projects, rankedTopProjectIds);
 
-  container.innerHTML = topProjects
-    .map((project, index) => {
-      const details = projectDetailsMap.get(project.project_id);
-      const override = getProjectOverride(project.project_id) || {};
-
-      const title = details?.title || project.project_id;
-      const summary =
-        override.portfolioBlurb ||
-        details?.summary ||
-        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
-
-      const technologies = dedupeStrings(details?.technologies).slice(0, 4);
-      const keyRole = override.keyRole?.trim();
-      const evidence = override.evidence?.trim();
-      const contributionSummary = buildContributionSummary(project, details, override);
-      const impactSummary = buildImpactSummary(project, details, override);
-      const evolutionSteps = buildProjectEvolutionSteps(project, details, override);
-
-      return `
-        <div class="top-project-card">
-          <div class="top-project-rank">#${index + 1}</div>
-          <div class="top-project-body">
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(summary)}</p>
-
-            ${
-              contributionSummary
-                ? `
-                  <div class="portfolio-detail-block">
-                    <span class="portfolio-detail-label">Contribution</span>
-                    <p>${escapeHtml(contributionSummary)}</p>
-                  </div>
-                `
-                : ""
-            }
-
-            ${
-              impactSummary
-                ? `
-                  <!-- Keep success evidence behind an explicit toggle in both public and private portfolio views. -->
-                  <div class="project-details">
-                    <button
-                      class="project-details-toggle"
-                      type="button"
-                      data-evidence-details="${escapeHtml(project.project_id)}"
-                    >
-                      View Details
-                    </button>
-                    <div
-                      class="project-details-panel hidden"
-                      data-evidence-details-panel="${escapeHtml(project.project_id)}"
-                    >
-                      <div class="project-story-block">
-                        <span class="project-story-label">Evidence of Success</span>
-                        <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
-                      </div>
-                      <div class="project-evolution-block">
-                        <span class="portfolio-detail-label">Project Evolution</span>
-                        <div class="project-evolution-steps">
-                          ${evolutionSteps
-                            .map(
-                              (step, stepIndex) => `
-                                <div class="project-evolution-step">
-                                  <div class="project-evolution-marker">${stepIndex + 1}</div>
-                                  <div>
-                                    <div class="project-evolution-title">${escapeHtml(step.label)}</div>
-                                    <p class="project-evolution-text">${escapeHtml(step.text)}</p>
-                                  </div>
-                                </div>
-                              `
-                            )
-                            .join("")}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                `
-                : ""
-            }
-
-            <div class="project-stack">
-              <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
-              <span class="stack-pill">${project.total_files} Files</span>
-              <span class="stack-pill">${project.total_skills} Skills</span>
-              ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  container.innerHTML = buildTopProjectsMarkup({
+    projects: rankedProjects,
+    summaryData,
+    isPrivateMode: false,
+    getProjectThumbnailUrl: () => "",
+    portfolioEntryMap,
+    getPortfolioImageUrl,
+  });
 }
 
 function renderPortfolioStats(projects, summaryData, timeline = []) {
@@ -744,48 +694,7 @@ function renderSkillsTimeline(timeline) {
     return;
   }
 
-  container.innerHTML = timeline
-    .map((entry) => {
-      const skills = Array.isArray(entry.skills) ? entry.skills : [];
-      const timeLabel = formatTimelineTimestamp(entry.timestamp || entry.year);
-      const projectLabel = String(entry.project_id || "").trim();
-
-      return `
-        <div class="timeline-year-row">
-          <div class="timeline-year">
-            <span class="timeline-dot" aria-hidden="true"></span>
-            <div class="timeline-time-block">
-              <span class="timeline-time-label">${escapeHtml(timeLabel)}</span>
-              ${projectLabel ? `<span class="timeline-project-label">${escapeHtml(projectLabel)}</span>` : ""}
-            </div>
-          </div>
-          <div class="timeline-track">
-            <div class="timeline-skill-pills">
-              ${
-                skills.length
-                  ? skills
-                      .map((skill) => {
-                        const name = skill.name || skill.skill || "unknown";
-                        const weight =
-                          skill.weight !== undefined && skill.weight !== null
-                            ? `<span class="timeline-weight">${Number(skill.weight).toFixed(1)}</span>`
-                            : "";
-
-                        return `
-                          <span class="timeline-skill-pill">
-                            ${escapeHtml(name)} ${weight}
-                          </span>
-                        `;
-                      })
-                      .join("")
-                  : `<span class="timeline-empty">No skills recorded</span>`
-              }
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  container.innerHTML = buildSkillsTimelineMarkup(timeline);
 }
 
 function renderActivityHeatmap(heatmapData) {
@@ -1194,6 +1103,11 @@ export async function loadPortfolio() {
   const rankedTopProjectIds =
     rankedTopProjectsResult.status === "fulfilled" ? rankedTopProjectsResult.value : [];
 
+  const portfolioEntryMap = await fetchPortfolioEntryMap(projects).catch((error) => {
+    console.error("Failed to load portfolio entries:", error);
+    return new Map();
+  });
+
   const profile = buildProfile(summaryData);
 
   if (projectsResult.status === "rejected") {
@@ -1216,7 +1130,7 @@ export async function loadPortfolio() {
   }
 
   renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds);
-  renderTopProjects(projects, summaryData, rankedTopProjectIds);
+  renderTopProjects(projects, summaryData, rankedTopProjectIds, portfolioEntryMap);
   renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
