@@ -466,6 +466,13 @@ function bindTutorialControls() {
   document.addEventListener(
     "click",
     async (event) => {
+      const interactiveEditorTarget = event.target.closest(
+        "input, textarea, select, [contenteditable='true'], [contenteditable='']",
+      );
+      if (interactiveEditorTarget) {
+        return;
+      }
+
       const tab = event.target.closest(".nav-tab");
       if (tutorialActive && tab) {
         event.preventDefault();

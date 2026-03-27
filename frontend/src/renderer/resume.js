@@ -244,7 +244,7 @@ async function renderResumeList() {
             </div>
           </div>
           <div class="resume-list-actions">
-            <button class="preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
+            <button class="secondary-btn preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
             <button class="export-btn resume-export-action" data-resume-id="${r.id}" data-resume-title="${r.title || "Untitled Resume"}">Export</button>
             <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
             <span class="resume-expand-chevron">▾</span>

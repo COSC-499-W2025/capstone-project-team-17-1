@@ -401,6 +401,7 @@ class ZipAnalyzer:
             classification=classification,
             primary_contributor=primary_contributor,
             snapshot=summary,
+            zip_path=str(stored_file.get("path") or zip_path),
         )
         self._logger.info("Stored zip analysis snapshot for %s", project_id)
 

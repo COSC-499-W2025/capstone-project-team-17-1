@@ -179,6 +179,10 @@ export async function authFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
+export function hasAuthToken() {
+  return Boolean(getAuthToken());
+}
+
 async function ensureCurrentUser() {
   if (currentUser) return currentUser;
   if (!getAuthToken()) return null;
@@ -510,7 +514,7 @@ export async function initAuthFlow() {
 
   setModeUI(false, null);
   setAuthFormMode("login");
-  restoreSavedPageOptimistically();
+  goToPage("dashboard", "dashboard-page");
 
   // ── Settings tab switching ────────────────────────────────────
   document.querySelectorAll(".settings-nav-item").forEach((btn) => {

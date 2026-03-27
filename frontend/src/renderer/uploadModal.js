@@ -79,15 +79,16 @@ async function submitZipUpload() {
   const fileInput = document.getElementById("zip-input");
   const file = fileInput.files[0];
 
-  if (!projectId || !file) {
-    alert("Please provide project ID and ZIP file.");
+  if (!file) {
+    alert("Please choose a ZIP file.");
     return;
   }
 
   const formData = new FormData();
   formData.append("file", file);
 
-  const url = `http://127.0.0.1:8002/projects/upload?project_id=${encodeURIComponent(projectId)}`;
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const url = `http://127.0.0.1:8002/projects/upload${query}`;
 
   console.log("Sending project_id:", projectId, "URL:", url);
 
