@@ -232,7 +232,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             last_commit_at TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (user_id, project_id),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -260,7 +260,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             status TEXT NOT NULL DEFAULT 'draft',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -297,7 +297,18 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
     """)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS user (
+            id INTEGER PRIMARY KEY CHECK(id = 1),
+            username TEXT NOT NULL,
+            password_hash TEXT,
+            github_username TEXT,
+            github_token_enc TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contributors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             email TEXT,
@@ -323,7 +334,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             state TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -362,6 +373,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_images_project ON project_images (project_id, created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_contributor_stats_project ON contributor_stats (project_id, contributor, created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (username, COALESCE(email, ''))")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_sections_resume ON resume_sections (resume_id, sort_order)")
@@ -375,6 +387,180 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
 
 def _run_migrations(conn: sqlite3.Connection) -> None:
     """Apply all schema migrations in order. Each migration is idempotent."""
+
+    # M15: rename users → contributors, update FK tables
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone():
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+        contributors_exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='contributors'"
+        ).fetchone()
+        if contributors_exists:
+            # contributors already created by _initialize_schema; migrate data from users into it
+            conn.execute("""
+                INSERT OR IGNORE INTO contributors (id, username, email, full_name, phone_number,
+                    city, state_region, github_url, portfolio_url, created_at, updated_at)
+                SELECT id, username, email, full_name, phone_number,
+                    city, state_region, github_url, portfolio_url, created_at, updated_at
+                FROM users
+            """)
+            conn.execute("DROP TABLE users")
+            # FK tables were already created pointing to contributors by _initialize_schema;
+            # migrate existing rows from the old FK tables that pointed to users.
+            fk_up = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
+            if any(r[2] == 'users' for r in fk_up):
+                conn.execute("ALTER TABLE user_projects RENAME TO user_projects_old")
+                conn.execute("""
+                    CREATE TABLE user_projects (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        project_id TEXT NOT NULL,
+                        contributor_name TEXT,
+                        first_commit_at TEXT,
+                        last_commit_at TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (user_id, project_id),
+                        FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                    )
+                """)
+                conn.execute("INSERT OR IGNORE INTO user_projects SELECT * FROM user_projects_old")
+                conn.execute("DROP TABLE user_projects_old")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
+            fk_ue = conn.execute("PRAGMA foreign_key_list(user_education)").fetchall()
+            if any(r[2] == 'users' for r in fk_ue):
+                conn.execute("ALTER TABLE user_education RENAME TO user_education_old")
+                conn.execute("""
+                    CREATE TABLE user_education (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        university TEXT NOT NULL,
+                        degree TEXT,
+                        start_date TEXT,
+                        end_date TEXT,
+                        city TEXT,
+                        state TEXT,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                    )
+                """)
+                conn.execute("INSERT OR IGNORE INTO user_education SELECT * FROM user_education_old")
+                conn.execute("DROP TABLE user_education_old")
+            fk_re = conn.execute("PRAGMA foreign_key_list(resumes)").fetchall()
+            if any(r[2] == 'users' for r in fk_re):
+                conn.execute("PRAGMA legacy_alter_table = ON")
+                conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
+                conn.execute("PRAGMA legacy_alter_table = OFF")
+                conn.execute("""
+                    CREATE TABLE resumes (
+                        id TEXT PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        title TEXT NOT NULL DEFAULT 'Default Resume',
+                        target_role TEXT,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                    )
+                """)
+                conn.execute("INSERT OR IGNORE INTO resumes SELECT * FROM resumes_old")
+                conn.execute("DROP TABLE resumes_old")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
+        else:
+            conn.execute("ALTER TABLE users RENAME TO contributors")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (username, COALESCE(email, ''))")
+
+            # Recreate user_projects with updated FK
+            conn.execute("ALTER TABLE user_projects RENAME TO user_projects_old")
+            conn.execute("""
+                CREATE TABLE user_projects (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    project_id TEXT NOT NULL,
+                    contributor_name TEXT,
+                    first_commit_at TEXT,
+                    last_commit_at TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (user_id, project_id),
+                    FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("INSERT OR IGNORE INTO user_projects SELECT * FROM user_projects_old")
+            conn.execute("DROP TABLE user_projects_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
+
+            # Recreate user_education with updated FK
+            conn.execute("ALTER TABLE user_education RENAME TO user_education_old")
+            conn.execute("""
+                CREATE TABLE user_education (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    university TEXT NOT NULL,
+                    degree TEXT,
+                    start_date TEXT,
+                    end_date TEXT,
+                    city TEXT,
+                    state TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("INSERT OR IGNORE INTO user_education SELECT * FROM user_education_old")
+            conn.execute("DROP TABLE user_education_old")
+
+            # Recreate resumes with updated FK
+            # Use legacy_alter_table=ON so SQLite does NOT auto-rewrite child FK references
+            # (resume_sections.FK) when we rename resumes → resumes_old.
+            conn.execute("PRAGMA legacy_alter_table = ON")
+            conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
+            conn.execute("PRAGMA legacy_alter_table = OFF")
+            conn.execute("""
+                CREATE TABLE resumes (
+                    id TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    title TEXT NOT NULL DEFAULT 'Default Resume',
+                    target_role TEXT,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("INSERT OR IGNORE INTO resumes SELECT * FROM resumes_old")
+            conn.execute("DROP TABLE resumes_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
+
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
+    # M16: repair resume_sections FK if it was corrupted to point to resumes_old
+    # (caused by SQLite auto-rewriting FK refs on rename before legacy_alter_table fix)
+    fk_rs = conn.execute("PRAGMA foreign_key_list(resume_sections)").fetchall()
+    if any(r[2] == 'resumes_old' for r in fk_rs):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("PRAGMA legacy_alter_table = ON")
+        conn.execute("ALTER TABLE resume_sections RENAME TO resume_sections_old")
+        conn.execute("PRAGMA legacy_alter_table = OFF")
+        conn.execute("""
+            CREATE TABLE resume_sections (
+                id TEXT PRIMARY KEY,
+                resume_id TEXT NOT NULL,
+                key TEXT NOT NULL,
+                label TEXT NOT NULL,
+                is_custom INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("INSERT OR IGNORE INTO resume_sections SELECT * FROM resume_sections_old")
+        conn.execute("DROP TABLE resume_sections_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_sections_resume ON resume_sections (resume_id, sort_order)")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
 
     # M1: contributor_stats — drop legacy line_changes column
     info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
@@ -418,8 +604,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
         conn.commit()
 
-    # M3: users — add profile columns
-    info = conn.execute("PRAGMA table_info(users)").fetchall()
+    # M3: contributors — add profile columns
+    info = conn.execute("PRAGMA table_info(contributors)").fetchall()
     columns = {row[1] for row in info}
     for col, col_type in (
         ("full_name", "TEXT"),
@@ -430,7 +616,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         ("portfolio_url", "TEXT"),
     ):
         if col not in columns:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+            conn.execute(f"ALTER TABLE contributors ADD COLUMN {col} {col_type}")
     conn.commit()
 
     # M4: user_projects — add activity period columns
@@ -441,19 +627,19 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE user_projects ADD COLUMN {col} TEXT")
     conn.commit()
 
-    # M5: users — reorder columns to canonical order
+    # M5: contributors — reorder columns to canonical order
     desired_order = [
         "id", "username", "email", "full_name", "phone_number",
         "city", "state_region", "github_url", "portfolio_url",
         "created_at", "updated_at",
     ]
-    info = conn.execute("PRAGMA table_info(users)").fetchall()
+    info = conn.execute("PRAGMA table_info(contributors)").fetchall()
     current_order = [row[1] for row in info]
     if all(col in current_order for col in desired_order) and current_order != desired_order:
         conn.execute("PRAGMA foreign_keys = OFF")
-        conn.execute("ALTER TABLE users RENAME TO users_old")
+        conn.execute("ALTER TABLE contributors RENAME TO contributors_old")
         conn.execute("""
-            CREATE TABLE users (
+            CREATE TABLE contributors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
                 email TEXT,
@@ -466,40 +652,24 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO users (
+        """)
+        conn.execute("""
+            INSERT INTO contributors (
                 id, username, email, full_name, phone_number, city, state_region,
                 github_url, portfolio_url, created_at, updated_at
             )
             SELECT
-                id,
-                username,
-                email,
-                full_name,
-                phone_number,
-                city,
-                state_region,
+                id, username, email, full_name, phone_number, city, state_region,
                 CASE
                     WHEN github_url IS NULL OR TRIM(github_url) = ''
                     THEN ('https://github.com/' || username)
                     ELSE github_url
                 END,
-                portfolio_url,
-                created_at,
-                updated_at
-            FROM users_old
-            """
-        )
-        conn.execute("DROP TABLE users_old")
-        conn.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
-            ON users (username, COALESCE(email, ''))
-            """
-        )
+                portfolio_url, created_at, updated_at
+            FROM contributors_old
+        """)
+        conn.execute("DROP TABLE contributors_old")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (username, COALESCE(email, ''))")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
@@ -518,7 +688,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 last_commit_at TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (user_id, project_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
@@ -562,7 +732,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 status TEXT NOT NULL DEFAULT 'draft',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
             )
         """)
         conn.execute("INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at) SELECT id, user_id, title, target_role, status, created_at, updated_at FROM resumes_old")
@@ -724,7 +894,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
     Repair user identity rows that were merged by generic noreply emails.
     """
     users = conn.execute(
-        "SELECT id, username, email FROM users ORDER BY id"
+        "SELECT id, username, email FROM contributors ORDER BY id"
     ).fetchall()
 
     # First pass: normalize/remove noreply emails while preserving uniqueness.
@@ -732,7 +902,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         if not _is_noreply_email(email):
             continue
         existing = conn.execute(
-            "SELECT id FROM users WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
+            "SELECT id FROM contributors WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
             (username,),
         ).fetchone()
         if existing and int(existing[0]) != int(user_id):
@@ -758,9 +928,9 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
                     (canonical_id, project_id, contributor_name),
                 )
             conn.execute("DELETE FROM user_projects WHERE user_id = ?", (int(user_id),))
-            conn.execute("DELETE FROM users WHERE id = ?", (int(user_id),))
+            conn.execute("DELETE FROM contributors WHERE id = ?", (int(user_id),))
         else:
-            conn.execute("UPDATE users SET email = NULL WHERE id = ?", (int(user_id),))
+            conn.execute("UPDATE contributors SET email = NULL WHERE id = ?", (int(user_id),))
 
     # Second pass: enforce contributor -> username mapping for every stats row.
     contributors = conn.execute(
@@ -768,14 +938,14 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
     ).fetchall()
     for (contributor,) in contributors:
         row = conn.execute(
-            "SELECT id FROM users WHERE username = ? ORDER BY id LIMIT 1",
+            "SELECT id FROM contributors WHERE username = ? ORDER BY id LIMIT 1",
             (contributor,),
         ).fetchone()
         if row:
             canonical_user_id = int(row[0])
         else:
             cursor = conn.execute(
-                "INSERT INTO users (username, email, github_url) VALUES (?, NULL, ?)",
+                "INSERT INTO contributors (username, email, github_url) VALUES (?, NULL, ?)",
                 (contributor, _default_github_url(contributor)),
             )
             canonical_user_id = int(cursor.lastrowid)
@@ -1753,19 +1923,19 @@ def upsert_user(
     row = None
     if email:
         row = conn.execute(
-            "SELECT id, username, email FROM users WHERE email = ? LIMIT 1",
+            "SELECT id, username, email FROM contributors WHERE email = ? LIMIT 1",
             (email,),
         ).fetchone()
     if not row:
         row = conn.execute(
-            "SELECT id, username, email FROM users WHERE username = ? LIMIT 1",
+            "SELECT id, username, email FROM contributors WHERE username = ? LIMIT 1",
             (username,),
         ).fetchone()
     if row:
         user_id = int(row[0])
         conn.execute(
             """
-            UPDATE users
+            UPDATE contributors
             SET
                 username = COALESCE(?, username),
                 email = COALESCE(?, email),
@@ -1784,7 +1954,7 @@ def upsert_user(
 
     cursor = conn.execute(
         """
-        INSERT INTO users (username, email, github_url)
+        INSERT INTO contributors (username, email, github_url)
         VALUES (?, ?, ?)
         """,
         (username, email, default_github),
@@ -1806,7 +1976,7 @@ def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
             state_region,
             github_url,
             portfolio_url
-        FROM users
+        FROM contributors
         WHERE id = ?
         LIMIT 1
         """,
@@ -1840,7 +2010,7 @@ def update_user_profile(
 ) -> None:
     conn.execute(
         """
-        UPDATE users
+        UPDATE contributors
         SET
             full_name = COALESCE(?, full_name),
             phone_number = COALESCE(?, phone_number),

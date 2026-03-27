@@ -388,7 +388,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj1")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM users ORDER BY username").fetchall()
+        rows = conn.execute("SELECT username FROM contributors ORDER BY username").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
@@ -431,7 +431,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj4")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM users").fetchall()
+        rows = conn.execute("SELECT username FROM contributors").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertNotIn("dependabot[bot]", names)
@@ -465,7 +465,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self.assertIsNone(row)
 
     def test_email_stored_via_commit_format(self):
-        """When git_log uses commit:HASH|name|email format, email is stored in users."""
+        """When git_log uses commit:HASH|name|email format, email is stored in contributors."""
         git_log = (
             "commit:abc123|Alice Example|alice@example.com|1700000000|Add feature\n"
             "commit:def456|Alice Example|alice@example.com|1700000100|Fix bug\n"
@@ -474,7 +474,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT email FROM users WHERE username = ?", ("Alice Example",)
+            "SELECT email FROM contributors WHERE username = ?", ("Alice Example",)
         ).fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], "alice@example.com")

@@ -967,7 +967,7 @@ async def generate_project_resume(project_id: str, request: Request):
             """
             SELECT u.username
             FROM user_projects up
-            JOIN users u ON u.id = up.user_id
+            JOIN contributors u ON u.id = up.user_id
             WHERE up.project_id = ?
             ORDER BY up.id
             LIMIT 1

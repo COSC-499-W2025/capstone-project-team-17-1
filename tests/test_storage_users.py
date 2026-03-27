@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -10,6 +11,7 @@ from capstone import storage
 def _open_isolated_db(db_dir: Path):
     original_base_dir = storage.BASE_DIR
     original_current_user = storage.CURRENT_USER
+    original_loom_db_path = os.environ.pop("LOOM_DB_PATH", None)
     storage.close_db()
     storage.BASE_DIR = db_dir
     storage.CURRENT_USER = None
@@ -24,6 +26,8 @@ def _open_isolated_db(db_dir: Path):
         storage.close_db()
         storage.BASE_DIR = original_base_dir
         storage.CURRENT_USER = original_current_user
+        if original_loom_db_path is not None:
+            os.environ["LOOM_DB_PATH"] = original_loom_db_path
 
 
 def test_users_and_links_schema_and_fk():
@@ -33,14 +37,14 @@ def test_users_and_links_schema_and_fk():
 
             # Tables exist
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            assert "users" in tables
+            assert "contributors" in tables
             assert "user_projects" in tables
             assert "contributor_stats" in tables
             assert "resumes" in tables
             assert "resume_sections" in tables
             assert "resume_items" in tables
             user_columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+                row[1] for row in conn.execute("PRAGMA table_info(contributors)").fetchall()
             }
             assert "full_name" in user_columns
             assert "phone_number" in user_columns
@@ -49,7 +53,7 @@ def test_users_and_links_schema_and_fk():
             assert "github_url" in user_columns
             assert "portfolio_url" in user_columns
             ordered_columns = [
-                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+                row[1] for row in conn.execute("PRAGMA table_info(contributors)").fetchall()
             ]
             assert ordered_columns == [
                 "id",
@@ -96,9 +100,9 @@ def test_users_and_links_schema_and_fk():
             ).fetchall()
             assert [tuple(row) for row in links] == [(user_id, "demo", "alice")]
 
-            # FK points to users
+            # FK points to contributors
             fk = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
-            assert fk and fk[0][2] == "users"
+            assert fk and fk[0][2] == "contributors"
 
 
 def test_get_and_update_user_profile():
@@ -134,7 +138,7 @@ def test_upsert_user_sets_default_github_url():
 
             user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
             row = conn.execute(
-                "SELECT github_url FROM users WHERE id = ?",
+                "SELECT github_url FROM contributors WHERE id = ?",
                 (user_id,),
             ).fetchone()
             assert row and row[0] == "https://github.com/alice"
@@ -328,7 +332,7 @@ def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
 
             uid = storage.upsert_user(conn, "boty", email="noreply@github.com")
             assert uid > 0
-            row = conn.execute("SELECT email FROM users WHERE id = ?", (uid,)).fetchone()
+            row = conn.execute("SELECT email FROM contributors WHERE id = ?", (uid,)).fetchone()
             assert row[0] is None  # noreply stripped
 
             uid2 = storage.upsert_user(conn, "alice", email="alice@example.com")
@@ -356,7 +360,7 @@ def test_upsert_users_from_contributors_links_projects_and_users():
             contribs = [Row("alice", "alice@example.com"), Row("bob")]
             storage.upsert_users_from_contributors(conn, "demo-proj", contribs)
 
-            users = conn.execute("SELECT username, email FROM users ORDER BY username").fetchall()
+            users = conn.execute("SELECT username, email FROM contributors ORDER BY username").fetchall()
             user_rows = [tuple(row) for row in users]
             assert ("alice", "alice@example.com") in user_rows
             assert ("bob", None) in user_rows

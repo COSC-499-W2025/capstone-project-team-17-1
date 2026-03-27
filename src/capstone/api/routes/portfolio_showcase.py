@@ -50,7 +50,7 @@ def list_users(request: Request):
     with _db_session(_require_db()) as c:
         rows = c.execute("""
             SELECT DISTINCT u.id, u.username, u.email
-            FROM users u
+            FROM contributors u
             INNER JOIN user_projects up ON u.id = up.user_id
             INNER JOIN project_analysis pa ON up.project_id = pa.project_id
             -- Exclude no-email users when another user WITH an email is
@@ -60,7 +60,7 @@ def list_users(request: Request):
             WHERE NOT (
                 u.email IS NULL
                 AND EXISTS (
-                    SELECT 1 FROM users u2
+                    SELECT 1 FROM contributors u2
                     INNER JOIN user_projects up2 ON u2.id = up2.user_id
                     WHERE u2.email IS NOT NULL
                       AND u2.id != u.id
