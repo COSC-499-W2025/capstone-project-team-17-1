@@ -17,21 +17,26 @@ function updateArc(element, value) {
 
 function getUsageColor(value) {
   const clamp = Math.max(0, Math.min(100, value));
+  const isLight = document.body.classList.contains("light");
 
+  if (isLight) {
+    // Softer palette for light surfaces: good -> warn -> critical
+    if (clamp < 60) return "rgb(47, 154, 99)";
+    if (clamp < 80) return "rgb(185, 133, 45)";
+    return "rgb(199, 81, 81)";
+  }
+
+  // Preserve existing vivid palette in dark mode.
   let r, g;
-
   if (clamp <= 50) {
-    // Green → Yellow
     const ratio = clamp / 50;
     r = Math.floor(0 + ratio * 255);
     g = 255;
   } else {
-    // Yellow → Red
     const ratio = (clamp - 50) / 50;
     r = 255;
     g = Math.floor(255 - ratio * 255);
   }
-
   return `rgb(${r}, ${g}, 0)`;
 }
 

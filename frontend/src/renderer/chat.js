@@ -130,12 +130,11 @@ export function initChat() {
   }
 
   function setComposerEnabled(baseEnabled) {
-    const enabled = Boolean(baseEnabled && externalConsentGranted);
-    inputEl.disabled = !enabled;
-    if (!enabled) {
-      sendBtn.disabled = true;
-    }
-    micBtn.disabled = !enabled || !speechInput.supported;
+    const projectReady = Boolean(baseEnabled);
+    const consentReady = Boolean(externalConsentGranted);
+    // Keep input typable even when project/consent prerequisites are missing.
+    inputEl.disabled = Boolean(sending);
+    micBtn.disabled = !projectReady || !consentReady || !speechInput.supported || Boolean(sending);
     if (!selectedProjectId) {
       inputEl.placeholder = "Select a project to start chatting with Sienna...";
     } else if (!externalConsentGranted) {
