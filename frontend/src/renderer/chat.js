@@ -1,6 +1,6 @@
 import { authFetch } from "./auth.js";
 import { createSiennaVoicePlayer } from "./AskSienna/voicePlayer.js";
-import { createSiennaSpeechInput } from "./AskSienna/speechInput.js";
+import { createSiennaSpeechInput } from "./AskSienna/speechInput.mjs";
 
 const CHAT_STORAGE_KEY = "loom_sienna_history_v1";
 const PROJECT_STORAGE_KEY = "loom_sienna_project_id_v1";
