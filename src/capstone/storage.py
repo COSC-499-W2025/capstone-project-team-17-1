@@ -674,6 +674,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _repair_user_identity_links(conn)
     conn.commit()
 
+    # M13: drop uploads_old leftover from M11
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='uploads_old'").fetchone():
+        conn.execute("DROP TABLE uploads_old")
+        conn.commit()
+
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""
