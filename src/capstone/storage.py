@@ -302,7 +302,13 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             username TEXT NOT NULL,
             password_hash TEXT,
             github_username TEXT,
+            github_url TEXT,
             github_token_enc TEXT,
+            full_name TEXT,
+            phone_number TEXT,
+            city TEXT,
+            state_region TEXT,
+            portfolio_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login_at TIMESTAMP
         )
@@ -310,14 +316,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS contributors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
+            github_username TEXT NOT NULL,
             email TEXT,
-            full_name TEXT,
-            phone_number TEXT,
-            city TEXT,
-            state_region TEXT,
             github_url TEXT,
-            portfolio_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -373,7 +374,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_images_project ON project_images (project_id, created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_contributor_stats_project ON contributor_stats (project_id, contributor, created_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (username, COALESCE(email, ''))")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (github_username, COALESCE(email, ''))")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_sections_resume ON resume_sections (resume_id, sort_order)")
@@ -604,20 +605,21 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
         conn.commit()
 
-    # M3: contributors — add profile columns
+    # M3: contributors — add profile columns (old schema only; skip if already on new schema)
     info = conn.execute("PRAGMA table_info(contributors)").fetchall()
     columns = {row[1] for row in info}
-    for col, col_type in (
-        ("full_name", "TEXT"),
-        ("phone_number", "TEXT"),
-        ("city", "TEXT"),
-        ("state_region", "TEXT"),
-        ("github_url", "TEXT"),
-        ("portfolio_url", "TEXT"),
-    ):
-        if col not in columns:
-            conn.execute(f"ALTER TABLE contributors ADD COLUMN {col} {col_type}")
-    conn.commit()
+    if "github_username" not in columns:
+        for col, col_type in (
+            ("full_name", "TEXT"),
+            ("phone_number", "TEXT"),
+            ("city", "TEXT"),
+            ("state_region", "TEXT"),
+            ("github_url", "TEXT"),
+            ("portfolio_url", "TEXT"),
+        ):
+            if col not in columns:
+                conn.execute(f"ALTER TABLE contributors ADD COLUMN {col} {col_type}")
+        conn.commit()
 
     # M4: user_projects — add activity period columns
     info = conn.execute("PRAGMA table_info(user_projects)").fetchall()
@@ -627,7 +629,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE user_projects ADD COLUMN {col} TEXT")
     conn.commit()
 
-    # M5: contributors — reorder columns to canonical order
+    # M5: contributors — reorder columns to canonical order (old schema only)
     desired_order = [
         "id", "username", "email", "full_name", "phone_number",
         "city", "state_region", "github_url", "portfolio_url",
@@ -635,7 +637,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     ]
     info = conn.execute("PRAGMA table_info(contributors)").fetchall()
     current_order = [row[1] for row in info]
-    if all(col in current_order for col in desired_order) and current_order != desired_order:
+    if "github_username" not in current_order and all(col in current_order for col in desired_order) and current_order != desired_order:
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("ALTER TABLE contributors RENAME TO contributors_old")
         conn.execute("""
@@ -840,9 +842,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
             conn.commit()
 
-    # M12: repair noreply email user identity links
-    _repair_user_identity_links(conn)
-    conn.commit()
+    # M12: repair noreply email user identity links (called after M17 renames username→github_username)
 
     # M13: drop uploads_old leftover from M11
     if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='uploads_old'").fetchone():
@@ -854,6 +854,91 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         if conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{old_table}'").fetchone():
             conn.execute(f"DROP TABLE {old_table}")
     conn.commit()
+
+    # M17: contributors — rename username→github_username, drop profile columns
+    info_c = {row[1]: row for row in conn.execute("PRAGMA table_info(contributors)").fetchall()}
+    if "username" in info_c:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("PRAGMA legacy_alter_table = ON")
+        conn.execute("ALTER TABLE contributors RENAME TO contributors_old")
+        conn.execute("PRAGMA legacy_alter_table = OFF")
+        conn.execute("""
+            CREATE TABLE contributors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                github_username TEXT NOT NULL,
+                email TEXT,
+                github_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            INSERT OR IGNORE INTO contributors (id, github_username, email, github_url, created_at, updated_at)
+            SELECT id, username, email, github_url, created_at, updated_at
+            FROM contributors_old
+        """)
+        conn.execute("DROP TABLE contributors_old")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (github_username, COALESCE(email, ''))")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
+    # M12 (deferred): repair noreply email user identity links — runs after M17 ensures github_username exists
+    _repair_user_identity_links(conn)
+    conn.commit()
+
+    # M18: user table — add profile columns
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(user)").fetchall()}
+    for col, col_type in [
+        ("full_name", "TEXT"),
+        ("phone_number", "TEXT"),
+        ("city", "TEXT"),
+        ("state_region", "TEXT"),
+        ("portfolio_url", "TEXT"),
+    ]:
+        if col not in user_cols:
+            conn.execute(f"ALTER TABLE user ADD COLUMN {col} {col_type}")
+    conn.commit()
+
+    # M19: user table — add github_url column and reorder to canonical layout
+    # Canonical order: id, username, password_hash, github_username, github_url,
+    #   github_token_enc, full_name, phone_number, city, state_region,
+    #   portfolio_url, created_at, last_login_at
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(user)").fetchall()}
+    if "github_url" not in user_cols:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE user RENAME TO user_old")
+        conn.execute("""
+            CREATE TABLE user (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                username TEXT NOT NULL,
+                password_hash TEXT,
+                github_username TEXT,
+                github_url TEXT,
+                github_token_enc TEXT,
+                full_name TEXT,
+                phone_number TEXT,
+                city TEXT,
+                state_region TEXT,
+                portfolio_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            INSERT OR IGNORE INTO user (
+                id, username, password_hash, github_username, github_token_enc,
+                full_name, phone_number, city, state_region, portfolio_url,
+                created_at, last_login_at
+            )
+            SELECT
+                id, username, password_hash, github_username, github_token_enc,
+                full_name, phone_number, city, state_region, portfolio_url,
+                created_at, last_login_at
+            FROM user_old
+        """)
+        conn.execute("DROP TABLE user_old")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
 
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
@@ -894,7 +979,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
     Repair user identity rows that were merged by generic noreply emails.
     """
     users = conn.execute(
-        "SELECT id, username, email FROM contributors ORDER BY id"
+        "SELECT id, github_username, email FROM contributors ORDER BY id"
     ).fetchall()
 
     # First pass: normalize/remove noreply emails while preserving uniqueness.
@@ -902,7 +987,7 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         if not _is_noreply_email(email):
             continue
         existing = conn.execute(
-            "SELECT id FROM contributors WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
+            "SELECT id FROM contributors WHERE github_username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
             (username,),
         ).fetchone()
         if existing and int(existing[0]) != int(user_id):
@@ -932,20 +1017,20 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         else:
             conn.execute("UPDATE contributors SET email = NULL WHERE id = ?", (int(user_id),))
 
-    # Second pass: enforce contributor -> username mapping for every stats row.
+    # Second pass: enforce contributor -> github_username mapping for every stats row.
     contributors = conn.execute(
         "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
     ).fetchall()
     for (contributor,) in contributors:
         row = conn.execute(
-            "SELECT id FROM contributors WHERE username = ? ORDER BY id LIMIT 1",
+            "SELECT id FROM contributors WHERE github_username = ? ORDER BY id LIMIT 1",
             (contributor,),
         ).fetchone()
         if row:
             canonical_user_id = int(row[0])
         else:
             cursor = conn.execute(
-                "INSERT INTO contributors (username, email, github_url) VALUES (?, NULL, ?)",
+                "INSERT INTO contributors (github_username, email, github_url) VALUES (?, NULL, ?)",
                 (contributor, _default_github_url(contributor)),
             )
             canonical_user_id = int(cursor.lastrowid)
@@ -1909,27 +1994,27 @@ def fetch_project_overrides(conn: sqlite3.Connection, project_id: str) -> dict |
 
 def upsert_contributor(
     conn: sqlite3.Connection,
-    username: str,
+    github_username: str,
     *,
     email: str | None = None,
 ) -> int:
-    if not username:
-        raise ValueError("username must be provided")
-    username = str(username).strip()
+    if not github_username:
+        raise ValueError("github_username must be provided")
+    github_username = str(github_username).strip()
     email = _normalize_user_email(email)
-    default_github = _default_github_url(username)
+    default_github = _default_github_url(github_username)
 
-    # Prefer matching by email when available, otherwise by username.
+    # Prefer matching by email when available, otherwise by github_username.
     row = None
     if email:
         row = conn.execute(
-            "SELECT id, username, email FROM contributors WHERE email = ? LIMIT 1",
+            "SELECT id, github_username, email FROM contributors WHERE email = ? LIMIT 1",
             (email,),
         ).fetchone()
     if not row:
         row = conn.execute(
-            "SELECT id, username, email FROM contributors WHERE username = ? LIMIT 1",
-            (username,),
+            "SELECT id, github_username, email FROM contributors WHERE github_username = ? LIMIT 1",
+            (github_username,),
         ).fetchone()
     if row:
         user_id = int(row[0])
@@ -1937,7 +2022,7 @@ def upsert_contributor(
             """
             UPDATE contributors
             SET
-                username = COALESCE(?, username),
+                github_username = COALESCE(?, github_username),
                 email = COALESCE(?, email),
                 github_url = CASE
                     WHEN github_url IS NULL OR TRIM(github_url) = ''
@@ -1947,99 +2032,49 @@ def upsert_contributor(
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (username, email, default_github, user_id),
+            (github_username, email, default_github, user_id),
         )
         conn.commit()
         return user_id
 
     cursor = conn.execute(
         """
-        INSERT INTO contributors (username, email, github_url)
+        INSERT INTO contributors (github_username, email, github_url)
         VALUES (?, ?, ?)
         """,
-        (username, email, default_github),
+        (github_username, email, default_github),
     )
     conn.commit()
     return int(cursor.lastrowid)
 
 
-def get_contributor_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
+def get_contributor_profile(conn: sqlite3.Connection, contributor_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT
-            id,
-            username,
-            email,
-            full_name,
-            phone_number,
-            city,
-            state_region,
-            github_url,
-            portfolio_url
+        SELECT id, github_username, email, github_url
         FROM contributors
         WHERE id = ?
         LIMIT 1
         """,
-        (int(user_id),),
+        (int(contributor_id),),
     ).fetchone()
     if not row:
         return None
     return {
         "id": int(row[0]),
-        "username": row[1],
+        "github_username": row[1],
         "email": row[2],
-        "full_name": row[3],
-        "phone_number": row[4],
-        "city": row[5],
-        "state_region": row[6],
-        "github_url": row[7],
-        "portfolio_url": row[8],
+        "github_url": row[3],
     }
-
-
-def update_contributor_profile(
-    conn: sqlite3.Connection,
-    user_id: int,
-    *,
-    full_name: str | None = None,
-    phone_number: str | None = None,
-    city: str | None = None,
-    state_region: str | None = None,
-    github_url: str | None = None,
-    portfolio_url: str | None = None,
-) -> None:
-    conn.execute(
-        """
-        UPDATE contributors
-        SET
-            full_name = COALESCE(?, full_name),
-            phone_number = COALESCE(?, phone_number),
-            city = COALESCE(?, city),
-            state_region = COALESCE(?, state_region),
-            github_url = COALESCE(?, github_url),
-            portfolio_url = COALESCE(?, portfolio_url),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        """,
-        (
-            full_name,
-            phone_number,
-            city,
-            state_region,
-            github_url,
-            portfolio_url,
-            int(user_id),
-        ),
-    )
-    conn.commit()
 
 
 def get_user(conn: sqlite3.Connection) -> dict | None:
     """Return the single login account row, or None if not yet set."""
     row = conn.execute(
         """
-        SELECT id, username, password_hash, github_username, github_token_enc,
-               created_at, last_login_at
+        SELECT id, username, password_hash, github_username, github_url,
+               github_token_enc, full_name, phone_number, city, state_region,
+               portfolio_url, created_at, last_login_at
         FROM user
         WHERE id = 1
         LIMIT 1
@@ -2052,9 +2087,15 @@ def get_user(conn: sqlite3.Connection) -> dict | None:
         "username": row[1],
         "password_hash": row[2],
         "github_username": row[3],
-        "github_token_enc": row[4],
-        "created_at": row[5],
-        "last_login_at": row[6],
+        "github_url": row[4],
+        "github_token_enc": row[5],
+        "full_name": row[6],
+        "phone_number": row[7],
+        "city": row[8],
+        "state_region": row[9],
+        "portfolio_url": row[10],
+        "created_at": row[11],
+        "last_login_at": row[12],
     }
 
 
@@ -2064,22 +2105,66 @@ def upsert_user(
     *,
     password_hash: str | None = None,
     github_username: str | None = None,
+    github_url: str | None = None,
     github_token_enc: str | None = None,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    city: str | None = None,
+    state_region: str | None = None,
+    portfolio_url: str | None = None,
 ) -> None:
-    """Insert or update the single login account row (id=1)."""
     if not username:
         raise ValueError("username must be provided")
     conn.execute(
         """
-        INSERT INTO user (id, username, password_hash, github_username, github_token_enc)
-        VALUES (1, ?, ?, ?, ?)
+        INSERT INTO user (id, username, password_hash, github_username, github_url,
+                          github_token_enc, full_name, phone_number, city, state_region,
+                          portfolio_url)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             username = excluded.username,
             password_hash = COALESCE(excluded.password_hash, password_hash),
             github_username = COALESCE(excluded.github_username, github_username),
-            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc)
+            github_url = COALESCE(excluded.github_url, github_url),
+            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            full_name = COALESCE(excluded.full_name, full_name),
+            phone_number = COALESCE(excluded.phone_number, phone_number),
+            city = COALESCE(excluded.city, city),
+            state_region = COALESCE(excluded.state_region, state_region),
+            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url)
         """,
-        (username, password_hash, github_username, github_token_enc),
+        (username, password_hash, github_username, github_url, github_token_enc,
+         full_name, phone_number, city, state_region, portfolio_url),
+    )
+    conn.commit()
+
+
+def update_user_profile(
+    conn: sqlite3.Connection,
+    *,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    city: str | None = None,
+    state_region: str | None = None,
+    github_username: str | None = None,
+    github_url: str | None = None,
+    portfolio_url: str | None = None,
+) -> None:
+    """Update profile fields on the login account row."""
+    conn.execute(
+        """
+        UPDATE user
+        SET
+            full_name = COALESCE(?, full_name),
+            phone_number = COALESCE(?, phone_number),
+            city = COALESCE(?, city),
+            state_region = COALESCE(?, state_region),
+            github_username = COALESCE(?, github_username),
+            github_url = COALESCE(?, github_url),
+            portfolio_url = COALESCE(?, portfolio_url)
+        WHERE id = 1
+        """,
+        (full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
     )
     conn.commit()
 
@@ -2823,12 +2908,12 @@ def bulk_upsert_contributors(
     if not project_id:
         return
     for row in contributors:
-        username = getattr(row, "contributor", None) or getattr(row, "username", None)
+        github_username = getattr(row, "contributor", None) or getattr(row, "username", None)
         email = getattr(row, "email", None)
-        if not username:
+        if not github_username:
             continue
-        user_id = upsert_contributor(conn, username, email=email)
-        link_user_to_project(conn, user_id, project_id, contributor_name=username)
+        user_id = upsert_contributor(conn, github_username, email=email)
+        link_user_to_project(conn, user_id, project_id, contributor_name=github_username)
 
 def save_project_metadata(conn, project_id, meta):
     cursor = conn.cursor()
@@ -3065,9 +3150,9 @@ __all__ = [
     # users / contributors
     "get_user",
     "upsert_user",
+    "update_user_profile",
     "upsert_contributor",
     "get_contributor_profile",
-    "update_contributor_profile",
     "upsert_default_resume_modules",
     "link_user_to_project",
     "fetch_user_project_activity_periods",

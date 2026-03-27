@@ -254,8 +254,7 @@ async def generate_resume(request: Request):
         # --- resolve data user's username for contributor matching ---
         data_user_profile = storage.get_contributor_profile(conn, data_user_id) or {}
         data_username = (
-            data_user_profile.get("username")
-            or data_user_profile.get("full_name")
+            data_user_profile.get("github_username")
             or ""
         )
 
@@ -346,7 +345,7 @@ async def generate_resume(request: Request):
         is_self = (data_user_id == owner_id)
 
         # Header data: use auth profile for self, local git profile for others
-        local_profile = storage.get_contributor_profile(conn, data_user_id) or {}
+        local_profile = storage.get_user(conn) or {}
 
         def _pick(auth_key: str, local_key: Optional[str] = None) -> str:
             local_val = (local_profile.get(local_key or auth_key) or "").strip()
@@ -358,9 +357,9 @@ async def generate_resume(request: Request):
         state = _pick("state_region")
         location = ", ".join(p for p in [city, state] if p)
         if is_self:
-            username = auth_user.get("username") or local_profile.get("username") or str(owner_id)
+            username = auth_user.get("username") or data_user_profile.get("github_username") or str(owner_id)
         else:
-            username = local_profile.get("username") or str(data_user_id)
+            username = data_user_profile.get("github_username") or str(data_user_id)
         header = {
             "full_name": _pick("full_name") or username,
             "email": _pick("email"),

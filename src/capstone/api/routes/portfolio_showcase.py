@@ -49,7 +49,7 @@ def list_users(request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute("""
-            SELECT DISTINCT u.id, u.username, u.email
+            SELECT DISTINCT u.id, u.github_username, u.email
             FROM contributors u
             INNER JOIN user_projects up ON u.id = up.user_id
             INNER JOIN project_analysis pa ON up.project_id = pa.project_id
@@ -69,7 +69,7 @@ def list_users(request: Request):
                       )
                 )
             )
-            ORDER BY LOWER(u.username)
+            ORDER BY LOWER(u.github_username)
         """).fetchall()
     users = [
         {"id": r[0], "username": r[1]}

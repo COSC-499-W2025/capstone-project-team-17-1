@@ -965,7 +965,7 @@ async def generate_project_resume(project_id: str, request: Request):
         # Fall back to any contributor linked to this project
         linked = conn.execute(
             """
-            SELECT u.username
+            SELECT u.github_username
             FROM user_projects up
             JOIN contributors u ON u.id = up.user_id
             WHERE up.project_id = ?
@@ -1025,7 +1025,7 @@ async def generate_project_resume(project_id: str, request: Request):
     project_items = [project_item]
 
     # 6. Build header from user profile
-    user_profile = storage.get_contributor_profile(conn, user_id) or {}
+    user_profile = storage.get_user(conn) or {}
     city = (user_profile.get("city") or "").strip()
     state = (user_profile.get("state_region") or "").strip()
     location = ", ".join(part for part in [city, state] if part)

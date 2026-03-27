@@ -46,25 +46,15 @@ def test_users_and_links_schema_and_fk():
             user_columns = {
                 row[1] for row in conn.execute("PRAGMA table_info(contributors)").fetchall()
             }
-            assert "full_name" in user_columns
-            assert "phone_number" in user_columns
-            assert "city" in user_columns
-            assert "state_region" in user_columns
-            assert "github_url" in user_columns
-            assert "portfolio_url" in user_columns
+            assert "github_username" in user_columns
             ordered_columns = [
                 row[1] for row in conn.execute("PRAGMA table_info(contributors)").fetchall()
             ]
             assert ordered_columns == [
                 "id",
-                "username",
+                "github_username",
                 "email",
-                "full_name",
-                "phone_number",
-                "city",
-                "state_region",
                 "github_url",
-                "portfolio_url",
                 "created_at",
                 "updated_at",
             ]
@@ -105,29 +95,28 @@ def test_users_and_links_schema_and_fk():
             assert fk and fk[0][2] == "contributors"
 
 
-def test_get_and_update_contributor_profile():
+def test_get_and_update_user_profile():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
-            storage.update_contributor_profile(
+            storage.upsert_user(conn, "alice")
+            storage.update_user_profile(
                 conn,
-                user_id,
-                full_name="Alice Doe",
-                phone_number="+1 111-222-3333",
-                city="Seattle",
-                state_region="WA",
-                github_url="https://github.com/alice",
+                full_name="Alice A",
+                phone_number="555-1234",
+                city="Vancouver",
+                state_region="BC",
+                github_username="alice",
                 portfolio_url="https://alice.dev",
             )
-            profile = storage.get_contributor_profile(conn, user_id)
+            profile = storage.get_user(conn)
             assert profile is not None
-            assert profile["full_name"] == "Alice Doe"
-            assert profile["phone_number"] == "+1 111-222-3333"
-            assert profile["city"] == "Seattle"
-            assert profile["state_region"] == "WA"
-            assert profile["github_url"] == "https://github.com/alice"
+            assert profile["full_name"] == "Alice A"
+            assert profile["phone_number"] == "555-1234"
+            assert profile["city"] == "Vancouver"
+            assert profile["state_region"] == "BC"
+            assert profile["github_username"] == "alice"
             assert profile["portfolio_url"] == "https://alice.dev"
 
 
@@ -360,7 +349,7 @@ def test_bulk_upsert_contributors_links_projects_and_users():
             contribs = [Row("alice", "alice@example.com"), Row("bob")]
             storage.bulk_upsert_contributors(conn, "demo-proj", contribs)
 
-            users = conn.execute("SELECT username, email FROM contributors ORDER BY username").fetchall()
+            users = conn.execute("SELECT github_username, email FROM contributors ORDER BY github_username").fetchall()
             user_rows = [tuple(row) for row in users]
             assert ("alice", "alice@example.com") in user_rows
             assert ("bob", None) in user_rows
