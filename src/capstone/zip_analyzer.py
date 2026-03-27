@@ -26,7 +26,7 @@ from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
-from .storage import open_db, close_db, store_analysis_snapshot, upsert_user, link_user_to_project, store_contributor_stats
+from .storage import open_db, close_db, store_analysis_snapshot, upsert_contributor, link_user_to_project, store_contributor_stats
 import sqlite3
 from . import file_store
 
@@ -343,7 +343,7 @@ class ZipAnalyzer:
         metric_summary = compute_metrics(metrics_inputs)
         collaboration = self._summarize_collaboration(git_logs)
         # Build author→email map from the raw git log lines while they are still available.
-        # to_compact_collaboration drops email, so we capture it here for upsert_user below.
+        # to_compact_collaboration drops email, so we capture it here for upsert_contributor below.
         author_email_map, noreply_only_authors = _build_author_email_map(git_logs)
         duration = perf_counter() - start
 
@@ -421,7 +421,7 @@ class ZipAnalyzer:
                     # Skip authors who only ever committed with noreply/bot emails
                     if cname in noreply_only_authors:
                         continue
-                    uid = upsert_user(conn, cname, email=author_email_map.get(cname))
+                    uid = upsert_contributor(conn, cname, email=author_email_map.get(cname))
                     link_user_to_project(conn, uid, project_id, contributor_name=cname)
                     commits, _lines, reviews = _parse_contrib_data(cdata)
                     score = commits * 1.0 + reviews * 0.5

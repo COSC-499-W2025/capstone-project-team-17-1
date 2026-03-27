@@ -17,7 +17,7 @@ from .storage import (
     link_user_to_project,
     open_db,
     store_contributor_stats,
-    upsert_user,
+    upsert_contributor,
     update_contributor_score,
 )
 
@@ -370,8 +370,8 @@ def sync_contributor_stats(
         progress_cb("Saving contributor stats", None, None)
     conn = open_db(db_dir)
     for row in stats:
-        # upsert user first to get stable id
-        user_id = upsert_user(conn, row.contributor, email=row.email)
+        # upsert contributor first to get stable id
+        user_id = upsert_contributor(conn, row.contributor, email=row.email)
         link_user_to_project(
             conn,
             user_id,

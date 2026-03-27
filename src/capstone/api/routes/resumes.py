@@ -227,19 +227,19 @@ async def generate_resume(request: Request):
         # Contributor ids can go stale if the local users table was rebuilt or reset.
         # Recreate the local user from the current auth profile before inserting rows
         # that reference users.id.
-        owner_profile = storage.get_user_profile(conn, owner_id)
+        owner_profile = storage.get_contributor_profile(conn, owner_id)
         if not owner_profile and auth_user:
             auth_username = (auth_user.get("username") or "").strip()
             github_url = (auth_user.get("github_url") or "").strip()
             github_handle = github_url.rstrip("/").split("/")[-1].strip() if github_url else ""
             identity = github_handle or auth_username
             if identity:
-                owner_id = storage.upsert_user(
+                owner_id = storage.upsert_contributor(
                     conn,
                     identity,
                     email=(auth_user.get("email") or "").strip() or None,
                 )
-                owner_profile = storage.get_user_profile(conn, owner_id)
+                owner_profile = storage.get_contributor_profile(conn, owner_id)
                 if auth_token and auth_token in _SESSIONS:
                     _SESSIONS[auth_token]["contributor_id"] = owner_id
                     _save_sessions()
@@ -252,7 +252,7 @@ async def generate_resume(request: Request):
             resume_title = f"{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         # --- resolve data user's username for contributor matching ---
-        data_user_profile = storage.get_user_profile(conn, data_user_id) or {}
+        data_user_profile = storage.get_contributor_profile(conn, data_user_id) or {}
         data_username = (
             data_user_profile.get("username")
             or data_user_profile.get("full_name")
@@ -346,7 +346,7 @@ async def generate_resume(request: Request):
         is_self = (data_user_id == owner_id)
 
         # Header data: use auth profile for self, local git profile for others
-        local_profile = storage.get_user_profile(conn, data_user_id) or {}
+        local_profile = storage.get_contributor_profile(conn, data_user_id) or {}
 
         def _pick(auth_key: str, local_key: Optional[str] = None) -> str:
             local_val = (local_profile.get(local_key or auth_key) or "").strip()

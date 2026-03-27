@@ -176,7 +176,7 @@ def _extract_contributors_from_zip(conn, file_id: str) -> list[tuple[str, str | 
     (written by ``_write_git_log`` in cli.py).
 
     Returns deduplicated ``(author_name, email_or_None)`` tuples.  Passing both
-    values to ``upsert_user`` lets the storage layer match contributors across
+    values to ``upsert_contributor`` lets the storage layer match contributors across
     the GitHub-URL flow (GitHub login + email) and the ZIP flow (git user.name +
     git user.email), reconciling them via shared email when available.
     """
@@ -365,12 +365,12 @@ async def upload_project(
     )
     log_event("SUCCESS", f"Full analysis snapshot stored · Project: {project_id}")
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
-    # Pass email alongside the git author name so upsert_user can reconcile with the same
+    # Pass email alongside the git author name so upsert_contributor can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
     try:
         contributors = _extract_contributors_from_zip(conn, stored["file_id"])
         for cname, cemail in contributors:
-            uid = storage.upsert_user(conn, cname, email=cemail)
+            uid = storage.upsert_contributor(conn, cname, email=cemail)
             storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
     except Exception:
         pass  # non-fatal; contributors will be populated on full analysis
@@ -497,7 +497,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                 try:
                     contributors = _extract_contributors_from_zip(conn, stored["file_id"])
                     for cname, cemail in contributors:
-                        uid = storage.upsert_user(conn, cname, email=cemail)
+                        uid = storage.upsert_contributor(conn, cname, email=cemail)
                         storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
                 except Exception:
                     pass  # non-fatal
@@ -980,7 +980,7 @@ async def generate_project_resume(project_id: str, request: Request):
         username = project_id  # last-resort fallback
 
     # 3. Upsert user and ensure project link
-    user_id = storage.upsert_user(conn, username)
+    user_id = storage.upsert_contributor(conn, username)
     storage.link_user_to_project(conn, user_id, project_id, contributor_name=username)
 
     # 4. Extract skills from snapshot (languages + frameworks + skills list)
@@ -1025,7 +1025,7 @@ async def generate_project_resume(project_id: str, request: Request):
     project_items = [project_item]
 
     # 6. Build header from user profile
-    user_profile = storage.get_user_profile(conn, user_id) or {}
+    user_profile = storage.get_contributor_profile(conn, user_id) or {}
     city = (user_profile.get("city") or "").strip()
     state = (user_profile.get("state_region") or "").strip()
     location = ", ".join(part for part in [city, state] if part)

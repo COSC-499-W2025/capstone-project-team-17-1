@@ -79,7 +79,7 @@ def test_users_and_links_schema_and_fk():
                 assert (info["updated_at"][4] or "").upper() == "CURRENT_TIMESTAMP"
 
             # Insert user and contributor stats with user_id
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             storage.store_contributor_stats(
                 conn,
                 project_id="demo",
@@ -105,13 +105,13 @@ def test_users_and_links_schema_and_fk():
             assert fk and fk[0][2] == "contributors"
 
 
-def test_get_and_update_user_profile():
+def test_get_and_update_contributor_profile():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
-            storage.update_user_profile(
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
+            storage.update_contributor_profile(
                 conn,
                 user_id,
                 full_name="Alice Doe",
@@ -121,7 +121,7 @@ def test_get_and_update_user_profile():
                 github_url="https://github.com/alice",
                 portfolio_url="https://alice.dev",
             )
-            profile = storage.get_user_profile(conn, user_id)
+            profile = storage.get_contributor_profile(conn, user_id)
             assert profile is not None
             assert profile["full_name"] == "Alice Doe"
             assert profile["phone_number"] == "+1 111-222-3333"
@@ -131,12 +131,12 @@ def test_get_and_update_user_profile():
             assert profile["portfolio_url"] == "https://alice.dev"
 
 
-def test_upsert_user_sets_default_github_url():
+def test_upsert_contributor_sets_default_github_url():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             row = conn.execute(
                 "SELECT github_url FROM contributors WHERE id = ?",
                 (user_id,),
@@ -149,7 +149,7 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             resume_id = storage.upsert_default_resume_modules(
                 conn,
                 user_id=user_id,
@@ -239,7 +239,7 @@ def test_upsert_default_resume_modules_updates_existing_draft_title():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             first_id = storage.upsert_default_resume_modules(
                 conn,
                 user_id=user_id,
@@ -283,7 +283,7 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_user(conn, "alice", email="alice@example.com")
+            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             first_id = storage.upsert_default_resume_modules(
                 conn,
                 user_id=user_id,
@@ -325,17 +325,17 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
             assert int(count) == 2
 
 
-def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
+def test_upsert_contributor_filters_noreply_and_sets_user_id_in_stats():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            uid = storage.upsert_user(conn, "boty", email="noreply@github.com")
+            uid = storage.upsert_contributor(conn, "boty", email="noreply@github.com")
             assert uid > 0
             row = conn.execute("SELECT email FROM contributors WHERE id = ?", (uid,)).fetchone()
             assert row[0] is None  # noreply stripped
 
-            uid2 = storage.upsert_user(conn, "alice", email="alice@example.com")
+            uid2 = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             storage.store_contributor_stats(
                 conn,
                 project_id="demo2",
@@ -347,7 +347,7 @@ def test_upsert_user_filters_noreply_and_sets_user_id_in_stats():
             assert rows and rows[0]["user_id"] == uid2
 
 
-def test_upsert_users_from_contributors_links_projects_and_users():
+def test_bulk_upsert_contributors_links_projects_and_users():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
@@ -358,7 +358,7 @@ def test_upsert_users_from_contributors_links_projects_and_users():
                     self.email = email
 
             contribs = [Row("alice", "alice@example.com"), Row("bob")]
-            storage.upsert_users_from_contributors(conn, "demo-proj", contribs)
+            storage.bulk_upsert_contributors(conn, "demo-proj", contribs)
 
             users = conn.execute("SELECT username, email FROM contributors ORDER BY username").fetchall()
             user_rows = [tuple(row) for row in users]
@@ -376,7 +376,7 @@ def test_store_contributor_stats_updates_latest_user_id():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            uid1 = storage.upsert_user(conn, "alice", email="alice@example.com")
+            uid1 = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             storage.store_contributor_stats(conn, project_id="demo", contributor="alice", user_id=None, commits=1)
             storage.store_contributor_stats(conn, project_id="demo", contributor="alice", user_id=uid1, commits=2)
 
@@ -398,7 +398,7 @@ def test_store_contributor_stats_updates_latest_user_id():
 def _edu_conn_and_uid(username: str, email: str):
     """Open DB, upsert user, clear their education, return (conn, uid)."""
     conn = storage.open_db()
-    uid = storage.upsert_user(conn, username, email=email)
+    uid = storage.upsert_contributor(conn, username, email=email)
     storage.replace_user_education(conn, uid, [])  # ensure clean slate
     return conn, uid
 
@@ -520,7 +520,7 @@ _HEADER = {
 def test_upsert_default_resume_modules_populates_summary_section():
     conn = storage.open_db()
     try:
-        uid = storage.upsert_user(conn, "resume_summary_test_user", email="rs_test@example.com")
+        uid = storage.upsert_contributor(conn, "resume_summary_test_user", email="rs_test@example.com")
         resume_id = storage.upsert_default_resume_modules(
             conn,
             user_id=uid,
@@ -547,7 +547,7 @@ def test_upsert_default_resume_modules_populates_summary_section():
 def test_upsert_default_resume_modules_no_summary_uses_empty_template():
     conn = storage.open_db()
     try:
-        uid = storage.upsert_user(conn, "resume_nosummary_test_user", email="rn_test@example.com")
+        uid = storage.upsert_contributor(conn, "resume_nosummary_test_user", email="rn_test@example.com")
         resume_id = storage.upsert_default_resume_modules(
             conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
             summary=None, create_new=True,
@@ -569,7 +569,7 @@ def test_upsert_default_resume_modules_no_summary_uses_empty_template():
 def test_upsert_default_resume_modules_populates_education_section():
     conn = storage.open_db()
     try:
-        uid = storage.upsert_user(conn, "resume_edu_test_user", email="re_test@example.com")
+        uid = storage.upsert_contributor(conn, "resume_edu_test_user", email="re_test@example.com")
         edu = [{"university": "UBCO", "degree": "BSc CS", "start_date": "2022",
                 "end_date": "Present", "city": "Kelowna", "state": "BC"}]
         resume_id = storage.upsert_default_resume_modules(
@@ -594,7 +594,7 @@ def test_upsert_default_resume_modules_populates_education_section():
 def test_upsert_default_resume_modules_education_location_city_state():
     conn = storage.open_db()
     try:
-        uid = storage.upsert_user(conn, "resume_loc_test_user", email="rl_test@example.com")
+        uid = storage.upsert_contributor(conn, "resume_loc_test_user", email="rl_test@example.com")
         edu = [{"university": "UBC", "degree": "BSc", "city": "Vancouver", "state": "BC"}]
         resume_id = storage.upsert_default_resume_modules(
             conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
@@ -615,7 +615,7 @@ def test_upsert_default_resume_modules_education_location_city_state():
 def test_upsert_default_resume_modules_refreshes_summary_on_regenerate():
     conn = storage.open_db()
     try:
-        uid = storage.upsert_user(conn, "resume_refresh_test_user", email="rr_test@example.com")
+        uid = storage.upsert_contributor(conn, "resume_refresh_test_user", email="rr_test@example.com")
         resume_id = storage.upsert_default_resume_modules(
             conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
             summary="First summary.", create_new=True,

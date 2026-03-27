@@ -179,7 +179,7 @@ def test_education_get_and_put_endpoints_return_correct_shape(tmp_path):
 
     conn = _st.open_db()
     try:
-        uid = _st.upsert_user(conn, "edu_shape_smoke_user", email="edu_smoke@example.com")
+        uid = _st.upsert_contributor(conn, "edu_shape_smoke_user", email="edu_smoke@example.com")
         # Reset education so the test is idempotent against prior runs
         _st.replace_user_education(conn, uid, [])
 

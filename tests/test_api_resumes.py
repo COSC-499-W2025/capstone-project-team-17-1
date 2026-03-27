@@ -42,7 +42,7 @@ class _ResumeAPIBase(unittest.TestCase):
 
         # Seed a user so all tests have a valid user_id
         conn = storage.open_db(self.tmp_path)
-        self.user_id = storage.upsert_user(conn, "testuser", email="test@example.com")
+        self.user_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
 
     # ------------------------------------------------------------------ helpers
 
@@ -487,7 +487,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_for_other_contributor_owned_by_session_user(self):
         # user_id in body = other contributor → resume.user_id must still equal session owner
         conn = storage.open_db(self.tmp_path)
-        other_id = storage.upsert_user(conn, "otheruser", email="other@example.com")
+        other_id = storage.upsert_contributor(conn, "otheruser", email="other@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-1")
 
         r = self.client.post(
@@ -505,7 +505,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_for_other_not_in_target_users_resume_list(self):
         # After generating for another user, their resume list should remain empty
         conn = storage.open_db(self.tmp_path)
-        other_id = storage.upsert_user(conn, "otheruser2", email="other2@example.com")
+        other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-2")
 
         self.client.post(

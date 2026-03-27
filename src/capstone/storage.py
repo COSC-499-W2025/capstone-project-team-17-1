@@ -1907,7 +1907,7 @@ def fetch_project_overrides(conn: sqlite3.Connection, project_id: str) -> dict |
 # Users and user-project links
 # -----------------------------
 
-def upsert_user(
+def upsert_contributor(
     conn: sqlite3.Connection,
     username: str,
     *,
@@ -1963,7 +1963,7 @@ def upsert_user(
     return int(cursor.lastrowid)
 
 
-def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
+def get_contributor_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
     row = conn.execute(
         """
         SELECT
@@ -1997,7 +1997,7 @@ def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
     }
 
 
-def update_user_profile(
+def update_contributor_profile(
     conn: sqlite3.Connection,
     user_id: int,
     *,
@@ -2030,6 +2030,56 @@ def update_user_profile(
             portfolio_url,
             int(user_id),
         ),
+    )
+    conn.commit()
+
+
+def get_user(conn: sqlite3.Connection) -> dict | None:
+    """Return the single login account row, or None if not yet set."""
+    row = conn.execute(
+        """
+        SELECT id, username, password_hash, github_username, github_token_enc,
+               created_at, last_login_at
+        FROM user
+        WHERE id = 1
+        LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": int(row[0]),
+        "username": row[1],
+        "password_hash": row[2],
+        "github_username": row[3],
+        "github_token_enc": row[4],
+        "created_at": row[5],
+        "last_login_at": row[6],
+    }
+
+
+def upsert_user(
+    conn: sqlite3.Connection,
+    username: str,
+    *,
+    password_hash: str | None = None,
+    github_username: str | None = None,
+    github_token_enc: str | None = None,
+) -> None:
+    """Insert or update the single login account row (id=1)."""
+    if not username:
+        raise ValueError("username must be provided")
+    conn.execute(
+        """
+        INSERT INTO user (id, username, password_hash, github_username, github_token_enc)
+        VALUES (1, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            username = excluded.username,
+            password_hash = COALESCE(excluded.password_hash, password_hash),
+            github_username = COALESCE(excluded.github_username, github_username),
+            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc)
+        """,
+        (username, password_hash, github_username, github_token_enc),
     )
     conn.commit()
 
@@ -2762,7 +2812,7 @@ def fetch_user_project_activity_periods(
     }
 
 
-def upsert_users_from_contributors(
+def bulk_upsert_contributors(
     conn: sqlite3.Connection,
     project_id: str,
     contributors: Iterable[object],
@@ -2777,7 +2827,7 @@ def upsert_users_from_contributors(
         email = getattr(row, "email", None)
         if not username:
             continue
-        user_id = upsert_user(conn, username, email=email)
+        user_id = upsert_contributor(conn, username, email=email)
         link_user_to_project(conn, user_id, project_id, contributor_name=username)
 
 def save_project_metadata(conn, project_id, meta):
@@ -3012,14 +3062,16 @@ __all__ = [
     "fetch_latest_contributor_stats",
     "update_contributor_score",
     "fetch_contributor_rankings",
-    # users
+    # users / contributors
+    "get_user",
     "upsert_user",
-    "get_user_profile",
-    "update_user_profile",
+    "upsert_contributor",
+    "get_contributor_profile",
+    "update_contributor_profile",
     "upsert_default_resume_modules",
     "link_user_to_project",
     "fetch_user_project_activity_periods",
-    "upsert_users_from_contributors",
+    "bulk_upsert_contributors",
     # evidence
     "store_project_evidence",
     "fetch_project_evidence",
