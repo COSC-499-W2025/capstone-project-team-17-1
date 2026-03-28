@@ -2867,6 +2867,12 @@ transition: all 0.2s ease;
   opacity: 0.92;
 }
 
+.resume-public-warning {
+  color: #ff6b6b;
+  opacity: 1;
+  font-weight: 600;
+}
+
 .resume-hero-actions {
   display: flex;
   flex-wrap: wrap;

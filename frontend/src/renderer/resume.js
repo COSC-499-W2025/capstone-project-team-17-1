@@ -1,4 +1,4 @@
-import { authFetch } from "./auth.js";
+import { authFetch, isPrivateMode } from "./auth.js";
 import { openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
@@ -233,8 +233,8 @@ async function renderResumeList() {
           <span class="resume-cb-visual"></span>
         </span>
         <div class="resume-list-card-header">
-          <span class="resume-card-drag" title="Drag to reorder">⠿</span>
-          <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
+          ${isPrivateMode() ? `<span class="resume-card-drag" title="Drag to reorder">⠿</span>` : ""}
+          ${isPrivateMode() ? `<button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>` : ""}
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -257,7 +257,9 @@ async function renderResumeList() {
     `;
   }).join("");
 
-  setupListDragDrop(container);
+  if (isPrivateMode()) {
+    setupListDragDrop(container);
+  }
 
   // Flash newly generated card
   if (_newResumeId) {
@@ -716,11 +718,17 @@ async function confirmDeleteResume(resumeId) {
 // ---------------------------------------------------------------------------
 
 function ce(field, value, ctx = "") {
+  if (!isPrivateMode()) {
+    return `<span data-field="${field}" ${ctx}>${value ?? ""}</span>`;
+  }
   return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
 function ceHeader(field, value, ctx = "") {
   // Header metadata fields save via data-header-field (collected as full metadata dict)
+  if (!isPrivateMode()) {
+    return `<span data-header-field="${field}" ${ctx}>${value ?? ""}</span>`;
+  }
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
@@ -728,8 +736,8 @@ function ceHeader(field, value, ctx = "") {
 function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
-  const del  = `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>`;
-  const drag = `<span class="re-item-drag" title="Drag to reorder">⠿</span>`;
+  const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
+  const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
   const bullets = (item.bullets || []).filter(Boolean);
 
   if (sectionKey === "core_skill") {
@@ -750,7 +758,7 @@ function buildItemHtml(rid, sid, sectionKey, item) {
     return `
       <div class="re-item" data-item-id="${iid}">
         ${drag}${del}
-        <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
+        <div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content || item.title || ""}</div>
       </div>`;
   }
 
@@ -772,10 +780,10 @@ function buildItemHtml(rid, sid, sectionKey, item) {
         ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
         ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
       </div>` : ""}
-      ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
+      ${item.content  ? `<div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
         <ul class="re-bullets">
-          ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
+          ${bullets.map((b) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="bullet" ${ctx} class="${isPrivateMode() ? "re-editable" : ""}">${b}</li>`).join("")}
         </ul>` : ""}
     </div>`;
 }
@@ -848,22 +856,23 @@ function buildResumeHtml(resume) {
     return `
       <div class="re-section" data-section-id="${sid}">
         <div class="re-section-head">
-          <span class="re-section-drag" title="Drag to reorder">⠿</span>
+          ${isPrivateMode() ? `<span class="re-section-drag" title="Drag to reorder">⠿</span>` : ""}
           <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
-          <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>
+          ${isPrivateMode() ? `<button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>` : ""}
         </div>
         <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">
           ${itemsHtml}
         </div>
-        <div class="re-section-footer">
+        ${isPrivateMode() ? `<div class="re-section-footer">
           <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
           <button class="re-add-section-btn" data-resume-id="${rid}" data-after-section-id="${sid}">+ Add section</button>
-        </div>
+        </div>` : ""}
       </div>`;
   }).join("");
 
   return `
     <div class="re-sheet">
+      ${!isPrivateMode() ? `<div class="skills-group-card"><p class="muted-text resume-public-warning">Log in to Private Mode to edit this resume. Public Mode supports preview, export, and delete only.</p></div>` : ""}
       ${heroHtml}
       ${headerSecHtml}
       ${sectionsHtml || ""}
@@ -1023,6 +1032,10 @@ function setupDragDrop(container) {
 }
 
 function attachEditListeners(container) {
+  if (!isPrivateMode()) {
+    return;
+  }
+
   // --- shared helpers (closed over container for header-field saves) ---
   function showSaved(el) {
     const existing = el.parentElement?.querySelector(".re-saved");
@@ -1276,18 +1289,11 @@ function attachEditListeners(container) {
 // ---------------------------------------------------------------------------
 
 export function initResume() {
-  document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
+  const newResumeBtn = document.getElementById("new-resume-btn");
+  newResumeBtn?.addEventListener("click", openNewResumeModal);
+  renderResumeList();
 
   document.addEventListener("auth:mode-changed", (e) => {
-    if (e.detail?.isPrivate) {
-      // Logged in: backend resolves user_id from token, just render
-      renderResumeList();
-    } else {
-      // Logged out / public mode
-      const container = document.getElementById("resume-list-container");
-      if (container) {
-        container.innerHTML = `<p class="muted-text">Click "New Resume" to create your first resume.</p>`;
-      }
-    }
+    renderResumeList();
   });
 }
