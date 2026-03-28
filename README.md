@@ -185,6 +185,8 @@ cd ..
 
 Use this flow for peer testing on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
 
+Before starting this section, complete the shared setup in [Installation Guide for Future Development Team](#installation-guide-for-future-development-team). The steps below only cover the macOS-specific launch and verification flow used for frontend peer testing.
+
 ### 1. Go to the project root and activate the virtual environment
 
 ```bash
@@ -192,21 +194,14 @@ cd /Users/yanshuyu/Desktop/capstone-project-team-17-1
 source .venv/bin/activate
 ```
 
-### 2. Install backend dependencies
-
-```bash
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-### 3. Rebuild the backend executable
+### 2. Rebuild the backend executable
 
 ```bash
 PYINSTALLER_CONFIG_DIR=/tmp/pyinstaller \
 .venv/bin/python -m PyInstaller src/capstone/capstone_backend.spec --clean
 ```
 
-### 4. Start the backend
+### 3. Start the backend
 
 The frontend currently expects the backend on port `8002`.
 
@@ -214,15 +209,14 @@ The frontend currently expects the backend on port `8002`.
 python -m capstone.run_server
 ```
 
-### 5. Open a new terminal and start the frontend
+### 4. Open a new terminal and start the frontend
 
 ```bash
 cd /Users/yanshuyu/Desktop/capstone-project-team-17-1/frontend
-npm install
 npm start
 ```
 
-### 6. Verify backend health
+### 5. Verify backend health
 
 Open:
 
@@ -232,7 +226,7 @@ http://127.0.0.1:8002/health
 
 If it returns a healthy response, the backend and frontend should be able to connect.
 
-### 7. Suggested peer-testing checks
+### 6. Suggested peer-testing checks
 
 - Confirm the app launches without a frontend-backend connection error.
 - Test account login and verify the authenticated view loads correctly.
@@ -787,6 +781,26 @@ The system must be able to ... :
 ## 30.0 Display textual information about a project as a résumé item
   - 30.1 Generate résumé-ready textual project descriptions
   - 30.2 Display only résumé-selected projects and wording
+
+## 31.0 Produce a One-Page Résumé
+  - 31.1 Include education and awards information
+  - 31.2 Present skills categorized by expertise level
+  - 31.3 Highlight projects with evidence of user contribution and impact
+
+## 32.0 Deliver a Web Portfolio
+  - 32.1 Display a skills timeline that demonstrates learning progression and increased expertise/depth
+  - 32.2 Display a heatmap of project activities showing productivity over time
+  - 32.3 Showcase the top 3 projects and illustrate process/evolution of changes
+
+## 33.0 Support Private Dashboard Customization
+  - 33.1 Provide a private mode for the dashboard
+  - 33.2 Allow the user to interactively customize specific dashboard components before going live
+  - 33.3 Allow the user to customize specific visualizations before going live
+
+## 34.0 Support Public Dashboard Viewing
+  - 34.1 Provide a public mode for the dashboard
+  - 34.2 Restrict dashboard changes in public mode to search controls
+  - 34.3 Restrict dashboard changes in public mode to filter controls
 
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
