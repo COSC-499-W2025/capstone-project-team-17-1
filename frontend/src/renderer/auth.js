@@ -4,9 +4,9 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
-import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
+import { refreshConsentUI, renderConsentSettings, setConsentSettingsMessage } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
-import { shouldRequireLoginForTab } from "./authShared.mjs";
+import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 
 const API_BASE = "http://127.0.0.1:8002";
@@ -14,6 +14,13 @@ const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
 let privateModeEnabled = false;
+let pendingPublicPage = null;
+let _educationEntries = [];
+let latestConsentState = {
+  local_consent: false,
+  external_consent: false,
+  bannerVisible: false,
+};
 
 function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -115,6 +122,37 @@ function setActiveTabByKey(tabKey) {
   });
 }
 
+function activateSettingsTab(tab = "general") {
+  document.querySelectorAll(".settings-nav-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === tab);
+  });
+  document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `settings-tab-${tab}`);
+  });
+}
+
+async function ensureConsentState() {
+  // Reuse the shared consent 
+  try {
+    latestConsentState = await refreshConsentUI();
+  } catch (_) {
+    latestConsentState = {
+      local_consent: false,
+      external_consent: false,
+      bannerVisible: false,
+    };
+  }
+  return latestConsentState;
+}
+
+function showConsentRequiredSettings(message = "Grant consent in Privacy & Consent before using Ask Sienna.") {
+  // Ask Sienna is gated by consent
+  showSavedPage("settings", "settings-page");
+  activateSettingsTab("privacy");
+  renderSettingsProfile();
+  setConsentSettingsMessage(message);
+}
+
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
@@ -125,6 +163,15 @@ function showSavedPage(tabKey, pageId) {
   if (!tabKey || !pageId) return;
   switchPage(pageId);
   setActiveTabByKey(tabKey);
+}
+
+function getActivePageSnapshot() {
+  const activeTab = document.querySelector(".nav-tab.active");
+  const activePage = document.querySelector(".page.active");
+  const tabKey = activeTab?.dataset.tab || "";
+  const pageId = activePage?.id || activeTab?.dataset.page || "";
+  if (!tabKey || !pageId) return null;
+  return { tabKey, pageId };
 }
 
 function restoreLastAllowedPage({ requirePrivate = false } = {}) {
@@ -159,6 +206,10 @@ export async function authFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
+export function hasAuthToken() {
+  return Boolean(getAuthToken());
+}
+
 async function ensureCurrentUser() {
   if (currentUser) return currentUser;
   if (!getAuthToken()) return null;
@@ -185,6 +236,24 @@ export async function openLoginFlow() {
   } catch (_) {}
   setAuthFormMode(mode);
   showAuthModal(true);
+}
+
+export async function openSettingsAndPromptLogin(settingsTab = "account") {
+  showSavedPage("settings", "settings-page");
+  const fallbackSettingsTab = shouldRequireLoginForSettingsTab(settingsTab, currentUser)
+    ? "privacy"
+    : settingsTab;
+  pendingPublicPage = {
+    tabKey: "settings",
+    pageId: "settings-page",
+    settingsTab: fallbackSettingsTab,
+  };
+  activateSettingsTab(fallbackSettingsTab);
+  renderSettingsProfile();
+  if (shouldRequireLoginForSettingsTab(settingsTab, currentUser)) {
+    setConsentSettingsMessage("");
+    await openLoginFlow();
+  }
 }
 
 function renderSettingsProfile() {
@@ -217,12 +286,33 @@ function renderSettingsProfile() {
           <label class="settings-form-label" for="pf-portfolio">Portfolio URL</label>
           <input id="pf-portfolio" class="settings-input" value="${currentUser.portfolio_url || ""}" />
         </div>
+
+        <div class="settings-edu-section">
+          <div class="settings-edu-section-header">
+            <span class="settings-edu-section-title">Education</span>
+            <span class="settings-edu-section-desc">Optional. Add your academic background.</span>
+          </div>
+          <div id="edu-cards-container" class="edu-cards-container"></div>
+          <div class="edu-add-zone" id="edu-add-zone">
+            <button class="edu-add-btn" id="edu-add-btn" title="Add education">＋</button>
+          </div>
+        </div>
+
         <div class="settings-form-actions">
           <button id="profile-save-btn" class="settings-save-btn">Save Profile</button>
           <span id="profile-msg" class="settings-feedback-msg"></span>
         </div>
       `;
       document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
+      document.getElementById("edu-add-btn")?.addEventListener("click", () => {
+        _educationEntries.push({ university: "", degree: "", start_date: "", end_date: "" });
+        _renderEduCards();
+      });
+      // Load education from backend then render
+      authFetch("/auth/me/education").then(r => r.json()).then(data => {
+        _educationEntries = Array.isArray(data.data) ? data.data : [];
+        _renderEduCards();
+      }).catch(() => { _educationEntries = []; _renderEduCards(); });
     }
   }
 
@@ -256,6 +346,58 @@ function renderSettingsProfile() {
   renderConsentSettings();
 }
 
+function _renderEduCards() {
+  const container = document.getElementById("edu-cards-container");
+  if (!container) return;
+  container.innerHTML = "";
+  _educationEntries.forEach((entry, idx) => {
+    const isCurrent = !entry.end_date || entry.end_date.toLowerCase() === "present";
+    const card = document.createElement("div");
+    card.className = "edu-card";
+    card.innerHTML = `
+      <button class="edu-card-delete" title="Remove" data-idx="${idx}">×</button>
+      <div class="edu-card-fields">
+        <input class="settings-input edu-university" placeholder="University / School" value="${entry.university || ""}" data-idx="${idx}" data-field="university" />
+        <input class="settings-input edu-degree" placeholder="Degree (e.g. BSc Computer Science)" value="${entry.degree || ""}" data-idx="${idx}" data-field="degree" />
+        <div class="edu-card-dates">
+          <input class="settings-input edu-start" placeholder="Start (e.g. Sep 2020)" value="${entry.start_date || ""}" data-idx="${idx}" data-field="start_date" />
+          <input class="settings-input edu-end" placeholder="End (e.g. May 2024)" value="${isCurrent ? "" : (entry.end_date || "")}" data-idx="${idx}" data-field="end_date" ${isCurrent ? "disabled" : ""} />
+          <label class="edu-current-label">
+            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent && entry.university ? "checked" : ""} />
+            <span>Current</span>
+          </label>
+        </div>
+        <div class="edu-card-location">
+          <input class="settings-input edu-city" placeholder="City" value="${entry.city || ""}" data-idx="${idx}" data-field="city" />
+          <input class="settings-input edu-state" placeholder="State / Province" value="${entry.state || ""}" data-idx="${idx}" data-field="state" />
+        </div>
+      </div>
+    `;
+    // delete
+    card.querySelector(".edu-card-delete").addEventListener("click", () => {
+      _educationEntries.splice(idx, 1);
+      _renderEduCards();
+    });
+    // field edits
+    card.querySelectorAll("[data-field]").forEach(input => {
+      input.addEventListener("input", e => {
+        _educationEntries[e.target.dataset.idx][e.target.dataset.field] = e.target.value;
+      });
+    });
+    // current checkbox
+    card.querySelector(".edu-current-chk").addEventListener("change", e => {
+      const i = parseInt(e.target.dataset.idx);
+      if (e.target.checked) {
+        _educationEntries[i].end_date = "Present";
+      } else {
+        _educationEntries[i].end_date = "";
+      }
+      _renderEduCards();
+    });
+    container.appendChild(card);
+  });
+}
+
 async function saveProfile() {
   const msg = document.getElementById("profile-msg");
   if (msg) msg.textContent = "Saving...";
@@ -270,11 +412,20 @@ async function saveProfile() {
   };
 
   try {
-    const res = await authFetch("/auth/me", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const [res, eduRes] = await Promise.all([
+      authFetch("/auth/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      authFetch("/auth/me/education", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          education: _educationEntries.filter(e => (e.university || "").trim()),
+        }),
+      }),
+    ]);
     const data = await res.json();
     if (!res.ok) {
       if (msg) msg.textContent = `Failed: ${data.detail || "save failed"}`;
@@ -345,6 +496,16 @@ function closeModalToPublic() {
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
   showAuthModal(false);
+  if (!currentUser && pendingPublicPage?.tabKey && pendingPublicPage?.pageId) {
+    showSavedPage(pendingPublicPage.tabKey, pendingPublicPage.pageId);
+    if (pendingPublicPage.tabKey === "settings") {
+      activateSettingsTab(pendingPublicPage.settingsTab || "privacy");
+      renderSettingsProfile();
+    }
+    pendingPublicPage = null;
+    return;
+  }
+  pendingPublicPage = null;
   if (!currentUser && !restoreLastAllowedPage()) {
     goToPage("dashboard", "dashboard-page");
   }
@@ -381,20 +542,21 @@ export async function initAuthFlow() {
 
   setModeUI(false, null);
   setAuthFormMode("login");
-  restoreSavedPageOptimistically();
+  goToPage("dashboard", "dashboard-page");
 
   // ── Settings tab switching ────────────────────────────────────
   document.querySelectorAll(".settings-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
-      document.querySelectorAll(".settings-nav-item").forEach((b) =>
-        b.classList.remove("active")
-      );
-      btn.classList.add("active");
-      document.querySelectorAll(".settings-tab-panel").forEach((p) =>
-        p.classList.remove("active")
-      );
-      document.getElementById(`settings-tab-${tab}`)?.classList.add("active");
+      if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
+        // Public mode can only stay on the consent tab inside Setting
+        activateSettingsTab("privacy");
+        renderSettingsProfile();
+        openSettingsAndPromptLogin(tab);
+        return;
+      }
+      setConsentSettingsMessage("");
+      activateSettingsTab(tab);
     });
   });
 
@@ -459,13 +621,23 @@ export async function initAuthFlow() {
         await openLoginFlow();
         return false;
       }
-      if (tabKey === "settings") {
-        const user = await ensureCurrentUser();
-        if (shouldRequireLoginForTab(tabKey, user)) {
-          await openLoginFlow();
+      if (tabKey === "chat") {
+        const consentState = await ensureConsentState();
+        if (!consentState?.external_consent) {
+          // Block Sienna before opening the page 
+          showConsentRequiredSettings();
           return false;
         }
+      }
+      if (tabKey === "settings") {
+        const user = await ensureCurrentUser();
         renderSettingsProfile();
+        if (user) {
+          activateSettingsTab("general");
+        } else {
+          activateSettingsTab("privacy");
+          setConsentSettingsMessage("");
+        }
       }
       if (tabKey === "customization") {
         const user = await ensureCurrentUser();
@@ -484,7 +656,7 @@ export async function initAuthFlow() {
     if (user) {
       setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      const consentState = await refreshConsentUI();
+      const consentState = await ensureConsentState();
       if (!consentState?.bannerVisible) {
         maybeShowOnboardingForAudience(user.username || user.id || "guest");
       }
@@ -506,7 +678,7 @@ export async function initAuthFlow() {
         loadMostUsedSkills(),
       ]);
       notifyPortfolioDataUpdated();
-      const consentState = await refreshConsentUI();
+      const consentState = await ensureConsentState();
       if (!consentState?.bannerVisible) {
         maybeShowOnboardingForAudience("guest");
       }
@@ -565,10 +737,11 @@ export async function initAuthFlow() {
     setAuthToken(data.token);
     setModeUI(true, data.user);
     showAuthModal(false);
+    pendingPublicPage = null;
     goToPage("dashboard", "dashboard-page");
 
     await syncCloudDbAndRefresh();
-    const consentState = await refreshConsentUI();
+    const consentState = await ensureConsentState();
     if (!consentState?.bannerVisible) {
       maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
     }
@@ -582,6 +755,11 @@ export async function initAuthFlow() {
   });
 
  window.addEventListener("consent:state-changed", (event) => {
+  latestConsentState = {
+    local_consent: Boolean(event.detail?.local_consent),
+    external_consent: Boolean(event.detail?.external_consent),
+    bannerVisible: Boolean(event.detail?.bannerVisible),
+  };
   if (event.detail?.bannerVisible) return;
   maybeShowOnboardingForAudience(currentUser?.username || currentUser?.id || "guest");
  });

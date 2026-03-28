@@ -118,6 +118,7 @@ class ZipAnalyzer:
         project_id: str | None = None,
         db_dir: Path | None = None,
         conn: sqlite3.Connection | None = None,
+        skip_contributor_storage: bool = False,
     ) -> dict[str, object]:
         start = perf_counter()
         zip_path = zip_path.expanduser().resolve()
@@ -170,6 +171,7 @@ class ZipAnalyzer:
                     db_dir,
                     conn,
                     stored,
+                    skip_contributor_storage=skip_contributor_storage,
                 )
         except BadZipFile as exc:
             detail = f"Corrupted zip archive ({exc})"
@@ -189,6 +191,7 @@ class ZipAnalyzer:
         db_dir: Path | None,
         conn,
         stored_file: dict,
+        skip_contributor_storage: bool = False,
     ) -> dict[str, object]:
         metadata_records: List[dict[str, object]] = []
         metrics_inputs: List[FileMetric] = []
@@ -353,7 +356,7 @@ class ZipAnalyzer:
         collaboration = self._summarize_collaboration(git_logs)
         # Build author→email map from the raw git log lines while they are still available.
         # to_compact_collaboration drops email, so we capture it here for upsert_user below.
-        author_email_map = _build_author_email_map(git_logs)
+        author_email_map, noreply_only_authors = _build_author_email_map(git_logs)
         duration = perf_counter() - start
 
         skill_observations = [
@@ -437,35 +440,41 @@ class ZipAnalyzer:
             classification=classification,
             primary_contributor=primary_contributor,
             snapshot=summary,
+            zip_path=str(stored_file.get("path") or zip_path),
         )
         self._logger.info("Stored zip analysis snapshot for %s", project_id)
 
         # store zip contributors in users and user_projects
-        contrib_raw = (
-            collaboration.get("contributors (commits, PRs, issues, reviews)")
-            or collaboration.get("contributors (commits, line changes, reviews)")
-            or {}
-        )
-        if isinstance(contrib_raw, dict):
-            for cname, cdata in contrib_raw.items():
-                cname = str(cname).strip()
-                if not cname or cname.lower().endswith("[bot]"):
-                    continue
-                uid = upsert_user(conn, cname, email=author_email_map.get(cname))
-                link_user_to_project(conn, uid, project_id, contributor_name=cname)
-                commits, _lines, reviews = _parse_contrib_data(cdata)
-                score = commits * 1.0 + reviews * 0.5
-                store_contributor_stats(
-                    conn,
-                    project_id=project_id,
-                    contributor=cname,
-                    user_id=uid,
-                    commits=commits,
-                    reviews=reviews,
-                    score=score,
-                    source="zip",
-                )
-            self._logger.info("Stored %d zip contributors for project %s", len(contrib_raw), project_id)
+        # (skipped for GitHub imports — sync_contributor_stats handles this via the API)
+        if not skip_contributor_storage:
+            contrib_raw = (
+                collaboration.get("contributors (commits, PRs, issues, reviews)")
+                or collaboration.get("contributors (commits, line changes, reviews)")
+                or {}
+            )
+            if isinstance(contrib_raw, dict):
+                for cname, cdata in contrib_raw.items():
+                    cname = str(cname).strip()
+                    if not cname or cname.lower().endswith("[bot]"):
+                        continue
+                    # Skip authors who only ever committed with noreply/bot emails
+                    if cname in noreply_only_authors:
+                        continue
+                    uid = upsert_user(conn, cname, email=author_email_map.get(cname))
+                    link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                    commits, _lines, reviews = _parse_contrib_data(cdata)
+                    score = commits * 1.0 + reviews * 0.5
+                    store_contributor_stats(
+                        conn,
+                        project_id=project_id,
+                        contributor=cname,
+                        user_id=uid,
+                        commits=commits,
+                        reviews=reviews,
+                        score=score,
+                        source="zip",
+                    )
+                self._logger.info("Stored %d zip contributors for project %s", len(contrib_raw), project_id)
 
         return summary
 
@@ -516,7 +525,23 @@ class ZipAnalyzer:
             if any(line.startswith("commit:") for line in logs):
                 entries = parse_git_log_stream("\n".join(logs))
                 analysis = build_collaboration_analysis(entries)
-                return to_compact_collaboration(analysis)
+                result = to_compact_collaboration(analysis)
+                # Extract first/last commit dates directly from raw log lines (format: commit:SHA|author|email|TIMESTAMP|subject)
+                timestamps: list[int] = []
+                for line in logs:
+                    if line.startswith("commit:"):
+                        try:
+                            parts = line.split(":", 1)[1].split("|")
+                            if len(parts) >= 4:
+                                ts = int(parts[3])
+                                if ts > 0:
+                                    timestamps.append(ts)
+                        except (ValueError, IndexError):
+                            pass
+                if timestamps:
+                    result["first_commit_date"] = datetime.utcfromtimestamp(min(timestamps)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    result["last_commit_date"] = datetime.utcfromtimestamp(max(timestamps)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                return result
         except Exception as exc:  # pragma: no cover - defensive fallback
             self._logger.warning("Failed rich collaboration parse; falling back to basic: %s", exc)
 
@@ -554,13 +579,17 @@ def _parse_contrib_data(value: object) -> tuple[int, int, int]:
     return commits, lines, reviews
 
 
-def _build_author_email_map(git_log_lines: list[str]) -> dict[str, str]:
-    """Return {author_name: email} from raw git log lines (commit:HASH|%an|%ae|%ct|%s).
+def _build_author_email_map(git_log_lines: list[str]) -> tuple[dict[str, str], set[str]]:
+    """Return ({author_name: real_email}, noreply_only_authors) from raw git log lines.
 
-    Skips noreply GitHub emails. First occurrence per author wins.
+    noreply_only_authors contains authors whose EVERY commit used a noreply/bot email
+    (i.e. they have no real email entry). These are typically automated accounts.
+    First real-email occurrence per author wins.
     """
     _NOREPLY_SUFFIXES = ("@users.noreply.github.com", "@noreply.github.com")
     result: dict[str, str] = {}
+    seen_noreply: set[str] = set()   # authors seen with noreply email
+
     for line in git_log_lines:
         if not line.startswith("commit:"):
             continue
@@ -573,10 +602,14 @@ def _build_author_email_map(git_log_lines: list[str]) -> dict[str, str]:
             continue
         lowered = email.lower()
         if lowered == "noreply@github.com" or any(lowered.endswith(s) for s in _NOREPLY_SUFFIXES):
+            seen_noreply.add(author)
             continue
         if author not in result:
             result[author] = email
-    return result
+
+    # Authors only ever seen with noreply emails and never with a real email
+    noreply_only = seen_noreply - result.keys()
+    return result, noreply_only
 
 
 def _compute_top_skills_by_year(skill_timeline: Dict[str, Dict[str, object]], top_n: int = 5) -> Dict[str, List[Dict[str, float]]]:

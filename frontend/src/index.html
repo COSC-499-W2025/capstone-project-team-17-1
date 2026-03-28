@@ -22,7 +22,7 @@
       <span class="nav-tab" data-tab="projects" data-page="projects-page">Projects</span>
       <span class="nav-tab" data-tab="resume" data-page="resume-page">Resume</span>
       <span class="nav-tab" data-tab="portfolio" data-page="portfolio-page">Portfolio</span>
-      <span class="nav-tab" data-tab="chat" data-page="chat-page">Chat</span>
+      <span class="nav-tab" data-tab="chat" data-page="chat-page">Ask Sienna</span>
       <span id="job-match-tab" class="nav-tab hidden" data-tab="job-match" data-page="job-match-page">Job Match</span>
       <span class="nav-tab" data-tab="settings" data-page="settings-page">Settings</span>
     </div>
@@ -340,46 +340,65 @@
       <!-- CHAT PAGE -->
 
       <div id="chat-page" class="page">
-        <div class="portfolio-page-wrapper">
+        <div class="sienna-page-shell">
+          <div class="sienna-header-row">
+            <div class="sienna-title-wrap">
+              <h1 class="sienna-title">Ask Sienna</h1>
+              <p class="sienna-subtitle">Your Loom AI copilot for projects, debugging, and feature guidance.</p>
+            </div>
+            <div class="sienna-header-actions">
+              <button id="sienna-clear-btn" class="secondary-btn">Clear Chat</button>
+            </div>
+          </div>
 
-          <div class="portfolio-header">
-            <div>
-              <h1>AI Chat</h1>
-              <p class="portfolio-subtitle">
-                Ask about resumes, portfolios, projects, and job matching.
+          <div class="sienna-toolbar card">
+            <div class="sienna-project-picker-wrap">
+              <label for="sienna-project-select" class="sienna-picker-label">Project Context</label>
+              <select id="sienna-project-select" class="sienna-project-select">
+                <option value="">Select a project...</option>
+              </select>
+              <div id="sienna-project-hint" class="sienna-project-hint hidden">
+                Select a project first to chat with Sienna.
+              </div>
+            </div>
+            <label class="sienna-voice-toggle">
+              <input id="sienna-voice-toggle" type="checkbox" checked />
+              <span>Voice Responses</span>
+            </label>
+          </div>
+
+          <div id="sienna-error" class="customization-status hidden"></div>
+
+          <div id="sienna-conversation-card" class="card sienna-conversation-card">
+            <div id="sienna-empty-state" class="sienna-empty-state">
+              <h2>Ask Sienna anything about Loom or your selected project.</h2>
+              <p>
+                Sienna can explain Loom features, suggest improvements, generate code ideas,
+                and help you debug issues in project files when needed.
               </p>
             </div>
-            <div class="portfolio-actions">
-              <button id="chat-clear-btn" class="primary-btn">Clear Chat</button>
+
+            <div id="sienna-messages" class="sienna-messages"></div>
+
+            <div class="sienna-composer">
+              <div id="sienna-input-shell" class="sienna-input-shell">
+                <textarea
+                  id="sienna-input"
+                  class="sienna-input"
+                  rows="1"
+                  placeholder="Ask Sienna about your project or Loom..."
+                ></textarea>
+                <div class="sienna-composer-actions">
+                  <button id="sienna-mic-btn" class="sienna-icon-btn" type="button" aria-label="Voice input" title="Voice input">
+                    <span aria-hidden="true">🎤</span>
+                  </button>
+                  <button id="sienna-send-btn" class="sienna-icon-btn sienna-send-btn" type="button" aria-label="Send message" title="Send">
+                    <span aria-hidden="true">➤</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div id="chat-quick-prompts-card" class="card customization-card customization-card-wide">
-            <h2 class="card-title">Quick Prompts</h2>
-            <div class="chat-suggestions-row">
-              <button class="chat-suggestion-btn" data-prompt="Review my resume for backend roles">Review my resume</button>
-              <button class="chat-suggestion-btn" data-prompt="Which of my projects is strongest for recruiters?">Best project for recruiters</button>
-              <button class="chat-suggestion-btn" data-prompt="Write a sharper portfolio summary for me">Sharpen portfolio summary</button>
-              <button class="chat-suggestion-btn" data-prompt="Give me 5 interview questions based on my skills">Interview questions</button>
-            </div>
-          </div>
-
-          <div id="chat-conversation-card" class="card customization-card customization-card-wide">
-            <h2 class="card-title">Conversation</h2>
-            <div id="chat-error" class="customization-status hidden"></div>
-            <div id="chat-messages" class="chat-messages-container"></div>
-
-            <div class="chat-composer-row">
-              <textarea
-                id="chat-input"
-                class="chat-input"
-                rows="3"
-                placeholder="Ask something..."
-              ></textarea>
-              <button id="chat-send-btn" class="primary-btn">Send</button>
-            </div>
-          </div>
-
         </div>
       </div>
 

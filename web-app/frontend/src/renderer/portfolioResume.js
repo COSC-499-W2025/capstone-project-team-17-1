@@ -165,7 +165,15 @@ function renderSkillsTimeline(timeline) {
   const container = document.getElementById("skills-timeline-container");
   if (!container) return;
 
-  if (!timeline.length) {
+  const visibleTimeline = timeline.filter((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
+      ? entry.project_metrics
+      : {};
+    return skills.length > 0 || Number(metrics.file_count || 0) > 0 || Number(metrics.active_days || 0) > 0;
+  });
+
+  if (!visibleTimeline.length) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
@@ -177,7 +185,7 @@ function renderSkillsTimeline(timeline) {
     return;
   }
 
-  container.innerHTML = timeline
+  container.innerHTML = visibleTimeline
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
 

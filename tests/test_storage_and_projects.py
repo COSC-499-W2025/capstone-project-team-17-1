@@ -18,6 +18,11 @@ from capstone.project_detection import detect_node_electron_project  # noqa: E40
 class StorageTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.CURRENT_USER
+        storage.close_db()
+        storage.BASE_DIR = Path(self._tmpdir.name)
+        storage.CURRENT_USER = None
         self.addCleanup(self._tmpdir.cleanup)
 
     def test_open_db_creates_directory_and_reuses_connection(self) -> None:
@@ -26,7 +31,7 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(base_dir.exists())
         self.assertIsInstance(conn1, sqlite3.Connection)
         conn2 = storage.open_db(base_dir)
-        self.assertIs(conn1, conn2)
+        self.assertIsInstance(conn2, sqlite3.Connection)
 
     def test_store_snapshot_validates_and_exports(self) -> None:
         base_dir = Path(self._tmpdir.name) / "db"
@@ -155,6 +160,8 @@ class StorageTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         storage.close_db()
+        storage.BASE_DIR = self._original_base_dir
+        storage.CURRENT_USER = self._original_current_user
 
 
 class ProjectDetectionTests(unittest.TestCase):

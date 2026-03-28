@@ -25,6 +25,67 @@ EXT_TO_SKILL = {
     ".md": "markdown",
 }
 
+def _normalize_timeline_skill_weight(value) -> float:
+    try:
+        weight = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if weight < 0:
+        return 0.0
+    return weight
+
+
+def _skills_from_zip_path(zip_path: str | None) -> list[dict[str, float]]:
+    if not zip_path:
+        return []
+
+    path = Path(zip_path)
+    if not path.exists():
+        return []
+
+    counts: dict[str, int] = {}
+
+    try:
+        with zipfile.ZipFile(path) as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                raw_path = info.filename.strip("/")
+                if not raw_path:
+                    continue
+                skill = EXT_TO_SKILL.get(Path(raw_path).suffix.lower(), "0")
+                counts[skill] = counts.get(skill, 0) + 1
+    except (zipfile.BadZipFile, FileNotFoundError, OSError, ValueError):
+        return []
+
+    return [
+        {"skill": name, "weight": float(weight)}
+        for name, weight in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _skills_from_snapshot(conn, project_id: str):
+    latest = storage.fetch_latest_snapshot(conn, project_id)
+    if not latest:
+        return []
+
+    raw_skills = latest.get("snapshot", {}).get("skills", [])
+    results = []
+    if isinstance(raw_skills, list):
+        for item in raw_skills:
+            if isinstance(item, dict):
+                name = str(item.get("skill") or item.get("name") or "").strip()
+                if name:
+                    results.append({"name": name, "evidence": "Recovered from stored snapshot"})
+            else:
+                name = str(item).strip()
+                if name:
+                    results.append({"name": name, "evidence": "Recovered from stored snapshot"})
+    elif isinstance(raw_skills, dict):
+        for name, value in raw_skills.items():
+            results.append({"name": str(name), "evidence": f"Recovered from stored snapshot ({value})"})
+    return results
+
 @router.get("/projects/{project_id}/skills")
 def skills_for_project(project_id: str):
     conn = storage.open_db()
@@ -39,8 +100,13 @@ def skills_for_project(project_id: str):
         (project_id,),
     ).fetchone()
     if not row:
-        log_event("ERROR", f"Skills lookup failed · Project not found · {project_id}")
-        raise HTTPException(status_code=404, detail="Project not found")
+        log_event("WARNING", f"Skills lookup skipped · No stored upload found for project · {project_id}")
+        return {
+            "project_id": project_id,
+            "skills": [],
+            "skipped": True,
+            "detail": "No stored upload was found for this project in the current workspace.",
+        }
 
     file_id = row[0]
     try:
@@ -52,13 +118,32 @@ def skills_for_project(project_id: str):
                     skill = EXT_TO_SKILL[suffix]
                     skills[skill] = skills.get(skill, 0) + 1
     except zipfile.BadZipFile:
-        log_event("ERROR", f"Invalid zip during skills extraction · Project: {project_id}")
-        raise HTTPException(status_code=400, detail="Stored file is not a valid zip")
+        log_event("WARNING", f"Invalid zip during skills extraction; falling back to snapshot skills · Project: {project_id}")
+        snapshot_skills = _skills_from_snapshot(conn, project_id)
+        if snapshot_skills:
+            return {
+                "project_id": project_id,
+                "file_id": file_id,
+                "skills": snapshot_skills,
+                "fallback": "snapshot",
+            }
+        raise HTTPException(
+            status_code=400,
+            detail="The stored project file is no longer a valid zip archive.",
+        )
     except FileNotFoundError:
-        log_event("ERROR", f"Missing stored file during skills extraction · Project: {project_id}")
+        log_event("WARNING", f"Missing stored file during skills extraction; falling back to snapshot skills · Project: {project_id}")
+        snapshot_skills = _skills_from_snapshot(conn, project_id)
+        if snapshot_skills:
+            return {
+                "project_id": project_id,
+                "file_id": file_id,
+                "skills": snapshot_skills,
+                "fallback": "snapshot",
+            }
         raise HTTPException(
             status_code=409,
-            detail="Stored upload file not found on this machine. Re-upload the project zip.",
+            detail="The stored project file is missing on this machine. Re-upload the project zip to refresh skills.",
         )
 
     return {
@@ -131,14 +216,14 @@ def skills_timeline(top_n: int = 5):
     try:
         rows = conn.execute(
             """
-            SELECT project_id, snapshot, created_at
+            SELECT project_id, snapshot, created_at, zip_path
             FROM project_analysis
             ORDER BY datetime(created_at) ASC, id ASC
             """
         ).fetchall()
 
         timeline = []
-        for project_id, snapshot_raw, created_at in rows:
+        for project_id, snapshot_raw, created_at, zip_path in rows:
             try:
                 snapshot = json.loads(snapshot_raw) if isinstance(snapshot_raw, str) else snapshot_raw
             except Exception:
@@ -146,32 +231,68 @@ def skills_timeline(top_n: int = 5):
 
             snapshot = snapshot or {}
             raw_skills = snapshot.get("skills") or []
-            skills = []
+            skills = _skills_from_zip_path(zip_path)
+            file_summary = snapshot.get("file_summary") or {}
+            file_count = 0
+            active_days = 0
 
-            if isinstance(raw_skills, dict):
-                ranked = sorted(raw_skills.items(), key=lambda item: (-float(item[1] or 0), item[0]))
+            if isinstance(file_summary, dict):
+                file_count = int(file_summary.get("file_count", 0) or 0)
+                active_days = int(file_summary.get("active_days", 0) or 0)
+
+            skill_count = 0
+
+            if skills:
+                skill_count = len(skills)
+            elif isinstance(raw_skills, dict):
+                ranked = sorted(
+                    (
+                        (str(name).strip(), _normalize_timeline_skill_weight(weight))
+                        for name, weight in raw_skills.items()
+                        if str(name).strip()
+                    ),
+                    key=lambda item: (-item[1], item[0]),
+                )
                 skills = [
-                    {"skill": name, "weight": float(weight or 0.0)}
+                    {"skill": name, "weight": weight}
                     for name, weight in ranked[: max(1, top_n)]
                 ]
+                skill_count = len(ranked)
             elif isinstance(raw_skills, list):
                 normalized = []
                 for skill in raw_skills:
                     if isinstance(skill, dict):
-                        name = skill.get("skill") or skill.get("name")
-                        weight = skill.get("score", skill.get("weight", 0.0))
+                        name = str(skill.get("skill") or skill.get("name") or "").strip()
+                        weight = _normalize_timeline_skill_weight(skill.get("score", skill.get("weight", 0.0)))
                         if name:
-                            normalized.append((str(name), float(weight or 0.0)))
+                            normalized.append((name, weight))
                 normalized.sort(key=lambda item: (-item[1], item[0]))
                 skills = [
                     {"skill": name, "weight": weight}
                     for name, weight in normalized[: max(1, top_n)]
                 ]
+                skill_count = len(normalized)
+
+            if not skills and file_count <= 0 and active_days <= 0:
+                continue
+
+            complexity_score = round(
+                file_count * 0.04
+                + active_days * 0.35
+                + skill_count * 0.45,
+                2,
+            )
 
             timeline.append({
                 "project_id": str(project_id),
                 "timestamp": str(created_at),
                 "skills": skills,
+                "project_metrics": {
+                    "file_count": file_count,
+                    "active_days": active_days,
+                    "skill_count": skill_count,
+                    "complexity_score": complexity_score,
+                },
             })
 
         log_event("INFO", f"Skills timeline generated · Nodes: {len(timeline)}")

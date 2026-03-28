@@ -43,12 +43,16 @@ async function loadMostUsedSkills() {
 
   for (const project of projectsData.projects) {
     const projectId = project.project_id || project.id || project.name;
+    if (!projectId) continue;
 
     const skillsRes = await fetch(
-      `${baseURL}/projects/${projectId}/skills`
+      `${baseURL}/projects/${encodeURIComponent(projectId)}/skills`
     );
 
-    if (!skillsRes.ok) continue;
+    if (!skillsRes.ok) {
+      if ([400, 404, 409].includes(skillsRes.status)) continue;
+      continue;
+    }
 
     const skillsData = await skillsRes.json();
 
