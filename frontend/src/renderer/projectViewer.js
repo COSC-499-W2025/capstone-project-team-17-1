@@ -447,18 +447,17 @@ async function _saveCurrentFile() {
 async function _loadAnalysis(projectId) {
   const panel = document.getElementById("pv-analysis-panel");
   try {
-    const [analysisRes, collabRes] = await Promise.all([
-      authFetch(`/projects/${encodeURIComponent(projectId)}/analysis`),
-      authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null),
-    ]);
-
+    const analysisRes = await authFetch(`/projects/${encodeURIComponent(projectId)}/analysis`);
     if (!analysisRes.ok) throw new Error(`HTTP ${analysisRes.status}`);
     const data = await analysisRes.json();
     _analysisData = data.analysis;
 
-    let collabInfo = null;
-    if (collabRes && collabRes.ok) {
-      collabInfo = await collabRes.json();
+    let collabInfo = data.collaboration || null;
+    if (!collabInfo) {
+      const collabRes = await authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null);
+      if (collabRes && collabRes.ok) {
+        collabInfo = await collabRes.json();
+      }
     }
 
     _renderAnalysisDashboard(panel, _analysisData, collabInfo);
@@ -493,6 +492,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
 
   const isGit = Boolean(collabInfo && (collabInfo.is_git_project || collabInfo.is_github));
   const contributors = (collabInfo && collabInfo.contributors) || [];
+  const contributorsSummary = _formatAnalysisContributorsSummary(collab, collabInfo);
 
   container.innerHTML = `
     <div class="pv-analysis-dashboard">
@@ -551,8 +551,8 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
             ${collab.primary_contributor
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Primary Contributor</span><span class="pv-collab-value">${_esc(collab.primary_contributor)}</span></div>`
               : ""}
-            ${collab.contributors
-              ? `<div class="pv-collab-row"><span class="pv-collab-label">Contributors</span><span class="pv-collab-value">${Array.isArray(collab.contributors) ? collab.contributors.length : collab.contributors}</span></div>`
+            ${contributorsSummary
+              ? `<div class="pv-collab-row"><span class="pv-collab-label">Contributors</span><span class="pv-collab-value">${_esc(contributorsSummary)}</span></div>`
               : ""}
             ${collab.classification
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Classification</span><span class="pv-collab-value">${_esc(collab.classification)}</span></div>`
@@ -560,7 +560,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
             ${collab.bot_contributors && collab.bot_contributors.length
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Bots</span><span class="pv-collab-value">${collab.bot_contributors.join(", ")}</span></div>`
               : ""}
-            ${!collab.primary_contributor && !collab.contributors
+            ${!collab.primary_contributor && !contributorsSummary
               ? '<span class="pv-no-data">No collaboration data available</span>'
               : ""}
           </div>
@@ -656,12 +656,21 @@ function _renderCollaborationTab(container, data) {
   const contributors = data.contributors || [];
   const first = data.first_commit_date;
   const last = data.last_commit_date;
-  const durationDays = data.project_duration_days || 0;
+  const durationDays = Number(data.project_duration_days) || 0;
   const bots = data.bot_contributors || [];
+  const daysActive =
+    (data.days_active_inclusive != null && Number(data.days_active_inclusive) > 0)
+      ? Number(data.days_active_inclusive)
+      : (_inclusiveCalendarDaysBetween(first, last) ?? null);
 
   const durationText = durationDays > 0
     ? `${Math.floor(durationDays / 365)}y ${Math.floor((durationDays % 365) / 30)}m ${durationDays % 30}d`
-    : "—";
+    : (() => {
+        const inc = _inclusiveCalendarDaysBetween(first, last);
+        if (inc == null || inc <= 0) return "—";
+        const dd = inc - 1;
+        return `${Math.floor(dd / 365)}y ${Math.floor((dd % 365) / 30)}m ${dd % 30}d`.replace(/^(0y )?(0m )?/, "") || `${inc} day${inc === 1 ? "" : "s"}`;
+      })();
 
   container.innerHTML = `
     <div class="pv-analysis-dashboard">
@@ -683,7 +692,7 @@ function _renderCollaborationTab(container, data) {
           <div class="pv-stat-label">Bot Contributors</div>
         </div>
         <div class="pv-stat-card">
-          <div class="pv-stat-value">${durationDays || "—"}</div>
+          <div class="pv-stat-value">${daysActive != null ? daysActive : "—"}</div>
           <div class="pv-stat-label">Days Active</div>
         </div>
       </div>
@@ -906,20 +915,64 @@ function _formatBytes(bytes) {
   return `${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
+function _coerceDateInput(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number" && !Number.isNaN(v)) {
+    const sec = v > 1e12 ? v / 1000 : v;
+    const d = new Date(sec * 1000);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function _formatAnalysisContributorsSummary(collab, collabInfo) {
+  const list = collabInfo?.contributors;
+  if (Array.isArray(list) && list.length) {
+    return list
+      .map((c) => (typeof c === "string" ? c : (c?.name || c?.login || c?.author || "")))
+      .filter(Boolean)
+      .slice(0, 20)
+      .join(", ");
+  }
+  const c = collab?.contributors;
+  if (!c) return "";
+  if (Array.isArray(c)) {
+    return c
+      .map((x) => (typeof x === "string" ? x : (x?.name || x?.login || x?.author || String(x))))
+      .filter(Boolean)
+      .slice(0, 20)
+      .join(", ");
+  }
+  if (typeof c === "object") {
+    return Object.keys(c)
+      .filter((k) => typeof k === "string" && k.trim())
+      .slice(0, 20)
+      .join(", ");
+  }
+  return String(c);
+}
+
+function _inclusiveCalendarDaysBetween(firstStr, lastStr) {
+  const a = _coerceDateInput(firstStr);
+  const b = _coerceDateInput(lastStr);
+  if (!a || !b) return null;
+  const utcMidnight = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const diff = Math.round((utcMidnight(b) - utcMidnight(a)) / 86400000);
+  if (diff < 0) return null;
+  return diff + 1;
+}
+
 function _formatDate(dateStr) {
-  if (!dateStr) return "—";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  } catch { return dateStr; }
+  if (!dateStr && dateStr !== 0) return "—";
+  const d = _coerceDateInput(dateStr);
+  if (!d) return typeof dateStr === "string" ? dateStr : "—";
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 function _formatMonthYear(dateStr) {
-  if (!dateStr) return "—";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
-  } catch { return dateStr; }
+  if (!dateStr && dateStr !== 0) return "—";
+  const d = _coerceDateInput(dateStr);
+  if (!d) return typeof dateStr === "string" ? dateStr : "—";
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
 }
