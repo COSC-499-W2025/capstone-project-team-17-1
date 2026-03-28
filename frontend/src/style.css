@@ -2431,6 +2431,8 @@ transition: all 0.2s ease;
   opacity: 0.85;
 }
 
+
+
 /* =========================================================
    LIVE PREVIEW PORTFOLIO
 ========================================================= */
@@ -5499,6 +5501,23 @@ transition: all 0.2s ease;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
+}
+
+
+.portfolio-reset-btn {
+  border-color: rgbs(255, 107, 107, 0.3);
+  color: #ff9b9b;
+}
+
+.portfolio-reset-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.portfolio-reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .customization-project-save-status {
