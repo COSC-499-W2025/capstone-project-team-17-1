@@ -34,7 +34,7 @@ from capstone.api.portfolio_helpers import (
     set_cover_portfolio_image,
     reorder_portfolio_images,
     upsert_portfolio_customization,
-    get_latest_snapshot as helper_get_latest_snapshot,
+    get_latest_snapshot as helper_get_latest_snapshot)
 from capstone.storage import (
     fetch_latest_snapshot,
     fetch_latest_snapshots,
