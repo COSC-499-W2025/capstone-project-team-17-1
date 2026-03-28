@@ -439,7 +439,7 @@ function renderFeaturedProjects(projects, customization) {
   const container = document.getElementById("portfolio-featured-projects-container");
   if (!container) return;
 
-  const selected = new Set(customization.featuredProjectIds || []);
+  const selected = new Set((customization.featuredProjectIds || []).map(String));
   const featuredOrder = customization.featuredProjectIds || [];
 
   if (!projects.length) {
@@ -470,7 +470,7 @@ function renderFeaturedProjects(projects, customization) {
           <input
             type="checkbox"
             data-featured-project-id="${escapeHtml(project.project_id)}"
-            ${selected.has(project.project_id) ? "checked" : ""}
+            ${selected.has(String(project.project_id)) ? "checked" : ""}
           />
           <div>
             <div class="customization-project-title">${escapeHtml(project.project_id)}</div>
@@ -489,7 +489,7 @@ function renderFeaturedProjects(projects, customization) {
 
 function renderProjectEditors(projects, customization) {
   const container = document.getElementById("portfolio-project-editor-container");
-  const featuredIds = customization.featuredProjectIds || [];
+  const featuredIds = (customization.featuredProjectIds || []).map(String);
   if (!container) return;
 
   if (!projects.length) {
@@ -515,7 +515,7 @@ function renderProjectEditors(projects, customization) {
   container.innerHTML = orderedProjects
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
-      const isFeatured = featuredIds.includes(project.project_id);
+      const isFeatured = featuredIds.includes(String(project.project_id));
       const isActive = activePortfolioProjectId === project.project_id;
       const selectedTemplate = String(override.templateId || "classic");
 
@@ -715,6 +715,58 @@ function renderProjectEditors(projects, customization) {
   })
   .join("");
 
+  container.querySelectorAll("[data-project-star]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const projectId = String(button.dataset.projectStar || "");
+      if (!projectId) return;
+
+      const current = loadPortfolioCustomization();
+      const featured = [...((current.featuredProjectIds || []).map(String))];
+
+      const existingIndex = featured.indexOf(projectId);
+      if (existingIndex >= 0) {
+        featured.splice(existingIndex, 1);
+      } else {
+        featured.unshift(projectId);
+      }
+
+      const nextFeatured = featured.slice(0, 3);
+
+      const nextCustomization = {
+        ...current,
+        featuredProjectIds: nextFeatured,
+      };
+
+      savePortfolioCustomization(nextCustomization);
+
+      renderFeaturedProjects(previewProjectsCache, nextCustomization);
+      renderProjectEditors(previewProjectsCache, nextCustomization);
+      renderFeaturedOrderList(previewProjectsCache, nextCustomization);
+      updateLivePreview();
+      scheduleAutosave();
+
+      try {
+        await Promise.all(
+          previewProjectsCache.map((project) => {
+            const pid = String(project.project_id);
+            const rank = nextFeatured.indexOf(pid);
+
+            return saveProjectFeaturedState(pid, {
+              selected: rank >= 0,
+              rank,
+            });
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist featured project order:", error);
+        setStatus("Failed to save featured project order.", "error");
+      }
+    });
+  });
+
   container.querySelectorAll("[data-reset-analysis-defaults]").forEach((button) => {
     button.addEventListener("click", () => {
       const projectId = button.dataset.resetAnalysisDefaults;
@@ -757,29 +809,6 @@ function renderProjectEditors(projects, customization) {
 
     const checkboxes = container.querySelectorAll("[data-project-selected]");
     const saveButtons = container.querySelectorAll("[data-project-save]");
-    const starButtons = container.querySelectorAll("[data-project-star]");
-
-    starButtons.forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const projectId = btn.dataset.projectStar;
-        const cb = container.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
-        if (!cb) return;
-
-        const wouldCheck = !cb.checked;
-        const checked = container.querySelectorAll("[data-project-selected]:checked");
-
-        if (wouldCheck && checked.length >= 3) {
-          setStatus("You can only feature up to 3 projects.", "warning");
-          return;
-        }
-
-        cb.checked = wouldCheck;
-        btn.classList.toggle("starred", wouldCheck);
-        setStatus(checked.length <= 3 ? "" : "");
-        cb.dispatchEvent(new Event("change", { bubbles: true }));
-        await rerenderFeaturedOrdering({ saveNow: true });
-      });
-    });
 
     checkboxes.forEach((cb) => {
       cb.addEventListener("change", () => {
