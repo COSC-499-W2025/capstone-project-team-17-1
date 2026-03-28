@@ -323,7 +323,7 @@ export function initChat() {
     availableProjects.forEach((project) => {
       const option = document.createElement("option");
       option.value = project.project_id;
-      option.textContent = `${project.project_id} (${project.total_files || 0} files)`;
+      option.textContent = `${project.project_id}`;
       projectSelectEl.appendChild(option);
     });
 

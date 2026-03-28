@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -177,3 +178,45 @@ def test_skills_timeline_includes_project_metrics_for_growth_logic(insights_clie
     assert first_alpha["project_metrics"]["active_days"] == 2
     assert first_alpha["project_metrics"]["skill_count"] == 1
     assert first_alpha["project_metrics"]["complexity_score"] > 0
+
+
+def test_skills_timeline_uses_zip_files_and_preserves_unmapped_files(insights_client: TestClient, tmp_path: Path):
+    zip_path = tmp_path / "gamma.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("gamma/src/app.py", "print('hello')")
+        zf.writestr("gamma/src/routes.ts", "export const routes = [];")
+        zf.writestr("gamma/docs/notes.txt", "notes")
+        zf.writestr("gamma/assets/logo.bin", "0101")
+
+    conn = storage.open_db()
+    try:
+        _insert_snapshot(
+            conn,
+            project_id="gamma",
+            created_at="2026-02-15T00:00:00Z",
+            snapshot={
+                "summary": "Gamma snapshot",
+                "skills": [
+                    {"skill": "TypeScript", "weight": 0.9},
+                ],
+                "file_summary": {
+                    "file_count": 4,
+                    "active_days": 3,
+                },
+            },
+            zip_path=str(zip_path),
+        )
+    finally:
+        conn.close()
+
+    response = insights_client.get("/skills/timeline")
+
+    assert response.status_code == 200
+    body = response.json()
+    gamma = next(item for item in body["timeline"] if item["project_id"] == "gamma")
+    assert gamma["project_metrics"]["skill_count"] == 3
+    assert gamma["skills"] == [
+        {"skill": "0", "weight": 2.0},
+        {"skill": "python", "weight": 1.0},
+        {"skill": "typescript", "weight": 1.0},
+    ]

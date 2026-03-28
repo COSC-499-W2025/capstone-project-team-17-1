@@ -1,5 +1,4 @@
-import { authFetch } from "./auth.js";
-import { openResumePreview } from "./portfolio.js";
+import { authFetch, isPrivateMode } from "./auth.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -64,6 +63,235 @@ async function fetchResumeDetail(resumeId) {
   if (!res.ok) throw new Error("Failed to fetch resume");
   const data = await res.json();
   return data.data;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeSkillName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  const canonicalMap = {
+    js: "JavaScript",
+    javascript: "JavaScript",
+    ts: "TypeScript",
+    typescript: "TypeScript",
+    html: "HTML",
+    css: "CSS",
+    sql: "SQL",
+    api: "API",
+    json: "JSON",
+    yaml: "YAML",
+    xml: "XML",
+    aws: "AWS",
+    gcp: "GCP",
+    fastapi: "FastAPI",
+    sqlite: "SQLite",
+    mongodb: "MongoDB",
+    postgresql: "PostgreSQL",
+  };
+  if (canonicalMap[lower]) return canonicalMap[lower];
+  return raw
+    .split(/[\s-/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function dedupeStrings(values) {
+  const seen = new Set();
+  const result = [];
+  (Array.isArray(values) ? values : []).forEach((value) => {
+    const normalized = normalizeSkillName(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(normalized);
+  });
+  return result;
+}
+
+function groupSkillsByExpertise(skills) {
+  const levels = {
+    Advanced: [],
+    Proficient: [],
+    Developing: [],
+    Foundation: [],
+  };
+
+  const ordered = dedupeStrings(skills);
+  ordered.forEach((skill, index) => {
+    if (index < 4) levels.Advanced.push(skill);
+    else if (index < 8) levels.Proficient.push(skill);
+    else if (index < 12) levels.Developing.push(skill);
+    else levels.Foundation.push(skill);
+  });
+
+  return levels;
+}
+
+function buildStyledResumePreviewHtml(resume) {
+  const sections = Array.isArray(resume?.sections) ? resume.sections.filter((section) => section?.is_enabled !== false) : [];
+  const headerSection = sections.find((section) => section?.key === "header");
+  const summarySection = sections.find((section) => section?.key === "summary");
+  const educationSection = sections.find((section) => section?.key === "education");
+  const skillSection = sections.find((section) => ["skills", "core_skill"].includes(section?.key));
+  const projectSection = sections.find((section) => ["project", "projects"].includes(section?.key));
+  const achievementSection = sections.find((section) => ["achievement", "achievements", "award", "awards"].includes(section?.key));
+
+  const headerItem = headerSection?.items?.[0] || {};
+  const headerMeta = headerItem?.metadata || {};
+  const name = headerMeta.full_name || resume?.title || "Resume";
+  const role = resume?.target_role || "";
+
+  const summaryText = (summarySection?.items || [])
+    .map((item) => String(item?.content || item?.title || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const educationItems = (educationSection?.items || []).filter((item) => item?.is_enabled !== false);
+  const educationText = educationItems.length
+    ? educationItems
+        .map((item) => [item?.title, item?.subtitle].filter(Boolean).join(", "))
+        .filter(Boolean)
+        .join(" | ")
+    : "No education details yet.";
+
+  const awards = (achievementSection?.items || [])
+    .filter((item) => item?.is_enabled !== false)
+    .map((item) => String(item?.title || item?.content || "").trim())
+    .filter(Boolean);
+
+  const rawSkillTokens = (skillSection?.items || [])
+    .filter((item) => item?.is_enabled !== false)
+    .flatMap((item) => {
+      const content = String(item?.content || item?.summary || "").trim();
+      const titled = String(item?.title || "").trim();
+      const fromContent = content
+        ? content.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean)
+        : [];
+      return titled ? [titled, ...fromContent] : fromContent;
+    });
+  const expertiseGroups = groupSkillsByExpertise(rawSkillTokens);
+  const expertiseSections = Object.entries(expertiseGroups);
+
+  const projectItems = (projectSection?.items || []).filter((item) => item?.is_enabled !== false);
+  const totalProjects = projectItems.length;
+  const totalSkills = dedupeStrings(rawSkillTokens).length;
+  const totalBullets = projectItems.reduce(
+    (sum, item) => sum + ((Array.isArray(item?.bullets) ? item.bullets.filter(Boolean).length : 0)),
+    0
+  );
+  const highlightCount = awards.length + totalBullets;
+  const professionalSummary =
+    summaryText ||
+    `Portfolio-focused builder with ${totalProjects} selected project${totalProjects === 1 ? "" : "s"} and ${totalSkills} highlighted skill${totalSkills === 1 ? "" : "s"}.`;
+
+  return `
+    <div class="resume-preview-sheet">
+      <div class="resume-preview-hero">
+        <h1>${escapeHtml(name)}</h1>
+        <p class="resume-preview-role">${escapeHtml(role)}</p>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Professional Summary</h3>
+        <p>${escapeHtml(professionalSummary)}</p>
+      </div>
+
+      <div class="resume-preview-grid">
+        <div class="resume-preview-section">
+          <h3>Education</h3>
+          <p>${escapeHtml(educationText)}</p>
+        </div>
+
+        <div class="resume-preview-section">
+          <h3>Awards</h3>
+          <ul>
+            ${
+              awards.length
+                ? awards.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+                : `<li>No awards yet.</li>`
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Skills by Expertise Level</h3>
+        <div class="resume-preview-grid">
+          ${
+            expertiseSections.length
+              ? expertiseSections
+                  .map(
+                    ([title, skills]) => `
+                      <div>
+                        <strong>${escapeHtml(title)}</strong>
+                        <p>${skills.length ? escapeHtml(skills.join(", ")) : `No ${escapeHtml(title.toLowerCase())} skills yet.`}</p>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<div><p>No skills listed yet.</p></div>`
+          }
+        </div>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Selected Projects</h3>
+        ${
+          projectItems.length
+            ? projectItems
+                .map((item) => {
+                  const title = String(item?.title || "Untitled Project").trim();
+                  const summary = String(item?.content || item?.summary || item?.subtitle || "").trim();
+                  return `
+                    <div class="resume-preview-project">
+                      <div class="resume-preview-project-title">${escapeHtml(title)}</div>
+                      <div class="resume-preview-project-meta">${escapeHtml(summary || "No project summary yet.")}</div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `<p>No projects selected yet.</p>`
+        }
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Portfolio Highlights</h3>
+        <ul>
+          <li>${totalProjects} selected project${totalProjects === 1 ? "" : "s"} included in this preview</li>
+          <li>${totalSkills} skill signal${totalSkills === 1 ? "" : "s"} represented across the resume</li>
+          <li>${highlightCount} supporting bullet${highlightCount === 1 ? "" : "s"} and award highlight${highlightCount === 1 ? "" : "s"} surfaced from resume content</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+async function openResumePreview(resumeId) {
+  const modal = document.getElementById("resume-preview-modal");
+  const body = document.getElementById("resume-preview-body");
+  if (!modal || !body) return;
+
+  body.innerHTML = `<p class="muted-text">Loading resume preview...</p>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const resume = await fetchResumeDetail(resumeId);
+    body.innerHTML = buildStyledResumePreviewHtml(resume);
+  } catch (err) {
+    console.error("Failed to open resume preview:", err);
+    body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -233,8 +461,8 @@ async function renderResumeList() {
           <span class="resume-cb-visual"></span>
         </span>
         <div class="resume-list-card-header">
-          <span class="resume-card-drag" title="Drag to reorder">⠿</span>
-          <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
+          ${isPrivateMode() ? `<span class="resume-card-drag" title="Drag to reorder">⠿</span>` : ""}
+          ${isPrivateMode() ? `<button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>` : ""}
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -257,7 +485,9 @@ async function renderResumeList() {
     `;
   }).join("");
 
-  setupListDragDrop(container);
+  if (isPrivateMode()) {
+    setupListDragDrop(container);
+  }
 
   // Flash newly generated card
   if (_newResumeId) {
@@ -337,7 +567,7 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-preview-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openResumePreview();
+      openResumePreview(btn.dataset.resumeId);
     });
   });
 
@@ -405,7 +635,7 @@ async function openNewResumeModal() {
                 ${p.project_id}
                 <span class="project-classification-badge ${badgeClass}" style="margin-left:6px">${badgeLabel}</span>
               </span>
-              <span class="resume-modal-item-meta">${p.total_files} files · ${p.total_skills} skills</span>
+              <span class="resume-modal-item-meta">${p.total_skills} skills</span>
             </span>
           </label>
         `;
@@ -716,11 +946,17 @@ async function confirmDeleteResume(resumeId) {
 // ---------------------------------------------------------------------------
 
 function ce(field, value, ctx = "") {
+  if (!isPrivateMode()) {
+    return `<span data-field="${field}" ${ctx}>${value ?? ""}</span>`;
+  }
   return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
 function ceHeader(field, value, ctx = "") {
   // Header metadata fields save via data-header-field (collected as full metadata dict)
+  if (!isPrivateMode()) {
+    return `<span data-header-field="${field}" ${ctx}>${value ?? ""}</span>`;
+  }
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
@@ -728,8 +964,8 @@ function ceHeader(field, value, ctx = "") {
 function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
-  const del  = `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>`;
-  const drag = `<span class="re-item-drag" title="Drag to reorder">⠿</span>`;
+  const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
+  const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
   const bullets = (item.bullets || []).filter(Boolean);
 
   if (sectionKey === "core_skill") {
@@ -750,7 +986,7 @@ function buildItemHtml(rid, sid, sectionKey, item) {
     return `
       <div class="re-item" data-item-id="${iid}">
         ${drag}${del}
-        <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
+        <div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content || item.title || ""}</div>
       </div>`;
   }
 
@@ -772,10 +1008,10 @@ function buildItemHtml(rid, sid, sectionKey, item) {
         ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
         ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
       </div>` : ""}
-      ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
+      ${item.content  ? `<div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
         <ul class="re-bullets">
-          ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
+          ${bullets.map((b) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="bullet" ${ctx} class="${isPrivateMode() ? "re-editable" : ""}">${b}</li>`).join("")}
         </ul>` : ""}
     </div>`;
 }
@@ -848,22 +1084,23 @@ function buildResumeHtml(resume) {
     return `
       <div class="re-section" data-section-id="${sid}">
         <div class="re-section-head">
-          <span class="re-section-drag" title="Drag to reorder">⠿</span>
+          ${isPrivateMode() ? `<span class="re-section-drag" title="Drag to reorder">⠿</span>` : ""}
           <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
-          <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>
+          ${isPrivateMode() ? `<button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>` : ""}
         </div>
         <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">
           ${itemsHtml}
         </div>
-        <div class="re-section-footer">
+        ${isPrivateMode() ? `<div class="re-section-footer">
           <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
           <button class="re-add-section-btn" data-resume-id="${rid}" data-after-section-id="${sid}">+ Add section</button>
-        </div>
+        </div>` : ""}
       </div>`;
   }).join("");
 
   return `
     <div class="re-sheet">
+      ${!isPrivateMode() ? `<div class="skills-group-card"><p class="muted-text resume-public-warning">Log in to Private Mode to edit this resume. Public Mode supports preview, export, and delete only.</p></div>` : ""}
       ${heroHtml}
       ${headerSecHtml}
       ${sectionsHtml || ""}
@@ -1023,6 +1260,10 @@ function setupDragDrop(container) {
 }
 
 function attachEditListeners(container) {
+  if (!isPrivateMode()) {
+    return;
+  }
+
   // --- shared helpers (closed over container for header-field saves) ---
   function showSaved(el) {
     const existing = el.parentElement?.querySelector(".re-saved");
@@ -1276,18 +1517,11 @@ function attachEditListeners(container) {
 // ---------------------------------------------------------------------------
 
 export function initResume() {
-  document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
+  const newResumeBtn = document.getElementById("new-resume-btn");
+  newResumeBtn?.addEventListener("click", openNewResumeModal);
+  renderResumeList();
 
   document.addEventListener("auth:mode-changed", (e) => {
-    if (e.detail?.isPrivate) {
-      // Logged in: backend resolves user_id from token, just render
-      renderResumeList();
-    } else {
-      // Logged out / public mode
-      const container = document.getElementById("resume-list-container");
-      if (container) {
-        container.innerHTML = `<p class="muted-text">Click "New Resume" to create your first resume.</p>`;
-      }
-    }
+    renderResumeList();
   });
 }
