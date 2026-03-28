@@ -1151,11 +1151,6 @@ svg {
   font-weight: 600;
 }
 
-.level-info { color: rgba(255, 255, 255, 0.85); }
-.level-warning { color: #f5c542; }
-.level-error { color: #ff4c4c; }
-.level-success { color: #00ff88; }
-
 /* =========================================================
    MISC
 ========================================================= */
@@ -7611,12 +7606,6 @@ body.light .heatmap-select {
   visibility: visible !important;
 }
 
-.activity-line {
-  color: white !important;
-  display: block !important;
-  padding: 6px 0 !important;
-}
-
 /* new addition which is fx */
 
 body {
@@ -8089,4 +8078,60 @@ body.widget-mode {
 
 .level-success {
   color: #7bffbe;
+}
+
+/* Activity log (dashboard): light surfaces for toolbar, filters, and log list */
+body.light .activity-live-pill {
+  background: var(--surface-muted);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.light .activity-filter-btn {
+  border: 1px solid var(--border-subtle);
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+}
+
+body.light .activity-filter-btn:hover,
+body.light .activity-filter-btn.active {
+  background: linear-gradient(90deg, rgba(43, 119, 214, 0.14), rgba(46, 169, 131, 0.12));
+  border-color: rgba(43, 119, 214, 0.4);
+  color: var(--text-primary);
+}
+
+body.light #recent-activity {
+  background: var(--card-inner-bg);
+  border: 1px solid var(--border-subtle);
+}
+
+body.light #recent-activity .activity-line {
+  color: var(--text-primary);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+body.light #recent-activity .activity-timestamp {
+  color: var(--text-secondary);
+}
+
+body.light #recent-activity .activity-tag,
+body.light #recent-activity .activity-message {
+  color: inherit;
+}
+
+body.light #recent-activity .activity-line.level-info {
+  color: var(--text-primary);
+}
+
+body.light #recent-activity .activity-line.level-warning {
+  color: #a16207;
+}
+
+body.light #recent-activity .activity-line.level-error {
+  color: #c62828;
+}
+
+body.light #recent-activity .activity-line.level-success {
+  color: #0d7a4d;
 }
