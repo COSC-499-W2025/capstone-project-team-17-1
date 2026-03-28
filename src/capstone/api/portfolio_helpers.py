@@ -123,7 +123,7 @@ def list_snapshots(
 def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[SnapshotRow]:
     row = conn.execute(
         """
-        SELECT project_id, classification, primary_contributor, snapshot, created_at
+        SELECT snapshot
         FROM project_analysis
         WHERE project_id = ?
         ORDER BY created_at DESC
@@ -135,13 +135,12 @@ def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[S
     if not row:
         return None
 
-    return SnapshotRow(
-        project_id=row[0],
-        classification=row[1],
-        primary_contributor=row[2],
-        snapshot=json.loads(row[3]),
-        created_at=row[4],
-    )
+    raw = row[0]
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        return json.loads(raw)
+    return None
 
 
 def get_portfolio_customization(conn: sqlite3.Connection, project_id: str) -> Dict[str, Any]:
