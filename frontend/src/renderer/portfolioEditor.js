@@ -16,6 +16,7 @@ let autosaveTimer = null;
 let isDirty = false;
 let isSaving = false;
 let lastSavedSnapshot = "";
+let activePortfolioProjectId = null;
 
 
 function escapeHtml(value) {
@@ -25,6 +26,89 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+// helper to support different portfolio theme layouts
+function buildProjectThemeDetails(project, override = {}) {
+  const templateId = String(override.templateId || "classic");
+  const images = Array.isArray(override.images) ? override.images : [];
+  const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
+
+  const coverMarkup = coverImage?.id
+    ? `
+      <img
+        class="portfolio-theme-cover-image"
+        src="${escapeHtml(getPortfolioImageUrl(project.project_id, coverImage.id))}"
+        alt="${escapeHtml(project.project_id)} cover image"
+      />
+    `
+    : "";
+
+  if (templateId === "gallery") {
+    return `
+      <div class="portfolio-theme-layout portfolio-theme-gallery">
+        ${coverMarkup}
+        <div class="portfolio-theme-gallery-grid">
+          ${images
+            .slice(0, 6)
+            .map(
+              (image) => `
+                <div class="portfolio-theme-gallery-item">
+                  <img
+                    src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
+                    alt="${escapeHtml(image.caption || "Project image")}"
+                  />
+                  <p>${escapeHtml(image.caption || override.portfolioBlurb || "")}</p>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  if (templateId === "case_study") {
+    return `
+      <div class="portfolio-theme-layout portfolio-theme-case-study">
+        ${coverMarkup}
+        <div class="portfolio-theme-block">
+          <span class="portfolio-theme-label">Overview</span>
+          <p>${escapeHtml(override.portfolioBlurb || "")}</p>
+        </div>
+        <div class="portfolio-theme-block">
+          <span class="portfolio-theme-label">My role</span>
+          <p>${escapeHtml(override.keyRole || "")}</p>
+        </div>
+        <div class="portfolio-theme-block">
+          <span class="portfolio-theme-label">Evidence of success</span>
+          <p>${escapeHtml(override.evidence || "")}</p>
+        </div>
+        <div class="portfolio-theme-block">
+          <span class="portfolio-theme-label">Discussion</span>
+          <p>This layout is meant to read more like a formal project writeup or case study.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="portfolio-theme-layout portfolio-theme-classic">
+      ${coverMarkup}
+      <div class="portfolio-theme-block">
+        <span class="portfolio-theme-label">Summary</span>
+        <p>${escapeHtml(override.portfolioBlurb || "")}</p>
+      </div>
+      <div class="portfolio-theme-block">
+        <span class="portfolio-theme-label">Key role</span>
+        <p>${escapeHtml(override.keyRole || "")}</p>
+      </div>
+      <div class="portfolio-theme-block">
+        <span class="portfolio-theme-label">Evidence</span>
+        <p>${escapeHtml(override.evidence || "")}</p>
+      </div>
+    </div>
+  `;
 }
 
 async function fetchProjectPortfolioEntry(projectId) {
@@ -369,6 +453,7 @@ function renderFeaturedProjects(projects, customization) {
 
 function renderProjectEditors(projects, customization) {
   const container = document.getElementById("portfolio-project-editor-container");
+  const featuredIds = customization.featuredProjectIds || [];
   if (!container) return;
 
   if (!projects.length) {
@@ -394,28 +479,35 @@ function renderProjectEditors(projects, customization) {
   container.innerHTML = orderedProjects
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
-      const isFeatured = (customization.featuredProjectIds || []).includes(project.project_id);
-      const index = (customization.featuredProjectIds || []).indexOf(project.project_id);
-      const rank = index >= 0 ? index + 1 : 1;
+      const isFeatured = featuredIds.includes(project.project_id);
+      const isActive = activePortfolioProjectId === project.project_id;
+      const selectedTemplate = String(override.templateId || "classic");
 
       const initialSnapshot = JSON.stringify({
         keyRole: override.keyRole || "",
         evidence: override.evidence || "",
         portfolioBlurb: override.portfolioBlurb || "",
+        templateId: selectedTemplate,
         isFeatured,
       });
 
       return `
-        <div class="customization-project-editor" data-project-editor-id="${escapeHtml(project.project_id)}" data-saved-snapshot="${escapeHtml(initialSnapshot)}">
-          <div class="customization-project-editor-header">
+        <div 
+          class="customization-project-editor ${isActive ? "active" : "collapsed"}" 
+          data-project-editor-id="${escapeHtml(project.project_id)}" 
+          data-saved-snapshot="${escapeHtml(initialSnapshot)}"
+        >
+          <div 
+            class="customization-project-editor-header" 
+            data-open-project-card="${escapeHtml(project.project_id)}">
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
               <p class="muted-text">
                 ${project.total_files || 0} files analyzed • ${project.total_skills || 0} skill signals
               </p>
             </div>
-
-            <div class="customization-project-editor-meta">
+            <div class="portfolio-card-header-actions">
+              <span class="portfolio-template-pill">${escapeHtml(selectedTemplate.replaceAll("_", " "))}</span>
               <input
                 type="checkbox"
                 data-project-selected="${escapeHtml(project.project_id)}"
@@ -430,134 +522,168 @@ function renderProjectEditors(projects, customization) {
               >★</button>
             </div>
           </div>
+          ${
+            !isActive
+              ? `
+                <div class="portfolio-card-collapsed-preview">
+                  <p>${escapeHtml(override.portfolioBlurb || "Click to open project portfolio details.")}</p>
+                </div>
+              `
+              : `
+              <div class="portfolio-card-expanded-content">
+                <div class="portfolio-template-picker">
+                  <button
+                    type="button"
+                    class="portfolio-template-card${selectedTemplate === "classic" ? " active" : ""}"
+                    data-template-choice="classic"
+                    data-project-template="${escapeHtml(project.project_id)}"
+                  >
+                    <div class="portfolio-template-title">Classic</div>
+                    <div class="portfolio-template-copy">Simple hero image and clean project summary.</div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    class="portfolio-template-card${selectedTemplate === "case_study" ? " active" : ""}"
+                    data-template-choice="case_study"
+                    data-project-template="${escapeHtml(project.project_id)}"
+                  >
+                    <div class="portfolio-template-title">Case Study</div>
+                    <div class="portfolio-template-copy">Problem, role, build work, and result layout.</div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    class="portfolio-template-card${selectedTemplate === "gallery" ? " active" : ""}"
+                    data-template-choice="gallery"
+                    data-project-template="${escapeHtml(project.project_id)}"
+                  >
+                    <div class="portfolio-template-title">Gallery</div>
+                    <div class="portfolio-template-copy">More visual layout focused on screenshots.</div>
+                  </button>
+                </div>
 
-          <div class="portfolio-template-picker">
-            <button
-              type="button"
-              class="portfolio-template-card${(override.templateId || "classic") === "classic" ? " active" : ""}"
-              data-template-choice="classic"
-              data-project-template="${escapeHtml(project.project_id)}"
-            >
-              <div class="portfolio-template-title">Classic</div>
-              <div class="portfolio-template-copy">Simple hero image and clean project summary.</div>
-            </button>
+                <input
+                  type="hidden"
+                  data-field="templateId"
+                  value="${escapeHtml(selectedTemplate)}"
+                />
 
-            <button
-              type="button"
-              class="portfolio-template-card${(override.templateId || "classic") === "case_study" ? " active" : ""}"
-              data-template-choice="case_study"
-              data-project-template="${escapeHtml(project.project_id)}"
-            >
-              <div class="portfolio-template-title">Case Study</div>
-              <div class="portfolio-template-copy">Problem, role, build work, and result layout.</div>
-            </button>
-
-            <button
-              type="button"
-              class="portfolio-template-card${(override.templateId || "classic") === "gallery" ? " active" : ""}"
-              data-template-choice="gallery"
-              data-project-template="${escapeHtml(project.project_id)}"
-            >
-              <div class="portfolio-template-title">Gallery</div>
-              <div class="portfolio-template-copy">More visual layout focused on screenshots.</div>
-            </button>
-          </div>
-
-          <input type="hidden" data-field="templateId" value="${escapeHtml(override.templateId || "classic")}" />
-
-          <div class="form-grid">
-            <label>
-              <span>Key role</span>
-              <input
-                type="text"
-                data-field="keyRole"
-                value="${escapeHtml(override.keyRole || "")}"
-                placeholder="Example: Frontend integration lead"
-              />
-            </label>
-
-            <label class="form-full-row">
-              <span>Evidence of success</span>
-              <textarea
-                data-field="evidence"
-                rows="3"
-                placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
-              >${escapeHtml(override.evidence || "")}</textarea>
-            </label>
-
-            <label class="form-full-row">
-              <span>Portfolio Summary</span>
-              <textarea
-                data-field="portfolioBlurb"
-                rows="3"
-                placeholder="Short description that should appear in the portfolio showcase."
-              >${escapeHtml(override.portfolioBlurb || "")}</textarea>
-            </label>
-          </div>
-
-          <div class="portfolio-upload-block">
-            <label class="portfolio-upload-dropzone">
-              <span class="portfolio-upload-trigger">Upload images</span>
-              <div class="portfolio-upload-help">PNG, JPG, WEBP, or GIF screenshots for this project.</div>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                data-project-image-upload="${escapeHtml(project.project_id)}"
-              />
-            </label>
-
-            <div class="portfolio-image-grid">
-              ${(Array.isArray(override.images) ? override.images : []).map((image) => `
-                <div class="portfolio-image-card" data-portfolio-image-id="${escapeHtml(image.id)}">
-                  <div class="portfolio-image-preview-wrap">
-                    <img
-                      class="portfolio-image-preview"
-                      src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
-                      alt="${escapeHtml(image.caption || "Portfolio image")}"
+                <div class="form-grid">
+                  <label>
+                    <span>Key role</span>
+                    <input
+                      type="text"
+                      data-field="keyRole"
+                      value="${escapeHtml(override.keyRole || "")}"
+                      placeholder="Example: Frontend integration lead"
                     />
-                    ${image.is_cover ? `<span class="portfolio-image-cover-badge">Cover</span>` : ""}
-                  </div>
-                  <div class="portfolio-image-meta">
-                      <div class="portfolio-image-caption">${escapeHtml(image.caption || "Project image")}</div>
-                      <div class="portfolio-image-actions">
-                        <button
-                          type="button"
-                          class="portfolio-image-btn"
-                          data-set-cover-image="${escapeHtml(image.id)}"
-                          data-project-id="${escapeHtml(project.project_id)}"
-                        >
-                          ${image.is_cover ? "Cover Image" : "Set Cover"}
-                        </button>
-                        <button
-                          type="button"
-                          class="portfolio-image-btn danger"
-                          data-delete-image="${escapeHtml(image.id)}"
-                          data-project-id="${escapeHtml(project.project_id)}"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                `).join("")}
-              </div>
-            </div>
+                  </label>
 
-          <div class="customization-project-editor-actions">
-            <span class="customization-project-save-status"></span>
-            <button
-              type="button"
-              class="secondary-btn customization-project-save-btn"
-              data-project-save="${escapeHtml(project.project_id)}"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+                  <label class="form-full-row">
+                    <span>Evidence of success</span>
+                    <textarea
+                      data-field="evidence"
+                      rows="3"
+                      placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
+                    >${escapeHtml(override.evidence || "")}</textarea>
+                  </label>
+
+                  <label class="form-full-row">
+                    <span>Portfolio Summary</span>
+                    <textarea
+                      data-field="portfolioBlurb"
+                      rows="3"
+                      placeholder="Short description that should appear in the portfolio showcase."
+                    >${escapeHtml(override.portfolioBlurb || "")}</textarea>
+                  </label>
+                </div>
+
+                <div class="portfolio-upload-block">
+                  <label class="portfolio-upload-dropzone">
+                    <span class="portfolio-upload-trigger">Upload images</span>
+                    <div class="portfolio-upload-help">PNG, JPG, WEBP, or GIF screenshots for this project.</div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      data-project-image-upload="${escapeHtml(project.project_id)}"
+                    />
+                  </label>
+
+                  <div class="portfolio-image-grid">
+                    ${(Array.isArray(override.images) ? override.images : []).map((image) => `
+                      <div class="portfolio-image-card" data-portfolio-image-id="${escapeHtml(image.id)}">
+                        <div class="portfolio-image-preview-wrap">
+                          <img
+                            class="portfolio-image-preview"
+                            src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
+                            alt="${escapeHtml(image.caption || "Portfolio image")}"
+                          />
+                          ${image.is_cover ? `<span class="portfolio-image-cover-badge">Cover</span>` : ""}
+                        </div>
+                        <div class="portfolio-image-meta">
+                          <div class="portfolio-image-caption">${escapeHtml(image.caption || "Project image")}</div>
+                          <div class="portfolio-image-actions">
+                            <button
+                              type="button"
+                              class="portfolio-image-btn"
+                              data-set-cover-image="${escapeHtml(image.id)}"
+                              data-project-id="${escapeHtml(project.project_id)}"
+                            >
+                              ${image.is_cover ? "Cover Image" : "Set Cover"}
+                            </button>
+                            <button
+                              type="button"
+                              class="portfolio-image-btn danger"
+                              data-delete-image="${escapeHtml(image.id)}"
+                              data-project-id="${escapeHtml(project.project_id)}"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `).join("")}
+                  </div>
+                </div>
+
+                <div class="portfolio-card-theme-preview">
+                  ${buildProjectThemeDetails(project, override)}
+                </div>
+
+                <div class="customization-project-editor-actions">
+                  <span class="customization-project-save-status"></span>
+                  <button
+                    type="button"
+                    class="secondary-btn customization-project-save-btn"
+                    data-project-save="${escapeHtml(project.project_id)}"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            `
+        }
+      </div>
+    `;
+  })
+  .join("");
+
+  container.querySelectorAll("[data-open-project-card]").forEach((header) => {
+  header.addEventListener("click", (event) => {
+    if (event.target.closest("[data-project-star]")) {
+      return;
+    }
+
+    const projectId = header.dataset.openProjectCard;
+    activePortfolioProjectId =
+      activePortfolioProjectId === projectId ? null : projectId;
+
+    const customization = loadPortfolioCustomization();
+    renderProjectEditors(previewProjectsCache, customization);
+  });
+});
 
     const checkboxes = container.querySelectorAll("[data-project-selected]");
     const saveButtons = container.querySelectorAll("[data-project-save]");
@@ -635,13 +761,20 @@ function renderProjectEditors(projects, customization) {
 
       hiddenInput.value = templateId;
 
-      container
-        .querySelectorAll(`[data-project-template="${CSS.escape(projectId)}"]`)
-        .forEach((card) => card.classList.remove("active"));
+      const customization = loadPortfolioCustomization();
+      const currentOverride = customization.projectOverrides?.[projectId] || {};
 
-      button.classList.add("active");
+      customization.projectOverrides = {
+        ...(customization.projectOverrides || {}),
+        [projectId]: {
+          ...currentOverride,
+          templateId
+        }
+      };
 
-      updateLivePreview();
+      savePortfolioCustomization(customization);
+      renderProjectEditors(previewProjectsCache, customization);
+      renderLivePreview(previewProjectsCache, customization);
       scheduleAutosave();
     });
   });
@@ -853,19 +986,33 @@ function collectCustomization(projects) {
   ].slice(0, 3);
 
   const projectOverrides = {};
+
   projects.forEach((project) => {
     const editor = document.querySelector(
       `[data-project-editor-id="${CSS.escape(project.project_id)}"]`
     );
 
-    const keyRole = editor?.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
-    const evidence = editor?.querySelector('[data-field="evidence"]')?.value?.trim() || "";
-    const portfolioBlurb =
-      editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
-
-    const templateId = editor?.querySelector('[data-field="templateId"]')?.value?.trim() || "classic";
-
     const existingOverride = current?.projectOverrides?.[project.project_id] || {};
+
+    const keyRole =
+      editor?.querySelector('[data-field="keyRole"]')?.value?.trim() ??
+      existingOverride.keyRole ??
+      "";
+
+    const evidence =
+      editor?.querySelector('[data-field="evidence"]')?.value?.trim() ??
+      existingOverride.evidence ??
+      "";
+
+    const portfolioBlurb =
+      editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() ??
+      existingOverride.portfolioBlurb ??
+      "";
+
+    const templateId =
+      editor?.querySelector('[data-field="templateId"]')?.value?.trim() ??
+      existingOverride.templateId ??
+      "classic";
 
     projectOverrides[project.project_id] = {
       keyRole,
@@ -1392,7 +1539,17 @@ export function initPortfolioEditor() {
       event.preventDefault();
       event.returnValue = "";
     });
-  }
+
+    window.addEventListener("portfolio:focus-project-editor", (event) => {
+    const projectId = event.detail?.projectId;
+    if (!projectId) return;
+
+    activePortfolioProjectId = projectId;
+    const customization = loadPortfolioCustomization();
+    renderProjectEditors(previewProjectsCache, customization);
+  });
 
   renderPortfolioCustomizationPage();
+  }
+
 }

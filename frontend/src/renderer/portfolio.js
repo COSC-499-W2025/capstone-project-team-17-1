@@ -136,6 +136,24 @@ function getTopProjects(projects) {
     .slice(0, 3);
 }
 
+function wirePortfolioProjectCardClicks() {
+  document
+    .querySelectorAll("[data-open-portfolio-project]")
+    .forEach((card) => {
+      card.addEventListener("click", () => {
+        window.dispatchEvent(
+          new CustomEvent("portfolio:focus-project-editor", {
+            detail: { projectId: card.dataset.openPortfolioProject },
+          })
+        );
+
+        document
+          .getElementById("portfolio-project-editor-container")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+}
+
 async function fetchRankedTopProjectIds(limit = 3) {
   const currentUser = getCurrentUser();
   const username =
@@ -1131,6 +1149,7 @@ export async function loadPortfolio() {
 
   renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds);
   renderTopProjects(projects, summaryData, rankedTopProjectIds, portfolioEntryMap);
+  wirePortfolioProjectCardClicks();
   renderPortfolioStats(projects, summaryData, timeline);
   renderSkillsTimeline(timeline);
   renderActivityHeatmap(heatmapData);
