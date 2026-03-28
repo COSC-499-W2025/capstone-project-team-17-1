@@ -457,3 +457,27 @@ To verify these changes, I added and ran frontend tests covering onboarding, aut
 
 ### Completed Tasks Week 11
 - complete [Improve portfolio heatmap, onboarding, and consent flows (#307)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/307)
+
+## Term2 week12 Personal LOG (Mar23 -Mar29, 2026)
+### 1. Type of Tasks Worked On
+<img width="1086" height="620" alt="Screenshot 2026-03-27 at 5 10 58 PM" src="https://github.com/user-attachments/assets/49630ddc-3a05-4109-aaca-90ee508cc1b1" />
+
+### 2. Weekly Goals Recap
+- complete [Add consent gate bug (#331)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/331)
+- complete [Improve portfolio heatmap, skill progression, and project evolution resume consistency bug (#318)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/318)
+- complete [Align dashboard modes, resume exports, and portfolio/tutorial UX (#317)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/317)
+- discussed the code details with members
+- review member's PR and help them
+
+This week, I worked on improving dashboard consistency, portfolio visualization, and the consent system to better align with the M3 requirements. I completed [Add consent gate bug (#331)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/331), [Improve portfolio heatmap, skill progression, and project evolution resume consistency (#318)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/318), and [Align dashboard modes, resume exports, and portfolio/tutorial UX (#317)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/317).
+
+These changes improve both functionality and consistency across the system. I implemented a proper consent gate for Ask Sienna, ensuring users must grant external AI consent before accessing AI features, and enforced stricter access control in public mode. I also aligned dashboard behavior between public and private modes by supporting customization in private mode while limiting public mode to filtering only.
+
+On the portfolio side, I enhanced the activity heatmap with better filtering (day/month/year and per-project), improved rendering, and ensured data consistency. I also strengthened skill progression logic using multiple signals (such as project usage and complexity) and unified expertise-level grouping across portfolio and résumé outputs. Additionally, I improved project evolution to better reflect changes over time using snapshot-based data.
+
+Beyond implementation, I actively discussed design and technical details with team members, reviewed their PRs, and helped improve code quality and consistency across features.
+  
+### Completed Tasks Week 12
+- complete [Add consent gate bug (#331)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/331)
+- complete [Improve portfolio heatmap, skill progression, and project evolution resume consistency bug (#318)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/318)
+- complete [Align dashboard modes, resume exports, and portfolio/tutorial UX (#317)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/317)
