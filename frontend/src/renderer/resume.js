@@ -385,11 +385,16 @@ function saveStarred(starredSet) {
   localStorage.setItem("resume_list_starred", JSON.stringify([...starredSet]));
 }
 
+function _resumeSortTime(r) {
+  const raw = r.updated_at || r.created_at || "";
+  const t = Date.parse(String(raw).replace(" ", "T"));
+  return Number.isFinite(t) ? t : 0;
+}
+
 function applySavedOrder(resumes) {
   const saved = getSavedResumeOrder();
   if (!saved.length) {
-    // No saved order: newest first (highest id = most recently created)
-    return [...resumes].sort((a, b) => b.id - a.id);
+    return [...resumes].sort((a, b) => _resumeSortTime(b) - _resumeSortTime(a));
   }
   const rank = new Map(saved.map((id, i) => [String(id), i]));
   const inOrder = [];
@@ -398,7 +403,7 @@ function applySavedOrder(resumes) {
     (rank.has(String(r.id)) ? inOrder : newItems).push(r);
   }
   inOrder.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
-  newItems.sort((a, b) => b.id - a.id);
+  newItems.sort((a, b) => _resumeSortTime(b) - _resumeSortTime(a));
   return [...newItems, ...inOrder];
 }
 

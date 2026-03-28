@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,7 @@ class mockS3:
         self.uploaded = []
         self.downloaded = []
         self.head_behaviour = "exists"
+        self.cloud_last_modified = datetime(2020, 1, 1, tzinfo=timezone.utc)
         self.list_result = {"Contents": [{"Key": "users/test/capstone.db"}]}
         self.put_result = []
         
@@ -54,7 +56,10 @@ class mockS3:
         
     def head_object(self, Bucket, Key):
         if self.head_behaviour == "exists":
-            return {"ResponseMetadata": {"HTTPStatusCode": 200}}
+            return {
+                "ResponseMetadata": {"HTTPStatusCode": 200},
+                "LastModified": self.cloud_last_modified,
+            }
         
         if self.head_behaviour == "not_found":
             raise ClientError(

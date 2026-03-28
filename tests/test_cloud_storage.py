@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,8 @@ class mockS3:
         self.uploaded = []
         self.downloaded = []
         self.head_behaviour = "exists"
+        # Cloud object time (tests can set older than local to exercise skip-download)
+        self.cloud_last_modified = datetime(2020, 1, 1, tzinfo=timezone.utc)
         self.list_result = {"Contents": [{"Key": "users/test/capstone.db"}]}
         self.put_result = []
         
@@ -54,7 +57,10 @@ class mockS3:
         
     def head_object(self, Bucket, Key):
         if self.head_behaviour == "exists":
-            return {"ResponseMetadata": {"HTTPStatusCode": 200}}
+            return {
+                "ResponseMetadata": {"HTTPStatusCode": 200},
+                "LastModified": self.cloud_last_modified,
+            }
         
         if self.head_behaviour == "not_found":
             raise ClientError(
@@ -169,6 +175,21 @@ def test_download_db_downloads_and_moves(monkeypatch, mock_s3, tmp_path):
     assert result["status"] == "downloaded"
     assert local_db.exists()
     assert local_db.read_text(encoding="utf-8") == "downloaded data"
+
+
+def test_download_db_skips_when_local_newer_uploads_to_cloud(monkeypatch, mock_s3, tmp_path):
+    local_db = tmp_path / "capstone.db"
+    local_db.write_text("local data", encoding="utf-8")
+    monkeypatch.setattr(cloud_storage, "get_local_db_path", lambda user_id: local_db)
+    monkeypatch.setattr(cloud_storage, "object_exists", lambda bucket, key: True)
+    monkeypatch.setattr(cloud_storage, "BUCKET_NAME", "loom-storage")
+    mock_s3.cloud_last_modified = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+    result = cloud_storage.download_database("testuser")
+
+    assert result["status"] == "skipped_local_newer_uploaded"
+    assert local_db.read_text(encoding="utf-8") == "local data"
+    assert mock_s3.uploaded
 
 
 def test_upload_project_zip_returns_no_local_zip(tmp_path):
