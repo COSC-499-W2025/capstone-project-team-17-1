@@ -7284,6 +7284,31 @@ body.light .pv-sienna-input-row input {
   border-color: var(--border-subtle);
 }
 
+body.light .pv-sienna-msg.user {
+  background: #dbeafe;
+  border: 1px solid #bcd6f5;
+  color: #0f2f57;
+}
+
+body.light .pv-sienna-header {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-subtle);
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-sienna-close {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-sienna-close:hover {
+  color: var(--text-primary);
+}
+
+body.light .pv-sienna-input-row {
+  border-top-color: var(--border-subtle);
+}
+
 body.light .sienna-conversation-card,
 body.light .sienna-toolbar.card {
   background: var(--surface-1);
