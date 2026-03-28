@@ -7475,6 +7475,14 @@ body.light .resume-list-card.re-selected {
   background: #eaf2fd;
 }
 
+body.light .resume-expand-chevron {
+  color: var(--text-secondary);
+}
+
+body.light .resume-list-expand-inner {
+  border-top-color: var(--border);
+}
+
 /* New Resume modal primary action should be neutral in light mode */
 body.light #resume-generate-btn {
   background: var(--card-inner-bg);
