@@ -7602,3 +7602,17 @@ body.light .heatmap-select {
   color: var(--text-primary);
   border: 1px solid var(--input-border);
 }
+
+#recent-activity {
+  min-height: 180px !important;
+  display: block !important;
+  overflow-y: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.activity-line {
+  color: white !important;
+  display: block !important;
+  padding: 6px 0 !important;
+}
