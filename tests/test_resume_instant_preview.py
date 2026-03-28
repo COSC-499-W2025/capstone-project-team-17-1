@@ -157,7 +157,7 @@ def test_build_resume_preview_filters_disabled_sections_and_items():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_contributor_profile",return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
         patch.object(
             app,
@@ -194,7 +194,7 @@ def test_build_resume_preview_normalizes_legacy_education_experience_titles():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_contributor_profile",return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
     ):
         payload = app._build_resume_preview_from_modular_resume(

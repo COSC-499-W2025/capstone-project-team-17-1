@@ -704,7 +704,36 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE user_projects_old")
         conn.commit()
 
+    # Repair dangling FKs left by an interrupted resume timestamp migration.
+    # When a prior run renamed resumes→resumes_old, SQLite auto-rewrote the FK inside
+    # resume_sections to point at 'resumes_old'.  If the process then crashed before
+    # rebuilding resume_sections, that table is left with a FK to a non-existent table.
+    # Fix: patch sqlite_master in-place (no RENAME, so no cascade side-effects).
+    for _tbl, _good_ref in (
+        ("resume_sections", "resumes"),
+        ("resume_items", "resume_sections"),
+    ):
+        _fk_rows = conn.execute(f"PRAGMA foreign_key_list({_tbl})").fetchall()
+        _bad = [r[2] for r in _fk_rows if r[2] != _good_ref]
+        if _bad:
+            _ref = _bad[0]
+            _still_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (_ref,)
+            ).fetchone()
+            if not _still_exists:
+                conn.execute("PRAGMA foreign_keys = OFF")
+                conn.execute("PRAGMA writable_schema = ON")
+                conn.execute(
+                    f"UPDATE sqlite_master SET sql = REPLACE(REPLACE(sql, '\"' || ? || '\"', ?), ? , ?) "
+                    f"WHERE type='table' AND name=?",
+                    (_ref, _good_ref, _ref, _good_ref, _tbl),
+                )
+                conn.execute("PRAGMA writable_schema = OFF")
+                conn.execute("PRAGMA foreign_keys = ON")
+                conn.commit()
+
     # M7: resumes/resume_sections/resume_items — fix timestamp column types
+    # Align resume timestamp columns with users (UTC CURRENT_TIMESTAMP defaults).
     resume_ts_specs = {
         "resumes": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
         "resume_sections": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
@@ -723,6 +752,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if needs_resume_ts_migration:
         conn.execute("PRAGMA foreign_keys = OFF")
+        # Prevent SQLite from auto-rewriting FK references in child tables when we
+        # rename a parent table.  Without this, resume_sections.FK gets rewritten to
+        # point at 'resumes_old', which breaks inserts after resumes_old is dropped.
+        conn.execute("PRAGMA legacy_alter_table = ON")
 
         conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
         conn.execute("""
@@ -784,6 +817,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE resume_items_old")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_items_section ON resume_items (section_id, sort_order)")
 
+        conn.execute("PRAGMA legacy_alter_table = OFF")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 

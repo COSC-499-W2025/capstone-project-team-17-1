@@ -185,6 +185,21 @@ function buildProjectEvolutionSteps(project, details, override) {
   return [stageOne, stageTwo, stageThree];
 }
 
+function buildProjectProcessSteps(project, details, rank = 0) {
+  const technologies = dedupeStrings(details?.technologies);
+  const highlights = dedupeStrings(details?.highlights);
+
+  return [
+    rank === 0
+      ? "Selected as a top portfolio project based on current project signals."
+      : "Reviewed as one of the portfolio's strongest project examples.",
+    technologies.length
+      ? `Worked across ${technologies.slice(0, 3).join(", ")} during implementation.`
+      : `Expanded implementation across ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"}.`,
+    highlights[0] || "Captured measurable project progress through analysis snapshots and portfolio evidence.",
+  ];
+}
+
 function getTopProjects(projects) {
   return [...projects]
     .sort((a, b) => {
@@ -1038,6 +1053,7 @@ function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
       const evidence = override.evidence?.trim();
       const contributionSummary = buildContributionSummary(project, details, override);
       const impactSummary = buildImpactSummary(project, details, override);
+      const processSteps = buildProjectProcessSteps(project, details, index);
       return `
         <div class="top-project-card">
           <div class="top-project-rank">#${index + 1}</div>
@@ -1072,6 +1088,12 @@ function renderTopProjects(projects, summaryData, rankedTopProjectIds = []) {
                       class="project-details-panel hidden"
                       data-evidence-details-panel="${escapeHtml(project.project_id)}"
                     >
+                      <div class="project-story-block">
+                        <span class="project-story-label">Process</span>
+                        <ol class="project-process-list">
+                          ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+                        </ol>
+                      </div>
                       <div class="project-story-block">
                         <span class="project-story-label">Evidence of Success</span>
                         <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
@@ -1178,7 +1200,15 @@ function renderSkillsTimeline(timeline) {
   const container = document.getElementById("skills-timeline-container");
   if (!container) return;
 
-  if (!timeline.length) {
+  const visibleTimeline = asArray(timeline).filter((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
+      ? entry.project_metrics
+      : {};
+    return skills.length > 0 || Number(metrics.file_count || 0) > 0 || Number(metrics.active_days || 0) > 0;
+  });
+
+  if (!visibleTimeline.length) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
@@ -1190,7 +1220,7 @@ function renderSkillsTimeline(timeline) {
     return;
   }
 
-  container.innerHTML = buildTimelineEntries(timeline)
+  container.innerHTML = buildTimelineEntries(visibleTimeline)
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
       const timeLabel = formatTimelineTimestamp(entry.timestamp || entry.year);

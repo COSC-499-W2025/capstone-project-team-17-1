@@ -388,7 +388,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj1")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM contributors ORDER BY username").fetchall()
+        rows = conn.execute("SELECT github_username FROM contributors ORDER BY github_username").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
@@ -431,7 +431,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj4")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM contributors").fetchall()
+        rows = conn.execute("SELECT github_username FROM contributors").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertNotIn("dependabot[bot]", names)
@@ -474,7 +474,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT email FROM contributors WHERE username = ?", ("Alice Example",)
+            "SELECT email FROM contributors WHERE github_username = ?", ("Alice Example",)
         ).fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], "alice@example.com")

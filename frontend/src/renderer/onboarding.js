@@ -80,12 +80,32 @@ const TUTORIAL_STEPS = [
     tabKey: "resume",
     pageId: "resume-page",
     title: "Resume",
-    description: "Resume lets you manage your saved resumes and view the one-page resume snapshot built from your portfolio data.",
+    description: "Resume lets you manage your saved resumes and view the one-page resume snapshot built from your portfolio data. In Public Mode you can preview, export, and delete, while editing is only available in Private Mode.",
     sections: [
       {
         label: "My Resumes",
         selectors: [".resume-manager-card"],
-        description: "Browse and manage your saved resumes.",
+        description: "Browse your saved resumes. Public Mode supports preview, export, and delete, while editing and deeper changes require Private Mode.",
+      },
+      {
+        label: "New Resume",
+        selectors: ["#new-resume-btn"],
+        description: "New Resume opens the project picker so you can choose which projects to include when generating a resume.",
+      },
+      {
+        label: "Preview",
+        selectors: [".resume-preview-action"],
+        description: "Preview opens a formatted resume preview for the selected resume without entering edit mode.",
+      },
+      {
+        label: "Export",
+        selectors: [".resume-export-action"],
+        description: "Export downloads the selected resume in supported formats such as JSON, Markdown, or PDF.",
+      },
+      {
+        label: "Delete",
+        selectors: [".resume-delete-action"],
+        description: "Delete permanently removes the selected resume from Loom after confirmation.",
       },
       {
         label: "Resume Snapshot",
@@ -98,7 +118,7 @@ const TUTORIAL_STEPS = [
     tabKey: "portfolio",
     pageId: "portfolio-page",
     title: "Portfolio",
-    description: "Portfolio showcases your top projects, skills timeline, and activity heatmap. Use the customization section to control what appears publicly.",
+    description: "Portfolio showcases your top projects, skills timeline, and activity heatmap. Public Mode is view-only here, while customization, project edits, featured selection, reordering, and live preview are only available in Private Mode.",
     sections: [
       {
         label: "Top Projects",
@@ -123,12 +143,12 @@ const TUTORIAL_STEPS = [
       {
         label: "Sections",
         selectors: ["#portfolio-selection-wrapper", ".portfolio-actions"],
-        description: "Selection lets you control which portfolio sections are visible in the public-facing portfolio view.",
+        description: "Selection lets you control which portfolio sections are visible in the public-facing portfolio view, and that customization is only available in Private Mode.",
       },
       {
         label: "Evidence Editing",
         selectors: [".portfolio-editor-card"],
-        description: "Edit contribution and evidence text before sharing.",
+        description: "Edit contribution and evidence text before sharing. These edits are only available in Private Mode.",
       },
       {
         label: "Project Detail Drafts",
@@ -140,7 +160,7 @@ const TUTORIAL_STEPS = [
         label: "My Starred Projects",
         // Keep this separate from drafts so the tutorial can explain showcase content independently.
         selectors: ["#live-preview-starred-section"],
-        description: "My Starred Projects shows the starred projects that currently appear in your portfolio showcase and reflects their draft text in the preview.",
+        description: "My Starred Projects shows the projects selected for your portfolio showcase. Starring, ordering, and live preview updates are only available in Private Mode.",
       },
     ],
   },

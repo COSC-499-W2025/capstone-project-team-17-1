@@ -140,14 +140,15 @@ def _get_session_contributor_id(request: Request) -> Optional[int]:
     return _SESSIONS[token].get("contributor_id")
 
 
+def _get_or_create_guest_contributor_id(conn) -> int:
+    return int(storage.upsert_contributor(conn, "guestuser", email=None))
+
+
 @router.get("")
 def list_resumes(request: Request, user_id: Optional[int] = None):
     _check_auth(request)
-    # Prefer resolving user_id from session; fall back to explicit query param
-    resolved_id = _get_session_contributor_id(request) or user_id
-    if not resolved_id:
-        raise HTTPException(status_code=400, detail="user_id is required (or login to auto-resolve)")
     with _db_session(_require_db()) as conn:
+        resolved_id = _get_session_contributor_id(request) or user_id or _get_or_create_guest_contributor_id(conn)
         resumes = storage.fetch_resumes(conn, resolved_id)
     return {"data": resumes, "meta": {"total": len(resumes)}, "error": None}
 
@@ -203,22 +204,19 @@ async def generate_resume(request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
 
-    # owner_id: who the resume belongs to — always the logged-in user
-    owner_id = _get_session_contributor_id(request)
-    if not owner_id:
-        raise HTTPException(status_code=400, detail="user_id is required (or login to auto-resolve)")
-    owner_id = int(owner_id)
-
-    # data_user_id: whose project data / skills / profile to aggregate
-    # defaults to owner (generating for yourself), can be overridden for collaborative projects
-    data_user_id = payload.get("user_id")
-    data_user_id = int(data_user_id) if data_user_id else owner_id
-
     create_new = bool(payload.get("create_new", False))
     resume_title = payload.get("resume_title") or None
     selected_project_ids = payload.get("project_ids") or None
 
     with _db_session(_require_db()) as conn:
+        owner_id = _get_session_contributor_id(request) or _get_or_create_guest_contributor_id(conn)
+        owner_id = int(owner_id)
+
+        # data_user_id: whose project data / skills / profile to aggregate
+        # defaults to owner (generating for yourself), can be overridden for collaborative projects
+        data_user_id = payload.get("user_id")
+        data_user_id = int(data_user_id) if data_user_id else owner_id
+
         from capstone.api.routes.auth import _SESSIONS, _extract_bearer, _save_sessions
 
         auth_token = _extract_bearer(request)
