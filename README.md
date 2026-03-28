@@ -101,7 +101,7 @@ This section is the recommended setup path for the next team working on the repo
 | Frontend tests | [`frontend/test/`](frontend/test) |
 | Demo and regression ZIPs | [`test_data/`](test_data) |
 | Setup scripts | [`scripts/`](scripts) |
-| Frontend peer testing startup (macOS) | [Peer Testing Instructions - Frontend (macOS)](#peer-testing-instructions---frontend-macos) |
+| Frontend peer testing startup (macOS) | [MAC instruction--open loom](#mac-instruction--open-loom) |
 | Known limitations and workarounds | [Known Bugs](#known-bugs) |
 
 ### 1. Clone and create a Python environment
@@ -179,7 +179,7 @@ cd ..
 - Sample archives for demos and regression checks live in [`test_data/`](test_data).
 - The current test suite assumes local filesystem access for generated app data and logs.
 
-## Peer Testing Instructions - Frontend (macOS)
+## MAC instruction--open loom
 
 ### Overview
 
@@ -190,7 +190,7 @@ Before starting this section, complete the shared setup in [Installation Guide f
 ### 1. Go to the project root and activate the virtual environment
 
 ```bash
-cd /Users/yanshuyu/Desktop/capstone-project-team-17-1
+cd /path/to/capstone-project-team-17-1
 source .venv/bin/activate
 ```
 
@@ -212,7 +212,7 @@ python -m capstone.run_server
 ### 4. Open a new terminal and start the frontend
 
 ```bash
-cd /Users/yanshuyu/Desktop/capstone-project-team-17-1/frontend
+cd frontend
 npm start
 ```
 
@@ -781,6 +781,8 @@ The system must be able to ... :
 ## 30.0 Display textual information about a project as a résumé item
   - 30.1 Generate résumé-ready textual project descriptions
   - 30.2 Display only résumé-selected projects and wording
+
+## Milestone #3
 
 ## 31.0 Produce a One-Page Résumé
   - 31.1 Include education and awards information
