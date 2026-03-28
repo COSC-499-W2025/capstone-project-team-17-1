@@ -16,6 +16,11 @@ let currentUser = null;
 let privateModeEnabled = false;
 let pendingPublicPage = null;
 let _educationEntries = [];
+let _githubTokenState = {
+  maskedDisplay: "",
+  configured: false,
+  editing: false,
+};
 let latestConsentState = {
   local_consent: false,
   external_consent: false,
@@ -256,6 +261,136 @@ export async function openSettingsAndPromptLogin(settingsTab = "account") {
   }
 }
 
+function _applyGithubTokenView() {
+  const input = document.getElementById("gh-token-input");
+  const editBtn = document.getElementById("gh-token-edit-btn");
+  const saveBtn = document.getElementById("gh-token-save-btn");
+  const cancelBtn = document.getElementById("gh-token-cancel-btn");
+  const showRow = document.getElementById("gh-token-show-row");
+  const showChk = document.getElementById("gh-token-show-chk");
+  if (!input || !editBtn || !saveBtn || !cancelBtn || !showRow || !showChk) return;
+
+  if (!_githubTokenState.editing) {
+    input.disabled = true;
+    input.value = _githubTokenState.configured ? _githubTokenState.maskedDisplay : "";
+    input.placeholder = _githubTokenState.configured ? "" : "No token saved yet";
+    input.type = "text";
+    input.autocomplete = "off";
+    showChk.checked = false;
+    const showLabel = document.getElementById("gh-token-show-label");
+    if (showLabel) showLabel.textContent = "Show token";
+    editBtn.classList.remove("hidden");
+    saveBtn.classList.add("hidden");
+    cancelBtn.classList.add("hidden");
+    showRow.classList.add("hidden");
+  } else {
+    input.disabled = false;
+    input.value = "";
+    input.placeholder = "Paste new personal access token";
+    showChk.checked = false;
+    const showLabelEd = document.getElementById("gh-token-show-label");
+    if (showLabelEd) showLabelEd.textContent = "Show token";
+    input.type = "password";
+    input.autocomplete = "new-password";
+    editBtn.classList.add("hidden");
+    saveBtn.classList.remove("hidden");
+    cancelBtn.classList.remove("hidden");
+    showRow.classList.remove("hidden");
+  }
+}
+
+async function _refreshGithubTokenStatus() {
+  try {
+    const res = await authFetch("/github/token/status");
+    if (!res.ok) {
+      _githubTokenState.configured = false;
+      _githubTokenState.maskedDisplay = "";
+      return;
+    }
+    const data = await res.json();
+    _githubTokenState.configured = Boolean(data.configured);
+    _githubTokenState.maskedDisplay = typeof data.masked_token === "string" ? data.masked_token : "";
+  } catch (_) {
+    _githubTokenState.configured = false;
+    _githubTokenState.maskedDisplay = "";
+  }
+}
+
+function _bindGithubTokenSettings() {
+  _githubTokenState.editing = false;
+  const editBtn = document.getElementById("gh-token-edit-btn");
+  const saveBtn = document.getElementById("gh-token-save-btn");
+  const cancelBtn = document.getElementById("gh-token-cancel-btn");
+  const showChk = document.getElementById("gh-token-show-chk");
+  const input = document.getElementById("gh-token-input");
+  if (!editBtn || !saveBtn || !cancelBtn || !showChk || !input) return;
+
+  editBtn.addEventListener("click", () => {
+    document.getElementById("gh-token-msg").textContent = "";
+    _githubTokenState.editing = true;
+    _applyGithubTokenView();
+  });
+
+  cancelBtn.addEventListener("click", async () => {
+    document.getElementById("gh-token-msg").textContent = "";
+    _githubTokenState.editing = false;
+    await _refreshGithubTokenStatus();
+    _applyGithubTokenView();
+  });
+
+  showChk.addEventListener("change", () => {
+    if (!_githubTokenState.editing) return;
+    input.type = showChk.checked ? "text" : "password";
+    const showLabel = document.getElementById("gh-token-show-label");
+    if (showLabel) showLabel.textContent = showChk.checked ? "Hide token" : "Show token";
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const msg = document.getElementById("gh-token-msg");
+    const raw = (input.value || "").trim();
+    if (!raw) {
+      if (msg) msg.textContent = "Enter a new token to save.";
+      return;
+    }
+    if (msg) msg.textContent = "Validating and saving...";
+    saveBtn.disabled = true;
+    try {
+      const res = await authFetch("/api/github/token", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: raw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const d = data.detail;
+        const detailText = Array.isArray(d)
+          ? d.map((x) => (typeof x === "object" && x?.msg) || String(x)).join(" ")
+          : (d || `Save failed (${res.status})`);
+        if (msg) msg.textContent = detailText;
+        return;
+      }
+      _githubTokenState.editing = false;
+      _githubTokenState.configured = true;
+      _githubTokenState.maskedDisplay = typeof data.masked_token === "string" ? data.masked_token : _githubTokenState.maskedDisplay;
+      showChk.checked = false;
+      _applyGithubTokenView();
+      if (msg) {
+        const who = data.github_login ? ` (@${data.github_login})` : "";
+        msg.textContent = `GitHub token saved${who}.`;
+      }
+    } catch (_) {
+      if (msg) msg.textContent = "Save failed: network error.";
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  _refreshGithubTokenStatus().then(() => {
+    _githubTokenState.editing = false;
+    _applyGithubTokenView();
+  });
+}
+
 function renderSettingsProfile() {
   // ── Account tab: profile form ──────────────────────────────────
   const profileEl = document.getElementById("settings-profile");
@@ -264,6 +399,7 @@ function renderSettingsProfile() {
       profileEl.innerHTML = `<p class="settings-login-prompt">Login to view and edit your profile.</p>`;
     } else {
       profileEl.innerHTML = `
+        <div class="settings-card settings-profile-card">
         <div class="settings-card-header">
           <h3>User Profile</h3>
           <p class="settings-card-desc">Update your personal information and public links.</p>
@@ -302,6 +438,33 @@ function renderSettingsProfile() {
           <button id="profile-save-btn" class="settings-save-btn">Save Profile</button>
           <span id="profile-msg" class="settings-feedback-msg"></span>
         </div>
+        </div>
+
+        <div class="settings-card settings-github-token-card">
+          <div class="settings-card-header">
+            <h3>GitHub</h3>
+            <p class="settings-card-desc">Personal access token used to list and import repositories. Update it if organization or classroom repos are missing (for example, after enabling SSO or new scopes).</p>
+          </div>
+          <div class="settings-form-grid">
+            <label class="settings-form-label" for="gh-token-input">GitHub Token</label>
+            <div class="settings-github-token-field-col">
+              <input id="gh-token-input" class="settings-input" disabled autocomplete="off" />
+              <label class="settings-github-show-toggle hidden" id="gh-token-show-row">
+                <input type="checkbox" id="gh-token-show-chk" />
+                <span id="gh-token-show-label">Show token</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-form-actions settings-github-token-actions">
+            <button type="button" id="gh-token-edit-btn" class="settings-action-btn">Edit</button>
+            <button type="button" id="gh-token-save-btn" class="settings-save-btn hidden">Save Changes</button>
+            <button type="button" id="gh-token-cancel-btn" class="settings-action-btn hidden">Cancel</button>
+            <span id="gh-token-msg" class="settings-feedback-msg"></span>
+          </div>
+          <p class="settings-github-token-footnote">
+            <a class="settings-inline-link" href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">Create or manage tokens on GitHub</a>
+          </p>
+        </div>
       `;
       document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
       document.getElementById("edu-add-btn")?.addEventListener("click", () => {
@@ -313,6 +476,7 @@ function renderSettingsProfile() {
         _educationEntries = Array.isArray(data.data) ? data.data : [];
         _renderEduCards();
       }).catch(() => { _educationEntries = []; _renderEduCards(); });
+      _bindGithubTokenSettings();
     }
   }
 

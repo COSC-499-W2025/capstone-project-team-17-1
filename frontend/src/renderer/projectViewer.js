@@ -491,7 +491,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
   const topSkillsByYear = data.top_skills_by_year || {};
   const years = Object.keys(topSkillsByYear).sort();
 
-  const isGit = collabInfo && collabInfo.is_github;
+  const isGit = Boolean(collabInfo && (collabInfo.is_git_project || collabInfo.is_github));
   const contributors = (collabInfo && collabInfo.contributors) || [];
 
   container.innerHTML = `
@@ -652,7 +652,7 @@ async function _loadCollaboration(projectId) {
 }
 
 function _renderCollaborationTab(container, data) {
-  const isGit = data.is_github;
+  const isGit = Boolean(data.is_git_project || data.is_github);
   const contributors = data.contributors || [];
   const first = data.first_commit_date;
   const last = data.last_commit_date;

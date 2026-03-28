@@ -6313,6 +6313,54 @@ body.light .export-modal-footer {
   opacity: 0.65;
 }
 
+.settings-account-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-github-token-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-github-show-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  opacity: 0.72;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-github-show-toggle input {
+  cursor: pointer;
+}
+
+.settings-github-token-actions {
+  flex-wrap: wrap;
+}
+
+.settings-github-token-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.5;
+}
+
+.settings-inline-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+}
+
+.settings-inline-link:hover {
+  opacity: 1;
+}
+
 /* Form grid used inside settings cards */
 .settings-form-grid {
   display: grid;

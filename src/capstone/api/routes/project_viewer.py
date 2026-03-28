@@ -806,6 +806,7 @@ def get_project_collaboration(project_id: str):
         return {
             "project_id": project_id,
             "is_github": is_github,
+            "is_git_project": bool(is_github or snapshot.get("is_git_project")),
             "classification": cached.get("classification") or collab.get("classification") or "unknown",
             "primary_contributor": cached.get("primary_contributor") or collab.get("primary_contributor"),
             "total_contributors": int(cached.get("total_contributors") or len(cached.get("contributors") or [])),
@@ -951,6 +952,7 @@ def get_project_collaboration(project_id: str):
     response_payload = {
         "project_id": project_id,
         "is_github": is_github,
+        "is_git_project": bool(is_github or snapshot.get("is_git_project")),
         "classification": classification,
         "primary_contributor": primary,
         "total_contributors": len(contributors),

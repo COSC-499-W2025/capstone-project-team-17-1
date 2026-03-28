@@ -14,7 +14,13 @@ async function checkGithubAuth() {
 
 export async function loadGithubRepos() {
     const res = await authFetch("/github/repos")
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.detail || `Failed to fetch GitHub repos (${res.status})`);
+    }
     const repos = await res.json()
+    console.log("Fetched repos:", Array.isArray(repos) ? repos.length : 0);
+    console.log("Repo names:", Array.isArray(repos) ? repos.map((r) => r.full_name) : []);
 
     renderRepoCards(repos)
 }
@@ -33,6 +39,22 @@ async function startGithubImport(owner, repo, projectId, branch) {
   }
 
   return res.json();
+}
+
+async function runGitAnalysis(projectId, repoFullName) {
+  if (!projectId) return null;
+  if (repoFullName) {
+    console.log("Running git analysis for:", repoFullName);
+  }
+  try {
+    const res = await authFetch(`/github/pull?project_id=${encodeURIComponent(projectId)}&refresh=true`, {
+      method: "POST",
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch (_) {
+    return null;
+  }
 }
 
 
@@ -82,7 +104,13 @@ async function initGithubSection() {
 
   try {
     const res = await authFetch("/github/repos");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.detail || `Failed to fetch GitHub repos (${res.status})`);
+    }
     const repos = await res.json();
+    console.log("Fetched repos:", Array.isArray(repos) ? repos.length : 0);
+    console.log("Repo names:", Array.isArray(repos) ? repos.map((r) => r.full_name) : []);
     renderRepoCards(repos);
   } catch (e) {
     githubContainer.innerHTML = `
@@ -101,7 +129,13 @@ async function initGithubSection() {
 
   try {
 
-    await startGithubImport(owner, name, projectId, branch);
+    const payload = await startGithubImport(owner, name, projectId, branch);
+    const project = payload?.summary || {};
+    console.log("Git project flag:", Boolean(project?.is_git_project));
+    console.log("Collaboration snapshot:", project?.collaboration || null);
+    if (project?.is_git_project) {
+      await runGitAnalysis(projectId, project?.repo_full_name);
+    }
 
     // Cloud sync is a follow-up step. If it fails, keep the import successful locally.
     try {

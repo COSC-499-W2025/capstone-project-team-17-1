@@ -174,6 +174,10 @@ export function renderGithubLogin(container) {
 export function renderRepoCards(repos) {
   const githubContainer = document.getElementById("github-section-body");
   if (!githubContainer) return;
+  console.log("Processed repos:", Array.isArray(repos) ? repos.length : 0);
+  if (Array.isArray(repos)) {
+    console.log("Processed repo names:", repos.map((r) => r.full_name || r.name));
+  }
 
   if (!repos || repos.length === 0) {
     githubContainer.innerHTML = `
@@ -195,6 +199,7 @@ export function renderRepoCards(repos) {
     const list = githubContainer.querySelector("#github-repo-list");
     if (!list) return;
     list.innerHTML = "";
+    console.log("Final rendered repos:", Array.isArray(filtered) ? filtered.length : 0);
 
     filtered.forEach(repo => {
       const card = document.createElement("div");
@@ -249,8 +254,10 @@ export function renderRepoCards(repos) {
         let branches = [];
 
         try {
+          const ownerQ = encodeURIComponent(owner);
+          const repoQ = encodeURIComponent(name);
           const res = await authFetch(
-            `/github/branches?owner=${owner}&repo=${name}`
+            `/github/branches?owner=${ownerQ}&repo=${repoQ}`
           );
 
           const data = await res.json();

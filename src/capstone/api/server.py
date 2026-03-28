@@ -15,7 +15,7 @@ from capstone.api.routes.activity_log import router as activity_router
 from capstone.api.routes.recent_projects import router as dashboard_router
 from capstone.api.routes.errors import router as errors_router
 from capstone.api.routes.health import router as health_router
-from capstone.api.routes.github_endpoints import router as github_router
+from capstone.api.routes.github_endpoints import router as github_router, put_github_token
 from capstone.api.routes.sienna import router as sienna_router
 from capstone.api.routes.auth import router as auth_router, configure as configure_auth
 from capstone.api.routes.cloud import router as cloud_router
@@ -128,6 +128,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(sienna_router)
     app.include_router(health_router)
     app.include_router(github_router)
+    app.add_api_route("/api/github/token", put_github_token, methods=["PUT"], tags=["github"])
     app.include_router(cloud_router)
     app.include_router(project_viewer_router)
     configure_auth(db_dir)
