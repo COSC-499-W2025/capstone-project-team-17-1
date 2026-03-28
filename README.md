@@ -195,6 +195,10 @@ Recommended install flow on macOS:
 
 Use this option when testing the packaged desktop app experience on macOS.
 
+### Option B: run Loom in development mode
+
+Use this option when you want to run the Electron app directly from the repository during development or peer testing.
+
 ### Prerequisites
 
 - The Python virtual environment has already been created.
