@@ -1,6 +1,6 @@
 const API_BASE = "http://127.0.0.1:8002";
-const AUTH_TOKEN_KEY = "loom_auth_token";
 import { formatConsentSummary, shouldShowConsentBanner } from "./consentShared.mjs";
+import { getStoredAuthToken } from "./authStorage.js";
 
 const CONSENT_COPY = {
   summary:
@@ -22,7 +22,7 @@ function getModal() {
 
 function buildAuthHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders };
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getStoredAuthToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

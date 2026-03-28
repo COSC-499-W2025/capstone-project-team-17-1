@@ -1,7 +1,8 @@
 import { openProjectViewer } from "./projectViewer.js";
-import { authFetch } from "./auth.js";
+import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 
 export async function loadRecentProjects() {
+  const epoch = captureAuthDataEpoch();
   try {
     const res = await authFetch("/dashboard/recent-projects");
     if (!res.ok) {
@@ -11,6 +12,9 @@ export async function loadRecentProjects() {
 
     const container = document.getElementById("recent-projects-container");
     if (!container) return;
+
+    if (!authDomWriteAllowed(epoch)) return;
+
     container.innerHTML = "";
 
     projects.slice(0, 5).forEach(project => {

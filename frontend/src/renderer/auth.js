@@ -8,9 +8,35 @@ import { refreshConsentUI, renderConsentSettings, setConsentSettingsMessage } fr
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
 import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
+import { beginPostLoginDashboardReload, finishPostLoginDashboardReload } from "./dashboardInit.js";
+import {
+  migrateLegacyAuthStorage,
+  getStoredAuthToken,
+  setStoredAuthToken,
+  clearStoredAuthTokens,
+  getRememberLoginPreference,
+  setRememberLoginPreference,
+  relocateStoredAuthToken,
+  AUTH_TOKEN_KEY,
+} from "./authStorage.js";
 
 const API_BASE = "http://127.0.0.1:8002";
-const AUTH_TOKEN_KEY = "loom_auth_token";
+
+/** Bumped when auth token identity or storage mode changes so stale dashboard fetches skip DOM writes. */
+let _authDataEpoch = 0;
+
+export function captureAuthDataEpoch() {
+  return _authDataEpoch;
+}
+
+export function authDomWriteAllowed(epoch) {
+  return _authDataEpoch === epoch;
+}
+
+function bumpAuthDataEpoch() {
+  _authDataEpoch++;
+}
+
 let authMode = "login";
 let currentUser = null;
 let privateModeEnabled = false;
@@ -27,15 +53,38 @@ let latestConsentState = {
   bannerVisible: false,
 };
 
-function getAuthToken() {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+export function getAuthToken() {
+  return getStoredAuthToken();
 }
 
-function setAuthToken(token) {
+/**
+ * @param {string | null} token
+ * @param {{ persistent?: boolean }} [options] — login/register should pass persistent explicitly
+ */
+function setAuthToken(token, options = {}) {
+  const prev = getStoredAuthToken();
   if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    const persistent =
+      typeof options.persistent === "boolean"
+        ? options.persistent
+        : isRememberLoginEffectiveOn();
+    setStoredAuthToken(token, { persistent });
+    if (prev !== token) bumpAuthDataEpoch();
   } else {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    clearStoredAuthTokens();
+    if (prev) bumpAuthDataEpoch();
+  }
+}
+
+/** Whether "stay signed in" is effectively on (preference or legacy local token). */
+export function isRememberLoginEffectiveOn() {
+  const p = getRememberLoginPreference();
+  if (p === true) return true;
+  if (p === false) return false;
+  try {
+    return Boolean(getStoredAuthToken() && localStorage.getItem(AUTH_TOKEN_KEY));
+  } catch (_) {
+    return false;
   }
 }
 
@@ -239,6 +288,8 @@ export async function openLoginFlow() {
       mode = boot.has_users ? "login" : "register";
     }
   } catch (_) {}
+  const rememberChk = document.getElementById("auth-remember-me");
+  if (rememberChk) rememberChk.checked = false;
   setAuthFormMode(mode);
   showAuthModal(true);
 }
@@ -487,6 +538,16 @@ function renderSettingsProfile() {
       securityEl.innerHTML = `<p class="settings-login-prompt">Login to manage security settings.</p>`;
     } else {
       securityEl.innerHTML = `
+        <div class="settings-card settings-session-card">
+          <div class="settings-card-header">
+            <h3>Stay signed in</h3>
+            <p class="settings-card-desc">When off, your session lasts until you quit the app; the next launch starts in guest mode until you log in again.</p>
+          </div>
+          <label class="settings-remember-label" for="settings-remember-login">
+            <input type="checkbox" id="settings-remember-login" />
+            <span>Remember me on this device</span>
+          </label>
+        </div>
         <div class="settings-card-header">
           <h3>Change Password</h3>
           <p class="settings-card-desc">Update your account password. New password must be at least 6 characters.</p>
@@ -502,6 +563,13 @@ function renderSettingsProfile() {
           <span id="password-msg" class="settings-feedback-msg"></span>
         </div>
       `;
+      const rememberSettings = document.getElementById("settings-remember-login");
+      if (rememberSettings) {
+        rememberSettings.checked = isRememberLoginEffectiveOn();
+        rememberSettings.addEventListener("change", async () => {
+          await applyRememberLoginFromSettings(rememberSettings.checked);
+        });
+      }
       document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
     }
   }
@@ -659,6 +727,8 @@ function closeModalToPublic() {
   if (githubUrlInput) githubUrlInput.value = "";
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
+  const rememberChk = document.getElementById("auth-remember-me");
+  if (rememberChk) rememberChk.checked = false;
   showAuthModal(false);
   if (!currentUser && pendingPublicPage?.tabKey && pendingPublicPage?.pageId) {
     showSavedPage(pendingPublicPage.tabKey, pendingPublicPage.pageId);
@@ -691,7 +761,19 @@ async function syncCloudDbAndRefresh() {
     loadMostUsedSkills(),
   ]);
   notifyPortfolioDataUpdated();
-}  
+}
+
+/** Settings toggle: move token between storages and refresh widgets. */
+export async function applyRememberLoginFromSettings(persist) {
+  const token = getAuthToken();
+  if (token) {
+    relocateStoredAuthToken(token, persist);
+    bumpAuthDataEpoch();
+    await syncCloudDbAndRefresh();
+  } else {
+    setRememberLoginPreference(persist);
+  }
+}
 
 export async function initAuthFlow() {
   const loginBtn = document.getElementById("login-btn");
@@ -711,7 +793,7 @@ export async function initAuthFlow() {
     return;
   }
 
-  setModeUI(false, null);
+  migrateLegacyAuthStorage();
   setAuthFormMode("login");
   goToPage("dashboard", "dashboard-page");
 
@@ -824,21 +906,29 @@ export async function initAuthFlow() {
     },
   });
 
-    try {
-    const user = await ensureCurrentUser();
+  try {
+    let bootUser = null;
+    const existingToken = getAuthToken();
+    if (existingToken) {
+      const meRes = await authFetch("/auth/me");
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        bootUser = meData.user || null;
+      }
+    }
 
-    if (user) {
-      setModeUI(true, user);
+    if (bootUser) {
+      setModeUI(true, bootUser);
       await syncCloudDbAndRefresh();
       const consentState = await ensureConsentState();
       if (!consentState?.bannerVisible) {
-        maybeShowOnboardingForAudience(user.username || user.id || "guest");
+        maybeShowOnboardingForAudience(bootUser.username || bootUser.id || "guest");
       }
       if (!restoreLastAllowedPage({ requirePrivate: true })) {
         goToPage("dashboard", "dashboard-page");
       }
     } else {
-      setAuthToken(null);
+      if (existingToken) setAuthToken(null);
       setModeUI(false, null);
       if (!restoreLastAllowedPage()) {
         goToPage("dashboard", "dashboard-page");
@@ -908,13 +998,30 @@ export async function initAuthFlow() {
       return;
     }
 
-    setAuthToken(data.token);
+    const wasGuest = !privateModeEnabled;
+    const rememberMe = document.getElementById("auth-remember-me")?.checked === true;
+    setAuthToken(data.token, { persistent: rememberMe });
     setModeUI(true, data.user);
     showAuthModal(false);
     pendingPublicPage = null;
     goToPage("dashboard", "dashboard-page");
 
-    await syncCloudDbAndRefresh();
+    if (wasGuest) {
+      const dashEpoch = beginPostLoginDashboardReload();
+      try {
+        await syncCloudDbAndRefresh();
+        try {
+          const { loadRecentActivity } = await import("./activity.js");
+          await loadRecentActivity();
+        } catch (_) {
+          /* activity is non-blocking */
+        }
+      } finally {
+        finishPostLoginDashboardReload(dashEpoch);
+      }
+    } else {
+      await syncCloudDbAndRefresh();
+    }
     const consentState = await ensureConsentState();
     if (!consentState?.bannerVisible) {
       maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");

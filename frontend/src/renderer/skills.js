@@ -1,21 +1,22 @@
-import { isPrivateMode } from "./auth.js";
-import { authFetch } from "./auth.js";
+import { isPrivateMode, authFetch, hasAuthToken, captureAuthDataEpoch, authDomWriteAllowed, getAuthToken } from "./auth.js";
 
 const SKILLS_CHART_MODE_KEY = "loom_dashboard_skills_chart_mode";
 let skillsChart = null;
 
 export async function loadMostUsedSkills() {
-
+  const epoch = captureAuthDataEpoch();
   const container = document.getElementById("most-used-skills");
   if (!container) return;
 
   console.log("Loading most used skills...");
-  let result = await window.skillsAPI.loadMostUsedSkills();
+  let result = await window.skillsAPI.loadMostUsedSkills(getAuthToken());
 
-  const hasToken = Boolean(localStorage.getItem("loom_auth_token"));
+  const hasToken = hasAuthToken();
   if ((isPrivateMode() || hasToken) && (!result || result.empty)) {
     result = await buildPrivateTimelineSkills();
   }
+
+  if (!authDomWriteAllowed(epoch)) return;
 
   console.log("Skills result:", result);
 

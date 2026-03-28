@@ -1,3 +1,5 @@
+import { captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+
 let activityState = {
   logs: [],
   filter: "all",
@@ -132,6 +134,7 @@ function renderCurrentActivity() {
  */
 export async function loadRecentActivity(options = {}) {
   const silent = Boolean(options.silent);
+  const epoch = captureAuthDataEpoch();
   const container = getContainer();
   if (!container) return;
 
@@ -148,12 +151,15 @@ export async function loadRecentActivity(options = {}) {
     }
 
     const result = await res.json();
+
+    if (!authDomWriteAllowed(epoch)) return;
+
     activityState.logs = Array.isArray(result) ? result : (result.logs || []);
 
     renderCurrentActivity();
   } catch (err) {
     console.error("Activity fetch failed:", err);
-    if (!silent) {
+    if (!silent && authDomWriteAllowed(epoch)) {
       container.innerHTML = `
       <div class="activity-line level-error">
         Failed to load activity.
