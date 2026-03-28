@@ -5,22 +5,44 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 
-def get_base_log_dir() -> Path:
+def _resolve_default_base_dir() -> Path:
     if sys.platform == "win32":
-        base = Path(os.getenv("APPDATA", Path.home()))
-    else:
-        base = Path.home()
+        return Path(os.getenv("APPDATA", Path.home()))
+    return Path.home()
 
-    app_dir = base / "Loom"
-    app_dir.mkdir(exist_ok=True)
 
-    log_dir = app_dir / "log"
-    log_dir.mkdir(exist_ok=True)
+def _ensure_writable_dir(path: Path) -> Path | None:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write_test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return path
+    except OSError:
+        return None
 
-    return log_dir
+
+def get_base_log_dir() -> Path:
+    candidates = []
+
+    env_dir = os.getenv("CAPSTONE_LOG_DIR")
+    if env_dir:
+        candidates.append(Path(env_dir))
+
+    candidates.append(_resolve_default_base_dir() / "Loom" / "log")
+    candidates.append(Path.cwd() / ".capstone-log")
+    candidates.append(Path(tempfile.gettempdir()) / "capstone-log")
+
+    for candidate in candidates:
+        resolved = _ensure_writable_dir(candidate)
+        if resolved is not None:
+            return resolved
+
+    raise RuntimeError("Unable to find a writable log directory")
 
 
 LOG_DIR = get_base_log_dir()

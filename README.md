@@ -333,25 +333,39 @@ API docs:
 |---|---|---|---|
 | GET | `/` | API status | Implemented |
 | GET | `/health` | Health check | Implemented |
+| GET | `/api/health` | Alternate health check | Implemented |
+| GET | `/system/system-metrics` | System metrics snapshot | Implemented |
+| GET | `/__debug/routers` | Route/debug mount inspection | Implemented |
 
 ### Consent
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| POST | `/privacy-consent` | Save privacy consent | Implemented |
 | GET | `/privacy-consent` | Get privacy consent | Implemented |
+| POST | `/privacy-consent/local` | Save local consent | Implemented |
+| POST | `/privacy-consent/external` | Save external/AI consent | Implemented |
 
 ### Projects
 
 | Method | Path | Description | Status |
 |---|---|---|---|
 | POST | `/projects/upload` | Upload zip and store project snapshot | Implemented |
+| POST | `/projects/upload-bundle` | Upload a multi-project zip bundle | Implemented |
 | GET | `/projects` | List projects | Implemented |
 | GET | `/projects/{id}` | Get project details | Implemented |
 | DELETE | `/projects/{id}` | Delete project | Implemented |
+| POST | `/projects/{id}/thumbnail` | Upload project thumbnail | Implemented |
+| GET | `/projects/{id}/thumbnail` | Get project thumbnail | Implemented |
 | GET | `/projects/{id}/uploads` | List project uploads | Implemented |
 | PATCH | `/projects/{id}` | Update project overrides | Implemented |
+| POST | `/projects/{id}/edit` | Legacy alias for project edit | Implemented |
 | GET | `/projects/{id}/overrides` | Get project overrides | Implemented |
+| POST | `/projects/{project_id}/generate-resume` | Generate a resume from one project | Implemented |
+| GET | `/projects/{project_id}/tree` | Get project file tree | Implemented |
+| GET | `/projects/{project_id}/file` | Read a project file | Implemented |
+| POST | `/projects/update-file` | Update a project file | Implemented |
+| GET | `/projects/{project_id}/analysis` | Get project analysis view | Implemented |
+| GET | `/projects/collaboration/{project_id}` | Get collaboration-focused project data | Implemented |
 
 ### Skills
 
@@ -359,34 +373,111 @@ API docs:
 |---|---|---|---|
 | GET | `/projects/{project_id}/skills` | Get detected skills for project | Implemented |
 | GET | `/skills` | Aggregate skills across projects | Implemented |
+| GET | `/skills/timeline` | Get skills timeline data | Implemented |
 
-### Resume
+### Resumes
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| GET | `/resume` | List/search resume entries | Implemented |
-| POST | `/resume` | Create resume entry | Implemented |
-| GET | `/resume/{id}` | Get resume entry | Implemented |
-| PATCH | `/resume/{id}` | Update resume entry | Implemented |
-| DELETE | `/resume/{id}` | Delete resume entry | Implemented |
-| POST | `/resume/generate` | Generate resume (`json|markdown|pdf`) | Implemented |
-| POST | `/resume/render-pdf` | Render resume payload as PDF | Implemented |
-| GET | `/resume-projects` | List/get resume wording by project | Implemented |
-| POST | `/resume-projects` | Upsert project resume wording | Implemented |
-| POST | `/resume-projects/generate` | Auto-generate resume wording | Implemented |
+| GET | `/resumes` | List resumes | Implemented |
+| POST | `/resumes` | Create a resume | Implemented |
+| POST | `/resumes/generate` | Auto-generate a resume | Implemented |
+| POST | `/resumes/render-pdf` | Render resume payload as PDF | Implemented |
+| GET | `/resumes/{resume_id}` | Get a resume | Implemented |
+| PATCH | `/resumes/{resume_id}` | Update resume metadata | Implemented |
+| DELETE | `/resumes/{resume_id}` | Delete a resume | Implemented |
+| GET | `/resumes/{resume_id}/export` | Export a resume (`json|markdown|pdf`) | Implemented |
+| GET | `/resumes/{resume_id}/sections` | List resume sections | Implemented |
+| POST | `/resumes/{resume_id}/sections` | Create a resume section | Implemented |
+| POST | `/resumes/{resume_id}/sections/reorder` | Reorder resume sections | Implemented |
+| PATCH | `/resumes/{resume_id}/sections/{section_id}` | Update a resume section | Implemented |
+| DELETE | `/resumes/{resume_id}/sections/{section_id}` | Delete a resume section | Implemented |
+| GET | `/resumes/{resume_id}/sections/{section_id}/items` | List section items | Implemented |
+| POST | `/resumes/{resume_id}/sections/{section_id}/items` | Create a section item | Implemented |
+| POST | `/resumes/{resume_id}/sections/{section_id}/items/reorder` | Reorder section items | Implemented |
+| PATCH | `/resumes/{resume_id}/sections/{section_id}/items/{item_id}` | Update a section item | Implemented |
+| DELETE | `/resumes/{resume_id}/sections/{section_id}/items/{item_id}` | Delete a section item | Implemented |
 
 ### Portfolio / Showcase
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| GET | `/portfolio/{id}` | Get portfolio/showcase summary | Implemented |
 | POST | `/portfolio/generate` | Generate portfolio summaries | Implemented |
+| POST | `/portfolio/showcase/edit` | Edit showcase summary by project id | Implemented |
 | POST | `/portfolio/{id}/edit` | Edit portfolio summary | Implemented |
+| GET | `/portfolio/latest/summary` | Get one-page portfolio summary | Implemented |
+| GET | `/portfolio/activity-heatmap` | Get portfolio activity heatmap data | Implemented |
+| GET | `/portfolio/project-evolution` | Get project evolution/showcase data | Implemented |
+| GET | `/portfolio/{id}/export` | Export portfolio data | Implemented |
 | GET | `/showcase/*` | Showcase-prefixed aliases | Implemented |
 | GET | `/portfolios/*`, `/users/*` | Legacy compatibility aliases | Implemented |
 
+### Auth
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/auth/bootstrap` | Get auth bootstrap/session state | Implemented |
+| POST | `/auth/register` | Register a user | Implemented |
+| POST | `/auth/login` | Log in a user | Implemented |
+| GET | `/auth/me` | Get current authenticated user | Implemented |
+| PUT | `/auth/me` | Update current user profile | Implemented |
+| GET | `/auth/me/education` | Get current user education entries | Implemented |
+| PUT | `/auth/me/education` | Update current user education entries | Implemented |
+| POST | `/auth/password` | Change password | Implemented |
+| POST | `/auth/logout` | Log out current session | Implemented |
+
+### GitHub / External Import
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/github/repos` | List authenticated GitHub repositories | Implemented |
+| POST | `/github/import` | Import a GitHub repository as a project | Implemented |
+| POST | `/github/pull` | Refresh/pull GitHub project data | Implemented |
+| GET | `/github/auth-status` | Check GitHub auth status | Implemented |
+| POST | `/github/login` | Save GitHub token/login state | Implemented |
+| GET | `/github/branches` | List repository branches | Implemented |
+
+### Dashboard / Analytics / Activity
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/dashboard/recent-projects` | Get recent projects for dashboard | Implemented |
+| GET | `/activity` | Get activity log entries | Implemented |
+| GET | `/analytics/project-health` | Get project health analytics | Implemented |
+| GET | `/errors` | List stored error analyses | Implemented |
+| POST | `/errors/analyze` | Run error analysis | Implemented |
+
+### Sienna / AI
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/sienna/projects` | List projects available to Sienna | Implemented |
+| POST | `/sienna/chat` | Chat with Sienna | Implemented |
+| POST | `/sienna/voice` | Generate/return Sienna voice output | Implemented |
+
+### Job Matching
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| POST | `/job-matching/match` | Match one project to a job description | Implemented |
+| POST | `/job-matching/rank` | Rank projects against a job description | Implemented |
+
+### Cloud
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/cloud/test` | Cloud connectivity test | Implemented |
+| GET | `/cloud/test-upload` | Cloud upload test | Implemented |
+| GET | `/cloud/db` | Inspect cloud DB state | Implemented |
+| POST | `/cloud/db/upload` | Upload DB to cloud storage | Implemented |
+| POST | `/cloud/db/download` | Download DB from cloud storage | Implemented |
+| POST | `/cloud/projects/download-all` | Download all project archives | Implemented |
+| POST | `/cloud/project/upload` | Upload a project archive to cloud storage | Implemented |
+| POST | `/cloud/project/download` | Download a project archive from cloud storage | Implemented |
+
 Note:
-- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
+- Full endpoint details, payload shapes, and aliases are documented in [`docs/api.md`](docs/api.md).
+- This table summarizes the main routes currently mounted by [`src/capstone/api/server.py`](src/capstone/api/server.py).
 
 ## Example Requests
 
@@ -411,12 +502,12 @@ Get project skills:
 curl "http://127.0.0.1:8003/projects/<project_id>/skills"
 ```
 
-Generate resume JSON:
+Generate a resume:
 
 ```bash
-curl -X POST "http://127.0.0.1:8003/resume/generate" \
+curl -X POST "http://127.0.0.1:8003/resumes/generate" \
   -H "Content-Type: application/json" \
-  -d '{"format":"json","limit":20}'
+  -d '{"user_id":1}'
 ```
 
 ## Test Report
@@ -434,9 +525,8 @@ curl -X POST "http://127.0.0.1:8003/resume/generate" \
 | Suite | Files | Status in current environment | Notes |
 |---|---|---|---|
 | Frontend unit/runtime tests | [`frontend/test/`](frontend/test) | Passing | `38/38` tests passed |
-| Python backend subset | [`tests/test_code_bundle.py`](tests/test_code_bundle.py), [`tests/test_config.py`](tests/test_config.py), [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py), [`tests/test_llm_client.py`](tests/test_llm_client.py), [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py), [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py), [`tests/test_safe_delete.py`](tests/test_safe_delete.py) | Passing | These files ran successfully in the current environment |
-| Python backend full collection | [`tests/`](tests) | Blocked | Collection interrupted by log-file permission errors |
-| Python CLI/runtime checks | [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Failing | Runtime import path hits the same log-file issue |
+| Python backend verified subset | [`tests/test_code_bundle.py`](tests/test_code_bundle.py), [`tests/test_config.py`](tests/test_config.py), [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py), [`tests/test_llm_client.py`](tests/test_llm_client.py), [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py), [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py), [`tests/test_safe_delete.py`](tests/test_safe_delete.py), [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Passing | `41` tests passed across these files in the current environment |
+| Python backend full collection | [`tests/`](tests) | Collects successfully | `497` tests were collected with `python -m pytest --collect-only -q` |
 
 ### Test Files Verified to Work
 
@@ -449,6 +539,9 @@ curl -X POST "http://127.0.0.1:8003/resume/generate" \
 | Python | [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py) |
 | Python | [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py) |
 | Python | [`tests/test_safe_delete.py`](tests/test_safe_delete.py) |
+| Python | [`tests/test_clean.py`](tests/test_clean.py) |
+| Python | [`tests/test_pipeline.py`](tests/test_pipeline.py) |
+| Python | [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) |
 | Frontend | [`frontend/test/authShared.test.mjs`](frontend/test/authShared.test.mjs) |
 | Frontend | [`frontend/test/consentShared.test.mjs`](frontend/test/consentShared.test.mjs) |
 | Frontend | [`frontend/test/displayPreferencesShared.test.mjs`](frontend/test/displayPreferencesShared.test.mjs) |
@@ -459,14 +552,15 @@ curl -X POST "http://127.0.0.1:8003/resume/generate" \
 | Frontend | [`frontend/test/portfolioState.test.mjs`](frontend/test/portfolioState.test.mjs) |
 | Frontend | [`frontend/test/speechInput.test.mjs`](frontend/test/speechInput.test.mjs) |
 
-### Test Files Currently Blocked
+### Test Collection Status
 
-Python test collection found a larger backend suite under [`tests/`](tests), but many files currently fail during import/collection because logging initializes `~/Loom/log/capstone.log` immediately. In the current sandboxed environment that path is not writable, so collection aborts before test logic runs.
+The previous logging-path collection issue has been fixed by falling back to a writable local or temporary log directory when the default Loom log path is not writable.
 
-| Status | Example files | Blocking reason |
+| Status | Scope | Result |
 |---|---|---|
-| Import/collection blocked | [`tests/test_api_endpoints.py`](tests/test_api_endpoints.py), [`tests/test_api_projects_crud.py`](tests/test_api_projects_crud.py), [`tests/test_auth_routes.py`](tests/test_auth_routes.py), [`tests/test_cli.py`](tests/test_cli.py), [`tests/test_storage_and_projects.py`](tests/test_storage_and_projects.py), [`tests/test_zip_analyzer.py`](tests/test_zip_analyzer.py) | Importing backend modules triggers file logging to a non-writable default path |
-| Runtime blocked | [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Test execution reaches the same logging initialization failure |
+| Collection | Full Python suite | `497` tests collected successfully |
+| Execution | Verified Python subset | `41` tests passed |
+| Execution | Frontend Node suite | `38/38` tests passed |
 
 ### Test Strategies Used
 
@@ -484,8 +578,8 @@ Python test collection found a larger backend suite under [`tests/`](tests), but
 | Metric | Result |
 |---|---|
 | Frontend Node test suite | `38/38` passed |
-| Python subset verified in this environment | `38` tests passed |
-| Python full-suite collection | Interrupted by `51` import/collection errors |
+| Python subset verified in this environment | `41` tests passed |
+| Python full-suite collection | `497` tests collected successfully |
 
 ## Additional Notes
 
@@ -508,10 +602,8 @@ The repo includes sample ZIPs for demos and validation under `test_data/`:
 
 | Bug | Trigger | Impact | Workaround |
 |---|---|---|---|
-| Hard-coded default log destination can break imports in restricted environments | Importing modules that call [`get_logger()`](src/capstone/logging_utils.py), especially through [`src/capstone/storage.py`](src/capstone/storage.py), [`src/capstone/cli.py`](src/capstone/cli.py), or [`src/capstone/api/server.py`](src/capstone/api/server.py), when `~/Loom/log/` is not writable | Backend tests and some commands fail with `PermissionError` before business logic runs | Run in an environment where `~/Loom/log/` is writable, or refactor logging to use a configurable/test-local path |
-| CLI commands that import storage fail before executing command logic | Running commands such as the flow exercised by [`tests/test_clean.py`](tests/test_clean.py) in a restricted filesystem environment | CLI appears broken even though the failure is initialization-related | Use a writable home/log directory or patch logging initialization before running CLI tests |
-| Large parts of the backend test suite are blocked by logging initialization | Running `python -m pytest` or `python -m pytest --collect-only -q` against the full [`tests/`](tests) suite | API, storage, CLI, and analysis tests cannot be used as full regression coverage in the current environment | Fix the logger path handling first, then rerun the blocked suites |
 | PDF export is not self-contained | Calling resume/portfolio PDF generation without a local TeX engine; see [`src/capstone/resume_pdf_builder.py`](src/capstone/resume_pdf_builder.py) and [`src/capstone/portfolio_pdf_builder.py`](src/capstone/portfolio_pdf_builder.py) | PDF generation fails at runtime | Install `tectonic`, `xelatex`, `lualatex`, or `pdflatex`, or avoid PDF export in environments without LaTeX |
+| Logging now depends on fallback paths in restricted environments | Running the app or tests where the default `~/Loom/log/` path is not writable | Logs are redirected to a writable fallback directory instead of the default Loom directory | Set `CAPSTONE_LOG_DIR` explicitly if you need logs in a specific location |
 | Interactive CLI file-picking depends on `tkinter` | Running interactive flows on systems where `tkinter` is not installed or not available to the Python build | File picker based workflows do not work as expected | Install `python3-tk` on Linux or use a Python distribution that bundles `tkinter` |
 | System metrics behavior is platform-sensitive | Using Windows-oriented monitoring assets such as [`src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe`](src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe) on non-Windows systems | Hardware monitoring features may be unavailable or inconsistent across macOS/Linux | Treat metrics features as Windows-first unless cross-platform support is explicitly added and tested |
 
