@@ -1,4 +1,5 @@
 .claude/
+.omc/
 node_modules/
 dist/
 out/

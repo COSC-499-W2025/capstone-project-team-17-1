@@ -40,14 +40,16 @@ class _ResumeAPIBase(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
 
-        # Seed a user so all tests have a valid user_id
+        # After M23 resumes.user_id FK → user(id); the singleton row (id=1) is
+        # always present. contributor_id is used only for project-linking operations.
         conn = storage.open_db(self.tmp_path)
-        self.user_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
+        self.user_id = 1  # resume ownership always uses the singleton user
+        self.contributor_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
 
     # ------------------------------------------------------------------ helpers
 
     def _create_resume(self, title: str = "My Resume") -> dict:
-        r = self.client.post("/resumes", json={"user_id": self.user_id, "title": title})
+        r = self.client.post("/resumes", json={"user_id": 1, "title": title})
         self.assertEqual(r.status_code, 201, r.text)
         return r.json()["data"]
 
@@ -192,7 +194,8 @@ class ResumeGuestGenerateTestCase(_ResumeAPIBase):
         r = self.client.post("/resumes/generate", json={"create_new": True, "project_ids": ["demo-project"]})
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
-        self.assertEqual(data["user_id"], guest_id)
+        # After M23 resumes.user_id FK → user(id); always 1 (singleton user per DB)
+        self.assertEqual(data["user_id"], 1)
         self.assertTrue(data["title"].startswith("guestuser_"))
 
 
@@ -434,17 +437,19 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def setUp(self) -> None:
         super().setUp()
-        # Inject a fake session so generate endpoint can resolve owner_id from Bearer token
+        # Inject a fake session (no contributor_id — auth is now decoupled from contributors).
+        # Seed the local user row so _resolve_data_contributor_id can match the contributor.
         from capstone.api.routes.auth import _SESSIONS
         _SESSIONS["test-token"] = {
-            "contributor_id": self.user_id,
             "user": {"username": "testuser", "email": "test@example.com"},
         }
+        conn = storage.open_db(self.tmp_path)
+        storage.upsert_user(conn, "testuser", github_username="testuser")
         self.addCleanup(lambda: _SESSIONS.pop("test-token", None))
         self.auth_headers = {"Authorization": "Bearer test-token"}
 
     def _seed_project_for_user(self, project_id: str) -> None:
-        self._seed_project_for_user_id(self.user_id, project_id)
+        self._seed_project_for_user_id(self.contributor_id, project_id)
 
     def _seed_project_for_user_id(self, user_id: int, project_id: str) -> None:
         conn = storage.open_db(self.tmp_path)
@@ -532,8 +537,9 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             "Resume must be owned by the session user, not the data contributor",
         )
 
-    def test_generate_for_other_not_in_target_users_resume_list(self):
-        # After generating for another user, their resume list should remain empty
+    def test_generate_for_other_appears_in_session_users_resume_list(self):
+        # After M23 all resumes are owned by user_id=1 (singleton per DB).
+        # Generating using another contributor's data still stores the resume under user_id=1.
         conn = storage.open_db(self.tmp_path)
         other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-2")
@@ -544,12 +550,12 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             headers=self.auth_headers,
         )
 
-        r = self.client.get(f"/resumes?user_id={other_id}")
+        r = self.client.get("/resumes", headers=self.auth_headers)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(
+        self.assertGreaterEqual(
             len(r.json()["data"]),
-            0,
-            "Target contributor's resume list must stay empty when someone else generated for them",
+            1,
+            "Generated resume must appear in the session user's list (user_id=1)",
         )
 
 

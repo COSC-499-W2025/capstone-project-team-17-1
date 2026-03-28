@@ -86,6 +86,32 @@ def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
     except Exception:
         pass
 
+
+def _sync_profile_to_local_db(auth_user: dict) -> None:
+    """Write the Cloudflare auth profile into the local singleton user table (id=1)."""
+    username = (auth_user.get("username") or "").strip()
+    if not username:
+        return
+    github_url = (auth_user.get("github_url") or "").strip() or None
+    github_handle = github_url.rstrip("/").split("/")[-1].strip() if github_url else None
+    try:
+        conn = storage.open_db()
+        storage.upsert_user(
+            conn,
+            username,
+            github_username=github_handle,
+            github_url=github_url,
+            full_name=(auth_user.get("full_name") or "").strip() or None,
+            phone_number=(auth_user.get("phone_number") or "").strip() or None,
+            city=(auth_user.get("city") or "").strip() or None,
+            state_region=(auth_user.get("state_region") or "").strip() or None,
+            portfolio_url=(auth_user.get("portfolio_url") or "").strip() or None,
+        )
+        storage.close_db()
+    except Exception:
+        pass
+
+
 class RegisterRequest(BaseModel):
     username: str
     password: str
@@ -119,44 +145,6 @@ def configure(db_dir: Optional[str] = None):
     _AUTH_BASE_URL = "https://loom-auth.amirparsaaminian1383.workers.dev"
     _load_sessions()
 
-
-def _resolve_contributor_id(auth_user: dict) -> Optional[int]:
-    """After login, find the matching git contributor in the local users table.
-    Tries github handle first, then falls back to auth username.
-    Creates a placeholder record if no match found so the user can generate resumes.
-    """
-    from capstone.portfolio_retrieval import _db_session
-
-    github_url = (auth_user.get("github_url") or "").strip()
-    github_handle = github_url.rstrip("/").split("/")[-1].lower() if github_url else ""
-    auth_username = (auth_user.get("username") or "").strip()
-
-    candidates = [h for h in [github_handle, auth_username.lower()] if h]
-    if not candidates:
-        return None
-
-    try:
-        with _db_session(None) as conn:
-            for handle in candidates:
-                row = conn.execute(
-                    "SELECT id FROM users WHERE LOWER(username) = ?", (handle,)
-                ).fetchone()
-                if row:
-                    return row[0]
-
-            # No match — create a placeholder so the user can start generating resumes
-            email = (auth_user.get("email") or "").strip()
-            identity = github_handle or auth_username
-            conn.execute(
-                "INSERT OR IGNORE INTO users (username, email) VALUES (?, ?)",
-                (identity, email),
-            )
-            row = conn.execute(
-                "SELECT id FROM users WHERE LOWER(username) = ?", (identity.lower(),)
-            ).fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
 
 def _get_auth_base_url() -> str:
     base = _AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev"
@@ -281,16 +269,15 @@ def register(payload: RegisterRequest):
             "email": payload.email,
             "github_url": payload.github_url,
         }
-    # Ensure github_url is in user dict for contributor resolution
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
     storage.CURRENT_USER = user["username"]
     _migrate_guest_data_into_user_db_if_needed(user["username"])
-    contributor_id = _resolve_contributor_id(user)
+    _sync_profile_to_local_db(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
+    _SESSIONS[token] = {"user": user}
     _save_sessions()
 
     return {
@@ -315,10 +302,10 @@ def login(payload: LoginRequest):
 
     storage.CURRENT_USER = user["username"]
     _migrate_guest_data_into_user_db_if_needed(user["username"])
-    contributor_id = _resolve_contributor_id(user)
+    _sync_profile_to_local_db(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
+    _SESSIONS[token] = {"user": user}
     _save_sessions()
 
     return {
@@ -332,11 +319,6 @@ def me(request: Request):
     user = session["user"]
     # Always restore CURRENT_USER from the session — critical after server restart
     storage.CURRENT_USER = user["username"]
-    # Re-resolve contributor_id if missing (sessions persisted before this change)
-    if "contributor_id" not in session:
-        contributor_id = _resolve_contributor_id(user)
-        session["contributor_id"] = contributor_id
-        _save_sessions()
     return {"user": user}
 
 @router.put("/me")
@@ -362,12 +344,11 @@ def update_me(payload: UpdateProfileRequest, request: Request):
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
     storage.CURRENT_USER = updated_user["username"]
-    contributor_id = _resolve_contributor_id(updated_user)
+    _sync_profile_to_local_db(updated_user)
 
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
         _SESSIONS[token]["user"] = updated_user
-        _SESSIONS[token]["contributor_id"] = contributor_id
         _save_sessions()
 
     return {
@@ -378,22 +359,16 @@ def update_me(payload: UpdateProfileRequest, request: Request):
 
 @router.get("/me/education")
 def get_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        return {"data": [], "error": None}
+    _require_session(request)
     from capstone.portfolio_retrieval import _db_session
     with _db_session(None) as conn:
-        entries = storage.get_user_education(conn, contributor_id)
+        entries = storage.get_user_education(conn, 1)
     return {"data": entries, "error": None}
 
 
 @router.put("/me/education")
 async def update_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        raise HTTPException(status_code=400, detail="contributor_id not resolved — re-login required")
+    _require_session(request)
     try:
         payload = await request.json()
     except Exception:
@@ -406,8 +381,8 @@ async def update_my_education(request: Request):
             raise HTTPException(status_code=400, detail="each entry requires a university field")
     from capstone.portfolio_retrieval import _db_session
     with _db_session(None) as conn:
-        storage.replace_user_education(conn, contributor_id, entries)
-        result = storage.get_user_education(conn, contributor_id)
+        storage.replace_user_education(conn, 1, entries)
+        result = storage.get_user_education(conn, 1)
     return {"data": result, "error": None}
 
 

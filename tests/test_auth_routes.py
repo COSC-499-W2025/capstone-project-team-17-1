@@ -179,11 +179,11 @@ def test_education_get_and_put_endpoints_return_correct_shape(tmp_path):
 
     conn = _st.open_db()
     try:
-        uid = _st.upsert_contributor(conn, "edu_shape_smoke_user", email="edu_smoke@example.com")
-        # Reset education so the test is idempotent against prior runs
-        _st.replace_user_education(conn, uid, [])
+        # user_education.user_id FK → user(id); the singleton user row (id=1) is
+        # inserted by _initialize_schema, so we always operate with user_id=1.
+        _st.replace_user_education(conn, 1, [])
 
-        _st.replace_user_education(conn, uid, [{
+        _st.replace_user_education(conn, 1, [{
             "university": "UBCO",
             "degree": "BSc Computer Science",
             "start_date": "2022",
@@ -191,13 +191,13 @@ def test_education_get_and_put_endpoints_return_correct_shape(tmp_path):
             "city": "Kelowna",
             "state": "BC",
         }])
-        result = _st.get_user_education(conn, uid)
+        result = _st.get_user_education(conn, 1)
         assert len(result) == 1
         assert set(result[0].keys()) >= {"id", "university", "degree", "start_date", "end_date", "city", "state"}
         assert result[0]["university"] == "UBCO"
         assert result[0]["city"] == "Kelowna"
 
         # Cleanup
-        _st.replace_user_education(conn, uid, [])
+        _st.replace_user_education(conn, 1, [])
     finally:
         _st.close_db()

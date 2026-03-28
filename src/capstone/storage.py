@@ -248,13 +248,13 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS resumes (
             id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL DEFAULT 1,
             title TEXT NOT NULL DEFAULT 'Default Resume',
             target_role TEXT,
             status TEXT NOT NULL DEFAULT 'draft',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -307,6 +307,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             last_login_at TIMESTAMP
         )
     """)
+    # Ensure singleton row exists so resumes/user_education FKs are always satisfiable.
+    # upsert_user() overwrites this with the real login profile on first sign-in.
+    conn.execute("INSERT OR IGNORE INTO user (id, username) VALUES (1, 'guest')")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS contributors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -320,7 +323,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS user_education (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL DEFAULT 1,
             university TEXT NOT NULL,
             degree TEXT,
             start_date TEXT,
@@ -329,7 +332,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             state TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -1115,6 +1118,69 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn.execute("DROP TABLE contributor_stats")
         # Remove test contributors (id > 11) — real contributors are id 1–11
         conn.execute("DELETE FROM contributors WHERE id > 11")
+        conn.commit()
+
+    # M23: migrate user_education and resumes FKs from contributors(id) → user(id)
+    # Ensure the singleton user row exists first so FK checks pass.
+    conn.execute("INSERT OR IGNORE INTO user (id, username) VALUES (1, 'guest')")
+    conn.commit()
+
+    _fk_ue = conn.execute("PRAGMA foreign_key_list(user_education)").fetchall()
+    if any(r[2] == "contributors" for r in _fk_ue):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE user_education RENAME TO user_education_old")
+        conn.execute("""
+            CREATE TABLE user_education (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                university TEXT NOT NULL,
+                degree TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                city TEXT,
+                state TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            INSERT INTO user_education (id, user_id, university, degree, start_date, end_date,
+                                        city, state, sort_order, created_at)
+            SELECT id, 1, university, degree, start_date, end_date,
+                   city, state, sort_order, created_at
+            FROM user_education_old
+        """)
+        conn.execute("DROP TABLE user_education_old")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
+    _fk_re = conn.execute("PRAGMA foreign_key_list(resumes)").fetchall()
+    if any(r[2] == "contributors" for r in _fk_re):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("PRAGMA legacy_alter_table = ON")
+        conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
+        conn.execute("PRAGMA legacy_alter_table = OFF")
+        conn.execute("""
+            CREATE TABLE resumes (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                title TEXT NOT NULL DEFAULT 'Default Resume',
+                target_role TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
+            SELECT id, 1, title, target_role, status, created_at, updated_at
+            FROM resumes_old
+        """)
+        conn.execute("DROP TABLE resumes_old")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
 
