@@ -163,7 +163,7 @@ cd ..
 
 - CLI: `capstone analyze /path/to/project.zip`
 - Interactive menu: `python main.py`
-- API server: `capstone api --host 127.0.0.1 --port 8003 --db-dir data`
+- API server: `capstone api --host 127.0.0.1 --port 8002 --db-dir data`
 
 ### 7. Environment notes for future teams
 
@@ -180,38 +180,55 @@ cd ..
 
 Use this flow for peer testing on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
 
-Before starting this section, complete the shared setup in [Installation Guide for Future Development Team](#installation-guide-for-future-development-team). The steps below only cover the macOS-specific launch and verification flow used for frontend peer testing.
+Before starting this section, complete the shared setup in [Installation Guide for Future Development Team](#installation-guide-for-future-development-team). The steps below are the recommended macOS launch flow for opening Loom in development mode.
 
-### 1. Go to the project root and activate the virtual environment
+### Option A: install the packaged macOS app locally
+
+If you want to install Loom as a local macOS application instead of running it from `npm start`, use the packaged macOS disk image:
+
+- Apple Silicon macOS installer: [`frontend/dist/Loom-1.0.0-arm64.dmg`](frontend/dist/Loom-1.0.0-arm64.dmg)
+
+Recommended install flow on macOS:
+- Open the `.dmg` file.
+- Drag `Loom.app` into the `Applications` folder.
+- Launch `Loom.app` from Applications.
+
+Use this option when testing the packaged desktop app experience on macOS.
+
+### Prerequisites
+
+- The Python virtual environment has already been created.
+- Backend dependencies have already been installed with `pip install -r requirements-dev.txt` and `pip install -e .`.
+- Frontend dependencies have already been installed with `cd frontend && npm install`.
+
+### Terminal 1: start the backend
 
 ```bash
 cd /path/to/capstone-project-team-17-1
 source .venv/bin/activate
+python -m capstone.run_server
 ```
 
-### 2. Rebuild the backend executable
+The frontend expects the backend on port `8002`.
+
+Optional for packaged-app testing only:
 
 ```bash
 PYINSTALLER_CONFIG_DIR=/tmp/pyinstaller \
 .venv/bin/python -m PyInstaller src/capstone/capstone_backend.spec --clean
 ```
 
-### 3. Start the backend
+You do not need this rebuild step for normal development mode with `npm start`.
 
-The frontend currently expects the backend on port `8002`.
-
-```bash
-python -m capstone.run_server
-```
-
-### 4. Open a new terminal and start the frontend
+### Terminal 2: start the frontend
 
 ```bash
+cd /path/to/capstone-project-team-17-1
 cd frontend
 npm start
 ```
 
-### 5. Verify backend health
+### Verify the backend connection
 
 Open:
 
@@ -221,7 +238,7 @@ http://127.0.0.1:8002/health
 
 If it returns a healthy response, the backend and frontend should be able to connect.
 
-### 6. Suggested peer-testing checks
+### Suggested peer-testing checks
 
 - Confirm the app launches without a frontend-backend connection error.
 - Test account login and verify the authenticated view loads correctly.
@@ -314,16 +331,16 @@ Input shortcuts in interactive mode:
 ### Run API Backend
 
 ```bash
-# Start FastAPI on port 8003
-capstone api --host 127.0.0.1 --port 8003 --db-dir data
+# Start FastAPI on port 8002
+capstone api --host 127.0.0.1 --port 8002 --db-dir data
 ```
 
-Base URL: `http://127.0.0.1:8003`
+Base URL: `http://127.0.0.1:8002`
 
 API docs:
-- Swagger UI: `http://127.0.0.1:8003/docs`
-- OpenAPI JSON: `http://127.0.0.1:8003/openapi.json`
-- Route debug (mounted routers + import errors): `http://127.0.0.1:8003/__debug/routers`
+- Swagger UI: `http://127.0.0.1:8002/docs`
+- OpenAPI JSON: `http://127.0.0.1:8002/openapi.json`
+- Route debug (mounted routers + import errors): `http://127.0.0.1:8002/__debug/routers`
 
 ## API Route Map (Table)
 
@@ -484,7 +501,7 @@ Note:
 Upload a project zip:
 
 ```bash
-curl -X POST "http://127.0.0.1:8003/projects/upload" \
+curl -X POST "http://127.0.0.1:8002/projects/upload" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@/path/to/project.zip;type=application/zip"
@@ -493,19 +510,19 @@ curl -X POST "http://127.0.0.1:8003/projects/upload" \
 List projects:
 
 ```bash
-curl "http://127.0.0.1:8003/projects"
+curl "http://127.0.0.1:8002/projects"
 ```
 
 Get project skills:
 
 ```bash
-curl "http://127.0.0.1:8003/projects/<project_id>/skills"
+curl "http://127.0.0.1:8002/projects/<project_id>/skills"
 ```
 
 Generate a resume:
 
 ```bash
-curl -X POST "http://127.0.0.1:8003/resumes/generate" \
+curl -X POST "http://127.0.0.1:8002/resumes/generate" \
   -H "Content-Type: application/json" \
   -d '{"user_id":1}'
 ```
