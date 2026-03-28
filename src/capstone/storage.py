@@ -190,6 +190,22 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      TEXT NOT NULL UNIQUE,
+            name            TEXT NOT NULL,
+            source          TEXT NOT NULL DEFAULT 'zip',
+            github_url      TEXT,
+            has_git         INTEGER NOT NULL DEFAULT 0,
+            type            TEXT,
+            status          TEXT NOT NULL DEFAULT 'ongoing',
+            first_commit_at TEXT,
+            last_commit_at  TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS error_analysis_results (
             project_id TEXT PRIMARY KEY,
             errors_json TEXT,
@@ -972,6 +988,58 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("DROP TABLE user_old")
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
+    # M20: create projects table and backfill from project_analysis + project_metadata
+    # Table may already exist (created empty by _initialize_schema on fresh DBs),
+    # so backfill whenever projects is empty but project_analysis has data.
+    _projects_empty = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0
+    _has_analysis = conn.execute("SELECT COUNT(*) FROM project_analysis").fetchone()[0] > 0
+    if _projects_empty and _has_analysis:
+        # Backfill from project_analysis: one row per project_id using earliest record.
+        # source = 'github' if any record has a repo_url, else 'zip'.
+        conn.execute("""
+            INSERT OR IGNORE INTO projects (project_id, name, source, github_url, type, created_at)
+            SELECT
+                project_id,
+                project_id,
+                CASE WHEN MAX(CASE WHEN repo_url IS NOT NULL AND repo_url != ''
+                                   THEN 1 ELSE 0 END) = 1
+                     THEN 'github' ELSE 'zip' END,
+                MAX(NULLIF(repo_url, '')),
+                MAX(classification),
+                MIN(created_at)
+            FROM project_analysis
+            GROUP BY project_id
+        """)
+        # Backfill first_commit_at / last_commit_at from user_projects git data
+        conn.execute("""
+            UPDATE projects SET
+                first_commit_at = (
+                    SELECT MIN(up.first_commit_at)
+                    FROM user_projects up
+                    WHERE up.project_id = projects.project_id
+                      AND up.first_commit_at IS NOT NULL
+                ),
+                last_commit_at = (
+                    SELECT MAX(up.last_commit_at)
+                    FROM user_projects up
+                    WHERE up.project_id = projects.project_id
+                      AND up.last_commit_at IS NOT NULL
+                )
+        """)
+        # Migrate status from project_metadata
+        conn.execute("""
+            UPDATE projects SET status = (
+                SELECT COALESCE(pm.status, 'ongoing')
+                FROM project_metadata pm
+                WHERE pm.project_id = projects.project_id
+            )
+            WHERE EXISTS (
+                SELECT 1 FROM project_metadata pm
+                WHERE pm.project_id = projects.project_id
+            )
+        """)
         conn.commit()
 
 
@@ -2978,6 +3046,91 @@ def load_project_metadata(conn):
         }
         for row in cursor.fetchall()
     }
+
+def upsert_project(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    name: str | None = None,
+    source: str = "zip",
+    github_url: str | None = None,
+    has_git: bool = False,
+    type: str | None = None,
+    status: str = "ongoing",
+    first_commit_at: str | None = None,
+    last_commit_at: str | None = None,
+) -> None:
+    """Insert or update a project row. name defaults to project_id if not given."""
+    effective_name = name or project_id
+    conn.execute(
+        """
+        INSERT INTO projects (project_id, name, source, github_url, has_git,
+                              type, status, first_commit_at, last_commit_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            name            = COALESCE(excluded.name, name),
+            github_url      = COALESCE(excluded.github_url, github_url),
+            has_git         = MAX(excluded.has_git, has_git),
+            type            = COALESCE(excluded.type, type),
+            status          = excluded.status,
+            first_commit_at = COALESCE(excluded.first_commit_at, first_commit_at),
+            last_commit_at  = COALESCE(excluded.last_commit_at, last_commit_at),
+            updated_at      = CURRENT_TIMESTAMP
+        """,
+        (project_id, effective_name, source, github_url, int(has_git),
+         type, status, first_commit_at, last_commit_at),
+    )
+    conn.commit()
+
+
+def get_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    """Return a single project row as a dict, or None if not found."""
+    row = conn.execute(
+        """
+        SELECT id, project_id, name, source, github_url, has_git, type,
+               status, first_commit_at, last_commit_at, created_at, updated_at
+        FROM projects WHERE project_id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0], "project_id": row[1], "name": row[2],
+        "source": row[3], "github_url": row[4], "has_git": bool(row[5]),
+        "type": row[6], "status": row[7],
+        "first_commit_at": row[8], "last_commit_at": row[9],
+        "created_at": row[10], "updated_at": row[11],
+    }
+
+
+def update_project_commit_range(
+    conn: sqlite3.Connection,
+    project_id: str,
+    first_commit_at: str | None,
+    last_commit_at: str | None,
+) -> None:
+    """Update first/last commit timestamps, keeping the earlier/later value."""
+    conn.execute(
+        """
+        UPDATE projects SET
+            first_commit_at = CASE
+                WHEN first_commit_at IS NULL THEN ?
+                WHEN ? IS NOT NULL AND ? < first_commit_at THEN ?
+                ELSE first_commit_at END,
+            last_commit_at = CASE
+                WHEN last_commit_at IS NULL THEN ?
+                WHEN ? IS NOT NULL AND ? > last_commit_at THEN ?
+                ELSE last_commit_at END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = ?
+        """,
+        (first_commit_at, first_commit_at, first_commit_at, first_commit_at,
+         last_commit_at, last_commit_at, last_commit_at, last_commit_at,
+         project_id),
+    )
+    conn.commit()
+
 
 def fetch_contributor_rankings(
     conn: sqlite3.Connection,
