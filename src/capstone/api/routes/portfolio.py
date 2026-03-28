@@ -303,8 +303,67 @@ def _collect_portfolio_evidence_lines(snapshot: dict[str, Any], limit: int = 4) 
 
     return lines[:limit]
 
+def _build_portfolio_blurb(project_id: str, snapshot: dict[str, Any], inferred_role: str) -> str:
+    title = _extract_title(project_id, snapshot)
+    technologies = _extract_technologies(snapshot)
+    frameworks = _as_list(snapshot.get("frameworks"))
+    collaboration = snapshot.get("collaboration", {}) or {}
+    classification = str(collaboration.get("classification") or "").strip().lower()
+
+    raw_summary = _extract_summary(snapshot)
+    existing = _extract_summary(snapshot)
+    
+    if existing:
+        lowered = existing.lower()
+        generic_markers = [
+            "uses ",
+            "showcases applied software development work",
+            "deliver core project functionality",
+        ]
+        if not any(marker in lowered for marker in generic_markers):
+            return existing
+
+    stack = _dedupe_strings([*technologies, *frameworks])[:4]
+    stack_text = ", ".join(stack)
+
+    role_phrase = inferred_role.lower() if inferred_role else "software development"
+
+    if classification == "individual":
+        if stack_text:
+            return (
+                f"{title} is an individual {role_phrase} project built with {stack_text}. "
+                f"It focuses on delivering the core functionality and main use case of the application."
+            )
+        return (
+            f"{title} is an individual {role_phrase} project focused on building a complete working solution "
+            f"for its main purpose."
+        )
+                
+    if classification == "collaborative":
+        if stack_text:
+            return (
+                f"{title} is a collaborative {role_phrase} project built with {stack_text}. "
+                f"It is designed to deliver the main product workflow and overall user experience."
+            )
+        return (
+            f"{title} is a collaborative {role_phrase} project focused on delivering the main functionality "
+            f"and shared project goals."
+        )
+
+    # fallback for unknown/missing collaboration data
+    if stack_text:
+        return (
+            f"{title} is a {role_phrase} project built with {stack_text}. "
+            f"It is intended to deliver the main functionality and core project experience."
+        )
+
+    return (
+        f"{title} is a {role_phrase} project focused on delivering a working solution for its primary purpose."
+    )
+    
+    
 def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
-    summary = _extract_summary(snapshot) or ""
+    summary = ""
     highlights = _extract_highlights(snapshot)
 
     evidence_lines = _collect_portfolio_evidence_lines(snapshot, limit=4)
@@ -329,13 +388,7 @@ def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[
     else:
         role_text = inferred_role
         
-    if not summary:
-        title = _extract_title(project_id, snapshot)
-        tech = _extract_technologies(snapshot)
-        if tech:
-            summary = f"{title} uses {', '.join(tech[:4])} to deliver core project functionality."
-        else:
-            summary = f"{title} showcases applied software development work."
+    summary = _build_portfolio_blurb(project_id, snapshot, inferred_role)
 
     return {
         "key_role": role_text,

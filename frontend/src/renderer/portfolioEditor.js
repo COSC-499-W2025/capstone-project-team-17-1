@@ -693,10 +693,10 @@ function renderProjectEditors(projects, customization) {
 
                   <button
                       type="button"
-                      class="portfolio-reset-btn"
+                      class="secondary-btn portfolio-reset-btn"
                       data-reset-analysis-defaults="${escapeHtml(project.project_id)}"
                   >
-                      Reset to analysis
+                      Reset to default analysis
                   </button>
 
                   <button
