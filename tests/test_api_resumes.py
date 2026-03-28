@@ -105,6 +105,11 @@ class ResumeCRUDTestCase(_ResumeAPIBase):
         self.assertIn("Resume A", titles)
         self.assertIn("Resume B", titles)
 
+    def test_list_resumes_defaults_to_guest_bucket_when_public(self):
+        r = self.client.get("/resumes")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.json()["data"], list)
+
     def test_update_resume_title(self):
         created = self._create_resume("Original Title")
         r = self.client.patch(f"/resumes/{created['id']}", json={"title": "Updated Title"})
@@ -163,6 +168,32 @@ class ResumeExportTestCase(_ResumeAPIBase):
     def test_export_nonexistent_resume_returns_404(self):
         r = self.client.get("/resumes/ghost/export?format=json")
         self.assertEqual(r.status_code, 404)
+
+
+class ResumeGuestGenerateTestCase(_ResumeAPIBase):
+
+    def test_generate_resume_works_without_login_using_guest_bucket(self):
+        conn = storage.open_db(self.tmp_path)
+        guest_id = storage.upsert_user(conn, "guestuser", email=None)
+        storage.link_user_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
+        storage.store_analysis_snapshot(
+            conn,
+            project_id="demo-project",
+            classification="individual",
+            primary_contributor="guestuser",
+            snapshot={
+                "languages": {"python": 3},
+                "frameworks": ["FastAPI"],
+                "skills": [{"skill": "Python"}, {"skill": "FastAPI"}],
+                "summary": "Built a demo API project.",
+            },
+        )
+
+        r = self.client.post("/resumes/generate", json={"create_new": True, "project_ids": ["demo-project"]})
+        self.assertEqual(r.status_code, 201, r.text)
+        data = r.json()["data"]
+        self.assertEqual(data["user_id"], guest_id)
+        self.assertTrue(data["title"].startswith("guestuser_"))
 
 
 # ---------------------------------------------------------------------------
@@ -445,10 +476,9 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         section_keys = [s["key"] for s in (data.get("sections") or [])]
         self.assertTrue(len(section_keys) > 0)
 
-    def test_generate_without_auth_returns_400(self):
-        # No Bearer token → owner_id cannot be resolved → 400
+    def test_generate_without_auth_uses_guest_bucket(self):
         r = self.client.post("/resumes/generate", json={})
-        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.status_code, 201)
 
     def test_generate_includes_skills_from_snapshot(self):
         self._seed_project_for_user("gen-proj-2")

@@ -79,15 +79,16 @@ async function submitZipUpload() {
   const fileInput = document.getElementById("zip-input");
   const file = fileInput.files[0];
 
-  if (!projectId || !file) {
-    alert("Please provide project ID and ZIP file.");
+  if (!file) {
+    alert("Please choose a ZIP file.");
     return;
   }
 
   const formData = new FormData();
   formData.append("file", file);
 
-  const url = `http://127.0.0.1:8002/projects/upload?project_id=${encodeURIComponent(projectId)}`;
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const url = `http://127.0.0.1:8002/projects/upload${query}`;
 
   console.log("Sending project_id:", projectId, "URL:", url);
 
@@ -180,9 +181,9 @@ export function renderRepoCards(repos) {
     <div id="github-repo-list" class="github-repo-list"></div>
   `;
 
-  const list = document.getElementById("github-repo-list");
-
   function draw(filtered) {
+    const list = githubContainer.querySelector("#github-repo-list");
+    if (!list) return;
     list.innerHTML = "";
 
     filtered.forEach(repo => {
@@ -315,7 +316,7 @@ startImport(owner, name, buildProjectId(selectedBranch), selectedBranch);
 
   draw(repos);
 
-  document.getElementById("github-repo-search")?.addEventListener("input", (e) => {
+  githubContainer.querySelector("#github-repo-search")?.addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
 
     const filtered = repos.filter(r => {

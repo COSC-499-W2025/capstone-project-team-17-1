@@ -21,6 +21,12 @@ const SECTION_SELECTOR_MAP = {
 };
 
 let portfolioInitialized = false;
+const heatmapState = {
+  granularity: "day",
+  projectId: "",
+  projects: [],
+};
+let projectEvolutionCache = new Map();
 
 function getStaticProfile() {
   return {
@@ -44,8 +50,66 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function toTitleCase(value) {
+  return String(value || "")
+    .split(/[\s-/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function normalizeSkillName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const lower = raw.toLowerCase();
+  const canonicalMap = {
+    js: "JavaScript",
+    javascript: "JavaScript",
+    ts: "TypeScript",
+    typescript: "TypeScript",
+    json: "JSON",
+    html: "HTML",
+    css: "CSS",
+    sql: "SQL",
+    nosql: "NoSQL",
+    api: "API",
+    rest: "REST",
+    graphql: "GraphQL",
+    yaml: "YAML",
+    xml: "XML",
+    csv: "CSV",
+    aws: "AWS",
+    gcp: "GCP",
+    fastapi: "FastAPI",
+    sqlite: "SQLite",
+    postgresql: "PostgreSQL",
+    mongodb: "MongoDB",
+    redis: "Redis",
+    nodejs: "Node.js",
+    expressjs: "Express.js",
+    ui: "UI",
+    ux: "UX",
+    ci: "CI",
+    cd: "CD",
+  };
+
+  return canonicalMap[lower] || toTitleCase(raw);
+}
+
 function dedupeStrings(values) {
-  return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
+  const seen = new Set();
+  const result = [];
+  asArray(values)
+    .map((v) => normalizeSkillName(v))
+    .filter(Boolean)
+    .forEach((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(value);
+    });
+  return result;
 }
 
 function buildContributionSummary(project, details, override) {
@@ -124,6 +188,21 @@ function buildProjectEvolutionSteps(project, details, override) {
   };
 
   return [stageOne, stageTwo, stageThree];
+}
+
+function buildProjectProcessSteps(project, details, rank = 0) {
+  const technologies = dedupeStrings(details?.technologies);
+  const highlights = dedupeStrings(details?.highlights);
+
+  return [
+    rank === 0
+      ? "Selected as a top portfolio project based on current project signals."
+      : "Reviewed as one of the portfolio's strongest project examples.",
+    technologies.length
+      ? `Worked across ${technologies.slice(0, 3).join(", ")} during implementation.`
+      : `Expanded implementation across ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"}.`,
+    highlights[0] || "Captured measurable project progress through analysis snapshots and portfolio evidence.",
+  ];
 }
 
 function getTopProjects(projects) {
@@ -205,13 +284,41 @@ async function fetchPortfolioResumeSummary() {
   return payload?.data || null;
 }
 
-async function fetchActivityHeatmap() {
-  const res = await authFetch(`/portfolio/activity-heatmap`);
+async function fetchActivityHeatmap(options = {}) {
+  const params = new URLSearchParams();
+  const granularity = String(options?.granularity || "day").trim().toLowerCase();
+  const projectId = String(options?.projectId || "").trim();
+
+  if (granularity) {
+    params.set("granularity", granularity);
+  }
+  if (projectId) {
+    params.set("project_id", projectId);
+  }
+
+  const query = params.toString();
+  const res = await authFetch(`/portfolio/activity-heatmap${query ? `?${query}` : ""}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch activity heatmap: ${res.status}`);
   }
   const payload = await res.json();
-  return payload?.data || { cells: [], maxCount: 0, projectCount: 0 };
+  return payload?.data || { cells: [], maxCount: 0, projectCount: 0, projects: [], granularity };
+}
+
+async function fetchProjectEvolution(projectIds = []) {
+  const cleaned = [...new Set(asArray(projectIds).map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!cleaned.length) {
+    return {};
+  }
+
+  const params = new URLSearchParams();
+  params.set("project_ids", cleaned.join(","));
+  const res = await authFetch(`/portfolio/project-evolution?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch project evolution: ${res.status}`);
+  }
+  const payload = await res.json();
+  return payload?.data || {};
 }
 
 async function fetchProjectPortfolioEntry(projectId) {
@@ -316,8 +423,109 @@ function formatTimelineTimestamp(timestamp) {
   });
 }
 
+function formatCompactDelta(value, suffix) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return null;
+  if (numeric > 0) return `+${numeric} ${suffix}`;
+  if (numeric < 0) return `${numeric} ${suffix}`;
+  return `0 ${suffix}`;
+}
+
+function renderEvolutionTimeline(project, details, override) {
+  const projectId = String(project?.project_id || "").trim();
+  const evolution = projectEvolutionCache.get(projectId);
+  const steps = Array.isArray(evolution?.steps) ? evolution.steps : [];
+
+  if (!steps.length) {
+    const fallbackSteps = buildProjectEvolutionSteps(project, details, override);
+    return `
+      <div class="project-evolution-block">
+        <span class="portfolio-detail-label">Project Evolution</span>
+        <div class="project-evolution-steps">
+          ${fallbackSteps
+            .map(
+              (step, stepIndex) => `
+                <div class="project-evolution-step">
+                  <div class="project-evolution-marker">${stepIndex + 1}</div>
+                  <div>
+                    <div class="project-evolution-title">${escapeHtml(step.label)}</div>
+                    <p class="project-evolution-text">${escapeHtml(step.text)}</p>
+                  </div>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="project-evolution-block">
+      <span class="portfolio-detail-label">Project Evolution</span>
+      <div class="project-evolution-steps project-evolution-steps-history">
+        ${steps
+          .map((step, stepIndex) => {
+            const metricPills = [
+              formatCompactDelta(step?.delta?.files, "files"),
+              formatCompactDelta(step?.delta?.skills, "skills"),
+              formatCompactDelta(step?.delta?.active_days, "active days"),
+            ].filter(Boolean);
+            const newSkills = Array.isArray(step?.new_skills) ? step.new_skills : [];
+            const highlights = Array.isArray(step?.highlights) ? step.highlights : [];
+
+            return `
+              <div class="project-evolution-step project-evolution-step-history">
+                <div class="project-evolution-marker">${stepIndex + 1}</div>
+                <div class="project-evolution-content">
+                  <div class="project-evolution-headline">
+                    <div>
+                      <div class="project-evolution-title">${escapeHtml(step?.label || `Iteration ${stepIndex + 1}`)}</div>
+                      <div class="project-evolution-time">${escapeHtml(formatTimelineTimestamp(step?.timestamp || ""))}</div>
+                    </div>
+                    <div class="project-evolution-metrics">
+                      <span class="stack-pill">${Number(step?.metrics?.files || 0)} Files</span>
+                      <span class="stack-pill">${Number(step?.metrics?.skills || 0)} Skills</span>
+                      <span class="stack-pill">${Number(step?.metrics?.active_days || 0)} Active Days</span>
+                    </div>
+                  </div>
+                  ${
+                    step?.changeSummary
+                      ? `<p class="project-evolution-change-summary">${escapeHtml(step.changeSummary)}</p>`
+                      : ""
+                  }
+                  ${
+                    step?.summary
+                      ? `<p class="project-evolution-text">${escapeHtml(step.summary)}</p>`
+                      : ""
+                  }
+                  ${
+                    metricPills.length
+                      ? `<div class="project-evolution-delta-row">${metricPills.map((item) => `<span class="hero-stat-chip">${escapeHtml(item)}</span>`).join("")}</div>`
+                      : ""
+                  }
+                  ${
+                    newSkills.length
+                      ? `<div class="project-evolution-detail-row"><span class="project-story-label">New Skills</span><div class="skills-pill-row">${newSkills.map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`).join("")}</div></div>`
+                      : ""
+                  }
+                  ${
+                    highlights.length
+                      ? `<div class="project-evolution-detail-row"><span class="project-story-label">Signals From This Snapshot</span><ul class="resume-awards-list">${highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
 function getTimelineSkillName(skill) {
-  return String(skill?.name || skill?.skill || "").trim();
+  return normalizeSkillName(skill?.name || skill?.skill || "");
 }
 
 function getTimelineSkillWeight(skill) {
@@ -326,10 +534,137 @@ function getTimelineSkillWeight(skill) {
   return Math.max(0, rawWeight);
 }
 
-function getSkillExpertiseLevel(depthScore) {
+function getSharedSkillDepthLevel(depthScore) {
   if (depthScore >= 2.5) return "Advanced";
-  if (depthScore >= 1.0) return "Intermediate";
+  if (depthScore >= 1.75) return "Proficient";
+  if (depthScore >= 1.1) return "Developing";
   return "Foundation";
+}
+
+function getExpertiseLevelOrder() {
+  return ["Advanced", "Proficient", "Developing", "Foundation"];
+}
+
+function getSkillGrowthLabel({
+  previousWeight,
+  currentWeight,
+  appearanceCount,
+  projectCount,
+  previousComplexity,
+  currentComplexity,
+}) {
+  if (appearanceCount <= 1) return "Baseline established";
+
+  const weightDelta = currentWeight - previousWeight;
+  const complexityDelta = currentComplexity - previousComplexity;
+
+  if (weightDelta >= 0.08 && (projectCount >= 2 || complexityDelta >= 0.75)) {
+    return "Depth increasing";
+  }
+  if (complexityDelta >= 1.2 || projectCount >= 3) {
+    return "Expanding across projects";
+  }
+  if (weightDelta <= -0.08 && complexityDelta <= -0.75) {
+    return "Applying in lighter scope";
+  }
+  return "Depth sustained";
+}
+
+function buildTimelineEntries(timeline) {
+  const seenCounts = new Map();
+  const previousWeights = new Map();
+  const cumulativeWeights = new Map();
+  const projectSets = new Map();
+  const previousComplexities = new Map();
+
+  return asArray(timeline).map((entry) => {
+    const rawSkills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const aggregatedSkills = new Map();
+    const projectId = String(entry?.project_id || "").trim();
+    const projectMetrics =
+      entry?.project_metrics && typeof entry.project_metrics === "object" ? entry.project_metrics : {};
+    const currentComplexity = Number(projectMetrics?.complexity_score || 0);
+
+    rawSkills.forEach((skill) => {
+      const name = getTimelineSkillName(skill);
+      const weight = getTimelineSkillWeight(skill);
+      const current = aggregatedSkills.get(name) || { name, weight: 0 };
+      current.weight += weight;
+      aggregatedSkills.set(name, current);
+    });
+
+    const normalizedSkills = [...aggregatedSkills.values()].sort((a, b) => {
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      return a.name.localeCompare(b.name);
+    });
+
+    let recurringCount = 0;
+    let newCount = 0;
+    let growthCount = 0;
+
+    const decoratedSkills = normalizedSkills.map(({ name, weight }) => {
+      const previousCount = seenCounts.get(name) || 0;
+      const nextCount = previousCount + 1;
+      const previousWeight = previousWeights.get(name) || 0;
+      const cumulativeWeight = (cumulativeWeights.get(name) || 0) + weight;
+      const projectSet = new Set(projectSets.get(name) || []);
+      if (projectId) {
+        projectSet.add(projectId);
+      }
+      const projectCount = projectSet.size;
+      const previousComplexity = Number(previousComplexities.get(name) || 0);
+      const depthScore = cumulativeWeight + nextCount * 0.35;
+      const growthLabel = getSkillGrowthLabel({
+        previousWeight,
+        currentWeight: weight,
+        appearanceCount: nextCount,
+        projectCount,
+        previousComplexity,
+        currentComplexity,
+      });
+
+      seenCounts.set(name, nextCount);
+      previousWeights.set(name, weight);
+      cumulativeWeights.set(name, cumulativeWeight);
+      projectSets.set(name, projectSet);
+      previousComplexities.set(name, currentComplexity);
+
+      if (previousCount > 0) recurringCount += 1;
+      else newCount += 1;
+      if (
+        previousCount > 0 &&
+        (
+          weight > previousWeight + 0.08 ||
+          projectCount >= 2 ||
+          currentComplexity > previousComplexity + 0.75
+        )
+      ) {
+        growthCount += 1;
+      }
+
+      return {
+        name,
+        appearanceCount: nextCount,
+        projectCount,
+        weight,
+        depthScore,
+        level: getSharedSkillDepthLevel(depthScore),
+        growthLabel,
+        status: previousCount > 0 ? "Recurring" : "First seen",
+      };
+    });
+
+    return {
+      ...entry,
+      skills: decoratedSkills,
+      meta: {
+        totalSkills: normalizedSkills.length,
+        recurringCount,
+        newCount,
+        growthCount,
+      },
+    };
+  });
 }
 
 function buildSkillExpertiseGroups(timeline, summaryData) {
@@ -366,7 +701,8 @@ function buildSkillExpertiseGroups(timeline, summaryData) {
 
   const groups = {
     Advanced: [],
-    Intermediate: [],
+    Proficient: [],
+    Developing: [],
     Foundation: [],
   };
 
@@ -376,7 +712,7 @@ function buildSkillExpertiseGroups(timeline, summaryData) {
       return {
         ...skill,
         depthScore,
-        level: getSkillExpertiseLevel(depthScore),
+        level: getSharedSkillDepthLevel(depthScore),
       };
     })
     .sort((a, b) => {
@@ -388,6 +724,14 @@ function buildSkillExpertiseGroups(timeline, summaryData) {
     });
 
   return groups;
+}
+
+function buildExpertiseSections(expertiseGroups) {
+  return getExpertiseLevelOrder().map((level) => ({
+    key: level,
+    title: level,
+    skills: Array.isArray(expertiseGroups?.[level]) ? expertiseGroups[level] : [],
+  }));
 }
 
 function getHeatmapBucket(intensity) {
@@ -455,6 +799,159 @@ function buildContributionHeatmapModel(cells) {
   }
 
   return { monthLabels, weeks };
+}
+
+function buildAggregatedHeatmapCalendar(cells, granularity) {
+  const entries = [...cells]
+    .map((cell) => ({
+      key: String(cell.period || "").trim(),
+      count: Number(cell.count || 0),
+      bucket: getHeatmapBucket(Number(cell.intensity || 0)),
+      label: formatHeatmapPeriod(cell.period, granularity),
+    }))
+    .filter((cell) => cell.key)
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  if (!entries.length) {
+    return { columnLabels: [], rows: [] };
+  }
+
+  if (granularity === "month") {
+    const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const years = [...new Set(entries.map((entry) => entry.key.slice(0, 4)))].sort();
+    const columnLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const rows = years.map((year) => ({
+      label: year,
+      cells: columnLabels.map((monthLabel, index) => {
+        const key = `${year}-${String(index + 1).padStart(2, "0")}`;
+        const entry = byKey.get(key);
+        return {
+          key,
+          label: entry?.label || `${monthLabel} ${year}`,
+          count: entry?.count || 0,
+          bucket: entry?.bucket || 0,
+          inRange: Boolean(entry),
+        };
+      }),
+    }));
+    return { columnLabels, rows };
+  }
+
+  const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+  const years = entries.map((entry) => Number(entry.key)).filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  const startYear = years[0];
+  const endYear = years[years.length - 1];
+  const columnLabels = Array.from(
+    { length: Math.min(12, endYear - startYear + 1) },
+    (_, index) => String(startYear + index)
+  );
+  const rows = [];
+
+  for (let cursor = startYear; cursor <= endYear; cursor += 12) {
+    const rowYears = Array.from({ length: 12 }, (_, index) => cursor + index).filter((year) => year <= endYear);
+    rows.push({
+      label: `${cursor}${rowYears.length > 1 ? `-${rowYears[rowYears.length - 1]}` : ""}`,
+      cells: rowYears.map((year) => {
+        const key = String(year);
+        const entry = byKey.get(key);
+        return {
+          key,
+          label: entry?.label || key,
+          count: entry?.count || 0,
+          bucket: entry?.bucket || 0,
+          inRange: Boolean(entry),
+        };
+      }),
+    });
+  }
+
+  return { columnLabels, rows };
+}
+
+function formatHeatmapPeriod(period, granularity) {
+  const raw = String(period || "").trim();
+  if (!raw) return "Unknown";
+
+  if (granularity === "year" && /^\d{4}$/.test(raw)) {
+    return raw;
+  }
+
+  if (granularity === "month" && /^\d{4}-\d{2}$/.test(raw)) {
+    const [year, month] = raw.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    }
+  }
+
+  if (granularity === "day" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+  }
+
+  return raw;
+}
+
+function renderHeatmapFilters(heatmapData) {
+  const projects = Array.isArray(heatmapData?.projects) ? heatmapData.projects : [];
+  heatmapState.projects = projects;
+
+  return `
+    <div class="heatmap-toolbar">
+      <label class="heatmap-filter">
+        <span>Time Filter</span>
+        <select id="heatmap-granularity-select" class="heatmap-select">
+          <option value="year" ${heatmapState.granularity === "year" ? "selected" : ""}>Year</option>
+          <option value="month" ${heatmapState.granularity === "month" ? "selected" : ""}>Month</option>
+          <option value="day" ${heatmapState.granularity === "day" ? "selected" : ""}>Day</option>
+        </select>
+      </label>
+      <label class="heatmap-filter">
+        <span>Project Map</span>
+        <select id="heatmap-project-select" class="heatmap-select">
+          <option value="" ${!heatmapState.projectId ? "selected" : ""}>All Projects</option>
+          ${projects
+            .map(
+              (projectId) => `
+                <option value="${escapeHtml(projectId)}" ${heatmapState.projectId === projectId ? "selected" : ""}>
+                  ${escapeHtml(projectId)}
+                </option>
+              `
+            )
+            .join("")}
+        </select>
+      </label>
+    </div>
+  `;
+}
+
+async function refreshActivityHeatmap() {
+  try {
+    const heatmapData = await fetchActivityHeatmap({
+      granularity: heatmapState.granularity,
+      projectId: heatmapState.projectId,
+    });
+    renderActivityHeatmap(heatmapData);
+  } catch (error) {
+    console.error("Failed to refresh activity heatmap:", error);
+  }
+}
+
+function bindHeatmapFilterEvents() {
+  const granularitySelect = document.getElementById("heatmap-granularity-select");
+  const projectSelect = document.getElementById("heatmap-project-select");
+
+  granularitySelect?.addEventListener("change", async (event) => {
+    heatmapState.granularity = String(event.target.value || "day").trim().toLowerCase() || "day";
+    await refreshActivityHeatmap();
+  });
+
+  projectSelect?.addEventListener("change", async (event) => {
+    heatmapState.projectId = String(event.target.value || "").trim();
+    await refreshActivityHeatmap();
+  });
 }
 
 function applyPortfolioSectionVisibility() {
@@ -599,6 +1096,85 @@ function renderTopProjects(projects, summaryData, rankedTopProjectIds = [], port
     portfolioEntryMap,
     getPortfolioImageUrl,
   });
+  container.innerHTML = topProjects
+    .map((project, index) => {
+      const details = projectDetailsMap.get(project.project_id);
+      const override = getProjectOverride(project.project_id) || {};
+
+      const title = details?.title || project.project_id;
+      const summary =
+        override.portfolioBlurb ||
+        details?.summary ||
+        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+
+      const technologies = dedupeStrings(details?.technologies).slice(0, 4);
+      const keyRole = override.keyRole?.trim();
+      const evidence = override.evidence?.trim();
+      const contributionSummary = buildContributionSummary(project, details, override);
+      const impactSummary = buildImpactSummary(project, details, override);
+      const processSteps = buildProjectProcessSteps(project, details, index);
+      return `
+        <div class="top-project-card">
+          <div class="top-project-rank">#${index + 1}</div>
+          <div class="top-project-body">
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(summary)}</p>
+
+            ${
+              contributionSummary
+                ? `
+                  <div class="portfolio-detail-block">
+                    <span class="portfolio-detail-label">Contribution</span>
+                    <p>${escapeHtml(contributionSummary)}</p>
+                  </div>
+                `
+                : ""
+            }
+
+            ${
+              impactSummary
+                ? `
+                  <!-- Keep success evidence behind an explicit toggle in both public and private portfolio views. -->
+                  <div class="project-details">
+                    <button
+                      class="project-details-toggle"
+                      type="button"
+                      data-evidence-details="${escapeHtml(project.project_id)}"
+                    >
+                      View Details
+                    </button>
+                    <div
+                      class="project-details-panel hidden"
+                      data-evidence-details-panel="${escapeHtml(project.project_id)}"
+                    >
+                      <div class="project-story-block">
+                        <span class="project-story-label">Process</span>
+                        <ol class="project-process-list">
+                          ${processSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+                        </ol>
+                      </div>
+                      <div class="project-story-block">
+                        <span class="project-story-label">Evidence of Success</span>
+                        <p class="project-evolution-text">${escapeHtml(impactSummary)}</p>
+                      </div>
+                      ${renderEvolutionTimeline(project, details, override)}
+                    </div>
+                  </div>
+                `
+                : ""
+            }
+
+            <div class="project-stack">
+              <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
+              <span class="stack-pill">${project.total_files} Files</span>
+              <span class="stack-pill">${project.total_skills} Skills</span>
+              ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderPortfolioStats(projects, summaryData, timeline = []) {
@@ -625,6 +1201,7 @@ function renderPortfolioStats(projects, summaryData, timeline = []) {
   const backendSkills = dedupeStrings(summaryData?.skills);
   const backendHighlights = dedupeStrings(summaryData?.highlights);
   const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
+  const expertiseSections = buildExpertiseSections(expertiseGroups);
 
   container.innerHTML = `
     <div class="skills-group-card">
@@ -640,47 +1217,29 @@ function renderPortfolioStats(projects, summaryData, timeline = []) {
     </div>
 
     ${
-      expertiseGroups.Advanced.length || expertiseGroups.Intermediate.length || expertiseGroups.Foundation.length
+      expertiseSections.some((section) => section.skills.length)
         ? `
           <div class="skills-group-card">
             <h3>Skills by Expertise Level</h3>
             <div class="skills-expertise-levels">
-              <div class="skills-expertise-group">
-                <span class="skills-expertise-label">Advanced</span>
-                <div class="skills-pill-row">
-                  ${
-                    expertiseGroups.Advanced.length
-                      ? expertiseGroups.Advanced
-                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
-                          .join("")
-                      : `<span class="timeline-empty">No advanced skills yet</span>`
-                  }
-                </div>
-              </div>
-              <div class="skills-expertise-group">
-                <span class="skills-expertise-label">Intermediate</span>
-                <div class="skills-pill-row">
-                  ${
-                    expertiseGroups.Intermediate.length
-                      ? expertiseGroups.Intermediate
-                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
-                          .join("")
-                      : `<span class="timeline-empty">No intermediate skills yet</span>`
-                  }
-                </div>
-              </div>
-              <div class="skills-expertise-group">
-                <span class="skills-expertise-label">Foundation</span>
-                <div class="skills-pill-row">
-                  ${
-                    expertiseGroups.Foundation.length
-                      ? expertiseGroups.Foundation
-                          .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
-                          .join("")
-                      : `<span class="timeline-empty">No foundation skills yet</span>`
-                  }
-                </div>
-              </div>
+              ${expertiseSections
+                .map(
+                  (section) => `
+                    <div class="skills-expertise-group">
+                      <span class="skills-expertise-label">${escapeHtml(section.title)}</span>
+                      <div class="skills-pill-row">
+                        ${
+                          section.skills.length
+                            ? section.skills
+                                .map((skill) => `<span class="skills-pill">${escapeHtml(skill)}</span>`)
+                                .join("")
+                            : `<span class="timeline-empty">No ${escapeHtml(section.title.toLowerCase())} skills yet</span>`
+                        }
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")}
             </div>
           </div>
         `
@@ -700,7 +1259,15 @@ function renderSkillsTimeline(timeline) {
   const container = document.getElementById("skills-timeline-container");
   if (!container) return;
 
-  if (!timeline.length) {
+  const visibleTimeline = asArray(timeline).filter((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
+      ? entry.project_metrics
+      : {};
+    return skills.length > 0 || Number(metrics.file_count || 0) > 0 || Number(metrics.active_days || 0) > 0;
+  });
+
+  if (!visibleTimeline.length) {
     container.innerHTML = `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
@@ -713,6 +1280,66 @@ function renderSkillsTimeline(timeline) {
   }
 
   container.innerHTML = buildSkillsTimelineMarkup(timeline);
+  container.innerHTML = buildTimelineEntries(visibleTimeline)
+    .map((entry) => {
+      const skills = Array.isArray(entry.skills) ? entry.skills : [];
+      const timeLabel = formatTimelineTimestamp(entry.timestamp || entry.year);
+      const projectLabel = String(entry.project_id || "").trim();
+
+      return `
+        <div class="timeline-year-row">
+          <div class="timeline-year">
+            <span class="timeline-dot" aria-hidden="true"></span>
+            <div class="timeline-time-block">
+              <span class="timeline-time-label">${escapeHtml(timeLabel)}</span>
+              ${projectLabel ? `<span class="timeline-project-label">${escapeHtml(projectLabel)}</span>` : ""}
+            </div>
+          </div>
+          <div class="timeline-track">
+            <div class="timeline-meta-row">
+              <span class="timeline-meta-pill">${entry.meta.totalSkills} skill${entry.meta.totalSkills === 1 ? "" : "s"}</span>
+              ${
+                entry.meta.newCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.newCount} first seen</span>`
+                  : ""
+              }
+              ${
+                entry.meta.recurringCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.recurringCount} recurring</span>`
+                  : ""
+              }
+              ${
+                entry.meta.growthCount
+                  ? `<span class="timeline-meta-pill">${entry.meta.growthCount} growing in depth</span>`
+                  : ""
+              }
+            </div>
+            <div class="timeline-skill-pills">
+              ${
+                skills.length
+                  ? skills
+                      .map((skill) => {
+                        const metaParts = [
+                          `${skill.status} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"}`,
+                          `${skill.projectCount} project${skill.projectCount === 1 ? "" : "s"}`,
+                        ];
+                        return `
+                          <span class="timeline-skill-pill">
+                            <span class="timeline-skill-name">${escapeHtml(skill.name)}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(skill.level)} · ${escapeHtml(skill.growthLabel)}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(metaParts.join(" · "))}</span>
+                          </span>
+                        `;
+                      })
+                      .join("")
+                  : `<span class="timeline-empty">No skills recorded</span>`
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderActivityHeatmap(heatmapData) {
@@ -723,9 +1350,14 @@ function renderActivityHeatmap(heatmapData) {
 
   const cells = Array.isArray(heatmapData?.cells) ? heatmapData.cells : [];
   const projectCount = Number(heatmapData?.projectCount || 0);
+  const granularity = String(heatmapData?.granularity || heatmapState.granularity || "day").trim().toLowerCase();
+  const selectedProjectId = String(heatmapData?.selectedProjectId || heatmapState.projectId || "").trim();
+  heatmapState.granularity = granularity;
+  heatmapState.projectId = selectedProjectId;
 
   if (!cells.length) {
     container.innerHTML = `
+      ${renderHeatmapFilters(heatmapData)}
       <div class="skills-group-card">
         <h3>No activity data yet</h3>
         <p class="muted-text">
@@ -733,6 +1365,7 @@ function renderActivityHeatmap(heatmapData) {
         </p>
       </div>
     `;
+    bindHeatmapFilterEvents();
     return;
   }
 
@@ -744,7 +1377,8 @@ function renderActivityHeatmap(heatmapData) {
   const totalActivity = cells.reduce((sum, cell) => sum + Number(cell.count || 0), 0);
   const averageActivity = cells.length ? Math.round(totalActivity / cells.length) : 0;
   const peakCell = [...cells].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
-  const heatmap = buildContributionHeatmapModel(cells);
+  const heatmap = granularity === "day" ? buildContributionHeatmapModel(cells) : null;
+  const aggregatedCalendar = granularity === "day" ? null : buildAggregatedHeatmapCalendar(cells, granularity);
   const legendLevels = [
     { label: "Low", bucket: 0 },
     { label: "", bucket: 1 },
@@ -754,15 +1388,16 @@ function renderActivityHeatmap(heatmapData) {
   ];
 
   container.innerHTML = `
+    ${renderHeatmapFilters(heatmapData)}
     <div class="heatmap-summary">
       <div>
         <p class="muted-text">
-          Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.
+          ${selectedProjectId ? `Showing ${escapeHtml(selectedProjectId)}.` : `Aggregated activity across ${projectCount} project${projectCount === 1 ? "" : "s"}.`}
         </p>
         <div class="heatmap-chip-row">
           <span class="hero-stat-chip">${totalActivity} total activity events</span>
-          <span class="hero-stat-chip">${averageActivity} avg / active day</span>
-          <span class="hero-stat-chip">Peak: ${escapeHtml(peakCell?.period || "")}</span>
+          <span class="hero-stat-chip">${averageActivity} avg / active ${escapeHtml(granularity)}</span>
+          <span class="hero-stat-chip">Peak: ${escapeHtml(formatHeatmapPeriod(peakCell?.period || "", granularity))}</span>
         </div>
       </div>
     </div>
@@ -781,49 +1416,101 @@ function renderActivityHeatmap(heatmapData) {
       <span class="heatmap-legend-label">More</span>
     </div>
 
-    <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
-      <div class="heatmap-month-row">
-        <div class="heatmap-month-spacer"></div>
-        <div class="heatmap-month-labels">
-          ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
-        </div>
-      </div>
-      <div class="heatmap-body">
-        <div class="heatmap-weekday-labels">
-          <span>Sun</span>
-          <span>Tue</span>
-          <span>Thu</span>
-          <span>Sat</span>
-        </div>
-        <div class="heatmap-weeks">
-          ${heatmap.weeks
-            .map(
-              (week) => `
-                <div class="heatmap-week-column">
-                  ${week.days
+    ${
+      granularity === "day"
+        ? `
+          <div class="heatmap-calendar" role="img" aria-label="Project activity heatmap by day">
+            <div class="heatmap-month-row">
+              <div class="heatmap-month-spacer"></div>
+              <div class="heatmap-month-labels">
+                ${heatmap.monthLabels.map((label) => `<span class="heatmap-month-label">${escapeHtml(label)}</span>`).join("")}
+              </div>
+            </div>
+            <div class="heatmap-body">
+              <div class="heatmap-weekday-labels">
+                <span>Sun</span>
+                <span>Tue</span>
+                <span>Thu</span>
+                <span>Sat</span>
+              </div>
+              <div class="heatmap-weeks">
+                ${heatmap.weeks
+                  .map(
+                    (week) => `
+                      <div class="heatmap-week-column">
+                        ${week.days
+                          .map(
+                            (day) => `
+                              <div
+                                class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
+                                title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
+                              ></div>
+                            `
+                          )
+                          .join("")}
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          </div>
+        `
+        : `
+          <div
+            class="heatmap-calendar heatmap-calendar-aggregated ${granularity === "year" ? "heatmap-calendar-aggregated-year" : ""}"
+            role="img"
+            aria-label="Project activity heatmap by ${escapeHtml(granularity)}"
+          >
+            <div class="heatmap-aggregated-calendar">
+              <div class="heatmap-aggregated-topbar">
+                <div class="heatmap-aggregated-corner"></div>
+                <div class="heatmap-aggregated-columns">
+                  ${aggregatedCalendar.columnLabels
                     .map(
-                      (day) => `
-                        <div
-                          class="heatmap-square bucket-${day.bucket} ${day.inRange ? "" : "heatmap-square-empty"}"
-                          title="${escapeHtml(day.label)} · ${day.count} activity event${day.count === 1 ? "" : "s"}"
-                        ></div>
+                      (label) => `
+                        <span class="heatmap-aggregated-column-label">${escapeHtml(label)}</span>
                       `
                     )
                     .join("")}
                 </div>
-              `
-            )
-            .join("")}
-        </div>
-      </div>
-    </div>
+              </div>
+              <div class="heatmap-aggregated-rows">
+                ${aggregatedCalendar.rows
+                  .map(
+                    (row) => `
+                      <div class="heatmap-aggregated-row">
+                        <span class="heatmap-aggregated-row-label">${escapeHtml(row.label)}</span>
+                        <div class="heatmap-aggregated-grid">
+                          ${row.cells
+                            .map(
+                              (entry) => `
+                                <div
+                                  class="heatmap-square bucket-${entry.bucket} ${entry.inRange ? "" : "heatmap-square-empty"}"
+                                  title="${escapeHtml(entry.label)} · ${entry.count} activity event${entry.count === 1 ? "" : "s"}"
+                                ></div>
+                              `
+                            )
+                            .join("")}
+                        </div>
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          </div>
+        `
+    }
   `;
+  bindHeatmapFilterEvents();
 }
 
 function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProjectIds = [], timeline = []) {
   const topProjects = getRankedTopProjects(projects, rankedTopProjectIds);
   const projectDetailsMap = getProjectDetailsMap(summaryData);
   const expertiseGroups = buildSkillExpertiseGroups(timeline, summaryData);
+  const expertiseSections = buildExpertiseSections(expertiseGroups);
 
   const totalProjects = projects.length;
   const totalFiles = projects.reduce((sum, p) => sum + (p.total_files || 0), 0);
@@ -863,18 +1550,16 @@ function buildResumePreviewHtml(profile, projects, summaryData, rankedTopProject
       <div class="resume-preview-section">
         <h3>Skills by Expertise Level</h3>
         <div class="resume-preview-grid">
-          <div>
-            <strong>Advanced</strong>
-            <p>${expertiseGroups.Advanced.length ? escapeHtml(expertiseGroups.Advanced.join(", ")) : "No advanced skills yet."}</p>
-          </div>
-          <div>
-            <strong>Intermediate</strong>
-            <p>${expertiseGroups.Intermediate.length ? escapeHtml(expertiseGroups.Intermediate.join(", ")) : "No intermediate skills yet."}</p>
-          </div>
-          <div>
-            <strong>Foundation</strong>
-            <p>${expertiseGroups.Foundation.length ? escapeHtml(expertiseGroups.Foundation.join(", ")) : "No foundation skills yet."}</p>
-          </div>
+          ${expertiseSections
+            .map(
+              (section) => `
+                <div>
+                  <strong>${escapeHtml(section.title)}</strong>
+                  <p>${section.skills.length ? escapeHtml(section.skills.join(", ")) : `No ${escapeHtml(section.title.toLowerCase())} skills yet.`}</p>
+                </div>
+              `
+            )
+            .join("")}
         </div>
       </div>
 
@@ -927,11 +1612,9 @@ function buildOnePageResumeSnapshot(profile, projects, summaryData, rankedTopPro
     target_role: profile.title,
     education: profile.education,
     awards: [...profile.awards],
-    skills_by_expertise: {
-      Advanced: [...expertiseGroups.Advanced],
-      Intermediate: [...expertiseGroups.Intermediate],
-      Foundation: [...expertiseGroups.Foundation],
-    },
+    skills_by_expertise: Object.fromEntries(
+      buildExpertiseSections(expertiseGroups).map((section) => [section.title, [...section.skills]])
+    ),
     projects: topProjects.map((project) => {
       const details = projectDetailsMap.get(project.project_id);
       const override = getProjectOverride(project.project_id) || {};
@@ -955,6 +1638,10 @@ function buildOnePageResumeSnapshot(profile, projects, summaryData, rankedTopPro
 }
 
 function buildOnePageResumeMarkdown(snapshot) {
+  const expertiseSections = getExpertiseLevelOrder().map((level) => ({
+    title: level,
+    skills: Array.isArray(snapshot.skills_by_expertise?.[level]) ? snapshot.skills_by_expertise[level] : [],
+  }));
   const sections = [
     `# ${snapshot.title}`,
     "",
@@ -968,9 +1655,7 @@ function buildOnePageResumeMarkdown(snapshot) {
     ...(snapshot.awards.length ? snapshot.awards.map((item) => `- ${item}`) : ["- None listed"]),
     "",
     "## Skills by Expertise Level",
-    `**Advanced:** ${snapshot.skills_by_expertise.Advanced.length ? snapshot.skills_by_expertise.Advanced.join(", ") : "None yet"}`,
-    `**Intermediate:** ${snapshot.skills_by_expertise.Intermediate.length ? snapshot.skills_by_expertise.Intermediate.join(", ") : "None yet"}`,
-    `**Foundation:** ${snapshot.skills_by_expertise.Foundation.length ? snapshot.skills_by_expertise.Foundation.join(", ") : "None yet"}`,
+    ...expertiseSections.map((section) => `**${section.title}:** ${section.skills.length ? section.skills.join(", ") : "None yet"}`),
     "",
     "## Projects",
     ...(
@@ -990,6 +1675,10 @@ function buildOnePageResumeMarkdown(snapshot) {
 }
 
 function buildOnePageResumePdfPayload(snapshot) {
+  const expertiseSections = getExpertiseLevelOrder().map((level) => ({
+    title: level,
+    skills: Array.isArray(snapshot.skills_by_expertise?.[level]) ? snapshot.skills_by_expertise[level] : [],
+  }));
   return {
     title: snapshot.title,
     target_role: snapshot.target_role,
@@ -1013,26 +1702,10 @@ function buildOnePageResumePdfPayload(snapshot) {
       },
       {
         name: "core_skill",
-        items: [
-          {
-            title: "Advanced",
-            content: snapshot.skills_by_expertise.Advanced.length
-              ? snapshot.skills_by_expertise.Advanced.join(", ")
-              : "None yet",
-          },
-          {
-            title: "Intermediate",
-            content: snapshot.skills_by_expertise.Intermediate.length
-              ? snapshot.skills_by_expertise.Intermediate.join(", ")
-              : "None yet",
-          },
-          {
-            title: "Foundation",
-            content: snapshot.skills_by_expertise.Foundation.length
-              ? snapshot.skills_by_expertise.Foundation.join(", ")
-              : "None yet",
-          },
-        ],
+        items: expertiseSections.map((section) => ({
+          title: section.title,
+          content: section.skills.length ? section.skills.join(", ") : "None yet",
+        })),
       },
       {
         name: "projects",
@@ -1103,6 +1776,8 @@ function closeResumePreview() {
 }
 
 export async function loadPortfolio() {
+  heatmapState.granularity = "day";
+  heatmapState.projectId = "";
   const [projectsResult, timelineResult, summaryResult, heatmapResult, rankedTopProjectsResult] = await Promise.allSettled([
     fetchProjects(),
     fetchSkillsTimeline(),
@@ -1120,6 +1795,7 @@ export async function loadPortfolio() {
       : { cells: [], maxCount: 0, projectCount: 0 };
   const rankedTopProjectIds =
     rankedTopProjectsResult.status === "fulfilled" ? rankedTopProjectsResult.value : [];
+  const topProjectsForEvolution = getRankedTopProjects(projects, rankedTopProjectIds);
 
   const portfolioEntryMap = await fetchPortfolioEntryMap(projects).catch((error) => {
     console.error("Failed to load portfolio entries:", error);
@@ -1145,6 +1821,14 @@ export async function loadPortfolio() {
   }
   if (rankedTopProjectsResult.status === "rejected") {
     console.error("Failed to load ranked top projects:", rankedTopProjectsResult.reason);
+  }
+
+  try {
+    const evolutionMap = await fetchProjectEvolution(topProjectsForEvolution.map((project) => project.project_id));
+    projectEvolutionCache = new Map(Object.entries(evolutionMap || {}));
+  } catch (error) {
+    projectEvolutionCache = new Map();
+    console.error("Failed to load project evolution:", error);
   }
 
   renderResumeSummary(profile, projects, summaryData, rankedTopProjectIds);

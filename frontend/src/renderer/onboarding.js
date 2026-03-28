@@ -80,12 +80,32 @@ const TUTORIAL_STEPS = [
     tabKey: "resume",
     pageId: "resume-page",
     title: "Resume",
-    description: "Resume lets you manage your saved resumes and view the one-page resume snapshot built from your portfolio data.",
+    description: "Resume lets you manage your saved resumes and view the one-page resume snapshot built from your portfolio data. In Public Mode you can preview, export, and delete, while editing is only available in Private Mode.",
     sections: [
       {
         label: "My Resumes",
         selectors: [".resume-manager-card"],
-        description: "Browse and manage your saved resumes.",
+        description: "Browse your saved resumes. Public Mode supports preview, export, and delete, while editing and deeper changes require Private Mode.",
+      },
+      {
+        label: "New Resume",
+        selectors: ["#new-resume-btn"],
+        description: "New Resume opens the project picker so you can choose which projects to include when generating a resume.",
+      },
+      {
+        label: "Preview",
+        selectors: [".resume-preview-action"],
+        description: "Preview opens a formatted resume preview for the selected resume without entering edit mode.",
+      },
+      {
+        label: "Export",
+        selectors: [".resume-export-action"],
+        description: "Export downloads the selected resume in supported formats such as JSON, Markdown, or PDF.",
+      },
+      {
+        label: "Delete",
+        selectors: [".resume-delete-action"],
+        description: "Delete permanently removes the selected resume from Loom after confirmation.",
       },
       {
         label: "Resume Snapshot",
@@ -98,7 +118,7 @@ const TUTORIAL_STEPS = [
     tabKey: "portfolio",
     pageId: "portfolio-page",
     title: "Portfolio",
-    description: "Portfolio showcases your top projects, skills timeline, and activity heatmap. Use the customization section to control what appears publicly.",
+    description: "Portfolio showcases your top projects, skills timeline, and activity heatmap. Public Mode is view-only here, while customization, project edits, featured selection, reordering, and live preview are only available in Private Mode.",
     sections: [
       {
         label: "Top Projects",
@@ -123,12 +143,12 @@ const TUTORIAL_STEPS = [
       {
         label: "Sections",
         selectors: ["#portfolio-selection-wrapper", ".portfolio-actions"],
-        description: "Selection lets you control which portfolio sections are visible in the public-facing portfolio view.",
+        description: "Selection lets you control which portfolio sections are visible in the public-facing portfolio view, and that customization is only available in Private Mode.",
       },
       {
         label: "Evidence Editing",
         selectors: [".portfolio-editor-card"],
-        description: "Edit contribution and evidence text before sharing.",
+        description: "Edit contribution and evidence text before sharing. These edits are only available in Private Mode.",
       },
       {
         label: "Project Detail Drafts",
@@ -140,39 +160,39 @@ const TUTORIAL_STEPS = [
         label: "My Starred Projects",
         // Keep this separate from drafts so the tutorial can explain showcase content independently.
         selectors: ["#live-preview-starred-section"],
-        description: "My Starred Projects shows the starred projects that currently appear in your portfolio showcase and reflects their draft text in the preview.",
+        description: "My Starred Projects shows the projects selected for your portfolio showcase. Starring, ordering, and live preview updates are only available in Private Mode.",
       },
     ],
   },
   {
     tabKey: "chat",
     pageId: "chat-page",
-    title: "Chat",
-    description: "Chat gives you an AI workspace for resume, portfolio, project, and interview guidance based on your Loom data.",
+    title: "Ask Sienna",
+    description: "Ask Sienna provides project-aware AI support for Loom workflows, code guidance, debugging, and feature questions.",
     sections: [
       {
-        label: "Quick Prompts",
-        selectors: ["#chat-quick-prompts-card", ".chat-suggestions-row"],
-        description: "Quick Prompts provides one-click starter questions for common tasks like resume review, project positioning, and interview prep.",
+        label: "Project Context",
+        selectors: [".sienna-toolbar", "#sienna-project-select"],
+        description: "Select a project first so Sienna answers with the right project context.",
       },
       {
         label: "Conversation",
-        selectors: ["#chat-conversation-card", "#chat-messages"],
-        description: "Conversation shows the running back-and-forth between you and Loom Copilot so you can continue refining the same topic.",
+        selectors: ["#sienna-conversation-card", "#sienna-messages"],
+        description: "Conversation shows your ongoing chat with Sienna, including streamed responses and project-specific guidance.",
       },
       {
         label: "Message Composer",
-        selectors: ["#chat-input", ".chat-composer-row"],
-        description: "Message Composer is where you type multi-line questions and send them to the assistant.",
+        selectors: ["#sienna-input", ".sienna-composer"],
+        description: "Message Composer is where you ask Sienna to explain Loom features, suggest improvements, or debug project issues.",
       },
       {
         label: "Send",
-        selectors: ["#chat-send-btn"],
-        description: "Send submits the current prompt to the assistant and appends the reply to the conversation history.",
+        selectors: ["#sienna-send-btn"],
+        description: "Send submits your prompt to Sienna and appends the AI response to the conversation.",
       },
       {
         label: "Clear Chat",
-        selectors: ["#chat-clear-btn"],
+        selectors: ["#sienna-clear-btn"],
         description: "Clear Chat resets the current conversation and starts you with a fresh assistant greeting.",
       },
     ],
@@ -466,6 +486,13 @@ function bindTutorialControls() {
   document.addEventListener(
     "click",
     async (event) => {
+      const interactiveEditorTarget = event.target.closest(
+        "input, textarea, select, [contenteditable='true'], [contenteditable='']",
+      );
+      if (interactiveEditorTarget) {
+        return;
+      }
+
       const tab = event.target.closest(".nav-tab");
       if (tutorialActive && tab) {
         event.preventDefault();
