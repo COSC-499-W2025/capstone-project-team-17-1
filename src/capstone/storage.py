@@ -1483,8 +1483,9 @@ def set_current_user(user_id: str | None):
 
 def get_database_path():
     # Allow overriding the DB path for local debugging.
-    # Set LOOM_DB_PATH=debug_db/capstone.db in a .env file or run config.
-    override = os.getenv("LOOM_DB_PATH")
+    # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
+    # override = os.getenv("LOOM_DB_PATH")
+    override = None
     if override:
         p = Path(override)
         p.parent.mkdir(parents=True, exist_ok=True)
