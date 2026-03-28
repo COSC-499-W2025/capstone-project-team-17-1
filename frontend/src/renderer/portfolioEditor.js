@@ -216,19 +216,39 @@ async function hydrateCustomizationFromBackend(projects) {
   const backendOverrides = {};
 
   portfolioResults.forEach((result, index) => {
-    if (result.status !== "fulfilled" || !result.value)
-      return;
-
     const projectId = String(projects[index]?.project_id || "");
     if (!projectId) return;
 
+    if (result.status !== "fulfilled") {
+      console.error(`Portfolio fetch failed for ${projectId}:`, result.reason);
+      return;
+    }
+
+    if (!result.value) {
+      console.warn(`No portfolio payload returned for ${projectId}`);
+      return;
+    }
+
     const data = result.value;
+    const resolved = data.resolved || {};
+    const defaults = data.analysis_defaults || {};
+
+    console.log(`Portfolio payload for ${projectId}:`, data);
+    console.log(`Resolved role for ${projectId}:`, resolved.key_role);
+
     backendOverrides[projectId] = {
-      keyRole: String(data.key_role || ""),
-      evidence: String(data.evidence_of_success || ""),
-      portfolioBlurb: String(data.portfolio_blurb || data.summary || ""),
+      keyRole: String(resolved.key_role || defaults.key_role || ""),
+      evidence: String(resolved.evidence_of_success || defaults.evidence_of_success || ""),
+      portfolioBlurb: String(
+        resolved.portfolio_blurb || defaults.portfolio_blurb || data.summary || ""
+      ),
       templateId: String(data.template_id || "classic"),
-      images: Array.isArray(data.images) ? data.images : []
+      images: Array.isArray(data.images) ? data.images : [],
+      analysisDefaults: {
+        keyRole: String(defaults.key_role || ""),
+        evidence: String(defaults.evidence_of_success || ""),
+        portfolioBlurb: String(defaults.portfolio_blurb || "")
+      }
     };
   });
 
@@ -292,19 +312,35 @@ function normalizeCustomization(customization) {
     .sort()
     .forEach((projectId) => {
       const override = rawOverrides[projectId] || {};
+
       projectOverrides[String(projectId)] = {
         keyRole: String(override.keyRole || ""),
         evidence: String(override.evidence || ""),
         portfolioBlurb: String(override.portfolioBlurb || ""),
         templateId: String(override.templateId || "classic"),
-        images: Array.isArray(override.images) ? override.images : []
+        images: Array.isArray(override.images) ? override.images : [],
+        analysisDefaults: {
+          keyRole: String(override.analysisDefaults?.keyRole || ""),
+          evidence: String(override.analysisDefaults?.evidence || ""),
+          portfolioBlurb: String(override.analysisDefaults?.portfolioBlurb || "")
+        }
       };
     });
+
+    const jobTarget =
+      customization?.jobTarget && typeof customization.jobTarget === "object"
+        ? {
+          title: String(customization.jobTarget.title || ""),
+          company: String(customization.jobTarget.company || ""),
+          description: String(customization.jobTarget.description || "")
+        }
+      : { title: "", company: "", description: ""};
 
   return {
     sectionVisibility,
     featuredProjectIds,
     projectOverrides,
+    jobTarget
   };
 }
 
@@ -654,6 +690,15 @@ function renderProjectEditors(projects, customization) {
 
                 <div class="customization-project-editor-actions">
                   <span class="customization-project-save-status"></span>
+
+                  <button
+                      type="button"
+                      class="portfolio-reset-btn"
+                      data-reset-analysis-defaults="${escapeHtml(project.project_id)}"
+                  >
+                      Reset to analysis
+                  </button>
+
                   <button
                     type="button"
                     class="secondary-btn customization-project-save-btn"
@@ -669,6 +714,31 @@ function renderProjectEditors(projects, customization) {
     `;
   })
   .join("");
+
+  container.querySelectorAll("[data-reset-analysis-defaults]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const projectId = button.dataset.resetAnalysisDefaults;
+      const customization = loadPortfolioCustomization();
+      const currentOverride = customization.projectOverrides?.[projectId] || {};
+      const defaults = currentOverride.analysisDefaults || {};
+
+      customization.projectOverrides = {
+        ...(customization.projectOverrides || {}),
+        [projectId]: {
+          ...currentOverride,
+          keyRole: defaults.keyRole || "",
+          evidence: defaults.evidence || "",
+          portfolioBlurb: defaults.portfolioBlurb || "",
+        },
+      };
+
+      savePortfolioCustomization(customization);
+      renderProjectEditors(previewProjectsCache, customization);
+      updateLivePreview();
+      scheduleAutosave();
+      setStatus("Reset to analysis defaults.", "info");
+    });
+  });
 
   container.querySelectorAll("[data-open-project-card]").forEach((header) => {
   header.addEventListener("click", (event) => {
@@ -774,7 +844,7 @@ function renderProjectEditors(projects, customization) {
 
       savePortfolioCustomization(customization);
       renderProjectEditors(previewProjectsCache, customization);
-      renderLivePreview(previewProjectsCache, customization);
+      updateLivePreview();
       scheduleAutosave();
     });
   });
@@ -801,17 +871,25 @@ function renderProjectEditors(projects, customization) {
           ...(customization.projectOverrides || {}),
           [projectId]: {
             ...current,
-            keyRole: String(latest?.key_role || current.keyRole || ""),
-            evidence: String(latest?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
+            evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
+            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: Array.isArray(latest?.images) ? latest.images : [],
+            analysisDefaults: {
+              keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
+              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
+              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
+            }
           },
         };
 
         savePortfolioCustomization(customization);
+        lastSavedSnapshot = snapshotCustomization(customization);
+        isDirty = false;
+        updateSaveButtonState();
         renderProjectEditors(previewProjectsCache, customization);
-        renderLivePreview(previewProjectsCache, customization);
+        updateLivePreview();
         setStatus("Images uploaded.", "success");
       } catch (error) {
         console.error(error);
@@ -837,17 +915,25 @@ function renderProjectEditors(projects, customization) {
           ...(customization.projectOverrides || {}),
           [projectId]: {
             ...current,
-            keyRole: String(latest?.key_role || current.keyRole || ""),
-            evidence: String(latest?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
+            evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
+            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: Array.isArray(latest?.images) ? latest.images : [],
+            analysisDefaults: {
+              keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
+              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
+              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
+            }
           },
         };
 
         savePortfolioCustomization(customization);
+        lastSavedSnapshot = snapshotCustomization(customization);
+        isDirty = false;
+        updateSaveButtonState();
         renderProjectEditors(previewProjectsCache, customization);
-        renderLivePreview(previewProjectsCache, customization);
+        updateLivePreview();
         setStatus("Cover image updated.", "success");
       } catch (error) {
         console.error(error);
@@ -871,17 +957,25 @@ function renderProjectEditors(projects, customization) {
           ...(customization.projectOverrides || {}),
           [projectId]: {
             ...current,
-            keyRole: String(latest?.key_role || current.keyRole || ""),
-            evidence: String(latest?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
+            evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
+            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: Array.isArray(latest?.images) ? latest.images : [],
+            analysisDefaults: {
+              keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
+              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
+              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
+            }
           },
         };
 
         savePortfolioCustomization(customization);
+        lastSavedSnapshot = snapshotCustomization(customization);
+        isDirty = false;
+        updateSaveButtonState();
         renderProjectEditors(previewProjectsCache, customization);
-        renderLivePreview(previewProjectsCache, customization);
+        updateLivePreview();
         setStatus("Image removed.", "success");
       } catch (error) {
         console.error(error);
@@ -1019,7 +1113,12 @@ function collectCustomization(projects) {
       evidence,
       portfolioBlurb,
       templateId,
-      images: Array.isArray(existingOverride.images) ? existingOverride.images : []
+      images: Array.isArray(existingOverride.images) ? existingOverride.images : [],
+      analysisDefaults: {
+        keyRole: String(existingOverride.analysisDefaults?.keyRole || ""),
+        evidence: String(existingOverride.analysisDefaults?.evidence || ""),
+        portfolioBlurb: String(existingOverride.analysisDefaults?.portfolioBlurb || "")
+      }
     };
   });
 
@@ -1109,7 +1208,11 @@ async function saveProjectById(projectId) {
     },
   };
 
-  savePortfolioCustomization({ ...current, projectOverrides: overrides });
+  const nextCustomization = { ...current, projectOverrides: overrides };
+  savePortfolioCustomization(nextCustomization);
+  lastSavedSnapshot = snapshotCustomization(nextCustomization);
+  isDirty = false;
+  updateSaveButtonState();
 
   editor.dataset.savedSnapshot = snapshot;
 
@@ -1402,11 +1505,7 @@ async function performSave({ silent = false } = {}) {
   if (nextSnapshot === lastSavedSnapshot) {
     isDirty = false;
     updateSaveButtonState();
-    if (!silent) {
-      setStatus("No changes to save", "info");
-    } else {
-      setStatus("Saved", "success");
-    }
+    setStatus(silent ? "Saved" : "No changes to save", silent ? "success" : "info");
     return "no-changes";
   }
 
@@ -1420,11 +1519,14 @@ async function performSave({ silent = false } = {}) {
 
     lastSavedSnapshot = snapshotCustomization(nextCustomization);
     isDirty = false;
+    updateSaveButtonState();
 
-    await loadPortfolio();
-    window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+    if (!silent) {
+      await loadPortfolio();
+      window.dispatchEvent(new CustomEvent("portfolio:customization-updated"));
+    }
 
-    setStatus("Saved", "success");
+    setStatus(silent ? "Autosaved" : "Saved", "success");
   } catch (error) {
     console.error("Failed to save portfolio customization:", error);
     isDirty = true;
