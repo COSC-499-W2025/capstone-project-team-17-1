@@ -252,28 +252,66 @@ def _stringify_evidence_value(value: Any) -> str:
         return text or label
     return str(value or "").strip()
 
+def _format_portfolio_evidence_line(label: str, value: str) -> str:
+    label = str(label or "").strip()
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if not label:
+        return value
+    return f"{label}: {value}"
+
+
+def _collect_portfolio_evidence_lines(snapshot: dict[str, Any], limit: int = 4) -> list[str]:
+    lines: list[str] = []
+
+    # pull structured evidence first if it exists in snapshot
+    extracted = _extract_evidence(snapshot)
+    extracted_items = extracted.get("items", []) if isinstance(extracted, dict) else []
+
+    for item in extracted_items:
+        if not isinstance(item, dict):
+            text = str(item).strip()
+        else:
+            text = _format_portfolio_evidence_line(
+                item.get("label", ""),
+                _stringify_evidence_value(item),
+            )
+        if text and text not in lines:
+            lines.append(text)
+
+    # fill with general evidence generated from snapshot metrics
+    generated = gather_evidence(snapshot)
+    for evidence in generated:
+        detail = str(getattr(evidence, "detail", "") or "").strip()
+        if detail and detail not in lines:
+            lines.append(detail)
+
+    # default if still empty
+    if not lines:
+        file_summary = snapshot.get("file_summary") or {}
+        file_count = 0
+        active_days = 0
+        if isinstance(file_summary, dict):
+            file_count = _safe_int(file_summary.get("file_count"))
+            active_days = _safe_int(file_summary.get("active_days"))
+
+        if file_count:
+            lines.append(f"{file_count} files analyzed")
+        if active_days:
+            lines.append(f"Active development across {active_days} tracked days")
+
+    return lines[:limit]
+
 def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
     summary = _extract_summary(snapshot) or ""
     highlights = _extract_highlights(snapshot)
 
-    evidence_payload = _extract_evidence(snapshot)
-    evidence_items = evidence_payload.get("items", []) if isinstance(evidence_payload, dict) else []
-
-    evidence_lines = [
-        _stringify_evidence_value(item)
-        for item in evidence_items[:2]
-        if _stringify_evidence_value(item)
-    ]
-
+    evidence_lines = _collect_portfolio_evidence_lines(snapshot, limit=4)
+    
     if not evidence_lines and highlights:
         evidence_lines = highlights[:2]
         
-    if not evidence_lines:
-        file_summary = snapshot.get("file_summary") or {}
-        files_count = file_summary.get("file_count") or len(snapshot.get("files", []) or [])
-        if files_count:
-            evidence_lines.append(f"{files_count} files analyzed")
-
     evidence_text = " • ".join(evidence_lines).strip()
 
     collaboration = snapshot.get("collaboration", {}) or {}
@@ -287,7 +325,7 @@ def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[
     if classification == "individual":
         role_text = inferred_role
     elif primary:
-        role_text = f"{inferred_role} with strong contribution ownership"
+        role_text = f"{inferred_role}"
     else:
         role_text = inferred_role
         

@@ -400,6 +400,23 @@ class ZipAnalyzer:
         }
         
         summary["project_role"] = infer_project_role_from_snapshot(summary)
+        
+        summary["project_evidence"] = [
+            {"label": "Files analyzed", "value": metric_summary.file_count},
+            {"label": "Active days", "value": metric_summary.active_days},
+        ]
+
+        if frameworks:
+            summary["project_evidence"].append({
+                "label": "Framework coverage",
+                "value": ", ".join(sorted(frameworks)),
+            })
+
+        if language_counter:
+            summary["project_evidence"].append({
+                "label": "Languages detected",
+                "value": ", ".join(sorted(language_counter.keys())),
+            })
 
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         with summary_path.open("w", encoding="utf-8") as fh:
