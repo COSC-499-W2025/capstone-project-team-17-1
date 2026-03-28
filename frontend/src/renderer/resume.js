@@ -1578,12 +1578,13 @@ export function initResume() {
   const newResumeBtn = document.getElementById("new-resume-btn");
   newResumeBtn?.addEventListener("click", openNewResumeModal);
 
-  // Do NOT call renderResumeList() here immediately.
-  // initAuthFlow() always dispatches auth:mode-changed after resolving the auth
-  // state (and setting storage.CURRENT_USER on the backend).  Firing a second
-  // GET /resumes before that happens can race with schema initialisation and
-  // return an empty list that overwrites the correct render.
-  document.addEventListener("auth:mode-changed", (e) => {
+  document.addEventListener("auth:mode-changed", () => {
     renderResumeList();
   });
+
+  // initAuthFlow() dispatches auth:mode-changed while this module is still loading,
+  // before the listener above exists — so we must load the list once now. At this
+  // point initAuthFlow has already finished (see renderer.js order), so /resumes
+  // sees the correct session and is not the early-startup race this comment used to avoid.
+  void renderResumeList();
 }
