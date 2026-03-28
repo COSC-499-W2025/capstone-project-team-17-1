@@ -74,6 +74,64 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+// ---------------------------------------------------------------------------
+// Custom dialog helpers — window.confirm/alert use native OS dialogs which
+// steal keyboard focus from the Electron renderer on Windows, making every
+// text input unresponsive until the window is clicked.  Always use these
+// instead of the native versions.
+// ---------------------------------------------------------------------------
+
+function _confirmDialog(message, okLabel = "Delete") {
+  return new Promise((resolve) => {
+    const modal = document.createElement("div");
+    modal.className = "auth-modal";
+    modal.style.cssText = "z-index:4000";
+    modal.innerHTML = `
+      <div class="auth-dialog" style="text-align:center;max-width:360px">
+        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="re-cf-cancel secondary-btn">Cancel</button>
+          <button class="re-cf-ok danger-btn">${escapeHtml(okLabel)}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    const ok = modal.querySelector(".re-cf-ok");
+    const cancel = modal.querySelector(".re-cf-cancel");
+    const finish = (val) => { modal.remove(); resolve(val); };
+    ok.addEventListener("click", () => finish(true));
+    cancel.addEventListener("click", () => finish(false));
+    modal.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") finish(false);
+      if (e.key === "Enter") finish(true);
+    });
+    cancel.focus();
+  });
+}
+
+function _alertDialog(message) {
+  return new Promise((resolve) => {
+    const modal = document.createElement("div");
+    modal.className = "auth-modal";
+    modal.style.cssText = "z-index:4000";
+    modal.innerHTML = `
+      <div class="auth-dialog" style="text-align:center;max-width:360px">
+        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
+        <div style="display:flex;justify-content:center">
+          <button class="re-cf-ok secondary-btn">OK</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    const okBtn = modal.querySelector(".re-cf-ok");
+    okBtn.addEventListener("click", () => { modal.remove(); resolve(); });
+    modal.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Enter") { modal.remove(); resolve(); }
+    });
+    okBtn.focus();
+  });
+}
+
 function normalizeSkillName(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -418,7 +476,7 @@ async function _openExportSequential(ids) {
 }
 
 async function _bulkDelete(ids) {
-  if (!confirm(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
+  if (!await _confirmDialog(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
   await Promise.all(ids.map((id) => deleteResume(id).catch(() => {})));
   _selectedResumeIds.clear();
   await renderResumeList();
@@ -910,9 +968,9 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     });
   });
 
-  document.getElementById("export-download-btn").addEventListener("click", () => {
+  document.getElementById("export-download-btn").addEventListener("click", async () => {
     const data = cache[currentFormat];
-    if (!data) { alert("Please wait for the preview to finish loading."); return; }
+    if (!data) { await _alertDialog("Please wait for the preview to finish loading."); return; }
 
     if (currentFormat === "pdf") {
       downloadBlob(data.blob, `${slug}.pdf`);
@@ -931,12 +989,12 @@ function openExportModal(resumeId, resumeTitle, onClose) {
 // ---------------------------------------------------------------------------
 
 async function confirmDeleteResume(resumeId) {
-  if (!confirm("Delete this resume?")) return;
+  if (!await _confirmDialog("Delete this resume?")) return;
   try {
     await deleteResume(resumeId);
     await renderResumeList();
   } catch (_) {
-    alert("Failed to delete resume.");
+    await _alertDialog("Failed to delete resume.");
   }
 }
 
@@ -1404,13 +1462,13 @@ function attachEditListeners(container) {
       const anyEl  = card?.querySelector("[data-resume-id]");
       if (!anyEl) return;
       const { resumeId: rid, sectionId: sid, itemId: iid } = anyEl.dataset;
-      if (!confirm("Delete this item?")) return;
+      if (!await _confirmDialog("Delete this item?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
         card.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { alert("Failed to delete item."); }
+      } catch (_) { await _alertDialog("Failed to delete item."); }
       return;
     }
 
@@ -1419,13 +1477,13 @@ function attachEditListeners(container) {
     if (delSecBtn) {
       const { resumeId: rid, sectionId: sid } = delSecBtn.dataset;
       const secEl = container.querySelector(`.re-section[data-section-id="${sid}"]`);
-      if (!confirm("Delete this entire section?")) return;
+      if (!await _confirmDialog("Delete this entire section?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
         secEl?.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { alert("Failed to delete section."); }
+      } catch (_) { await _alertDialog("Failed to delete section."); }
       return;
     }
 
@@ -1452,7 +1510,7 @@ function attachEditListeners(container) {
           recalcExpand(container);
           updateCardMeta(container, rid);
         }
-      } catch (_) { alert("Failed to add item."); }
+      } catch (_) { await _alertDialog("Failed to add item."); }
       return;
     }
 
@@ -1507,7 +1565,7 @@ function attachEditListeners(container) {
         initAllEditables(newSec);
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { alert("Failed to add section."); }
+      } catch (_) { await _alertDialog("Failed to add section."); }
     }
   });
 }
