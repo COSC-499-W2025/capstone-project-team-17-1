@@ -647,9 +647,9 @@ def delete_project(id: str):
         (id,),
     ).fetchone()
 
-    # --- GitHub-import path: project lives only in github_projects / project_analysis ---
+    # --- GitHub-import path: project lives only in projects (source='github') / project_analysis ---
     github_row = conn.execute(
-        "SELECT project_id FROM github_projects WHERE project_id = ?",
+        "SELECT project_id FROM projects WHERE project_id = ? AND source = 'github'",
         (id,),
     ).fetchone() if not upload_row else None
 
@@ -690,12 +690,11 @@ def delete_project(id: str):
     conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM error_analysis_results WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_metadata WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM contributor_stats WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM github_projects WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM projects WHERE project_id = ?", (id,))
     conn.commit()
 
     # Remove physical blob only when no other upload references it

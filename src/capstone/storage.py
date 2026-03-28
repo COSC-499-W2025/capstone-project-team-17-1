@@ -181,14 +181,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             updated_at TEXT
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS project_metadata (
-            project_id TEXT PRIMARY KEY,
-            start_date TEXT,
-            end_date TEXT,
-            status TEXT
-        )
-    """)
+    # project_metadata removed in M21 — superseded by projects.status / first_commit_at / last_commit_at
     conn.execute("""
         CREATE TABLE IF NOT EXISTS projects (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,6 +189,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             name            TEXT NOT NULL,
             source          TEXT NOT NULL DEFAULT 'zip',
             github_url      TEXT,
+            github_branch   TEXT,
             has_git         INTEGER NOT NULL DEFAULT 0,
             type            TEXT,
             status          TEXT NOT NULL DEFAULT 'ongoing',
@@ -258,15 +252,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS github_projects (
-            project_id TEXT PRIMARY KEY,
-            owner TEXT NOT NULL,
-            repo TEXT NOT NULL,
-            branch TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # github_projects removed in M21 — superseded by projects (source, github_url, github_branch)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS resumes (
             id TEXT PRIMARY KEY,
@@ -1028,18 +1014,57 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                       AND up.last_commit_at IS NOT NULL
                 )
         """)
-        # Migrate status from project_metadata
+        # Migrate status from project_metadata (table may already be gone after M21)
+        _pm_table_exists_m20 = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='project_metadata'"
+        ).fetchone()
+        if _pm_table_exists_m20:
+            conn.execute("""
+                UPDATE projects SET status = (
+                    SELECT COALESCE(pm.status, 'ongoing')
+                    FROM project_metadata pm
+                    WHERE pm.project_id = projects.project_id
+                )
+                WHERE EXISTS (
+                    SELECT 1 FROM project_metadata pm
+                    WHERE pm.project_id = projects.project_id
+                )
+            """)
+        conn.commit()
+
+    # M21: add github_branch to projects; migrate from github_projects; drop legacy tables
+    _proj_cols = {row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
+    if "github_branch" not in _proj_cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN github_branch TEXT")
+        conn.commit()
+
+    # Migrate branch + source/github_url from github_projects if it still exists
+    _gp_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='github_projects'"
+    ).fetchone()
+    if _gp_exists:
         conn.execute("""
-            UPDATE projects SET status = (
-                SELECT COALESCE(pm.status, 'ongoing')
-                FROM project_metadata pm
-                WHERE pm.project_id = projects.project_id
-            )
-            WHERE EXISTS (
-                SELECT 1 FROM project_metadata pm
-                WHERE pm.project_id = projects.project_id
-            )
+            UPDATE projects SET
+                github_branch = COALESCE(github_branch, (
+                    SELECT gp.branch FROM github_projects gp WHERE gp.project_id = projects.project_id
+                )),
+                source = CASE
+                    WHEN EXISTS (SELECT 1 FROM github_projects gp WHERE gp.project_id = projects.project_id)
+                    THEN 'github'
+                    ELSE source END,
+                github_url = COALESCE(github_url, (
+                    SELECT 'https://github.com/' || gp.owner || '/' || gp.repo
+                    FROM github_projects gp WHERE gp.project_id = projects.project_id
+                ))
         """)
+        conn.execute("DROP TABLE github_projects")
+        conn.commit()
+
+    _pm_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='project_metadata'"
+    ).fetchone()
+    if _pm_exists:
+        conn.execute("DROP TABLE project_metadata")
         conn.commit()
 
 
@@ -3032,33 +3057,27 @@ def bulk_upsert_contributors(
         link_user_to_project(conn, user_id, project_id, contributor_name=github_username)
 
 def save_project_metadata(conn, project_id, meta):
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO project_metadata
-        (project_id, start_date, end_date, status)
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            project_id,
-            meta["start_date"],
-            meta["end_date"],
-            meta["status"],
-        ),
+    """Save project timeline/status. Writes to projects table (project_metadata was removed in M21)."""
+    upsert_project(
+        conn,
+        project_id,
+        status=meta.get("status") or "ongoing",
+        first_commit_at=meta.get("start_date"),
+        last_commit_at=meta.get("end_date"),
     )
-    conn.commit()
 
 def load_project_metadata(conn):
-    cursor = conn.cursor()
-    cursor.execute("SELECT project_id, start_date, end_date, status FROM project_metadata")
-
+    """Load project timeline/status from projects table (project_metadata was removed in M21)."""
+    rows = conn.execute(
+        "SELECT project_id, first_commit_at, last_commit_at, status FROM projects"
+    ).fetchall()
     return {
         row[0]: {
             "start_date": row[1],
             "end_date": row[2],
             "status": row[3],
         }
-        for row in cursor.fetchall()
+        for row in rows
     }
 
 def upsert_project(
@@ -3068,6 +3087,7 @@ def upsert_project(
     name: str | None = None,
     source: str = "zip",
     github_url: str | None = None,
+    github_branch: str | None = None,
     has_git: bool = False,
     type: str | None = None,
     status: str = "ongoing",
@@ -3078,12 +3098,14 @@ def upsert_project(
     effective_name = name or project_id
     conn.execute(
         """
-        INSERT INTO projects (project_id, name, source, github_url, has_git,
+        INSERT INTO projects (project_id, name, source, github_url, github_branch, has_git,
                               type, status, first_commit_at, last_commit_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(project_id) DO UPDATE SET
             name            = COALESCE(excluded.name, name),
+            source          = CASE WHEN excluded.source != 'zip' THEN excluded.source ELSE source END,
             github_url      = COALESCE(excluded.github_url, github_url),
+            github_branch   = COALESCE(excluded.github_branch, github_branch),
             has_git         = MAX(excluded.has_git, has_git),
             type            = COALESCE(excluded.type, type),
             status          = excluded.status,
@@ -3091,7 +3113,7 @@ def upsert_project(
             last_commit_at  = COALESCE(excluded.last_commit_at, last_commit_at),
             updated_at      = CURRENT_TIMESTAMP
         """,
-        (project_id, effective_name, source, github_url, int(has_git),
+        (project_id, effective_name, source, github_url, github_branch, int(has_git),
          type, status, first_commit_at, last_commit_at),
     )
     conn.commit()
@@ -3101,7 +3123,7 @@ def get_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
     """Return a single project row as a dict, or None if not found."""
     row = conn.execute(
         """
-        SELECT id, project_id, name, source, github_url, has_git, type,
+        SELECT id, project_id, name, source, github_url, github_branch, has_git, type,
                status, first_commit_at, last_commit_at, created_at, updated_at
         FROM projects WHERE project_id = ?
         """,
@@ -3111,10 +3133,10 @@ def get_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
         return None
     return {
         "id": row[0], "project_id": row[1], "name": row[2],
-        "source": row[3], "github_url": row[4], "has_git": bool(row[5]),
-        "type": row[6], "status": row[7],
-        "first_commit_at": row[8], "last_commit_at": row[9],
-        "created_at": row[10], "updated_at": row[11],
+        "source": row[3], "github_url": row[4], "github_branch": row[5],
+        "has_git": bool(row[6]), "type": row[7], "status": row[8],
+        "first_commit_at": row[9], "last_commit_at": row[10],
+        "created_at": row[11], "updated_at": row[12],
     }
 
 

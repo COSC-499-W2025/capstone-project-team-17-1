@@ -47,13 +47,13 @@ SELECT
     pa.classification,
     pa.primary_contributor,
     CASE
-        WHEN gp.project_id IS NOT NULL THEN 1
+        WHEN p.source = 'github' THEN 1
         ELSE 0
     END AS is_github,
     COALESCE(uc.cnt, 0) AS contributor_count
 FROM project_analysis pa
-LEFT JOIN github_projects gp
-    ON pa.project_id = gp.project_id
+LEFT JOIN projects p
+    ON pa.project_id = p.project_id
 LEFT JOIN (
     SELECT project_id, COUNT(DISTINCT user_id) AS cnt
     FROM user_projects
