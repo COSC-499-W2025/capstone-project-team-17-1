@@ -1,6 +1,5 @@
 # Shuyu Yan– Project Log  46070686
-- [Milestone 3 - Week 12 [Mar23 -Mar29, 2026]](Term2-week12-personal-LOG)
-
+- [Milestone 3 - Week 12 (Mar 23 - Mar 29, 2026)](#term2-week12-personal-log-mar23--mar29-2026)
 
 ## Week3 Personal Log [Sept 15 – Sept 21, 2025]
 ## Table of Contents
