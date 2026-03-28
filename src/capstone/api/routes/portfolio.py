@@ -555,6 +555,85 @@ def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional
 
     return None, None
 
+# helper to build data for case study theme
+def _build_case_study_abstract(project_id: str, snapshot: dict[str, Any]) -> str:
+    existing = _extract_summary(snapshot)
+    if existing:
+        return existing.strip()
+
+    title = _extract_title(project_id, snapshot)
+    technologies = _extract_technologies(snapshot)[:4]
+    highlights = _extract_highlights(snapshot)[:2]
+
+    tech_text = ", ".join(technologies)
+    highlight_text = " ".join(highlights)
+
+    if tech_text and highlight_text:
+        return f"{title} is a project built with {tech_text}. {highlight_text}"
+
+    if tech_text:
+        return f"{title} is a project built with {tech_text} to deliver its core functionality."
+
+    return f"{title} is a software project focused on delivering its main use case."
+
+# helper to build data for portfolio templates
+def _build_template_payload(
+    project_id: str,
+    snapshot: dict[str, Any],
+    customization: dict[str, Any],
+    images: list[dict[str, Any]],
+) -> dict[str, Any]:
+    resolved = {
+        "key_role": str(customization.get("key_role") or ""),
+        "evidence_of_success": str(customization.get("evidence_of_success") or ""),
+        "portfolio_blurb": str(customization.get("portfolio_blurb") or ""),
+    }
+
+    default_role = str(snapshot.get("project_role") or infer_project_role_from_snapshot(snapshot))
+    role = resolved["key_role"] or default_role
+    blurb = resolved["portfolio_blurb"] or _build_portfolio_blurb(project_id, snapshot, role)
+    evidence = resolved["evidence_of_success"] or " • ".join(_collect_portfolio_evidence_lines(snapshot, limit=4))
+
+    cover_image = next((img for img in images if img.get("is_cover")), None)
+    if not cover_image and images:
+        cover_image = images[0]
+
+    metrics = []
+    file_summary = snapshot.get("file_summary") or {}
+    if isinstance(file_summary, dict):
+        if file_summary.get("file_count"):
+            metrics.append({"label": "Files", "value": file_summary.get("file_count")})
+        if file_summary.get("active_days"):
+            metrics.append({"label": "Active Days", "value": file_summary.get("active_days")})
+        if file_summary.get("total_bytes"):
+            metrics.append({"label": "Bytes", "value": file_summary.get("total_bytes")})
+
+    return {
+        "classic": {
+            "title": _extract_title(project_id, snapshot),
+            "summary": blurb,
+            "role": role,
+            "evidence": evidence,
+            "cover_image": cover_image,
+            "stack": _extract_technologies(snapshot)[:6],
+        },
+        "gallery": {
+            "title": _extract_title(project_id, snapshot),
+            "headline": blurb,
+            "cover_image": cover_image,
+            "images": images[:8],
+        },
+        "case_study": {
+            "title": _extract_title(project_id, snapshot),
+            "abstract": _build_case_study_abstract(project_id, snapshot),
+            "role": role,
+            "evidence": _collect_portfolio_evidence_lines(snapshot, limit=4),
+            "metrics": metrics,
+            "stack": _extract_technologies(snapshot)[:6],
+            "cover_image": cover_image,
+        },
+    }
+
 
 @router.post("/generate")
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
@@ -958,6 +1037,11 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
     if isinstance(snapshot, dict):
         payload["title"] = _extract_title(id, snapshot)
         payload["summary"] = _extract_summary(snapshot)
+        payload["template_payload"] = (
+            _build_template_payload(id, snapshot, customization, images)
+            if isinstance(snapshot, dict)
+                else {}
+)
         
     return {"data": payload, "error": None}
 
