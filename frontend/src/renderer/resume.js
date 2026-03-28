@@ -407,7 +407,7 @@ async function openNewResumeModal() {
                 ${p.project_id}
                 <span class="project-classification-badge ${badgeClass}" style="margin-left:6px">${badgeLabel}</span>
               </span>
-              <span class="resume-modal-item-meta">${p.total_files} files · ${p.total_skills} skills</span>
+              <span class="resume-modal-item-meta">${p.total_skills} skills</span>
             </span>
           </label>
         `;

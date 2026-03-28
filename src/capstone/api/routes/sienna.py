@@ -274,6 +274,12 @@ def _safe_json_load(value: str | None) -> dict[str, Any]:
 
 
 def _resolve_file_id(conn: sqlite3.Connection, project_id: str, snapshot: dict[str, Any]) -> str | None:
+    archive_file_id = snapshot.get("archive_file_id")
+    if archive_file_id:
+        file_row = conn.execute("SELECT file_id FROM files WHERE file_id = ? LIMIT 1", (archive_file_id,)).fetchone()
+        if file_row:
+            return file_row[0]
+
     upload_row = conn.execute(
         """
         SELECT u.file_id
@@ -286,12 +292,6 @@ def _resolve_file_id(conn: sqlite3.Connection, project_id: str, snapshot: dict[s
     ).fetchone()
     if upload_row:
         return upload_row[0]
-
-    archive_file_id = snapshot.get("archive_file_id")
-    if archive_file_id:
-        file_row = conn.execute("SELECT file_id FROM files WHERE file_id = ? LIMIT 1", (archive_file_id,)).fetchone()
-        if file_row:
-            return file_row[0]
     return None
 
 
@@ -638,6 +638,8 @@ def list_sienna_projects(request: Request):
         else:
             total_skills = 0
         total_files = int(file_summary.get("file_count") or snapshot.get("file_count") or 0)
+        if total_files <= 0 and total_skills <= 0:
+            continue
         projects.append(
             SiennaProject(
                 project_id=project_id,
