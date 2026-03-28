@@ -69,8 +69,25 @@ def _check_auth(request: Request) -> None:
 
 def _bind_current_user_from_session(request: Request) -> None:
     username = get_authenticated_username(request)
-    if username:
-        storage_module.CURRENT_USER = username
+    storage_module.set_current_user(username)
+
+
+def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
+    with _db_session(db_dir) as c:
+        return fetch_latest_snapshots_with_zip(c) or []
+
+
+def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
+    rows = _load_heatmap_rows(db_dir)
+    if rows:
+        return rows
+
+    previous_user = storage_module.get_current_user()
+    try:
+        storage_module.set_current_user(None)
+        return _load_heatmap_rows(db_dir)
+    finally:
+        storage_module.set_current_user(previous_user)
 
 
 class PortfolioProject(BaseModel):
@@ -743,85 +760,74 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
         if not db_dir:
             raise HTTPException(status_code=500, detail="Database not configured")
 
-        with _db_session(db_dir) as c:
-            rows = fetch_latest_snapshots_with_zip(c) or []
+        granularity = _normalize_heatmap_granularity(request.query_params.get("granularity"))
+        selected_project_id = str(request.query_params.get("project_id") or "").strip()
+        rows = _load_heatmap_rows(db_dir)
+        data = _build_heatmap_response(rows, granularity, selected_project_id)
 
-        daily_counts: dict[str, int] = {}
-        project_count = 0
-
-        for row in rows:
-            project_id = str(row.get("project_id") or "").strip()
-            snapshot = row.get("snapshot") or {}
-            zip_path = row.get("zip_path")
-
-            if not project_id or not isinstance(snapshot, dict):
-                continue
-
-            file_summary = snapshot.get("file_summary") or {}
-            monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
-            activity_by_day = {}
-            if isinstance(file_summary, dict):
-                activity_by_day = file_summary.get("daily_timeline") or {}
-
-            if not isinstance(activity_by_day, dict) or not activity_by_day:
-                activity_by_day = _build_daily_activity_from_zip_path(zip_path)
-
-            if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
-                activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
-
-            if not isinstance(activity_by_day, dict):
-                continue
-
-            project_count += 1
-
-            for period, count in activity_by_day.items():
-                key = str(period).strip()
-                if not key:
-                    continue
-                daily_counts[key] = daily_counts.get(key, 0) + _safe_int(count)
-
-        if not daily_counts:
-            return {
-                "data": {
-                    "cells": [],
-                    "maxCount": 0,
-                    "projectCount": project_count,
-                    "granularity": "day",
-                },
-                "error": None,
-            }
-
-        ordered_periods = sorted(daily_counts.items(), key=lambda item: item[0])
-        max_count = max(daily_counts.values()) if daily_counts else 0
-
-        cells = []
-        for period, count in ordered_periods:
-            intensity = 0.0
-            if max_count > 0:
-                intensity = round(count / max_count, 3)
-
-            cells.append(
-                {
-                    "period": period,
-                    "count": count,
-                    "intensity": intensity,
-                }
-            )
+        if not data["cells"] and get_authenticated_username(request):
+            guest_rows = _load_heatmap_rows_with_guest_fallback(db_dir)
+            guest_data = _build_heatmap_response(guest_rows, granularity, selected_project_id)
+            if guest_data["cells"]:
+                data = guest_data
 
         log_event(
             "SUCCESS",
-            f"Portfolio activity heatmap generated · Days: {len(cells)} · Projects: {project_count}",
+            "Portfolio activity heatmap generated"
+            f" · Granularity: {granularity}"
+            f" · Cells: {len(data['cells'])}"
+            f" · Projects: {data['projectCount']}"
+            + (f" · Selected Project: {selected_project_id}" if selected_project_id else ""),
         )
 
         return {
-            "data": {
-                "cells": cells,
-                "maxCount": max_count,
-                "projectCount": project_count,
-                "granularity": "day",
-            },
+            "data": data,
             "error": None,
         }
+
+    except Exception as exc:
+        return {
+            "data": None,
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        }
+
+
+@router.get("/project-evolution")
+def portfolio_project_evolution(
+    request: Request,
+    project_ids: str = "",
+    limit: int = 6,
+) -> dict[str, Any]:
+    try:
+        _check_auth(request)
+        _bind_current_user_from_session(request)
+
+        db_dir = _resolve_db_dir(request)
+        if not db_dir:
+            raise HTTPException(status_code=500, detail="Database not configured")
+
+        cleaned_ids = [
+            str(project_id).strip()
+            for project_id in str(project_ids or "").split(",")
+            if str(project_id).strip()
+        ][:10]
+
+        if not cleaned_ids:
+            return {"data": {}, "error": None}
+
+        payload: dict[str, Any] = {}
+        with _db_session(db_dir) as c:
+            for project_id in cleaned_ids:
+                history = fetch_project_snapshot_history(c, project_id, limit=max(1, min(int(limit), 12)))
+                payload[project_id] = {
+                    "projectId": project_id,
+                    "steps": _build_project_evolution_steps(history),
+                    "snapshotCount": len(history),
+                }
+
+        log_event("SUCCESS", f"Portfolio project evolution generated · Projects: {len(payload)}")
+        return {"data": payload, "error": None}
 
     except Exception as exc:
         return {
