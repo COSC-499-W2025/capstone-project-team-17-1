@@ -5,7 +5,6 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
-import { authFetch, hasAuthToken } from "./auth.js";
 async function checkGithubAuth() {
     const res = await fetch("http://127.0.0.1:8002/github/auth-status")
     const data = await res.json()
@@ -106,9 +105,9 @@ async function initGithubSection() {
 
     // Cloud sync is a follow-up step. If it fails, keep the import successful locally.
     try {
-      if (hasAuthToken()) {
-        await authFetch("/cloud/db/upload", { method: "POST" });
-      }
+      await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+        method: "POST"
+      });
     } catch (syncError) {
       console.warn("Cloud sync after GitHub import failed:", syncError);
     }
@@ -130,7 +129,7 @@ async function initGithubSection() {
   } catch (e) {
     console.error("GitHub import failed:", e);
     closeProgressModal();
-    alert(`GitHub import failed: ${e.message || e}`);
+    alert("GitHub import failed.");
   }
 
 }

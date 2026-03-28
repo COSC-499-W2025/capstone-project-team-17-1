@@ -2,9 +2,7 @@ from fastapi import APIRouter
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
-import sqlite3
 from capstone.portfolio_retrieval import _db_session
-from capstone.activity_log import log_event
 
 router = APIRouter()
 
@@ -21,20 +19,6 @@ class RecentProject(BaseModel):
 
 
 import json
-
-
-def _load_upload_ids(db) -> set[str]:
-    try:
-        return {
-            str(row[0]).strip()
-            for row in db.execute("SELECT DISTINCT upload_id FROM uploads").fetchall()
-            if str(row[0]).strip()
-        }
-    except sqlite3.OperationalError as exc:
-        if "no such table" in str(exc).lower() and "uploads" in str(exc).lower():
-            log_event("WARNING", "Recent projects loaded without uploads table; falling back to snapshot-only filtering")
-            return set()
-        raise
 
 @router.get("/dashboard/recent-projects", response_model=List[RecentProject])
 def get_recent_projects():
@@ -67,8 +51,6 @@ WHERE pa.rowid IN (
 ORDER BY pa.created_at DESC
 """).fetchall()
 
-        upload_ids = _load_upload_ids(db)
-
     projects = []
 
     for row in rows:
@@ -80,36 +62,11 @@ ORDER BY pa.created_at DESC
         is_github = bool(row[5])
         contributor_count = int(row[6])
 
-        try:
-            snapshot = json.loads(snapshot_raw)
-        except Exception:
-            log_event("WARNING", f"Skipping invalid project snapshot in recent projects · Project: {project_id}")
-            continue
-
-        normalized_project_id = str(project_id or "").strip()
-        snapshot_project_id = str(snapshot.get("project_id") or snapshot.get("id") or "").strip()
-        file_summary = snapshot.get("file_summary")
-        has_file_summary = isinstance(file_summary, dict) and any(
-            file_summary.get(key) not in (None, "", 0)
-            for key in ("file_count", "active_days", "language_count", "total_lines")
-        )
-        raw_skills = snapshot.get("skills")
-        has_skills = (
-            isinstance(raw_skills, list) and len(raw_skills) > 0
-        ) or (
-            isinstance(raw_skills, dict) and len(raw_skills.keys()) > 0
-        )
-
-        # Filter out placeholder / broken recent-project entries that only have a bare
-        # ID snapshot and no corresponding uploaded project in the current workspace.
-        if normalized_project_id not in upload_ids and not has_file_summary and not has_skills:
-            log_event(
-                "WARNING",
-                f"Skipping incomplete project snapshot in recent projects · Project: {normalized_project_id or snapshot_project_id or 'unknown'}",
-            )
-            continue
+        snapshot = json.loads(snapshot_raw)
 
         # --- FILE COUNT ---
+        file_summary = snapshot.get("file_summary")
+
         if isinstance(file_summary, dict):
             total_files = file_summary.get("file_count", 0)
         else:

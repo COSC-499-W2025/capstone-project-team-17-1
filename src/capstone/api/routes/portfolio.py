@@ -34,12 +34,7 @@ from capstone.api.portfolio_helpers import (
     set_cover_portfolio_image,
     reorder_portfolio_images,
     upsert_portfolio_customization,
-    get_latest_snapshot as helper_get_latest_snapshot)
-from capstone.storage import (
-    fetch_latest_snapshot,
-    fetch_latest_snapshots,
-    fetch_latest_snapshots_with_zip,
-    fetch_project_snapshot_history,
+    get_latest_snapshot as helper_get_latest_snapshot,
 )
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -74,8 +69,7 @@ def _check_auth(request: Request) -> None:
 
 def _bind_current_user_from_session(request: Request) -> None:
     username = get_authenticated_username(request)
-    if username:
-        storage_module.CURRENT_USER = username
+    storage_module.set_current_user(username)
 
 
 def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
@@ -88,12 +82,12 @@ def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
     if rows:
         return rows
 
-    previous_user = storage_module.CURRENT_USER
+    previous_user = storage_module.get_current_user()
     try:
-        storage_module.CURRENT_USER = None
+        storage_module.set_current_user(None)
         return _load_heatmap_rows(db_dir)
     finally:
-        storage_module.CURRENT_USER = previous_user
+        storage_module.set_current_user(previous_user)
 
 
 class PortfolioProject(BaseModel):
@@ -452,147 +446,6 @@ def _default_portfolio_summary() -> dict[str, Any]:
     }
 
 
-def _snapshot_file_count(snapshot: dict[str, Any]) -> int:
-    file_summary = snapshot.get("file_summary")
-    if isinstance(file_summary, dict):
-        return _safe_int(file_summary.get("file_count"))
-    return _safe_int(snapshot.get("file_count"))
-
-
-def _snapshot_active_days(snapshot: dict[str, Any]) -> int:
-    file_summary = snapshot.get("file_summary")
-    if isinstance(file_summary, dict):
-        return _safe_int(file_summary.get("active_days"))
-    return 0
-
-
-def _snapshot_skill_names(snapshot: dict[str, Any]) -> list[str]:
-    return _extract_skill_names(snapshot.get("skills")) or _extract_technologies(snapshot)
-
-
-def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    ordered = list(reversed(history))
-    milestones: list[dict[str, Any]] = []
-    previous_skills: set[str] = set()
-    previous_file_count = 0
-    previous_active_days = 0
-
-    for index, item in enumerate(ordered):
-        snapshot = item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {}
-        created_at = str(item.get("created_at") or "").strip()
-        summary = _extract_summary(snapshot) or ""
-        file_count = _snapshot_file_count(snapshot)
-        active_days = _snapshot_active_days(snapshot)
-        skills = _snapshot_skill_names(snapshot)
-        skill_set = {skill.lower(): skill for skill in skills}
-        new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
-        file_delta = file_count - previous_file_count if index > 0 else file_count
-        skill_delta = len(skills) - len(previous_skills) if index > 0 else len(skills)
-        active_days_delta = active_days - previous_active_days if index > 0 else active_days
-
-        if index == 0:
-            milestone_type = "Baseline"
-        elif index == len(ordered) - 1:
-            milestone_type = "Current State"
-        elif file_delta >= 5 or skill_delta >= 2:
-            milestone_type = "Expansion"
-        elif active_days_delta > 0 or new_skills:
-            milestone_type = "Refinement"
-        else:
-            milestone_type = f"Iteration {index + 1}"
-
-        change_summary_parts: list[str] = []
-        if file_delta > 0:
-            change_summary_parts.append(f"Added {file_delta} file{'s' if file_delta != 1 else ''}")
-        elif file_delta < 0:
-            change_summary_parts.append(f"Reduced file scope by {abs(file_delta)}")
-
-        if skill_delta > 0:
-            change_summary_parts.append(f"Expanded into {skill_delta} more skill signal{'s' if skill_delta != 1 else ''}")
-        elif skill_delta < 0:
-            change_summary_parts.append(f"Focused down by {abs(skill_delta)} skill signal{'s' if skill_delta != 1 else ''}")
-
-        if active_days_delta > 0:
-            change_summary_parts.append(f"Increased active span by {active_days_delta} day{'s' if active_days_delta != 1 else ''}")
-
-        if new_skills:
-            change_summary_parts.append(f"Introduced {', '.join(new_skills[:3])}")
-
-        if not change_summary_parts:
-            change_summary_parts.append("Maintained the implementation baseline")
-
-        milestones.append(
-            {
-                "label": milestone_type,
-                "timestamp": created_at,
-                "summary": summary,
-                "changeSummary": ". ".join(change_summary_parts) + ".",
-                "metrics": {
-                    "files": file_count,
-                    "skills": len(skills),
-                    "active_days": active_days,
-                },
-                "delta": {
-                    "files": file_delta,
-                    "skills": skill_delta,
-                    "active_days": active_days_delta,
-                },
-                "new_skills": new_skills,
-                "highlights": _extract_highlights(snapshot)[:3],
-            }
-        )
-
-        previous_skills = set(skill_set.keys())
-        previous_file_count = file_count
-        previous_active_days = active_days
-
-    return milestones
-
-
-def _load_export_projects(portfolio_id: str, db_dir: str) -> list[PortfolioProject]:
-    with _db_session(db_dir) as c:
-        if portfolio_id == "latest":
-            rows = fetch_latest_snapshots(c) or []
-            projects: list[PortfolioProject] = []
-
-            for row in rows:
-                project_id = row.get("project_id")
-                snapshot = row.get("snapshot")
-                if project_id and isinstance(snapshot, dict):
-                    projects.append(_project_from_snapshot(str(project_id), snapshot))
-
-            return projects
-
-        snapshot = fetch_latest_snapshot(c, portfolio_id)
-        if not snapshot or not isinstance(snapshot, dict):
-            return []
-
-        return [_project_from_snapshot(portfolio_id, snapshot)]
-
-def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional[dict[str, Any]]]:
-    """
-    Normalize rows returned by fetch_latest_snapshots().
-
-    Supports:
-    - dict-like rows with keys: project_id, snapshot
-    - tuple/list rows like: (project_id, snapshot, ...)
-    """
-    project_id: Optional[str] = None
-    snapshot: Optional[dict[str, Any]] = None
-
-    if isinstance(row, dict):
-        raw_project_id = row.get("project_id")
-        raw_snapshot = row.get("snapshot")
-
-        if raw_project_id is not None:
-            project_id = str(raw_project_id)
-
-        if isinstance(raw_snapshot, dict):
-            snapshot = raw_snapshot
-
-    return project_id, snapshot
-
-
 def _build_file_summary_from_zip_path(zip_path: str | None) -> dict[str, Any]:
     if not zip_path:
         return {}
@@ -707,120 +560,6 @@ def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional
             snapshot = raw_snapshot
 
         return project_id, snapshot
-def _normalize_heatmap_granularity(value: Any) -> str:
-    raw = str(value or "day").strip().lower()
-    if raw in {"year", "month", "day"}:
-        return raw
-    return "day"
-
-
-def _build_heatmap_period_key(period: str, granularity: str) -> Optional[str]:
-    raw = str(period or "").strip()
-    if granularity == "day":
-        if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
-            return raw
-        return None
-    if granularity == "month":
-        if len(raw) >= 7 and raw[4] == "-":
-            return raw[:7]
-        return None
-    if granularity == "year":
-        if len(raw) >= 4:
-            return raw[:4]
-        return None
-    return None
-
-
-def _collect_heatmap_project_activity(row: dict[str, Any]) -> dict[str, int]:
-    snapshot = row.get("snapshot") or {}
-    zip_path = row.get("zip_path")
-
-    if not isinstance(snapshot, dict):
-        return {}
-
-    file_summary = snapshot.get("file_summary") or {}
-    monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
-    activity_by_day = {}
-    if isinstance(file_summary, dict):
-        activity_by_day = file_summary.get("daily_timeline") or {}
-
-    if not isinstance(activity_by_day, dict) or not activity_by_day:
-        activity_by_day = _build_daily_activity_from_zip_path(zip_path)
-
-    if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
-        activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
-
-    if not isinstance(activity_by_day, dict):
-        return {}
-
-    return activity_by_day
-
-
-def _build_heatmap_response(
-    rows: list[dict[str, Any]],
-    granularity: str,
-    selected_project_id: str,
-) -> dict[str, Any]:
-    activity_counts: dict[str, int] = {}
-    available_projects: list[str] = []
-    contributing_projects: set[str] = set()
-
-    for row in rows:
-        project_id = str(row.get("project_id") or "").strip()
-        if not project_id:
-            continue
-
-        available_projects.append(project_id)
-
-        if selected_project_id and project_id != selected_project_id:
-            continue
-
-        activity_by_day = _collect_heatmap_project_activity(row)
-        if not activity_by_day:
-            continue
-
-        contributing_projects.add(project_id)
-
-        for period, count in activity_by_day.items():
-            key = _build_heatmap_period_key(str(period), granularity)
-            if not key:
-                continue
-            activity_counts[key] = activity_counts.get(key, 0) + _safe_int(count)
-
-    project_ids = sorted(set(available_projects))
-
-    if not activity_counts:
-        return {
-            "cells": [],
-            "maxCount": 0,
-            "projectCount": len(contributing_projects),
-            "granularity": granularity,
-            "selectedProjectId": selected_project_id,
-            "projects": project_ids,
-        }
-
-    ordered_periods = sorted(activity_counts.items(), key=lambda item: item[0])
-    max_count = max(activity_counts.values()) if activity_counts else 0
-    cells = []
-
-    for period, count in ordered_periods:
-        intensity = round(count / max_count, 3) if max_count > 0 else 0.0
-        cells.append(
-            {
-                "period": period,
-                "count": count,
-                "intensity": intensity,
-            }
-        )
-
-    return {
-        "cells": cells,
-        "maxCount": max_count,
-        "projectCount": len(contributing_projects),
-        "granularity": granularity,
-        "selectedProjectId": selected_project_id,
-        "projects": project_ids,
-    }
 
     if isinstance(row, (tuple, list)):
         if len(row) >= 1 and row[0] is not None:
@@ -832,85 +571,6 @@ def _build_heatmap_response(
         return project_id, snapshot
 
     return None, None
-
-# helper to build data for case study theme
-def _build_case_study_abstract(project_id: str, snapshot: dict[str, Any]) -> str:
-    existing = _extract_summary(snapshot)
-    if existing:
-        return existing.strip()
-
-    title = _extract_title(project_id, snapshot)
-    technologies = _extract_technologies(snapshot)[:4]
-    highlights = _extract_highlights(snapshot)[:2]
-
-    tech_text = ", ".join(technologies)
-    highlight_text = " ".join(highlights)
-
-    if tech_text and highlight_text:
-        return f"{title} is a project built with {tech_text}. {highlight_text}"
-
-    if tech_text:
-        return f"{title} is a project built with {tech_text} to deliver its core functionality."
-
-    return f"{title} is a software project focused on delivering its main use case."
-
-# helper to build data for portfolio templates
-def _build_template_payload(
-    project_id: str,
-    snapshot: dict[str, Any],
-    customization: dict[str, Any],
-    images: list[dict[str, Any]],
-) -> dict[str, Any]:
-    resolved = {
-        "key_role": str(customization.get("key_role") or ""),
-        "evidence_of_success": str(customization.get("evidence_of_success") or ""),
-        "portfolio_blurb": str(customization.get("portfolio_blurb") or ""),
-    }
-
-    default_role = str(snapshot.get("project_role") or infer_project_role_from_snapshot(snapshot))
-    role = resolved["key_role"] or default_role
-    blurb = resolved["portfolio_blurb"] or _build_portfolio_blurb(project_id, snapshot, role)
-    evidence = resolved["evidence_of_success"] or " • ".join(_collect_portfolio_evidence_lines(snapshot, limit=4))
-
-    cover_image = next((img for img in images if img.get("is_cover")), None)
-    if not cover_image and images:
-        cover_image = images[0]
-
-    metrics = []
-    file_summary = snapshot.get("file_summary") or {}
-    if isinstance(file_summary, dict):
-        if file_summary.get("file_count"):
-            metrics.append({"label": "Files", "value": file_summary.get("file_count")})
-        if file_summary.get("active_days"):
-            metrics.append({"label": "Active Days", "value": file_summary.get("active_days")})
-        if file_summary.get("total_bytes"):
-            metrics.append({"label": "Bytes", "value": file_summary.get("total_bytes")})
-
-    return {
-        "classic": {
-            "title": _extract_title(project_id, snapshot),
-            "summary": blurb,
-            "role": role,
-            "evidence": evidence,
-            "cover_image": cover_image,
-            "stack": _extract_technologies(snapshot)[:6],
-        },
-        "gallery": {
-            "title": _extract_title(project_id, snapshot),
-            "headline": blurb,
-            "cover_image": cover_image,
-            "images": images[:8],
-        },
-        "case_study": {
-            "title": _extract_title(project_id, snapshot),
-            "abstract": _build_case_study_abstract(project_id, snapshot),
-            "role": role,
-            "evidence": _collect_portfolio_evidence_lines(snapshot, limit=4),
-            "metrics": metrics,
-            "stack": _extract_technologies(snapshot)[:6],
-            "cover_image": cover_image,
-        },
-    }
 
 
 @router.post("/generate")
@@ -1304,11 +964,6 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
     if isinstance(snapshot, dict):
         payload["title"] = _extract_title(id, snapshot)
         payload["summary"] = _extract_summary(snapshot)
-        payload["template_payload"] = (
-            _build_template_payload(id, snapshot, customization, images)
-            if isinstance(snapshot, dict)
-                else {}
-)
         
     return {"data": payload, "error": None}
 

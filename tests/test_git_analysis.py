@@ -41,17 +41,10 @@ class RepositoryAnalysisTests(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.repo_dir = Path(self._tmpdir.name) / "repo"
         self.repo_dir.mkdir()
-        self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
-        storage.BASE_DIR = Path(self._tmpdir.name)
-        storage.CURRENT_USER = None
         self.addCleanup(self._tmpdir.cleanup)
 
     def tearDown(self) -> None:
         storage.close_db()
-        storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
 
     def test_analyze_repository_persists_snapshot(self) -> None:
         db_dir = Path(self._tmpdir.name) / "db"

@@ -413,29 +413,3 @@ def reorder_portfolio_images(
 
     conn.commit()
     return list_portfolio_images(conn, project_id)
-
-def update_portfolio_image_caption(
-    conn: sqlite3.Connection,
-    *,
-    project_id: str,
-    image_id: str,
-    caption: str,
-) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM portfolio_images WHERE id = ? AND project_id = ?",
-        (image_id, project_id),
-    ).fetchone()
-
-    if not row:
-        return False
-
-    conn.execute(
-        """
-        UPDATE portfolio_images
-        SET caption = ?
-        WHERE id = ? AND project_id = ?
-        """,
-        (caption or "", image_id, project_id),
-    )
-    conn.commit()
-    return True

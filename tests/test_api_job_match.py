@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import patch
-from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from capstone.api.server import app
@@ -76,46 +75,14 @@ class TestJobMatchEndpoints(unittest.TestCase):
 
         # Return 3 ranked matches; endpoint should slice to top_k BEFORE json conversion
         fake_matches = [
-            SimpleNamespace(
-                project_id="p1",
-                score=0.9,
-                required_coverage=1.0,
-                preferred_coverage=1.0,
-                keyword_overlap=1.0,
-                recency_factor=1.0,
-                matched_required=["python"],
-                matched_preferred=["docker"],
-                matched_keywords=["python", "docker"],
-            ),
-            SimpleNamespace(
-                project_id="p2",
-                score=0.8,
-                required_coverage=0.9,
-                preferred_coverage=0.8,
-                keyword_overlap=0.8,
-                recency_factor=0.9,
-                matched_required=["python"],
-                matched_preferred=["docker"],
-                matched_keywords=["python"],
-            ),
-            SimpleNamespace(
-                project_id="p3",
-                score=0.7,
-                required_coverage=0.7,
-                preferred_coverage=0.6,
-                keyword_overlap=0.6,
-                recency_factor=0.8,
-                matched_required=["python"],
-                matched_preferred=[],
-                matched_keywords=["python"],
-            ),
+            {"project_id": "p1", "score": 0.9},
+            {"project_id": "p2", "score": 0.8},
+            {"project_id": "p3", "score": 0.7},
         ]
         mock_rank.return_value = fake_matches
 
         # Make matches_to_json predictable so we can assert length easily
-        mock_matches_to_json.side_effect = lambda matches: {
-            "matches": [{"project_id": match.project_id, "score": match.score} for match in matches]
-        }
+        mock_matches_to_json.side_effect = lambda matches: {"matches": matches}
 
         # Request top_k=2
         response = client.post(

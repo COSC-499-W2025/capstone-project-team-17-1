@@ -231,6 +231,54 @@ ipcMain.on("maximize", (event) => {
   }
 });
 
+ipcMain.handle("ai:chat", async (_event, messages) => {
+  const lastMessage = messages?.[messages.length - 1]?.content?.trim() || "";
+  const lower = lastMessage.toLowerCase();
+
+  if (!lastMessage) {
+    return { reply: "Please type a message." };
+  }
+
+  if (lower.includes("resume")) {
+    return {
+      reply:
+        "For your resume, focus on impact. Start bullets with action verbs, include numbers, and keep each bullet outcome-focused."
+    };
+  }
+
+  if (lower.includes("portfolio")) {
+    return {
+      reply:
+        "Your portfolio should highlight your best 2–3 projects, your exact role, the tech stack, and what problem you solved."
+    };
+  }
+
+  if (lower.includes("project")) {
+    return {
+      reply:
+        "A strong project summary includes: problem, approach, stack, challenges, and measurable result."
+    };
+  }
+
+  if (lower.includes("job")) {
+    return {
+      reply:
+        "For job matching, compare role requirements against your projects, skills, and keywords from the posting."
+    };
+  }
+
+  if (lower.includes("hello") || lower.includes("hey") || lower.includes("hi")) {
+    return {
+      reply:
+        "Hey — I’m Loom Copilot. Ask me about your resume, portfolio, projects, or jobs."
+    };
+  }
+
+  return {
+    reply:
+      "I’m running in demo mode right now. The chatbot flow works, and a real AI model can be plugged in later."
+  };
+});
 app.whenReady().then(() => {
   startAPI();
   createWindow();

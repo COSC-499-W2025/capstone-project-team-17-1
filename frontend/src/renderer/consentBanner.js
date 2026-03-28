@@ -10,7 +10,6 @@ const CONSENT_COPY = {
   external:
     "External AI consent allows Loom to send selected project metadata or user-approved files to external AI services for optional insights.",
 };
-let pendingConsentSettingsMessage = "";
 
 function getBanner() {
   return document.getElementById("consent-banner");
@@ -79,14 +78,6 @@ function setConsentSummary(state) {
   summary.textContent = formatConsentSummary(state);
 }
 
-export function setConsentSettingsMessage(message = "") {
-  // Keep the latest message 
-  pendingConsentSettingsMessage = message;
-  const msg = document.getElementById("consent-settings-msg");
-  if (!msg) return;
-  msg.textContent = message;
-}
-
 function renderSettingsConsent(state) {
   // Settings acts as the long-term place
   const container = document.getElementById("settings-consent");
@@ -131,7 +122,6 @@ function renderSettingsConsent(state) {
   `;
 
   setConsentSummary(state);
-  setConsentSettingsMessage(pendingConsentSettingsMessage);
 
   document.getElementById("consent-toggle-local")?.addEventListener("click", async () => {
     await handleConsentToggle("/privacy-consent/local", !state.local_consent);
@@ -215,14 +205,15 @@ export async function refreshConsentUI() {
 }
 
 async function handleConsentToggle(path, granted) {
-  setConsentSettingsMessage("Saving...");
+  const msg = document.getElementById("consent-settings-msg");
+  if (msg) msg.textContent = "Saving...";
 
   try {
     await saveConsent(path, granted);
-    setConsentSettingsMessage(granted ? "Consent granted." : "Consent revoked.");
+    if (msg) msg.textContent = granted ? "Consent granted." : "Consent revoked.";
     await refreshConsentUI();
   } catch (_) {
-    setConsentSettingsMessage("Failed to update consent.");
+    if (msg) msg.textContent = "Failed to update consent.";
   }
 }
 
