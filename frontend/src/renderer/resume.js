@@ -39,7 +39,7 @@ async function generateResume(projectIds, title, contributorId) {
   // Only pass user_id when user explicitly chose a contributor (collaborative project)
   if (contributorId) body.user_id = Number(contributorId);
 
-  const res = await authFetch("/resumes/generate", {
+  const res = await authFetch("/resumes/auto-generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

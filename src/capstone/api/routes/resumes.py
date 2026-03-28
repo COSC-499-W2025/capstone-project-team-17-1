@@ -21,7 +21,7 @@ import capstone.storage as storage
 # Helpers — convert new resume structure to formats expected by PDF builder
 # ---------------------------------------------------------------------------
 
-def _resume_to_pdf_payload(resume: dict) -> dict:
+def _resume_to_latex_payload(resume: dict) -> dict:
     """
     Map fetch_resume() output → dict accepted by build_pdf_with_latex / _extract_template_fields.
     - Renames section 'key' → 'name', normalising singular→plural where the PDF builder expects it
@@ -116,7 +116,7 @@ def _check_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
 
-def _require_db() -> Optional[str]:
+def _get_db_dir() -> Optional[str]:
     return _DB_DIR
 
 
@@ -131,7 +131,7 @@ async def _get_payload(request: Request) -> dict:
 # Resumes collection
 # ---------------------------------------------------------------------------
 
-def _resolve_data_contributor_id(conn) -> Optional[int]:
+def _get_current_user_contributor_id(conn) -> Optional[int]:
     """Find the contributors.id matching the logged-in user's github profile.
     Returns None when no linked contributor exists yet (no projects analysed).
     """
@@ -154,14 +154,14 @@ def _resolve_data_contributor_id(conn) -> Optional[int]:
 @router.get("")
 def list_resumes(request: Request, user_id: Optional[int] = None):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         # After M23 all resumes belong to user_id=1 (singleton user per DB)
         resumes = storage.fetch_resumes(conn, 1)
     return {"data": resumes, "meta": {"total": len(resumes)}, "error": None}
 
 
-@router.post("")
-async def create_resume(request: Request):
+@router.post("/blank")
+async def create_blank_resume(request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
     user_id = payload.get("user_id")
@@ -169,7 +169,7 @@ async def create_resume(request: Request):
         raise HTTPException(status_code=400, detail="user_id is required")
     title = str(payload.get("title") or "Default Resume").strip()
     target_role = payload.get("target_role")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         resume_id = storage.insert_resume(conn, int(user_id), title, target_role)
         resume = storage.fetch_resume(conn, resume_id)
     return JSONResponse({"data": resume, "error": None}, status_code=201)
@@ -197,8 +197,8 @@ async def render_pdf(request: Request):
     return {"data": {"format": "pdf", "payload": encoded}, "error": None}
 
 
-@router.post("/generate")
-async def generate_resume(request: Request):
+@router.post("/auto-generate")
+async def auto_generate_resume(request: Request):
     """Auto-generate (or refresh) a resume for a user from all their linked projects.
 
     Request body:
@@ -215,7 +215,7 @@ async def generate_resume(request: Request):
     resume_title = payload.get("resume_title") or None
     selected_project_ids = payload.get("project_ids") or None
 
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         from capstone.api.routes.auth import _SESSIONS, _extract_bearer
         auth_token = _extract_bearer(request)
         auth_user = (_SESSIONS.get(auth_token) or {}).get("user") or {} if auth_token else {}
@@ -227,7 +227,7 @@ async def generate_resume(request: Request):
         if _explicit_data_user:
             data_user_id: Optional[int] = int(_explicit_data_user)
         else:
-            data_user_id = _resolve_data_contributor_id(conn)
+            data_user_id = _get_current_user_contributor_id(conn)
 
         is_self = (_explicit_data_user is None)
 
@@ -293,9 +293,9 @@ async def generate_resume(request: Request):
             elif isinstance(raw_skills, dict):
                 for name in raw_skills:
                     _add_skill(name)
-            # Fetch contributor_stats rows for this project.
-            # Prefer GitHub API rows (source="github") over zip-derived rows;
-            # if any github rows exist, ignore zip rows entirely to avoid double-counting.
+            # Fetch contributor stats for this project from the single merged table.
+            # project_contributors has UNIQUE(project_id, contributor_id) so there is
+            # exactly one row per contributor — no aggregation across sources needed.
             cs_rows = conn.execute(
                 """SELECT c.github_username, pc.contributor_id,
                           pc.commits, pc.pull_requests, pc.issues, pc.reviews
@@ -305,22 +305,16 @@ async def generate_resume(request: Request):
                 (pid,),
             ).fetchall()
             contributor_stats_map: dict = {}
-            if cs_rows:
-                _agg: dict = {}
-                for cname, uid, c, p, i, rv in cs_rows:
-                    if not cname or _is_bot_contributor(cname) or _is_noreply_email(cname):
-                        continue
-                    key = cname
-                    if key not in _agg:
-                        _agg[key] = {"commits": 0, "pull_requests": 0,
-                                     "issues": 0, "reviews": 0, "user_ids": set()}
-                    _agg[key]["commits"]       += c or 0
-                    _agg[key]["pull_requests"] += p or 0
-                    _agg[key]["issues"]        += i or 0
-                    _agg[key]["reviews"]       += rv or 0
-                    if uid:
-                        _agg[key]["user_ids"].add(uid)
-                contributor_stats_map = _agg
+            for cname, uid, c, p, i, rv in cs_rows:
+                if not cname or _is_bot_contributor(cname) or _is_noreply_email(cname):
+                    continue
+                contributor_stats_map[cname] = {
+                    "commits": c or 0,
+                    "pull_requests": p or 0,
+                    "issues": i or 0,
+                    "reviews": rv or 0,
+                    "user_ids": {uid} if uid else set(),
+                }
 
             item = build_resume_project_item(
                 pid, snap,
@@ -403,7 +397,7 @@ async def generate_resume(request: Request):
 @router.get("/{resume_id}")
 def get_resume(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         resume = storage.fetch_resume(conn, resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -414,7 +408,7 @@ def get_resume(resume_id: str, request: Request):
 async def update_resume(resume_id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         found = storage.update_resume(
             conn,
             resume_id,
@@ -431,7 +425,7 @@ async def update_resume(resume_id: str, request: Request):
 @router.delete("/{resume_id}")
 def delete_resume(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         ok = storage.delete_resume(conn, resume_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -445,7 +439,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
     fmt = format.lower()
     if fmt not in {"json", "markdown", "pdf"}:
         raise HTTPException(status_code=400, detail="format must be json, markdown, or pdf")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         resume = storage.fetch_resume(conn, resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -454,7 +448,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
     if fmt == "markdown":
         return PlainTextResponse(_resume_to_markdown(resume))
     # pdf — return binary stream so Postman / browsers can open it directly
-    pdf_payload = _resume_to_pdf_payload(resume)
+    pdf_payload = _resume_to_latex_payload(resume)
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = Path(tmpdir) / "resume.pdf"
         try:
@@ -477,7 +471,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
 @router.get("/{resume_id}/sections")
 def list_sections(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         sections = storage.fetch_resume_sections(conn, resume_id)
@@ -491,7 +485,7 @@ async def reorder_sections(resume_id: str, request: Request):
     ids = payload.get("ids")
     if not isinstance(ids, list):
         raise HTTPException(status_code=400, detail="ids must be a list")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         sections = storage.reorder_resume_sections(conn, resume_id, ids)
@@ -510,7 +504,7 @@ async def create_section(resume_id: str, request: Request):
         raise HTTPException(status_code=400, detail="label is required")
     is_custom = bool(payload.get("is_custom", True))
     sort_order = payload.get("sort_order")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         section_id = storage.insert_resume_section(
@@ -529,7 +523,7 @@ async def update_section(resume_id: str, section_id: str, request: Request):
     payload = await _get_payload(request)
     is_enabled = payload.get("is_enabled")
     sort_order = payload.get("sort_order")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         found = storage.update_resume_section(
             conn,
             section_id,
@@ -547,7 +541,7 @@ async def update_section(resume_id: str, section_id: str, request: Request):
 @router.delete("/{resume_id}/sections/{section_id}")
 def delete_section(resume_id: str, section_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         ok = storage.delete_resume_section(conn, section_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Section not found")
@@ -561,7 +555,7 @@ def delete_section(resume_id: str, section_id: str, request: Request):
 @router.get("/{resume_id}/sections/{section_id}/items")
 def list_items(resume_id: str, section_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         items = storage.fetch_resume_items(conn, section_id)
     return {"data": items, "meta": {"total": len(items)}, "error": None}
 
@@ -573,7 +567,7 @@ async def reorder_items(resume_id: str, section_id: str, request: Request):
     ids = payload.get("ids")
     if not isinstance(ids, list):
         raise HTTPException(status_code=400, detail="ids must be a list")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         items = storage.reorder_resume_items(conn, section_id, ids)
     return {"data": items, "error": None}
 
@@ -589,7 +583,7 @@ async def create_item(resume_id: str, section_id: str, request: Request):
         raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         item_id = storage.insert_resume_item(
             conn,
             section_id,
@@ -619,7 +613,7 @@ async def update_item(resume_id: str, section_id: str, item_id: str, request: Re
         raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         found = storage.update_resume_item(
             conn,
             item_id,
@@ -643,7 +637,7 @@ async def update_item(resume_id: str, section_id: str, item_id: str, request: Re
 @router.delete("/{resume_id}/sections/{section_id}/items/{item_id}")
 def delete_item(resume_id: str, section_id: str, item_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as conn:
+    with _db_session(_get_db_dir()) as conn:
         ok = storage.delete_resume_item(conn, item_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Item not found")

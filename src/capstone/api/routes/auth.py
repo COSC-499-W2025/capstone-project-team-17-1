@@ -319,7 +319,11 @@ def me(request: Request):
     user = session["user"]
     # Always restore CURRENT_USER from the session — critical after server restart
     storage.CURRENT_USER = user["username"]
-    return {"user": user}
+    from capstone.portfolio_retrieval import _db_session
+    from capstone.api.routes.resumes import _get_current_user_contributor_id
+    with _db_session(None) as conn:
+        contributor_id = _get_current_user_contributor_id(conn)
+    return {"user": user, "contributor_id": contributor_id}
 
 @router.put("/me")
 def update_me(payload: UpdateProfileRequest, request: Request):

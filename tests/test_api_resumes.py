@@ -49,7 +49,7 @@ class _ResumeAPIBase(unittest.TestCase):
     # ------------------------------------------------------------------ helpers
 
     def _create_resume(self, title: str = "My Resume") -> dict:
-        r = self.client.post("/resumes", json={"user_id": 1, "title": title})
+        r = self.client.post("/resumes/blank", json={"user_id": 1, "title": title})
         self.assertEqual(r.status_code, 201, r.text)
         return r.json()["data"]
 
@@ -84,7 +84,7 @@ class ResumeCRUDTestCase(_ResumeAPIBase):
         self.assertEqual(data["user_id"], self.user_id)
 
     def test_create_resume_missing_user_id_returns_400(self):
-        r = self.client.post("/resumes", json={"title": "No User"})
+        r = self.client.post("/resumes/blank", json={"title": "No User"})
         self.assertEqual(r.status_code, 400)
 
     def test_get_resume_returns_200(self):
@@ -191,7 +191,7 @@ class ResumeGuestGenerateTestCase(_ResumeAPIBase):
             },
         )
 
-        r = self.client.post("/resumes/generate", json={"create_new": True, "project_ids": ["demo-project"]})
+        r = self.client.post("/resumes/auto-generate", json={"create_new": True, "project_ids": ["demo-project"]})
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
         # After M23 resumes.user_id FK → user(id); always 1 (singleton user per DB)
@@ -474,7 +474,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_creates_resume_with_sections(self):
         self._seed_project_for_user("gen-proj-1")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
         self.assertIsNotNone(data.get("id"))
@@ -482,12 +482,12 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         self.assertTrue(len(section_keys) > 0)
 
     def test_generate_without_auth_uses_guest_bucket(self):
-        r = self.client.post("/resumes/generate", json={})
+        r = self.client.post("/resumes/auto-generate", json={})
         self.assertEqual(r.status_code, 201)
 
     def test_generate_includes_skills_from_snapshot(self):
         self._seed_project_for_user("gen-proj-2")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         resume_json = json.dumps(r.json()["data"])
         self.assertTrue(
@@ -497,12 +497,12 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_create_new_flag_makes_fresh_resume(self):
         self._seed_project_for_user("gen-proj-3")
-        r1 = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r1 = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r1.status_code, 201)
         id1 = r1.json()["data"]["id"]
 
         r2 = self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"create_new": True, "resume_title": "New Resume"},
             headers=self.auth_headers,
         )
@@ -515,7 +515,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_without_user_id_defaults_to_session_owner(self):
         # Omitting user_id → data_user_id defaults to owner; resume stored under owner
         self._seed_project_for_user("gen-proj-self")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         self.assertEqual(r.json()["data"]["user_id"], self.user_id)
 
@@ -526,7 +526,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         self._seed_project_for_user_id(other_id, "other-proj-1")
 
         r = self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"user_id": other_id},
             headers=self.auth_headers,
         )
@@ -545,7 +545,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         self._seed_project_for_user_id(other_id, "other-proj-2")
 
         self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"user_id": other_id},
             headers=self.auth_headers,
         )
