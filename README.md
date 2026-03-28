@@ -5,14 +5,9 @@ The system supports three workflows: CLI analysis, interactive menu usage, and F
 
 ## README Navigation
 
+- [Quickstart](#quickstart)
 - [Installation Guide for Future Development Team](#installation-guide-for-future-development-team)
-- [Backend Package (`src/capstone/`)](src/capstone)
-- [Frontend App (`frontend/`)](frontend)
-- [API Documentation (`docs/api.md`)](docs/api.md)
-- [Test Suite (`tests/`)](tests)
-- [Frontend Tests (`frontend/test/`)](frontend/test)
-- [Sample Test Data (`test_data/`)](test_data)
-- [Setup Scripts (`scripts/`)](scripts)
+- [MAC instruction--open loom](#mac-instruction--open-loom)
 - [Usage](#usage)
 - [API Route Map (Table)](#api-route-map-table)
 - [Test Report](#test-report)
