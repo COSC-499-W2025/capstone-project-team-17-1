@@ -13,10 +13,12 @@ This module centralizes:
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import json
 import sqlite3
 import uuid
+import shutil
 from pathlib import Path
 from typing import Iterable, Optional
 import json
@@ -24,27 +26,47 @@ from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
 import os
+import re
 from pathlib import Path
 import sys
 
 logger = get_logger(__name__)
 
 def _user_dir(username: str) -> str:
-    """Return a filesystem-safe, case-sensitive directory name for a username.
-    Uses SHA256 so 'erensun408' and 'ErenSun408' always get different dirs,
-    even on case-insensitive filesystems (Windows/macOS).
-    """
+    """Return a filesystem-safe directory for a canonical storage user key."""
+    token = str(username or "").strip().lower()
+    if not token:
+        return "unknown"
+    safe = re.sub(r"[^a-z0-9._-]+", "_", token).strip("._-")
+    return safe or "unknown"
+
+
+def _legacy_user_dir_hash(username: str) -> str:
     return hashlib.sha256(username.encode()).hexdigest()[:24]
+
+
+def resolve_storage_user_key(user_id: str | None) -> str | None:
+    """
+    Canonical storage namespace for authenticated users.
+    - None/blank/guest-like values map to guest mode (None).
+    - Authenticated identifiers are normalized for stable local/cloud mapping.
+    """
+    token = str(user_id or "").strip()
+    if not token:
+        return None
+    lowered = token.lower()
+    if lowered in {"guest", "guestuser"}:
+        return None
+    return lowered
 
 
 def get_user_db_path():
 
-    global CURRENT_USER
-
-    if CURRENT_USER is None:
+    storage_user_key = get_current_user()
+    if storage_user_key is None:
         return BASE_DIR / "guest_capstone.db"
 
-    path = BASE_DIR / "users" / _user_dir(CURRENT_USER)
+    path = BASE_DIR / "users" / _user_dir(storage_user_key)
     path.mkdir(parents=True, exist_ok=True)
 
     return path / "capstone.db"
@@ -64,6 +86,9 @@ BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 CURRENT_USER = None
+_REQUEST_STORAGE_USER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "storage_current_user", default=None
+)
 _SCHEMA_READY: set[str] = set()
 
 def _is_noreply_email(email: str | None) -> bool:
@@ -1004,11 +1029,49 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
 
 def set_current_user(user_id: str | None):
     global CURRENT_USER
-    CURRENT_USER = user_id
+    resolved = resolve_storage_user_key(user_id)
+    CURRENT_USER = resolved
+    _REQUEST_STORAGE_USER.set(resolved)
+
+
+def bind_request_user(user_id: str | None) -> contextvars.Token:
+    """
+    Bind request-local storage user context and mirror it globally for legacy code.
+    Returns a context token so middleware can reset after the request completes.
+    """
+    resolved = resolve_storage_user_key(user_id)
+    token = _REQUEST_STORAGE_USER.set(resolved)
+    global CURRENT_USER
+    CURRENT_USER = resolved
+    return token
+
+
+def reset_request_user(token: contextvars.Token) -> None:
+    try:
+        _REQUEST_STORAGE_USER.reset(token)
+    except Exception:
+        # Defensive fallback to guest context if reset token is invalid.
+        _REQUEST_STORAGE_USER.set(None)
+
+
+def get_current_user() -> str | None:
+    scoped_user = _REQUEST_STORAGE_USER.get()
+    if scoped_user is not None:
+        return resolve_storage_user_key(scoped_user)
+    return resolve_storage_user_key(CURRENT_USER)
 
 def get_database_path():
-    if CURRENT_USER:
-        path = BASE_DIR / "data" / "users" / _user_dir(CURRENT_USER)
+    storage_user_key = get_current_user()
+    if storage_user_key:
+        users_root = BASE_DIR / "data" / "users"
+        path = users_root / _user_dir(storage_user_key)
+        legacy_path = users_root / _legacy_user_dir_hash(storage_user_key)
+        if legacy_path.exists() and not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                legacy_path.rename(path)
+            except Exception:
+                shutil.copytree(legacy_path, path, dirs_exist_ok=True)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
@@ -1059,7 +1122,14 @@ def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
 
     return conn
 
-def close_db() -> None:
+def close_db(conn: sqlite3.Connection | None = None) -> None:
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:  # pragma: no cover
+            logger.warning("Failed to close DB connection", exc_info=True)
+        return
+
     """Close the shared database handle if it exists."""
     global _DB_HANDLE, _DB_PATH
     if _DB_HANDLE is not None:

@@ -1464,6 +1464,23 @@ body.light .activity-line.level-success {
   font-size: 12px;
 }
 
+.auth-remember-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: #dbeafe;
+  cursor: pointer;
+  user-select: none;
+}
+
+.auth-remember-row input {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 /* Login / consent detail modals: light surfaces in light mode (keep dark defaults above) */
 body.light .auth-modal {
   background: var(--overlay-scrim);
@@ -1483,6 +1500,10 @@ body.light .auth-dialog h3 {
 body.light .auth-dialog p {
   color: var(--text-secondary);
   opacity: 1;
+}
+
+body.light .auth-remember-row {
+  color: var(--text-secondary);
 }
 
 body.light .auth-close {
@@ -6307,10 +6328,82 @@ body.light .export-modal-footer {
   line-height: 1.5;
 }
 
+.settings-session-card {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-remember-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-remember-label input {
+  width: auto;
+  margin: 0;
+}
+
+body.light .settings-session-card {
+  border-bottom-color: var(--border-subtle);
+}
+
 .settings-login-prompt {
   margin: 0;
   font-size: 14px;
   opacity: 0.65;
+}
+
+.settings-account-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-github-token-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-github-show-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  opacity: 0.72;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-github-show-toggle input {
+  cursor: pointer;
+}
+
+.settings-github-token-actions {
+  flex-wrap: wrap;
+}
+
+.settings-github-token-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.5;
+}
+
+.settings-inline-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+}
+
+.settings-inline-link:hover {
+  opacity: 1;
 }
 
 /* Form grid used inside settings cards */

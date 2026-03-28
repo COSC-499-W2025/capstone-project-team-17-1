@@ -34,13 +34,13 @@ uploadBtn?.addEventListener("click", openUploadModal);
 // Initial Page Setup
 // -----------------------------
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 
   initThemeToggle();
 
   initWindowControls();
   initChat();
-  initAuthFlow();
+  await initAuthFlow();
   
   initPortfolio();
   initPortfolioEditor();

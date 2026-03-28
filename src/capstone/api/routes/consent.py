@@ -43,7 +43,7 @@ def _ensure_row(conn):
 
 def _bind_current_user_from_session(request: Request) -> None:
     username = get_authenticated_username(request)
-    storage_module.CURRENT_USER = username if username else None
+    storage_module.set_current_user(username)
 
 
 # ------------------------------------------------

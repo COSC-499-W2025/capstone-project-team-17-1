@@ -51,7 +51,7 @@ async def _get_payload(request: Request) -> dict:
 
 @router.get("/users")
 def list_users(request: Request):
-    from capstone.github_contributors import _is_noreply_email, _is_bot_contributor
+    from capstone.github_contributors import _is_bot_contributor
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute("""
@@ -59,22 +59,6 @@ def list_users(request: Request):
             FROM users u
             INNER JOIN user_projects up ON u.id = up.user_id
             INNER JOIN project_analysis pa ON up.project_id = pa.project_id
-            -- Exclude no-email users when another user WITH an email is
-            -- already linked to at least one of the same projects.
-            -- This removes git-fullname duplicates when the GitHub-login
-            -- version (with real email) is also present.
-            WHERE NOT (
-                u.email IS NULL
-                AND EXISTS (
-                    SELECT 1 FROM users u2
-                    INNER JOIN user_projects up2 ON u2.id = up2.user_id
-                    WHERE u2.email IS NOT NULL
-                      AND u2.id != u.id
-                      AND up2.project_id IN (
-                          SELECT project_id FROM user_projects WHERE user_id = u.id
-                      )
-                )
-            )
             ORDER BY LOWER(u.username)
         """).fetchall()
     users = [
@@ -82,7 +66,6 @@ def list_users(request: Request):
         for r in rows
         if r and r[1]
         and not _is_bot_contributor(r[1])
-        and not _is_noreply_email(r[2])
     ]
     return {"data": users, "error": None}
 
