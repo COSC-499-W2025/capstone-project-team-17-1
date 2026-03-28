@@ -158,7 +158,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             repo_url TEXT,
             token_enc TEXT,
             zip_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -170,7 +171,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             resume_bullets_json TEXT,
             selected INTEGER,
             rank INTEGER,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -203,7 +205,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS error_analysis_results (
             project_id TEXT PRIMARY KEY,
             errors_json TEXT,
-            updated_at TEXT
+            updated_at TEXT,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     # contributor_stats removed in M22 — superseded by project_contributors
@@ -214,7 +217,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             filename TEXT,
             content_type TEXT,
             image_b64 TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     # user_projects removed in M22 — superseded by project_contributors
@@ -234,7 +238,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (project_id, contributor_id),
-            FOREIGN KEY (contributor_id) REFERENCES contributors(id) ON DELETE CASCADE
+            FOREIGN KEY (contributor_id) REFERENCES contributors(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -343,7 +348,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             label TEXT,
             value TEXT,
             source TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -595,13 +601,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_contributor_stats_project ON contributor_stats (project_id, contributor, created_at)")
         conn.commit()
 
-    # M2: contributor_stats — add user_id column (table removed in M22; guard accordingly)
+    # M2: contributor_stats — add user_id and weights_hash columns (table removed in M22; guard accordingly)
     if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'").fetchone():
         info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
         columns = {row[1] for row in info}
         if "user_id" not in columns:
             conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
-            conn.commit()
+        if "weights_hash" not in columns:
+            conn.execute("ALTER TABLE contributor_stats ADD COLUMN weights_hash TEXT")
+        conn.commit()
 
     # M3: contributors — add profile columns (old schema only; skip if already on new schema)
     info = conn.execute("PRAGMA table_info(contributors)").fetchall()
@@ -1183,6 +1191,176 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
+    # M24: add ON DELETE CASCADE FK (project_id → projects) to all project child tables.
+    # Recreate each table only when the FK is missing (idempotent).
+    _tables_needing_cascade = [
+        "project_analysis",
+        "error_analysis_results",
+        "project_overrides",
+        "project_images",
+        "project_evidence",
+        "project_contributors",
+    ]
+    for _tbl in _tables_needing_cascade:
+        _fk_rows = conn.execute(f"PRAGMA foreign_key_list({_tbl})").fetchall()
+        _has_cascade = any(
+            r[2] == "projects" and r[6] == "CASCADE"
+            for r in _fk_rows
+        )
+        if _has_cascade:
+            continue
+
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(f"ALTER TABLE {_tbl} RENAME TO {_tbl}_m24_old")
+
+        if _tbl == "project_analysis":
+            conn.execute("""
+                CREATE TABLE project_analysis (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    classification TEXT NOT NULL,
+                    primary_contributor TEXT,
+                    snapshot JSON NOT NULL,
+                    repo_url TEXT,
+                    token_enc TEXT,
+                    zip_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            _old_pa_cols = {r[1] for r in conn.execute("PRAGMA table_info(project_analysis_m24_old)").fetchall()}
+            # Backfill any missing parent projects rows so FK inserts succeed
+            conn.execute("""
+                INSERT OR IGNORE INTO projects (project_id, name, source)
+                SELECT DISTINCT project_id, project_id, 'zip'
+                FROM project_analysis_m24_old
+                WHERE project_id IS NOT NULL
+            """)
+            _pa_insert_cols = "project_id, classification, primary_contributor, snapshot, repo_url, token_enc, zip_path, created_at"
+            _pa_select_exprs = ", ".join([
+                "project_id",
+                "COALESCE(classification, 'unknown')",
+                "primary_contributor",
+                "COALESCE(snapshot, '{}')",
+                "repo_url" if "repo_url" in _old_pa_cols else "NULL",
+                "token_enc" if "token_enc" in _old_pa_cols else "NULL",
+                "zip_path" if "zip_path" in _old_pa_cols else "NULL",
+                "created_at",
+            ])
+            conn.execute(f"INSERT INTO project_analysis ({_pa_insert_cols}) SELECT {_pa_select_exprs} FROM project_analysis_m24_old")
+
+        elif _tbl == "error_analysis_results":
+            conn.execute("""
+                CREATE TABLE error_analysis_results (
+                    project_id TEXT PRIMARY KEY,
+                    errors_json TEXT,
+                    updated_at TEXT,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO error_analysis_results (project_id, errors_json, updated_at)
+                SELECT project_id, errors_json, updated_at
+                FROM error_analysis_results_m24_old
+            """)
+
+        elif _tbl == "project_overrides":
+            conn.execute("""
+                CREATE TABLE project_overrides (
+                    project_id TEXT PRIMARY KEY,
+                    key_role TEXT,
+                    evidence TEXT,
+                    portfolio_blurb TEXT,
+                    resume_bullets_json TEXT,
+                    selected INTEGER,
+                    rank INTEGER,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO project_overrides
+                    (project_id, key_role, evidence, portfolio_blurb, resume_bullets_json,
+                     selected, rank, updated_at)
+                SELECT project_id, key_role, evidence, portfolio_blurb, resume_bullets_json,
+                       selected, rank, updated_at
+                FROM project_overrides_m24_old
+            """)
+
+        elif _tbl == "project_images":
+            conn.execute("""
+                CREATE TABLE project_images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    filename TEXT,
+                    content_type TEXT,
+                    image_b64 TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO project_images (id, project_id, filename, content_type, image_b64, created_at)
+                SELECT id, project_id, filename, content_type, image_b64, created_at
+                FROM project_images_m24_old
+            """)
+
+        elif _tbl == "project_evidence":
+            conn.execute("""
+                CREATE TABLE project_evidence (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    evidence_type TEXT NOT NULL,
+                    label TEXT,
+                    value TEXT,
+                    source TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO project_evidence
+                    (id, project_id, evidence_type, label, value, source, created_at)
+                SELECT id, project_id, evidence_type, label, value, source, created_at
+                FROM project_evidence_m24_old
+            """)
+
+        elif _tbl == "project_contributors":
+            conn.execute("""
+                CREATE TABLE project_contributors (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id      TEXT NOT NULL,
+                    contributor_id  INTEGER NOT NULL,
+                    first_commit_at TEXT,
+                    last_commit_at  TEXT,
+                    commits         INTEGER NOT NULL DEFAULT 0,
+                    pull_requests   INTEGER NOT NULL DEFAULT 0,
+                    issues          INTEGER NOT NULL DEFAULT 0,
+                    reviews         INTEGER NOT NULL DEFAULT 0,
+                    score           REAL NOT NULL DEFAULT 0,
+                    weights_hash    TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (project_id, contributor_id),
+                    FOREIGN KEY (contributor_id) REFERENCES contributors(id) ON DELETE CASCADE,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO project_contributors
+                    (id, project_id, contributor_id, first_commit_at, last_commit_at,
+                     commits, pull_requests, issues, reviews, score, weights_hash,
+                     created_at, updated_at)
+                SELECT id, project_id, contributor_id, first_commit_at, last_commit_at,
+                       commits, pull_requests, issues, reviews, score, weights_hash,
+                       created_at, updated_at
+                FROM project_contributors_m24_old
+            """)
+
+        conn.execute(f"DROP TABLE {_tbl}_m24_old")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""
@@ -1282,7 +1460,12 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         )
 
         projects = conn.execute(
-            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? AND project_id IS NOT NULL",
+            """
+            SELECT DISTINCT cs.project_id
+            FROM contributor_stats cs
+            JOIN projects p ON p.project_id = cs.project_id
+            WHERE cs.contributor = ? AND cs.project_id IS NOT NULL
+            """,
             (contributor,),
         ).fetchall()
         for (project_id,) in projects:
@@ -1391,22 +1574,7 @@ def store_analysis_snapshot(
     doc.setdefault("classification", classification)
     doc.setdefault("primary_contributor", primary_contributor)
 
-    payload = json.dumps(doc)
-    conn.execute(
-        """
-        INSERT INTO project_analysis (
-            project_id,
-            classification,
-            primary_contributor,
-            snapshot,
-            zip_path
-        )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (project_id, classification, primary_contributor, payload, zip_path),
-    )
-
-    # Keep projects table in sync with every analysis
+    # Ensure the parent projects row exists before inserting into project_analysis (FK)
     _collab = doc.get("collaboration") or {}
     _first = _collab.get("first_commit_date")
     _last = _collab.get("last_commit_date")
@@ -1422,6 +1590,21 @@ def store_analysis_snapshot(
         type=_type,
         first_commit_at=_first,
         last_commit_at=_last,
+    )
+
+    payload = json.dumps(doc)
+    conn.execute(
+        """
+        INSERT INTO project_analysis (
+            project_id,
+            classification,
+            primary_contributor,
+            snapshot,
+            zip_path
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (project_id, classification, primary_contributor, payload, zip_path),
     )
 
     conn.commit()
@@ -1747,6 +1930,9 @@ def store_github_source(
 
     token_enc = _encrypt_token(token)
 
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id, source="github", github_url=repo_url)
+
     existing = conn.execute(
         "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
         (project_id,),
@@ -1952,6 +2138,9 @@ def store_contributor_stats(
             contributor_id = int(row[0])
     if contributor_id is None:
         return  # cannot store without a linked contributor
+
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id)
 
     conn.execute(
         """
@@ -3070,6 +3259,8 @@ def link_contributor_to_project(
         raise ValueError("user_id must be provided")
     if not project_id:
         raise ValueError("project_id must be provided")
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id)
     conn.execute(
         """
         INSERT INTO project_contributors (project_id, contributor_id, first_commit_at, last_commit_at)

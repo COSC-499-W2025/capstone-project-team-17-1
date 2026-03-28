@@ -686,13 +686,9 @@ def delete_project(id: str):
                 (file_id,),
             )
 
-    # Always remove shared analysis / contributor records and related metadata
-    conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM error_analysis_results WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_contributors WHERE project_id = ?", (id,))
+    # Deleting from projects cascades to all child tables (project_analysis,
+    # error_analysis_results, project_overrides, project_images, project_evidence,
+    # project_contributors) via ON DELETE CASCADE FKs added in M24.
     conn.execute("DELETE FROM projects WHERE project_id = ?", (id,))
     conn.commit()
 

@@ -89,9 +89,11 @@ def test_users_and_links_schema_and_fk():
             ).fetchall()
             assert [tuple(row) for row in links] == [(user_id, "demo")]
 
-            # FK points to contributors
+            # FKs point to contributors and projects (M24 added projects CASCADE FK)
             fk = conn.execute("PRAGMA foreign_key_list(project_contributors)").fetchall()
-            assert fk and fk[0][2] == "contributors"
+            fk_tables = {row[2] for row in fk}
+            assert "contributors" in fk_tables
+            assert "projects" in fk_tables
 
 
 def test_get_and_update_user_profile():
