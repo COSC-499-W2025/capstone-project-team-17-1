@@ -1,5 +1,4 @@
 import { authFetch, isPrivateMode } from "./auth.js";
-import { openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -64,6 +63,235 @@ async function fetchResumeDetail(resumeId) {
   if (!res.ok) throw new Error("Failed to fetch resume");
   const data = await res.json();
   return data.data;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeSkillName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  const canonicalMap = {
+    js: "JavaScript",
+    javascript: "JavaScript",
+    ts: "TypeScript",
+    typescript: "TypeScript",
+    html: "HTML",
+    css: "CSS",
+    sql: "SQL",
+    api: "API",
+    json: "JSON",
+    yaml: "YAML",
+    xml: "XML",
+    aws: "AWS",
+    gcp: "GCP",
+    fastapi: "FastAPI",
+    sqlite: "SQLite",
+    mongodb: "MongoDB",
+    postgresql: "PostgreSQL",
+  };
+  if (canonicalMap[lower]) return canonicalMap[lower];
+  return raw
+    .split(/[\s-/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function dedupeStrings(values) {
+  const seen = new Set();
+  const result = [];
+  (Array.isArray(values) ? values : []).forEach((value) => {
+    const normalized = normalizeSkillName(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(normalized);
+  });
+  return result;
+}
+
+function groupSkillsByExpertise(skills) {
+  const levels = {
+    Advanced: [],
+    Proficient: [],
+    Developing: [],
+    Foundation: [],
+  };
+
+  const ordered = dedupeStrings(skills);
+  ordered.forEach((skill, index) => {
+    if (index < 4) levels.Advanced.push(skill);
+    else if (index < 8) levels.Proficient.push(skill);
+    else if (index < 12) levels.Developing.push(skill);
+    else levels.Foundation.push(skill);
+  });
+
+  return levels;
+}
+
+function buildStyledResumePreviewHtml(resume) {
+  const sections = Array.isArray(resume?.sections) ? resume.sections.filter((section) => section?.is_enabled !== false) : [];
+  const headerSection = sections.find((section) => section?.key === "header");
+  const summarySection = sections.find((section) => section?.key === "summary");
+  const educationSection = sections.find((section) => section?.key === "education");
+  const skillSection = sections.find((section) => ["skills", "core_skill"].includes(section?.key));
+  const projectSection = sections.find((section) => ["project", "projects"].includes(section?.key));
+  const achievementSection = sections.find((section) => ["achievement", "achievements", "award", "awards"].includes(section?.key));
+
+  const headerItem = headerSection?.items?.[0] || {};
+  const headerMeta = headerItem?.metadata || {};
+  const name = headerMeta.full_name || resume?.title || "Resume";
+  const role = resume?.target_role || "";
+
+  const summaryText = (summarySection?.items || [])
+    .map((item) => String(item?.content || item?.title || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const educationItems = (educationSection?.items || []).filter((item) => item?.is_enabled !== false);
+  const educationText = educationItems.length
+    ? educationItems
+        .map((item) => [item?.title, item?.subtitle].filter(Boolean).join(", "))
+        .filter(Boolean)
+        .join(" | ")
+    : "No education details yet.";
+
+  const awards = (achievementSection?.items || [])
+    .filter((item) => item?.is_enabled !== false)
+    .map((item) => String(item?.title || item?.content || "").trim())
+    .filter(Boolean);
+
+  const rawSkillTokens = (skillSection?.items || [])
+    .filter((item) => item?.is_enabled !== false)
+    .flatMap((item) => {
+      const content = String(item?.content || item?.summary || "").trim();
+      const titled = String(item?.title || "").trim();
+      const fromContent = content
+        ? content.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean)
+        : [];
+      return titled ? [titled, ...fromContent] : fromContent;
+    });
+  const expertiseGroups = groupSkillsByExpertise(rawSkillTokens);
+  const expertiseSections = Object.entries(expertiseGroups);
+
+  const projectItems = (projectSection?.items || []).filter((item) => item?.is_enabled !== false);
+  const totalProjects = projectItems.length;
+  const totalSkills = dedupeStrings(rawSkillTokens).length;
+  const totalBullets = projectItems.reduce(
+    (sum, item) => sum + ((Array.isArray(item?.bullets) ? item.bullets.filter(Boolean).length : 0)),
+    0
+  );
+  const highlightCount = awards.length + totalBullets;
+  const professionalSummary =
+    summaryText ||
+    `Portfolio-focused builder with ${totalProjects} selected project${totalProjects === 1 ? "" : "s"} and ${totalSkills} highlighted skill${totalSkills === 1 ? "" : "s"}.`;
+
+  return `
+    <div class="resume-preview-sheet">
+      <div class="resume-preview-hero">
+        <h1>${escapeHtml(name)}</h1>
+        <p class="resume-preview-role">${escapeHtml(role)}</p>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Professional Summary</h3>
+        <p>${escapeHtml(professionalSummary)}</p>
+      </div>
+
+      <div class="resume-preview-grid">
+        <div class="resume-preview-section">
+          <h3>Education</h3>
+          <p>${escapeHtml(educationText)}</p>
+        </div>
+
+        <div class="resume-preview-section">
+          <h3>Awards</h3>
+          <ul>
+            ${
+              awards.length
+                ? awards.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+                : `<li>No awards yet.</li>`
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Skills by Expertise Level</h3>
+        <div class="resume-preview-grid">
+          ${
+            expertiseSections.length
+              ? expertiseSections
+                  .map(
+                    ([title, skills]) => `
+                      <div>
+                        <strong>${escapeHtml(title)}</strong>
+                        <p>${skills.length ? escapeHtml(skills.join(", ")) : `No ${escapeHtml(title.toLowerCase())} skills yet.`}</p>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<div><p>No skills listed yet.</p></div>`
+          }
+        </div>
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Selected Projects</h3>
+        ${
+          projectItems.length
+            ? projectItems
+                .map((item) => {
+                  const title = String(item?.title || "Untitled Project").trim();
+                  const summary = String(item?.content || item?.summary || item?.subtitle || "").trim();
+                  return `
+                    <div class="resume-preview-project">
+                      <div class="resume-preview-project-title">${escapeHtml(title)}</div>
+                      <div class="resume-preview-project-meta">${escapeHtml(summary || "No project summary yet.")}</div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `<p>No projects selected yet.</p>`
+        }
+      </div>
+
+      <div class="resume-preview-section">
+        <h3>Portfolio Highlights</h3>
+        <ul>
+          <li>${totalProjects} selected project${totalProjects === 1 ? "" : "s"} included in this preview</li>
+          <li>${totalSkills} skill signal${totalSkills === 1 ? "" : "s"} represented across the resume</li>
+          <li>${highlightCount} supporting bullet${highlightCount === 1 ? "" : "s"} and award highlight${highlightCount === 1 ? "" : "s"} surfaced from resume content</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+async function openResumePreview(resumeId) {
+  const modal = document.getElementById("resume-preview-modal");
+  const body = document.getElementById("resume-preview-body");
+  if (!modal || !body) return;
+
+  body.innerHTML = `<p class="muted-text">Loading resume preview...</p>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const resume = await fetchResumeDetail(resumeId);
+    body.innerHTML = buildStyledResumePreviewHtml(resume);
+  } catch (err) {
+    console.error("Failed to open resume preview:", err);
+    body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -339,7 +567,7 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-preview-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openResumePreview();
+      openResumePreview(btn.dataset.resumeId);
     });
   });
 
