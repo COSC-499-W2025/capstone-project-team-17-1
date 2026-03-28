@@ -3,6 +3,9 @@ import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
+import { loadProjectHealth } from "./projectHealth.js";
+import { loadErrorAnalysis } from "./errors.js";
+import { loadMostUsedSkills } from "./skills.js";
 import { authFetch } from "./auth.js";
 
 export function openUploadModal() {
@@ -105,7 +108,13 @@ async function submitZipUpload() {
     }
 
     document.getElementById("upload-modal")?.remove();
-    loadProjects();
+    await Promise.all([
+      loadProjects(),
+      loadRecentProjects(),
+      loadProjectHealth(),
+      loadErrorAnalysis(),
+      loadMostUsedSkills(),
+    ]);
     notifyPortfolioDataUpdated();
   } catch (err) {
     console.error("ZIP upload failed:", err);
