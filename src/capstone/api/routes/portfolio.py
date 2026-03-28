@@ -18,6 +18,7 @@ from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session
+from capstone.storage import _UNSET as _DB_UNSET
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
 from capstone.storage import (
@@ -63,8 +64,8 @@ def _bind_current_user_from_session(request: Request) -> None:
         storage_module.CURRENT_USER = username
 
 
-def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
-    with _db_session(db_dir) as c:
+def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:
+    with _db_session(db_dir, user=user) as c:
         return fetch_latest_snapshots_with_zip(c) or []
 
 
@@ -72,13 +73,7 @@ def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
     rows = _load_heatmap_rows(db_dir)
     if rows:
         return rows
-
-    previous_user = storage_module.CURRENT_USER
-    try:
-        storage_module.CURRENT_USER = None
-        return _load_heatmap_rows(db_dir)
-    finally:
-        storage_module.CURRENT_USER = previous_user
+    return _load_heatmap_rows(db_dir, user=None)
 
 
 class PortfolioProject(BaseModel):

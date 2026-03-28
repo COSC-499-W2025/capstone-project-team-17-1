@@ -50,12 +50,7 @@ def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
     if not guest_db.exists():
         return
 
-    previous_user = storage.CURRENT_USER
-    try:
-        storage.CURRENT_USER = username
-        user_db = storage.get_database_path()
-    finally:
-        storage.CURRENT_USER = previous_user
+    user_db = storage.get_database_path(username)
 
     user_db.parent.mkdir(parents=True, exist_ok=True)
 

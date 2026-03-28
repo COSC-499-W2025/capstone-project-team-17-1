@@ -75,12 +75,7 @@ def list_objects(bucket: str, prefix: str):
 # ------------------------------------------------
 
 def get_local_db_path(user_id: str) -> Path:
-    previous_user = storage.CURRENT_USER
-    try:
-        storage.CURRENT_USER = user_id
-        return storage.get_database_path()
-    finally:
-        storage.CURRENT_USER = previous_user
+    return storage.get_database_path(user_id)
 
 
 def get_cloud_db_key(user_id: str) -> str:

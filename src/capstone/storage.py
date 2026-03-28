@@ -1481,7 +1481,10 @@ def set_current_user(user_id: str | None):
     global CURRENT_USER
     CURRENT_USER = user_id
 
-def get_database_path():
+_UNSET = object()  # sentinel — distinguishes "not passed" from None
+
+
+def get_database_path(user=_UNSET) -> Path:
     # Allow overriding the DB path for local debugging.
     # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
     # override = os.getenv("LOOM_DB_PATH")
@@ -1491,8 +1494,9 @@ def get_database_path():
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
-    if CURRENT_USER:
-        path = BASE_DIR / "data" / "users" / _user_dir(CURRENT_USER)
+    effective_user = CURRENT_USER if user is _UNSET else user
+    if effective_user:
+        path = BASE_DIR / "data" / "users" / _user_dir(effective_user)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
@@ -1503,10 +1507,10 @@ def get_database_path():
 # -----------------------------
 # DB lifecycle
 # -----------------------------
-def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
+def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
     target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
-    db_path = get_database_path()
+    db_path = get_database_path(user=user)
     db_key = str(db_path.resolve())
 
     logger.info("Opening database at %s", db_path)
