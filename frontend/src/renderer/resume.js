@@ -1519,8 +1519,12 @@ function attachEditListeners(container) {
 export function initResume() {
   const newResumeBtn = document.getElementById("new-resume-btn");
   newResumeBtn?.addEventListener("click", openNewResumeModal);
-  renderResumeList();
 
+  // Do NOT call renderResumeList() here immediately.
+  // initAuthFlow() always dispatches auth:mode-changed after resolving the auth
+  // state (and setting storage.CURRENT_USER on the backend).  Firing a second
+  // GET /resumes before that happens can race with schema initialisation and
+  // return an empty list that overwrites the correct render.
   document.addEventListener("auth:mode-changed", (e) => {
     renderResumeList();
   });
