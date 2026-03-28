@@ -2,9 +2,22 @@
 
 const API_BASE = "http://127.0.0.1:8002";
 
+function _getAuthToken() {
+  try {
+    return localStorage.getItem("loom_auth_token") || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _authHeaders() {
+  const token = _getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function fetchAllSkills() {
   try {
-    const response = await fetch(`${API_BASE}/skills`);
+    const response = await fetch(`${API_BASE}/skills`, { headers: _authHeaders() });
     if (!response.ok) {
       throw new Error("Failed to fetch skills");
     }
@@ -30,8 +43,9 @@ function computeTopSkills(skillData) {
 
 async function loadMostUsedSkills() {
   const baseURL = "http://127.0.0.1:8002";
+  const headers = _authHeaders();
 
-  const projectsRes = await fetch(`${baseURL}/projects`);
+  const projectsRes = await fetch(`${baseURL}/projects`, { headers });
   const projectsData = await projectsRes.json();
 
   if (!projectsData.projects || projectsData.projects.length === 0) {
@@ -46,7 +60,8 @@ async function loadMostUsedSkills() {
     if (!projectId) continue;
 
     const skillsRes = await fetch(
-      `${baseURL}/projects/${encodeURIComponent(projectId)}/skills`
+      `${baseURL}/projects/${encodeURIComponent(projectId)}/skills`,
+      { headers }
     );
 
     if (!skillsRes.ok) {

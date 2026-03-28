@@ -309,14 +309,15 @@ def import_repository(
                 )
             except Exception:
                 pass  # non-fatal — resume will fall back to git-log commit data
-            if _is_cloud_sync_user(storage_module.CURRENT_USER):
+            active_user = storage_module.get_current_user()
+            if _is_cloud_sync_user(active_user):
                 upload_project_zip(
-                    storage_module.CURRENT_USER,
+                    active_user,
                     project_id,
                     zip_path,
                     zip_path.name,
                 )
-                upload_database(storage_module.CURRENT_USER)
+                upload_database(active_user)
         finally:
             conn.close()
 
@@ -418,14 +419,15 @@ def pull_repository(project_id: str, refresh: bool = False):
         except Exception:
             pass  # non-fatal
 
-        if _is_cloud_sync_user(storage_module.CURRENT_USER):
+        active_user = storage_module.get_current_user()
+        if _is_cloud_sync_user(active_user):
             upload_project_zip(
-                storage_module.CURRENT_USER,
+                active_user,
                 project_id,
                 zip_path,
                 zip_path.name,
             )
-            upload_database(storage_module.CURRENT_USER)
+            upload_database(active_user)
 
     conn.close()
 
@@ -450,8 +452,9 @@ def github_auth_status():
 def github_login(token: str):
     save_github_token(token)
 
-    if _is_cloud_sync_user(storage_module.CURRENT_USER):
-        upload_database(storage_module.CURRENT_USER)
+    active_user = storage_module.get_current_user()
+    if _is_cloud_sync_user(active_user):
+        upload_database(active_user)
 
     return {
         "status": "authenticated"

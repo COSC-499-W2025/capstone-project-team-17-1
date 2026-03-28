@@ -38,13 +38,16 @@ def _db_session(db_dir: str | None):
             pass
         yield conn
     finally:
-        if _close_db is not None:
-            try:
+        try:
+            if _close_db is not None:
                 _close_db(conn)
-            except TypeError:
-                _close_db()
-        else:
-            conn.close()
+            else:
+                conn.close()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _extract_evidence(snapshot: Dict[str, Any]) -> Dict[str, Any]:

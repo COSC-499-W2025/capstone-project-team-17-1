@@ -30,6 +30,9 @@ from capstone.logging_utils import get_logger
 from capstone.system.cloud_storage import (
     upload_project_zip as cloud_upload_zip,
     upload_database as cloud_upload_db,
+    list_objects as cloud_list_objects,
+    download_file as cloud_download_file,
+    BUCKET_NAME as CLOUD_BUCKET,
 )
 import capstone.storage as storage_module
 
@@ -110,6 +113,36 @@ def _get_file_id_for_project(project_id: str) -> str:
             if fpath and project_id.lower() in Path(fpath).name.lower():
                 logger.info("Project %s found via filename match in files table", project_id)
                 return fid
+
+    storage_user_key = storage.resolve_storage_user_key(storage.get_current_user())
+    if storage_user_key:
+        prefix = f"users/{storage_user_key}/projects/{project_id}/"
+        listing = cloud_list_objects(CLOUD_BUCKET, prefix) or {}
+        candidates = listing.get("Contents") or []
+        if candidates:
+            key = str(candidates[0].get("Key") or "")
+            if key:
+                filename = Path(key).name or "project.zip"
+                with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix or ".zip", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                try:
+                    cloud_download_file(CLOUD_BUCKET, key, tmp_path)
+                    stored = file_store.ensure_file(
+                        conn,
+                        tmp_path,
+                        original_name=filename,
+                        source="project_viewer_cloud_recovery",
+                        upload_id=project_id,
+                        mime="application/zip",
+                    )
+                    conn.commit()
+                    logger.info("Project %s recovered from cloud project prefix", project_id)
+                    return stored["file_id"]
+                finally:
+                    try:
+                        tmp_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
     raise HTTPException(status_code=404, detail="Project not found")
 
@@ -334,15 +367,16 @@ def update_project_file(payload: UpdateFilePayload):
         tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to update file: {exc}")
 
-    if storage_module.CURRENT_USER:
+    active_user = storage_module.get_current_user()
+    if active_user:
         try:
             cloud_upload_zip(
-                storage_module.CURRENT_USER,
+                active_user,
                 project_id,
                 zip_path,
                 zip_path.name,
             )
-            cloud_upload_db(storage_module.CURRENT_USER)
+            cloud_upload_db(active_user)
         except Exception:
             logger.warning("Cloud sync failed after file update for %s", project_id)
 

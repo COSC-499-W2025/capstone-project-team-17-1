@@ -512,6 +512,13 @@ function closeModalToPublic() {
 }
 
 async function syncCloudDbAndRefresh() {
+  try {
+    await authFetch("/cloud/db/download", { method: "POST" });
+    await authFetch("/cloud/projects/download-all", { method: "POST" });
+  } catch (_) {
+    // No cloud backup yet or offline — continue with local DB
+  }
+
   await Promise.all([
     loadProjects(),
     loadRecentProjects(),
@@ -579,13 +586,16 @@ export async function initAuthFlow() {
 
   async function performLogout() {
     logoutBtn.disabled = true;
+    const tokenBeforeLogout = getAuthToken();
+
+    try {
+      if (tokenBeforeLogout) {
+        await authFetch("/auth/logout", { method: "POST" });
+      }
+    } catch (_) {}
     setAuthToken(null);
     setModeUI(false, null);
     goToPage("dashboard", "dashboard-page");
-
-    try {
-      await authFetch("/auth/logout", { method: "POST" });
-    } catch (_) {}
 
     await Promise.all([
       loadProjects(),

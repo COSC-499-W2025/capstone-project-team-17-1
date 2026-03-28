@@ -202,8 +202,7 @@ def _restore_user_from_request(request: Request) -> None:
         from capstone.api.routes.auth import get_authenticated_username
 
         username = get_authenticated_username(request)
-        if username:
-            storage_module.CURRENT_USER = username
+        storage_module.set_current_user(username)
     except Exception:
         pass
 

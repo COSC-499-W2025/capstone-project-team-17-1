@@ -1,4 +1,5 @@
 import { isPrivateMode } from "./auth.js";
+import { authFetch } from "./auth.js";
 
 const SKILLS_CHART_MODE_KEY = "loom_dashboard_skills_chart_mode";
 let skillsChart = null;
@@ -11,7 +12,8 @@ export async function loadMostUsedSkills() {
   console.log("Loading most used skills...");
   let result = await window.skillsAPI.loadMostUsedSkills();
 
-  if (isPrivateMode() && (!result || result.empty)) {
+  const hasToken = Boolean(localStorage.getItem("loom_auth_token"));
+  if ((isPrivateMode() || hasToken) && (!result || result.empty)) {
     result = await buildPrivateTimelineSkills();
   }
 
@@ -181,7 +183,7 @@ export async function loadMostUsedSkills() {
 
 async function buildPrivateTimelineSkills() {
   try {
-    const res = await fetch("http://127.0.0.1:8002/skills/timeline");
+    const res = await authFetch("/skills/timeline");
     if (!res.ok) {
       return { empty: true };
     }

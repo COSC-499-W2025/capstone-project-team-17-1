@@ -1,8 +1,6 @@
 import { switchPage } from "./navigation.js";
 import { authFetch } from "./auth.js";
 import { renderMarkdown } from "./AskSienna/markdown.js";
-
-const API = "http://127.0.0.1:8002";
 const MONACO_CDN = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min";
 
 let _currentProjectId = null;
@@ -209,7 +207,7 @@ function _activateViewerTab(tabName) {
 async function _loadFileTree(projectId) {
   const sidebar = document.getElementById("pv-sidebar");
   try {
-    const res = await fetch(`${API}/projects/${encodeURIComponent(projectId)}/tree`);
+    const res = await authFetch(`/projects/${encodeURIComponent(projectId)}/tree`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     _treeData = data.tree;
@@ -330,8 +328,8 @@ async function _loadFileContent(path) {
   _unsavedChanges = false;
 
   try {
-    const res = await fetch(
-      `${API}/projects/${encodeURIComponent(_currentProjectId)}/file?path=${encodeURIComponent(path)}`
+    const res = await authFetch(
+      `/projects/${encodeURIComponent(_currentProjectId)}/file?path=${encodeURIComponent(path)}`
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -414,7 +412,7 @@ async function _saveCurrentFile() {
   saveBtn.disabled = true;
 
   try {
-    const res = await fetch(`${API}/projects/update-file`, {
+    const res = await authFetch(`/projects/update-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -450,8 +448,8 @@ async function _loadAnalysis(projectId) {
   const panel = document.getElementById("pv-analysis-panel");
   try {
     const [analysisRes, collabRes] = await Promise.all([
-      fetch(`${API}/projects/${encodeURIComponent(projectId)}/analysis`),
-      fetch(`${API}/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null),
+      authFetch(`/projects/${encodeURIComponent(projectId)}/analysis`),
+      authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null),
     ]);
 
     if (!analysisRes.ok) throw new Error(`HTTP ${analysisRes.status}`);
@@ -640,7 +638,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
 async function _loadCollaboration(projectId) {
   const panel = document.getElementById("pv-collaboration-panel");
   try {
-    const res = await fetch(`${API}/projects/collaboration/${encodeURIComponent(projectId)}`);
+    const res = await authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _collabData = await res.json();
     _renderCollaborationTab(panel, _collabData);

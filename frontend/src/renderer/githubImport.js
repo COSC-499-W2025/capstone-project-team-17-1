@@ -7,24 +7,23 @@ import { loadErrorAnalysis } from "./errors.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 import { authFetch, hasAuthToken } from "./auth.js";
 async function checkGithubAuth() {
-    const res = await fetch("http://127.0.0.1:8002/github/auth-status")
+    const res = await authFetch("/github/auth-status")
     const data = await res.json()
     return data.authenticated
 }
 
 export async function loadGithubRepos() {
-    const res = await fetch("http://127.0.0.1:8002/github/repos")
+    const res = await authFetch("/github/repos")
     const repos = await res.json()
 
     renderRepoCards(repos)
 }
 
 async function startGithubImport(owner, repo, projectId, branch) {
-
   const url =
-  `http://127.0.0.1:8002/github/import?owner=${owner}&repo=${repo}&project_id=${projectId}&branch=${branch}`;
+  `/github/import?owner=${owner}&repo=${repo}&project_id=${projectId}&branch=${branch}`;
 
-  const res = await fetch(url, {
+  const res = await authFetch(url, {
     method: "POST"
   });
 
@@ -82,7 +81,7 @@ async function initGithubSection() {
   `;
 
   try {
-    const res = await fetch("http://127.0.0.1:8002/github/repos");
+    const res = await authFetch("/github/repos");
     const repos = await res.json();
     renderRepoCards(repos);
   } catch (e) {

@@ -59,8 +59,7 @@ def _check_auth(request: Request) -> None:
 
 def _bind_current_user_from_session(request: Request) -> None:
     username = get_authenticated_username(request)
-    if username:
-        storage_module.CURRENT_USER = username
+    storage_module.set_current_user(username)
 
 
 def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
@@ -73,12 +72,12 @@ def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
     if rows:
         return rows
 
-    previous_user = storage_module.CURRENT_USER
+    previous_user = storage_module.get_current_user()
     try:
-        storage_module.CURRENT_USER = None
+        storage_module.set_current_user(None)
         return _load_heatmap_rows(db_dir)
     finally:
-        storage_module.CURRENT_USER = previous_user
+        storage_module.set_current_user(previous_user)
 
 
 class PortfolioProject(BaseModel):

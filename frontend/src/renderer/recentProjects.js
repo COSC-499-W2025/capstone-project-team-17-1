@@ -1,11 +1,16 @@
 import { openProjectViewer } from "./projectViewer.js";
+import { authFetch } from "./auth.js";
 
 export async function loadRecentProjects() {
   try {
-    const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
+    const res = await authFetch("/dashboard/recent-projects");
+    if (!res.ok) {
+      throw new Error(`Failed to load recent projects: ${res.status}`);
+    }
     const projects = await res.json();
 
     const container = document.getElementById("recent-projects-container");
+    if (!container) return;
     container.innerHTML = "";
 
     projects.slice(0, 5).forEach(project => {

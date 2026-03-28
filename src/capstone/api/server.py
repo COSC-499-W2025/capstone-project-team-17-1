@@ -1,7 +1,8 @@
 import os
 import traceback
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
@@ -79,6 +80,28 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def storage_current_user_middleware(request: Request, call_next):
+        """Bind SQLite scope to the Bearer session on every request (guest = None)."""
+        import capstone.storage as storage_module
+        from capstone.api.routes.auth import get_authenticated_storage_user_key
+
+        storage_user_key = get_authenticated_storage_user_key(request)
+        token = storage_module.bind_request_user(storage_user_key)
+        mode = "user" if storage_user_key else "guest"
+        print(
+            "[storage-bind] "
+            f"path={request.url.path!r} "
+            f"mode={mode!r} "
+            f"user_id={storage_user_key!r} "
+            f"db_path={str(storage_module.get_database_path())!r}",
+            flush=True,
+        )
+        try:
+            return await call_next(request)
+        finally:
+            storage_module.reset_request_user(token)
 
     @app.get("/")
     def root():

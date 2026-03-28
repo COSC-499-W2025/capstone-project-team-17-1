@@ -3,6 +3,7 @@ import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
+import { authFetch } from "./auth.js";
 
 export function openUploadModal() {
   const existing = document.getElementById("upload-modal");
@@ -88,12 +89,12 @@ async function submitZipUpload() {
   formData.append("file", file);
 
   const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
-  const url = `http://127.0.0.1:8002/projects/upload${query}`;
+  const url = `/projects/upload${query}`;
 
   console.log("Sending project_id:", projectId, "URL:", url);
 
   try {
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method: "POST",
       body: formData
     });
@@ -148,7 +149,7 @@ export function renderGithubLogin(container) {
     return;
   }
 
-  const res = await fetch(`http://127.0.0.1:8002/github/login?token=${encodeURIComponent(token)}`, {
+  const res = await authFetch(`/github/login?token=${encodeURIComponent(token)}`, {
     method: "POST"
   });
 
@@ -239,8 +240,8 @@ export function renderRepoCards(repos) {
         let branches = [];
 
         try {
-          const res = await fetch(
-            `http://127.0.0.1:8002/github/branches?owner=${owner}&repo=${name}`
+          const res = await authFetch(
+            `/github/branches?owner=${owner}&repo=${name}`
           );
 
           const data = await res.json();

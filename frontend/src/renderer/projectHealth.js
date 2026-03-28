@@ -1,3 +1,5 @@
+import { authFetch } from "./auth.js";
+
 function getHealthColor(score) {
   const clamp = Math.max(0, Math.min(100, score));
 
@@ -33,7 +35,7 @@ export async function loadProjectHealth() {
   `;
 
   try {
-    const res = await fetch("http://127.0.0.1:8002/analytics/project-health");
+    const res = await authFetch("/analytics/project-health");
     const projects = await res.json();
 
     container.innerHTML = "";
