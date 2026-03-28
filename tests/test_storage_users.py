@@ -38,8 +38,7 @@ def test_users_and_links_schema_and_fk():
             # Tables exist
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             assert "contributors" in tables
-            assert "user_projects" in tables
-            assert "contributor_stats" in tables
+            assert "project_contributors" in tables
             assert "resumes" in tables
             assert "resume_sections" in tables
             assert "resume_items" in tables
@@ -82,16 +81,16 @@ def test_users_and_links_schema_and_fk():
             assert len(rows) == 1
             assert rows[0]["user_id"] == user_id
 
-            # Link user to project (idempotent)
-            storage.link_user_to_project(conn, user_id, "demo", contributor_name="alice")
-            storage.link_user_to_project(conn, user_id, "demo", contributor_name="alice")
+            # Link contributor to project (idempotent)
+            storage.link_contributor_to_project(conn, user_id, "demo", contributor_name="alice")
+            storage.link_contributor_to_project(conn, user_id, "demo", contributor_name="alice")
             links = conn.execute(
-                "SELECT user_id, project_id, contributor_name FROM user_projects"
+                "SELECT contributor_id, project_id FROM project_contributors"
             ).fetchall()
-            assert [tuple(row) for row in links] == [(user_id, "demo", "alice")]
+            assert [tuple(row) for row in links] == [(user_id, "demo")]
 
             # FK points to contributors
-            fk = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
+            fk = conn.execute("PRAGMA foreign_key_list(project_contributors)").fetchall()
             assert fk and fk[0][2] == "contributors"
 
 
@@ -354,7 +353,11 @@ def test_bulk_upsert_contributors_links_projects_and_users():
             assert ("alice", "alice@example.com") in user_rows
             assert ("bob", None) in user_rows
 
-            links = conn.execute("SELECT project_id, contributor_name FROM user_projects").fetchall()
+            links = conn.execute(
+                """SELECT pc.project_id, c.github_username
+                   FROM project_contributors pc
+                   JOIN contributors c ON c.id = pc.contributor_id"""
+            ).fetchall()
             link_rows = [tuple(row) for row in links]
             assert ("demo-proj", "alice") in link_rows
             assert ("demo-proj", "bob") in link_rows

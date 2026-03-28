@@ -175,7 +175,7 @@ class ResumeGuestGenerateTestCase(_ResumeAPIBase):
     def test_generate_resume_works_without_login_using_guest_bucket(self):
         conn = storage.open_db(self.tmp_path)
         guest_id = storage.upsert_contributor(conn, "guestuser", email=None)
-        storage.link_user_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
+        storage.link_contributor_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
         storage.store_analysis_snapshot(
             conn,
             project_id="demo-project",
@@ -463,7 +463,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             primary_contributor="testuser",
             snapshot=snapshot,
         )
-        storage.link_user_to_project(conn, user_id, project_id, contributor_name="testuser")
+        storage.link_contributor_to_project(conn, user_id, project_id, contributor_name="testuser")
 
     # --- fixed existing tests (now pass Bearer token) ---
 

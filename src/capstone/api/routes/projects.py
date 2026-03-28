@@ -371,7 +371,7 @@ async def upload_project(
         contributors = _extract_contributors_from_zip(conn, stored["file_id"])
         for cname, cemail in contributors:
             uid = storage.upsert_contributor(conn, cname, email=cemail)
-            storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+            storage.link_contributor_to_project(conn, uid, project_id, contributor_name=cname)
     except Exception:
         pass  # non-fatal; contributors will be populated on full analysis
 
@@ -498,7 +498,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                     contributors = _extract_contributors_from_zip(conn, stored["file_id"])
                     for cname, cemail in contributors:
                         uid = storage.upsert_contributor(conn, cname, email=cemail)
-                        storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                        storage.link_contributor_to_project(conn, uid, project_id, contributor_name=cname)
                 except Exception:
                     pass  # non-fatal
 
@@ -692,8 +692,7 @@ def delete_project(id: str):
     conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM contributor_stats WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
+    conn.execute("DELETE FROM project_contributors WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM projects WHERE project_id = ?", (id,))
     conn.commit()
 
@@ -968,10 +967,10 @@ async def generate_project_resume(project_id: str, request: Request):
         linked = conn.execute(
             """
             SELECT u.github_username
-            FROM user_projects up
-            JOIN contributors u ON u.id = up.user_id
-            WHERE up.project_id = ?
-            ORDER BY up.id
+            FROM project_contributors pc
+            JOIN contributors u ON u.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            ORDER BY pc.id
             LIMIT 1
             """,
             (project_id,),
@@ -983,7 +982,7 @@ async def generate_project_resume(project_id: str, request: Request):
 
     # 3. Upsert user and ensure project link
     user_id = storage.upsert_contributor(conn, username)
-    storage.link_user_to_project(conn, user_id, project_id, contributor_name=username)
+    storage.link_contributor_to_project(conn, user_id, project_id, contributor_name=username)
 
     # 4. Extract skills from snapshot (languages + frameworks + skills list)
     skill_names: list[str] = []

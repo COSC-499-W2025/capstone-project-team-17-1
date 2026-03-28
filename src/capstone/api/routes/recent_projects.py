@@ -55,8 +55,8 @@ FROM project_analysis pa
 LEFT JOIN projects p
     ON pa.project_id = p.project_id
 LEFT JOIN (
-    SELECT project_id, COUNT(DISTINCT user_id) AS cnt
-    FROM user_projects
+    SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
+    FROM project_contributors
     GROUP BY project_id
 ) uc ON pa.project_id = uc.project_id
 WHERE pa.rowid IN (

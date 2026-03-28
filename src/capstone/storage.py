@@ -206,22 +206,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             updated_at TEXT
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS contributor_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            contributor TEXT NOT NULL,
-            user_id INTEGER,
-            commits INTEGER NOT NULL DEFAULT 0,
-            pull_requests INTEGER NOT NULL DEFAULT 0,
-            issues INTEGER NOT NULL DEFAULT 0,
-            reviews INTEGER NOT NULL DEFAULT 0,
-            score REAL NOT NULL DEFAULT 0,
-            weights_hash TEXT,
-            source TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # contributor_stats removed in M22 — superseded by project_contributors
     conn.execute("""
         CREATE TABLE IF NOT EXISTS project_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,17 +217,24 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # user_projects removed in M22 — superseded by project_contributors
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS user_projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            project_id TEXT NOT NULL,
-            contributor_name TEXT,
+        CREATE TABLE IF NOT EXISTS project_contributors (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      TEXT NOT NULL,
+            contributor_id  INTEGER NOT NULL,
             first_commit_at TEXT,
-            last_commit_at TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (user_id, project_id),
-            FOREIGN KEY (user_id) REFERENCES contributors(id) ON DELETE CASCADE
+            last_commit_at  TEXT,
+            commits         INTEGER NOT NULL DEFAULT 0,
+            pull_requests   INTEGER NOT NULL DEFAULT 0,
+            issues          INTEGER NOT NULL DEFAULT 0,
+            reviews         INTEGER NOT NULL DEFAULT 0,
+            score           REAL NOT NULL DEFAULT 0,
+            weights_hash    TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, contributor_id),
+            FOREIGN KEY (contributor_id) REFERENCES contributors(id) ON DELETE CASCADE
         )
     """)
     conn.execute("""
@@ -375,9 +367,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     """)
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_images_project ON project_images (project_id, created_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_contributor_stats_project ON contributor_stats (project_id, contributor, created_at)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (github_username, COALESCE(email, ''))")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects (project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_contributors_project ON project_contributors (project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_contributors_contributor ON project_contributors (contributor_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_sections_resume ON resume_sections (resume_id, sort_order)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_items_section ON resume_items (section_id, sort_order)")
@@ -600,12 +592,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_contributor_stats_project ON contributor_stats (project_id, contributor, created_at)")
         conn.commit()
 
-    # M2: contributor_stats — add user_id column
-    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
-    columns = {row[1] for row in info}
-    if "user_id" not in columns:
-        conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
-        conn.commit()
+    # M2: contributor_stats — add user_id column (table removed in M22; guard accordingly)
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'").fetchone():
+        info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
+        columns = {row[1] for row in info}
+        if "user_id" not in columns:
+            conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
+            conn.commit()
 
     # M3: contributors — add profile columns (old schema only; skip if already on new schema)
     info = conn.execute("PRAGMA table_info(contributors)").fetchall()
@@ -623,13 +616,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE contributors ADD COLUMN {col} {col_type}")
         conn.commit()
 
-    # M4: user_projects — add activity period columns
-    info = conn.execute("PRAGMA table_info(user_projects)").fetchall()
-    columns = {row[1] for row in info}
-    for col in ("first_commit_at", "last_commit_at"):
-        if col not in columns:
-            conn.execute(f"ALTER TABLE user_projects ADD COLUMN {col} TEXT")
-    conn.commit()
+    # M4: user_projects — add activity period columns (table removed in M22; guard accordingly)
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_projects'").fetchone():
+        info = conn.execute("PRAGMA table_info(user_projects)").fetchall()
+        columns = {row[1] for row in info}
+        for col in ("first_commit_at", "last_commit_at"):
+            if col not in columns:
+                conn.execute(f"ALTER TABLE user_projects ADD COLUMN {col} TEXT")
+        conn.commit()
 
     # M5: contributors — reorder columns to canonical order (old schema only)
     desired_order = [
@@ -919,8 +913,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
 
     # M12 (deferred): repair noreply email user identity links — runs after M17 ensures github_username exists
-    _repair_user_identity_links(conn)
-    conn.commit()
+    # Skipped after M22 removes contributor_stats and user_projects
+    if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'").fetchone():
+        _repair_user_identity_links(conn)
+        conn.commit()
 
     # M18: user table — add profile columns
     user_cols = {row[1] for row in conn.execute("PRAGMA table_info(user)").fetchall()}
@@ -998,20 +994,23 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             FROM project_analysis
             GROUP BY project_id
         """)
-        # Backfill first_commit_at / last_commit_at from user_projects git data
-        conn.execute("""
+        # Backfill first_commit_at / last_commit_at from available contributor data
+        _commit_src = "user_projects" if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='user_projects'"
+        ).fetchone() else "project_contributors"
+        conn.execute(f"""
             UPDATE projects SET
                 first_commit_at = (
-                    SELECT MIN(up.first_commit_at)
-                    FROM user_projects up
-                    WHERE up.project_id = projects.project_id
-                      AND up.first_commit_at IS NOT NULL
+                    SELECT MIN(t.first_commit_at)
+                    FROM {_commit_src} t
+                    WHERE t.project_id = projects.project_id
+                      AND t.first_commit_at IS NOT NULL
                 ),
                 last_commit_at = (
-                    SELECT MAX(up.last_commit_at)
-                    FROM user_projects up
-                    WHERE up.project_id = projects.project_id
-                      AND up.last_commit_at IS NOT NULL
+                    SELECT MAX(t.last_commit_at)
+                    FROM {_commit_src} t
+                    WHERE t.project_id = projects.project_id
+                      AND t.last_commit_at IS NOT NULL
                 )
         """)
         # Migrate status from project_metadata (table may already be gone after M21)
@@ -1067,6 +1066,57 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE project_metadata")
         conn.commit()
 
+    # M22: merge user_projects + contributor_stats → project_contributors; clean test data; drop legacy tables
+    _up_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='user_projects'"
+    ).fetchone()
+    _cs_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'"
+    ).fetchone()
+    if _up_exists or _cs_exists:
+        _pc_empty = conn.execute("SELECT COUNT(*) FROM project_contributors").fetchone()[0] == 0
+        if _pc_empty:
+            if _up_exists:
+                # Migrate git activity data — only real contributors (id <= 11)
+                conn.execute("""
+                    INSERT OR IGNORE INTO project_contributors
+                        (project_id, contributor_id, first_commit_at, last_commit_at, created_at)
+                    SELECT up.project_id, up.user_id, up.first_commit_at, up.last_commit_at, up.created_at
+                    FROM user_projects up
+                    WHERE up.user_id IS NOT NULL AND up.user_id <= 11
+                """)
+            if _cs_exists:
+                # Merge latest GitHub stats per (project_id, user_id) — only real contributors
+                conn.execute("""
+                    INSERT INTO project_contributors
+                        (project_id, contributor_id, commits, pull_requests, issues, reviews,
+                         score, weights_hash, created_at)
+                    SELECT cs.project_id, cs.user_id, cs.commits, cs.pull_requests, cs.issues,
+                           cs.reviews, cs.score, cs.weights_hash, cs.created_at
+                    FROM contributor_stats cs
+                    WHERE cs.user_id IS NOT NULL
+                      AND cs.user_id <= 11
+                      AND cs.id IN (
+                          SELECT MAX(id) FROM contributor_stats
+                          WHERE user_id IS NOT NULL GROUP BY project_id, user_id
+                      )
+                    ON CONFLICT(project_id, contributor_id) DO UPDATE SET
+                        commits       = excluded.commits,
+                        pull_requests = excluded.pull_requests,
+                        issues        = excluded.issues,
+                        reviews       = excluded.reviews,
+                        score         = excluded.score,
+                        weights_hash  = COALESCE(excluded.weights_hash, weights_hash),
+                        updated_at    = CURRENT_TIMESTAMP
+                """)
+        if _up_exists:
+            conn.execute("DROP TABLE user_projects")
+        if _cs_exists:
+            conn.execute("DROP TABLE contributor_stats")
+        # Remove test contributors (id > 11) — real contributors are id 1–11
+        conn.execute("DELETE FROM contributors WHERE id > 11")
+        conn.commit()
+
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""
@@ -1119,32 +1169,30 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         ).fetchone()
         if existing and int(existing[0]) != int(user_id):
             canonical_id = int(existing[0])
-            conn.execute(
-                "UPDATE contributor_stats SET user_id = ? WHERE user_id = ?",
-                (canonical_id, int(user_id)),
-            )
-            old_links = conn.execute(
-                """
-                SELECT project_id, contributor_name
-                FROM user_projects
-                WHERE user_id = ?
-                """,
+            old_projects = conn.execute(
+                "SELECT project_id FROM project_contributors WHERE contributor_id = ?",
                 (int(user_id),),
             ).fetchall()
-            for project_id, contributor_name in old_links:
+            for (project_id,) in old_projects:
                 conn.execute(
                     """
-                    INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
-                    VALUES (?, ?, ?)
+                    INSERT OR IGNORE INTO project_contributors (project_id, contributor_id)
+                    VALUES (?, ?)
                     """,
-                    (canonical_id, project_id, contributor_name),
+                    (project_id, canonical_id),
                 )
-            conn.execute("DELETE FROM user_projects WHERE user_id = ?", (int(user_id),))
+            conn.execute("DELETE FROM project_contributors WHERE contributor_id = ?", (int(user_id),))
             conn.execute("DELETE FROM contributors WHERE id = ?", (int(user_id),))
         else:
             conn.execute("UPDATE contributors SET email = NULL WHERE id = ?", (int(user_id),))
 
-    # Second pass: enforce contributor -> github_username mapping for every stats row.
+    # Second pass: no-op after M22 (contributor_stats / user_projects are gone).
+    # Kept as a guard so M12 remains callable on pre-M22 DBs.
+    if not conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'"
+    ).fetchone():
+        return
+
     contributors = conn.execute(
         "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
     ).fetchall()
@@ -1174,19 +1222,10 @@ def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
         for (project_id,) in projects:
             conn.execute(
                 """
-                INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
-                VALUES (?, ?, ?)
+                INSERT OR IGNORE INTO project_contributors (contributor_id, project_id)
+                VALUES (?, ?)
                 """,
-                (canonical_user_id, project_id, contributor),
-            )
-            conn.execute(
-                """
-                DELETE FROM user_projects
-                WHERE contributor_name = ?
-                  AND project_id = ?
-                  AND user_id != ?
-                """,
-                (contributor, project_id, canonical_user_id),
+                (canonical_user_id, project_id),
             )
 
 def set_current_user(user_id: str | None):
@@ -1830,40 +1869,48 @@ def store_contributor_stats(
     reviews: int = 0,
     score: float = 0.0,
     weights_hash: str | None = None,
-    source: str | None = None,
+    source: str | None = None,  # kept for API compat; no longer stored
 ) -> None:
     if not project_id:
         raise ValueError("project_id must be provided")
     if not contributor:
         raise ValueError("contributor must be provided")
 
+    contributor_id = int(user_id) if user_id else None
+    if contributor_id is None:
+        row = conn.execute(
+            "SELECT id FROM contributors WHERE github_username = ? ORDER BY id LIMIT 1",
+            (contributor,),
+        ).fetchone()
+        if row:
+            contributor_id = int(row[0])
+    if contributor_id is None:
+        return  # cannot store without a linked contributor
+
     conn.execute(
         """
-        INSERT INTO contributor_stats (
-            project_id,
-            contributor,
-            user_id,
-            commits,
-            pull_requests,
-            issues,
-            reviews,
-            score,
-            weights_hash,
-            source
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO project_contributors
+            (project_id, contributor_id, commits, pull_requests, issues, reviews,
+             score, weights_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, contributor_id) DO UPDATE SET
+            commits       = excluded.commits,
+            pull_requests = excluded.pull_requests,
+            issues        = excluded.issues,
+            reviews       = excluded.reviews,
+            score         = excluded.score,
+            weights_hash  = COALESCE(excluded.weights_hash, weights_hash),
+            updated_at    = CURRENT_TIMESTAMP
         """,
         (
             project_id,
-            contributor,
-            user_id,
+            contributor_id,
             int(commits),
             int(pull_requests),
             int(issues),
             int(reviews),
             float(score),
             weights_hash,
-            source,
         ),
     )
     conn.commit()
@@ -1878,39 +1925,24 @@ def fetch_latest_contributor_stats(
 
     cursor = conn.execute(
         """
-        WITH latest_time AS (
-            SELECT contributor, MAX(created_at) AS created_at
-            FROM contributor_stats
-            WHERE project_id = ?
-            GROUP BY contributor
-        ),
-        latest_row AS (
-            SELECT cs.contributor, MAX(cs.id) AS id
-            FROM contributor_stats cs
-            JOIN latest_time lt
-              ON lt.contributor = cs.contributor
-             AND lt.created_at = cs.created_at
-            WHERE cs.project_id = ?
-            GROUP BY cs.contributor
-        )
         SELECT
-            cs.id,
-            cs.project_id,
-            cs.contributor,
-            cs.user_id,
-            cs.commits,
-            cs.pull_requests,
-            cs.issues,
-            cs.reviews,
-            cs.score,
-            cs.weights_hash,
-            cs.source,
-            cs.created_at
-        FROM contributor_stats cs
-        JOIN latest_row lr ON lr.id = cs.id
-        ORDER BY cs.score DESC, cs.contributor ASC
+            pc.id,
+            pc.project_id,
+            c.github_username AS contributor,
+            pc.contributor_id  AS user_id,
+            pc.commits,
+            pc.pull_requests,
+            pc.issues,
+            pc.reviews,
+            pc.score,
+            pc.weights_hash,
+            pc.created_at
+        FROM project_contributors pc
+        JOIN contributors c ON c.id = pc.contributor_id
+        WHERE pc.project_id = ?
+        ORDER BY pc.score DESC, c.github_username ASC
         """,
-        (project_id, project_id),
+        (project_id,),
     )
 
     rows = cursor.fetchall()
@@ -1918,7 +1950,7 @@ def fetch_latest_contributor_stats(
     for row in rows:
         (
             row_id,
-            project_id,
+            proj_id,
             contributor,
             user_id,
             commits,
@@ -1927,22 +1959,21 @@ def fetch_latest_contributor_stats(
             reviews,
             score,
             weights_hash,
-            source,
             created_at,
         ) = row
         payload.append(
             {
-            "id": row_id,
-            "project_id": project_id,
-            "contributor": contributor,
-            "user_id": user_id,
-            "commits": commits,
-            "pull_requests": pull_requests,
-            "issues": issues,
-            "reviews": reviews,
+                "id": row_id,
+                "project_id": proj_id,
+                "contributor": contributor,
+                "user_id": user_id,
+                "commits": commits,
+                "pull_requests": pull_requests,
+                "issues": issues,
+                "reviews": reviews,
                 "score": score,
                 "weights_hash": weights_hash,
-                "source": source,
+                "source": None,  # removed; kept for dict-key compat
                 "created_at": created_at,
             }
         )
@@ -2041,8 +2072,8 @@ def update_contributor_score(
 ) -> None:
     conn.execute(
         """
-        UPDATE contributor_stats
-        SET score = ?, weights_hash = ?
+        UPDATE project_contributors
+        SET score = ?, weights_hash = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (float(score), weights_hash, int(row_id)),
@@ -2960,12 +2991,12 @@ def reorder_resume_items(conn: sqlite3.Connection, section_id: str, ids: list[st
     return fetch_resume_items(conn, section_id)
 
 
-def link_user_to_project(
+def link_contributor_to_project(
     conn: sqlite3.Connection,
     user_id: int,
     project_id: str,
     *,
-    contributor_name: str | None = None,
+    contributor_name: str | None = None,  # kept for API compat; no longer stored
     first_commit_at: str | None = None,
     last_commit_at: str | None = None,
 ) -> None:
@@ -2975,41 +3006,27 @@ def link_user_to_project(
         raise ValueError("project_id must be provided")
     conn.execute(
         """
-        INSERT OR IGNORE INTO user_projects (
-            user_id, project_id, contributor_name, first_commit_at, last_commit_at
-        )
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO project_contributors (project_id, contributor_id, first_commit_at, last_commit_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(project_id, contributor_id) DO UPDATE SET
+            first_commit_at = CASE
+                WHEN first_commit_at IS NULL THEN excluded.first_commit_at
+                WHEN excluded.first_commit_at IS NOT NULL
+                     AND excluded.first_commit_at < first_commit_at THEN excluded.first_commit_at
+                ELSE first_commit_at END,
+            last_commit_at = CASE
+                WHEN last_commit_at IS NULL THEN excluded.last_commit_at
+                WHEN excluded.last_commit_at IS NOT NULL
+                     AND excluded.last_commit_at > last_commit_at THEN excluded.last_commit_at
+                ELSE last_commit_at END,
+            updated_at = CURRENT_TIMESTAMP
         """,
-        (int(user_id), project_id, contributor_name, first_commit_at, last_commit_at),
+        (project_id, int(user_id), first_commit_at, last_commit_at),
     )
-    existing = conn.execute(
-        """
-        SELECT contributor_name, first_commit_at, last_commit_at
-        FROM user_projects
-        WHERE user_id = ? AND project_id = ?
-        """,
-        (int(user_id), project_id),
-    ).fetchone()
-    if existing:
-        merged_name = contributor_name if contributor_name is not None else existing[0]
-        merged_first = existing[1]
-        merged_last = existing[2]
-        if first_commit_at and (not merged_first or str(first_commit_at) < str(merged_first)):
-            merged_first = first_commit_at
-        if last_commit_at and (not merged_last or str(last_commit_at) > str(merged_last)):
-            merged_last = last_commit_at
-        conn.execute(
-            """
-            UPDATE user_projects
-            SET contributor_name = ?, first_commit_at = ?, last_commit_at = ?
-            WHERE user_id = ? AND project_id = ?
-            """,
-            (merged_name, merged_first, merged_last, int(user_id), project_id),
-        )
     conn.commit()
 
 
-def fetch_user_project_activity_periods(
+def fetch_project_contributor_activity_periods(
     conn: sqlite3.Connection,
     *,
     user_id: int,
@@ -3022,8 +3039,8 @@ def fetch_user_project_activity_periods(
     rows = conn.execute(
         f"""
         SELECT project_id, first_commit_at, last_commit_at
-        FROM user_projects
-        WHERE user_id = ?
+        FROM project_contributors
+        WHERE contributor_id = ?
           AND project_id IN ({placeholders})
         """,
         (int(user_id), *cleaned),
@@ -3054,7 +3071,7 @@ def bulk_upsert_contributors(
         if not github_username:
             continue
         user_id = upsert_contributor(conn, github_username, email=email)
-        link_user_to_project(conn, user_id, project_id, contributor_name=github_username)
+        link_contributor_to_project(conn, user_id, project_id, contributor_name=github_username)
 
 def save_project_metadata(conn, project_id, meta):
     """Save project timeline/status. Writes to projects table (project_metadata was removed in M21)."""
@@ -3377,8 +3394,8 @@ __all__ = [
     "upsert_contributor",
     "get_contributor_profile",
     "upsert_default_resume_modules",
-    "link_user_to_project",
-    "fetch_user_project_activity_periods",
+    "link_contributor_to_project",
+    "fetch_project_contributor_activity_periods",
     "bulk_upsert_contributors",
     # evidence
     "store_project_evidence",

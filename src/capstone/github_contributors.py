@@ -14,7 +14,7 @@ from typing import Callable, Iterable, Optional
 from .logging_utils import get_logger
 from .storage import (
     fetch_latest_contributor_stats,
-    link_user_to_project,
+    link_contributor_to_project,
     open_db,
     store_contributor_stats,
     upsert_contributor,
@@ -372,7 +372,7 @@ def sync_contributor_stats(
     for row in stats:
         # upsert contributor first to get stable id
         user_id = upsert_contributor(conn, row.contributor, email=row.email)
-        link_user_to_project(
+        link_contributor_to_project(
             conn,
             user_id,
             resolved_project_id,

@@ -261,7 +261,7 @@ async def generate_resume(request: Request):
             project_ids = [str(p) for p in selected_project_ids]
         else:
             rows = conn.execute(
-                "SELECT project_id FROM user_projects WHERE user_id = ?",
+                "SELECT project_id FROM project_contributors WHERE contributor_id = ?",
                 (data_user_id,),
             ).fetchall()
             project_ids = [r[0] for r in rows]
@@ -302,17 +302,17 @@ async def generate_resume(request: Request):
             # Prefer GitHub API rows (source="github") over zip-derived rows;
             # if any github rows exist, ignore zip rows entirely to avoid double-counting.
             cs_rows = conn.execute(
-                """SELECT contributor, user_id, commits, pull_requests, issues, reviews, source
-                   FROM contributor_stats WHERE project_id = ?""",
+                """SELECT c.github_username, pc.contributor_id,
+                          pc.commits, pc.pull_requests, pc.issues, pc.reviews
+                   FROM project_contributors pc
+                   JOIN contributors c ON c.id = pc.contributor_id
+                   WHERE pc.project_id = ?""",
                 (pid,),
             ).fetchall()
             contributor_stats_map: dict = {}
             if cs_rows:
-                _has_github = any(r[6] == "github" for r in cs_rows)
                 _agg: dict = {}
-                for cname, uid, c, p, i, rv, src in cs_rows:
-                    if _has_github and src != "github":
-                        continue
+                for cname, uid, c, p, i, rv in cs_rows:
                     if not cname or _is_bot_contributor(cname) or _is_noreply_email(cname):
                         continue
                     key = cname

@@ -55,7 +55,7 @@ from capstone.storage import (
     fetch_project_thumbnail_meta,
     fetch_latest_snapshot,
     fetch_latest_snapshots,
-    fetch_user_project_activity_periods,
+    fetch_project_contributor_activity_periods,
     get_user,
     open_db,
     store_github_source,
@@ -3164,7 +3164,7 @@ def _sync_generated_resume_modules_to_db(
         str(snap.get("project_id") or (snap.get("snapshot") or {}).get("project_id") or "").strip()
         for snap in chosen_snapshots
     ]
-    activity_map = fetch_user_project_activity_periods(
+    activity_map = fetch_project_contributor_activity_periods(
         conn,
         user_id=user_id,
         project_ids=chosen_project_ids,

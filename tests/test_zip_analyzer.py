@@ -393,7 +393,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
 
-    def test_contributors_linked_in_user_projects_table(self):
+    def test_contributors_linked_in_project_contributors_table(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("Bob Smith", "bob@example.com", 1700000100)
@@ -402,26 +402,36 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         rows = conn.execute(
-            "SELECT contributor_name FROM user_projects WHERE project_id = ? ORDER BY contributor_name",
+            """
+            SELECT c.github_username
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            ORDER BY c.github_username
+            """,
             ("proj2",),
         ).fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
 
-    def test_contributor_stats_written_with_zip_source(self):
+    def test_contributor_stats_written(self):
         git_log = _reflog_line("Alice Example", "alice@example.com", 1700000000)
         self._run_analyze(self._make_archive(git_log), "proj3")
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT source, commits, score FROM contributor_stats WHERE project_id = ? AND contributor = ?",
+            """
+            SELECT pc.commits, pc.score
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ? AND c.github_username = ?
+            """,
             ("proj3", "Alice Example"),
         ).fetchone()
         self.assertIsNotNone(row)
-        self.assertEqual(row[0], "zip")
-        self.assertGreaterEqual(row[1], 1)   # at least 1 commit
-        self.assertGreaterEqual(row[2], 0.0)  # score >= 0
+        self.assertGreaterEqual(row[0], 1)   # at least 1 commit
+        self.assertGreaterEqual(row[1], 0.0)  # score >= 0
 
     def test_bot_contributors_excluded_from_users_table(self):
         git_log = (
@@ -436,7 +446,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self.assertIn("Alice Example", names)
         self.assertNotIn("dependabot[bot]", names)
 
-    def test_bot_contributors_excluded_from_user_projects_table(self):
+    def test_bot_contributors_excluded_from_project_contributors_table(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("github-actions[bot]", "actions@github.com", 1700000100)
@@ -445,12 +455,18 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         rows = conn.execute(
-            "SELECT contributor_name FROM user_projects WHERE project_id = ?", ("proj5",)
+            """
+            SELECT c.github_username
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            """,
+            ("proj5",),
         ).fetchall()
         names = [r[0] for r in rows]
         self.assertNotIn("github-actions[bot]", names)
 
-    def test_bot_contributors_excluded_from_contributor_stats(self):
+    def test_bot_contributors_excluded_from_project_contributors_stats(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("renovate[bot]", "renovate@whitesource.com", 1700000100)
@@ -459,7 +475,11 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT id FROM contributor_stats WHERE project_id = ? AND contributor = ?",
+            """
+            SELECT pc.id FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ? AND c.github_username = ?
+            """,
             ("proj6", "renovate[bot]"),
         ).fetchone()
         self.assertIsNone(row)

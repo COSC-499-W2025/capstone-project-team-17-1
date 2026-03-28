@@ -51,21 +51,17 @@ def list_users(request: Request):
         rows = c.execute("""
             SELECT DISTINCT u.id, u.github_username, u.email
             FROM contributors u
-            INNER JOIN user_projects up ON u.id = up.user_id
-            INNER JOIN project_analysis pa ON up.project_id = pa.project_id
-            -- Exclude no-email users when another user WITH an email is
-            -- already linked to at least one of the same projects.
-            -- This removes git-fullname duplicates when the GitHub-login
-            -- version (with real email) is also present.
+            INNER JOIN project_contributors pc ON u.id = pc.contributor_id
+            INNER JOIN project_analysis pa ON pc.project_id = pa.project_id
             WHERE NOT (
                 u.email IS NULL
                 AND EXISTS (
                     SELECT 1 FROM contributors u2
-                    INNER JOIN user_projects up2 ON u2.id = up2.user_id
+                    INNER JOIN project_contributors pc2 ON u2.id = pc2.contributor_id
                     WHERE u2.email IS NOT NULL
                       AND u2.id != u.id
-                      AND up2.project_id IN (
-                          SELECT project_id FROM user_projects WHERE user_id = u.id
+                      AND pc2.project_id IN (
+                          SELECT project_id FROM project_contributors WHERE contributor_id = u.id
                       )
                 )
             )
@@ -85,7 +81,13 @@ def list_user_projects(user: str, request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute(
-            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? ORDER BY project_id",
+            """
+            SELECT DISTINCT pc.project_id
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE c.github_username = ?
+            ORDER BY pc.project_id
+            """,
             (user,),
         ).fetchall()
     projects = [r[0] for r in rows if r and r[0]]
@@ -116,7 +118,11 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
     if user:
         with _db_session(_require_db()) as c:
             row = c.execute(
-                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
+                """
+                SELECT 1 FROM project_contributors pc
+                JOIN contributors c ON c.id = pc.contributor_id
+                WHERE pc.project_id = ? AND c.github_username = ? LIMIT 1
+                """,
                 (projectId, user),
             ).fetchone()
         if row:

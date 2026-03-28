@@ -26,7 +26,7 @@ from .logging_utils import get_logger
 from .metrics import FileMetric, MetricSummary, compute_metrics
 from .modes import ModeResolution
 from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
-from .storage import open_db, close_db, store_analysis_snapshot, upsert_contributor, link_user_to_project, store_contributor_stats
+from .storage import open_db, close_db, store_analysis_snapshot, upsert_contributor, link_contributor_to_project, store_contributor_stats
 import sqlite3
 from . import file_store
 
@@ -422,7 +422,7 @@ class ZipAnalyzer:
                     if cname in noreply_only_authors:
                         continue
                     uid = upsert_contributor(conn, cname, email=author_email_map.get(cname))
-                    link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                    link_contributor_to_project(conn, uid, project_id, contributor_name=cname)
                     commits, _lines, reviews = _parse_contrib_data(cdata)
                     score = commits * 1.0 + reviews * 0.5
                     store_contributor_stats(

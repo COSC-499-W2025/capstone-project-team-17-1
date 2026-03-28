@@ -245,7 +245,7 @@ def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
 
 def test_sync_generated_resume_modules_includes_project_activity_period_dates():
     with (
-        patch.object(app, "fetch_user_project_activity_periods", return_value={
+        patch.object(app, "fetch_project_contributor_activity_periods", return_value={
             "demo-project": {
                 "first_commit_at": "2025-01-10",
                 "last_commit_at": "2025-01-20",
