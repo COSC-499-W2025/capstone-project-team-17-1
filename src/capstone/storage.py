@@ -1249,9 +1249,10 @@ def store_analysis_snapshot(
     classification: str = "unknown",
     primary_contributor: str | None = None,
     snapshot: dict | None = None,
-    zip_path: str | None = None, 
+    zip_path: str | None = None,
+    repo_url: str | None = None,
 ) -> None:
-    """Insert a new snapshot row for a project."""
+    """Insert a new snapshot row for a project and upsert the projects table."""
     if not project_id:
         raise ValueError("project_id must be provided")
 
@@ -1262,24 +1263,37 @@ def store_analysis_snapshot(
 
     payload = json.dumps(doc)
     conn.execute(
-    """
-    INSERT INTO project_analysis (
-        project_id,
-        classification,
-        primary_contributor,
-        snapshot,
-        zip_path
+        """
+        INSERT INTO project_analysis (
+            project_id,
+            classification,
+            primary_contributor,
+            snapshot,
+            zip_path
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (project_id, classification, primary_contributor, payload, zip_path),
     )
-    VALUES (?, ?, ?, ?, ?)
-    """,
-    (
+
+    # Keep projects table in sync with every analysis
+    _collab = doc.get("collaboration") or {}
+    _first = _collab.get("first_commit_date")
+    _last = _collab.get("last_commit_date")
+    _source = "zip" if zip_path else "github"
+    _github_url = repo_url or doc.get("repo_url") or doc.get("github_url")
+    _type = classification if classification not in ("unknown", "") else None
+    upsert_project(
+        conn,
         project_id,
-        classification,
-        primary_contributor,
-        payload,
-        zip_path,  # 👈 STORE IT HERE
-    ),
-)
+        source=_source,
+        github_url=_github_url,
+        has_git=bool(_first),
+        type=_type,
+        first_commit_at=_first,
+        last_commit_at=_last,
+    )
+
     conn.commit()
 
 

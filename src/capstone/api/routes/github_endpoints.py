@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
-from capstone.storage import open_db, save_github_token, get_github_token, fetch_latest_snapshot, store_analysis_snapshot
+from capstone.storage import open_db, save_github_token, get_github_token, fetch_latest_snapshot, store_analysis_snapshot, upsert_project, update_project_commit_range
 import capstone.storage as storage_module
 from capstone.system.cloud_storage import upload_database, upload_project_zip
 from capstone.github_contributors import sync_contributor_stats
@@ -296,6 +296,16 @@ def import_repository(
             # extract timestamps from git log — we fetch them here instead.
             _patch_github_commit_dates(conn, project_id, owner, repo, branch, headers, summary)
             _store_commit_sha_in_latest_snapshot(conn, project_id, latest_commit_sha)
+
+            # Sync commit dates and github_url into the projects table.
+            _github_url = f"https://github.com/{owner}/{repo}"
+            upsert_project(conn, project_id, source="github", github_url=_github_url)
+            _collab = (summary.get("collaboration") or {})
+            update_project_commit_range(
+                conn, project_id,
+                _collab.get("first_commit_date"),
+                _collab.get("last_commit_date"),
+            )
 
             # Sync full contributor stats (commits, PRs, issues, reviews) via GitHub API.
             # This enriches the contributor_stats table so resume generation can show
