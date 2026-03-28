@@ -2337,6 +2337,104 @@ transition: all 0.2s ease;
   backdrop-filter: blur(12px);
 }
 
+/* =========================================================
+   PORTFOLIO CARD POPUP
+========================================================= */
+
+.customization-project-editor {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.customization-project-editor.active {
+  border-color: rgba(77, 166, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(77, 166, 255, 0.12);
+}
+
+.customization-project-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.portfolio-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portfolio-card-collapsed-preview {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.portfolio-card-expanded-content {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.portfolio-card-theme-preview {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.portfolio-theme-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.portfolio-theme-cover-image {
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  object-fit: cover;
+  display: block;
+  border-radius: 14px;
+}
+
+.portfolio-theme-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.portfolio-theme-block {
+  display: grid;
+  gap: 6px;
+}
+
+.portfolio-theme-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-theme-gallery-item img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+}
+
+.portfolio-theme-gallery-item p {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* =========================================================
+   LIVE PREVIEW PORTFOLIO
+========================================================= */
+
 .live-preview-project-card {
   width: 100%;
   overflow: hidden;
