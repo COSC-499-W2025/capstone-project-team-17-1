@@ -14,6 +14,9 @@ The system supports three workflows: CLI analysis, interactive menu usage, and F
 - [Known Bugs](#known-bugs)
 - [Test Data ZIPs](#test-data-zips)
 - [Work Breakdown Structure](#work-breakdown-structure)
+- [DFD Level 1](#dfd-level-1)
+- [system_architecture_design](#system_architecture_design)
+- [Team Contract](#team-contract)
 
 ## Tips
 For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
