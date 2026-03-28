@@ -532,6 +532,29 @@ body.light .theme-toggle::before {
   100% { background-position: -200% 0; }
 }
 
+/* Skeleton: lines/shimmer are tuned for dark cards; override for light surfaces */
+body.light .skeleton-card.card {
+  background: linear-gradient(145deg, #e8ecf4, #f2f5fb);
+  border-color: var(--border);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+body.light .skeleton-line {
+  background: rgba(19, 41, 75, 0.11);
+}
+
+body.light .skeleton-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.72) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
 .tab-panel {
   flex: 1;
   min-height: 0;
@@ -7575,6 +7598,116 @@ body.light .pv-analysis-section,
 body.light .pv-stat-card {
   background: var(--card-inner-bg);
   border: 1px solid var(--border);
+}
+
+/* Project viewer — Analysis & Collaboration: readable text on light cards */
+body.light .pv-analysis-section h3 {
+  color: var(--text-primary);
+}
+
+body.light .pv-stat-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-name,
+body.light .pv-skill-name {
+  color: var(--text-primary);
+}
+
+body.light .pv-lang-pct,
+body.light .pv-skill-pct {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-bar-bg,
+body.light .pv-skill-bar-bg,
+body.light .pv-period-bar {
+  background: rgba(19, 41, 75, 0.08);
+}
+
+body.light .pv-tag {
+  background: rgba(43, 119, 214, 0.12);
+  color: #1f4f8a;
+  border-color: rgba(43, 119, 214, 0.25);
+}
+
+body.light .pv-tag-bot {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: rgba(180, 83, 9, 0.35);
+  color: #9a3412;
+}
+
+body.light .pv-collab-row {
+  background: rgba(19, 41, 75, 0.04);
+}
+
+body.light .pv-collab-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-value {
+  color: #1f4f8a;
+}
+
+body.light .pv-timeline-year {
+  color: var(--text-primary);
+}
+
+body.light .pv-no-data {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-title {
+  color: var(--text-primary);
+}
+
+body.light .pv-collab-notice {
+  background: rgba(234, 179, 8, 0.18);
+  border-color: rgba(180, 130, 0, 0.35);
+  color: #7c5200;
+}
+
+body.light .pv-period-labels {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-ranking-header {
+  color: var(--text-secondary);
+  opacity: 1;
+  border-bottom-color: var(--border);
+}
+
+body.light .pv-ranking-row {
+  background: rgba(19, 41, 75, 0.03);
+}
+
+body.light .pv-ranking-row:hover {
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-rank-col {
+  color: #1f4f8a;
+}
+
+body.light .pv-rank-first {
+  background: rgba(43, 119, 214, 0.1);
+  border-color: rgba(43, 119, 214, 0.28);
+}
+
+body.light .pv-analysis-loading,
+body.light .pv-analysis-error {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+body.light .pv-analysis-hint {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 body.light .health-project,
