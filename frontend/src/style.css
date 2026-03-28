@@ -1151,10 +1151,29 @@ svg {
   font-weight: 600;
 }
 
-.level-info { color: rgba(255, 255, 255, 0.85); }
-.level-warning { color: #f5c542; }
-.level-error { color: #ff4c4c; }
-.level-success { color: #00ff88; }
+.activity-line.level-info {
+  color: var(--text-primary);
+}
+.activity-line.level-warning {
+  color: #f5c542;
+}
+.activity-line.level-error {
+  color: #ff4c4c;
+}
+.activity-line.level-success {
+  color: #00ff88;
+}
+
+/* Activity log: semantic colors on light backgrounds */
+body.light .activity-line.level-warning {
+  color: #a16207;
+}
+body.light .activity-line.level-error {
+  color: #c62828;
+}
+body.light .activity-line.level-success {
+  color: #0d7a4d;
+}
 
 /* =========================================================
    MISC
@@ -1439,6 +1458,70 @@ svg {
   min-height: 18px;
   color: #ff8f8f;
   font-size: 12px;
+}
+
+/* Login / consent detail modals: light surfaces in light mode (keep dark defaults above) */
+body.light .auth-modal {
+  background: var(--overlay-scrim);
+}
+
+body.light .auth-dialog {
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.light .auth-dialog h3 {
+  color: var(--text-primary);
+}
+
+body.light .auth-dialog p {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .auth-close {
+  color: var(--text-secondary);
+}
+
+body.light .auth-close:hover {
+  color: var(--text-primary);
+}
+
+body.light .auth-link,
+body.light .auth-cancel {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light .auth-link:hover,
+body.light .auth-cancel:hover {
+  background: #e6eef9;
+  filter: none;
+}
+
+body.light .auth-error {
+  color: #c62828;
+}
+
+body.light .consent-detail-item {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+body.light .consent-detail-item h4 {
+  color: var(--text-primary);
+}
+
+body.light .consent-detail-item p,
+body.light .consent-detail-status {
+  color: var(--text-secondary);
+}
+
+body.light .consent-detail-status {
+  opacity: 1;
 }
 
 .error-project {
@@ -7618,7 +7701,7 @@ body.light .heatmap-select {
 }
 
 .activity-line {
-  color: white !important;
+  color: var(--text-primary);
   display: block !important;
   padding: 6px 0 !important;
 }
