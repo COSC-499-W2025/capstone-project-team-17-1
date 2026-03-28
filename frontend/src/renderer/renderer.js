@@ -1,3 +1,4 @@
+import { initDashboardFX } from "./dashboard_fx.js";
 import { initPortfolioEditor } from "./portfolioEditor.js";
 import { initChat } from "./chat.js";
 import { initJobMatch } from "./jobMatch.js";
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initDisplayPreferences();
   initConsentBanner();
   initOnboarding();
+  initDashboardFX();
 
   loadProjects();
 

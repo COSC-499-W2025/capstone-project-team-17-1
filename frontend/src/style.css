@@ -7616,3 +7616,477 @@ body.light .heatmap-select {
   display: block !important;
   padding: 6px 0 !important;
 }
+
+/* new addition which is fx */
+
+body {
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(0, 183, 255, 0.10), transparent 30%),
+    radial-gradient(circle at 85% 18%, rgba(116, 60, 255, 0.12), transparent 28%),
+    radial-gradient(circle at 52% 82%, rgba(0, 255, 170, 0.07), transparent 32%);
+  pointer-events: none;
+  z-index: -4;
+}
+
+.aurora-scene {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -3;
+  overflow: hidden;
+}
+
+.aurora-blob {
+  position: absolute;
+  width: 38vw;
+  height: 38vw;
+  filter: blur(70px);
+  border-radius: 50%;
+  opacity: 0.22;
+  mix-blend-mode: screen;
+  animation: auroraFloat 18s ease-in-out infinite;
+}
+
+.aurora-a {
+  top: -8%;
+  left: 6%;
+  background: radial-gradient(circle, rgba(0, 179, 255, 0.65), transparent 65%);
+}
+
+.aurora-b {
+  top: 8%;
+  right: -4%;
+  background: radial-gradient(circle, rgba(115, 68, 255, 0.55), transparent 65%);
+  animation-delay: -6s;
+}
+
+.aurora-c {
+  bottom: -12%;
+  left: 28%;
+  background: radial-gradient(circle, rgba(0, 255, 174, 0.35), transparent 65%);
+  animation-delay: -12s;
+}
+
+.aurora-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+}
+
+.aurora-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image:
+    radial-gradient(circle at 20% 20%, white 0.5px, transparent 0.8px),
+    radial-gradient(circle at 70% 60%, white 0.5px, transparent 0.8px),
+    radial-gradient(circle at 40% 80%, white 0.5px, transparent 0.8px);
+  background-size: 140px 140px;
+}
+
+.cursor-glow {
+  position: fixed;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(71, 175, 255, 0.20), rgba(71, 175, 255, 0.06) 45%, transparent 72%);
+  filter: blur(12px);
+  z-index: -2;
+  transition: transform 0.08s linear;
+}
+
+@keyframes auroraFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(3vw, -2vh, 0) scale(1.06);
+  }
+  50% {
+    transform: translate3d(-2vw, 3vh, 0) scale(0.96);
+  }
+  75% {
+    transform: translate3d(2vw, 1vh, 0) scale(1.03);
+  }
+}
+
+.dashboard-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background:
+    linear-gradient(180deg, rgba(23, 34, 70, 0.80), rgba(8, 17, 40, 0.94));
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    opacity 0.35s ease,
+    filter 0.35s ease;
+  opacity: 0;
+  transform: translateY(22px) scale(0.985);
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.dashboard-card.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.dashboard-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(95, 193, 255, 0.15), transparent 24%, transparent 76%, rgba(0, 255, 170, 0.08));
+  pointer-events: none;
+}
+
+.dashboard-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(77,166,255,0.42), rgba(0,255,136,0.14), rgba(108,72,255,0.38));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.dashboard-card:hover {
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.42),
+    0 0 28px rgba(54, 154, 255, 0.14);
+  border-color: rgba(98, 185, 255, 0.26);
+}
+
+.dashboard-card:hover::after,
+.dashboard-card.widget-match::after,
+.dashboard-card.widget-fullscreen::after {
+  opacity: 1;
+}
+
+.card-expand-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #eaf3ff;
+  border-radius: 10px;
+  cursor: pointer;
+  z-index: 4;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.card-expand-btn:hover {
+  transform: scale(1.08);
+  background: rgba(77, 166, 255, 0.16);
+  border-color: rgba(77, 166, 255, 0.4);
+}
+
+.widget-spotlight-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 25, 0.74);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+  z-index: 998;
+}
+
+.widget-spotlight-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.widget-mode {
+  overflow: hidden;
+}
+
+.dashboard-card.widget-fullscreen {
+  position: fixed !important;
+  top: 90px !important;
+  left: 40px !important;
+  right: 40px !important;
+  bottom: 40px !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  z-index: 999 !important;
+  overflow: auto !important;
+  transform: none !important;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.52),
+    0 0 42px rgba(77, 166, 255, 0.16);
+}
+
+.widget-hidden-by-search {
+  opacity: 0.18 !important;
+  filter: grayscale(0.7);
+}
+
+.command-palette-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.command-palette-root.hidden {
+  display: none;
+}
+
+.command-palette-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 8, 20, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.command-palette-panel {
+  position: absolute;
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, 92vw);
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    linear-gradient(180deg, rgba(20, 30, 60, 0.96), rgba(8, 15, 34, 0.98));
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.45),
+    0 0 30px rgba(77, 166, 255, 0.10);
+  overflow: hidden;
+}
+
+.command-palette-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 10px;
+}
+
+.command-palette-kicker {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: rgba(213, 225, 255, 0.62);
+}
+
+.command-palette-hint {
+  font-size: 12px;
+  color: rgba(213, 225, 255, 0.72);
+}
+
+.command-palette-input {
+  width: calc(100% - 32px);
+  margin: 0 16px 12px;
+  padding: 15px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.06);
+  color: #f5f8ff;
+  outline: none;
+  font-size: 15px;
+}
+
+.command-palette-input:focus {
+  border-color: rgba(77,166,255,0.42);
+  box-shadow: 0 0 0 3px rgba(77,166,255,0.12);
+}
+
+.command-palette-list {
+  max-height: 52vh;
+  overflow: auto;
+  padding: 0 12px 14px;
+}
+
+.command-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: none;
+  background: transparent;
+  color: #f5f8ff;
+  text-align: left;
+  padding: 14px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.command-item:hover,
+.command-item.active {
+  background: rgba(255,255,255,0.08);
+  transform: translateX(4px);
+}
+
+.command-group {
+  min-width: 88px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(135, 189, 255, 0.78);
+}
+
+.command-label {
+  font-size: 14px;
+  color: #f5f8ff;
+}
+
+.command-empty {
+  padding: 18px;
+  color: rgba(223, 233, 252, 0.72);
+}
+
+#widget-search {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+#widget-search:focus {
+  border-color: rgba(77,166,255,0.44);
+  box-shadow: 0 0 0 3px rgba(77,166,255,0.12);
+  transform: translateY(-1px);
+}
+
+.activity-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.activity-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(234,243,255,0.92);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ff88;
+  box-shadow: 0 0 12px rgba(0,255,136,0.6);
+  animation: livePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+.activity-filter-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.activity-filter-btn {
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: rgba(234,243,255,0.88);
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.activity-filter-btn:hover,
+.activity-filter-btn.active {
+  background: linear-gradient(90deg, rgba(77,166,255,0.22), rgba(0,255,136,0.16));
+  border-color: rgba(77,166,255,0.34);
+  transform: translateY(-1px);
+}
+
+#recent-activity {
+  min-height: 180px;
+  max-height: 340px;
+  overflow-y: auto;
+  display: block;
+  padding: 8px 6px 4px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(5, 10, 24, 0.56), rgba(16, 24, 48, 0.32));
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.activity-line {
+  display: block;
+  color: rgba(245, 248, 255, 0.88);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.activity-timestamp {
+  color: rgba(194, 211, 245, 0.84);
+  margin-right: 10px;
+}
+
+.activity-tag {
+  font-weight: 700;
+  margin-right: 10px;
+}
+
+.activity-message {
+  color: rgba(245, 248, 255, 0.92);
+}
+
+.level-info {
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.level-warning {
+  color: #ffd15c;
+}
+
+.level-error {
+  color: #ff7a7a;
+}
+
+.level-success {
+  color: #7bffbe;
+}
