@@ -101,6 +101,7 @@ This section is the recommended setup path for the next team working on the repo
 | Frontend tests | [`frontend/test/`](frontend/test) |
 | Demo and regression ZIPs | [`test_data/`](test_data) |
 | Setup scripts | [`scripts/`](scripts) |
+| Frontend peer testing startup (macOS) | [Peer Testing Instructions - Frontend (macOS)](#peer-testing-instructions---frontend-macos) |
 | Known limitations and workarounds | [Known Bugs](#known-bugs) |
 
 ### 1. Clone and create a Python environment
@@ -177,6 +178,67 @@ cd ..
 - API route details are documented in [`docs/api.md`](docs/api.md).
 - Sample archives for demos and regression checks live in [`test_data/`](test_data).
 - The current test suite assumes local filesystem access for generated app data and logs.
+
+## Peer Testing Instructions - Frontend (macOS)
+
+### Overview
+
+Use this flow for peer testing on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
+
+### 1. Go to the project root and activate the virtual environment
+
+```bash
+cd /Users/yanshuyu/Desktop/capstone-project-team-17-1
+source .venv/bin/activate
+```
+
+### 2. Install backend dependencies
+
+```bash
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+### 3. Rebuild the backend executable
+
+```bash
+PYINSTALLER_CONFIG_DIR=/tmp/pyinstaller \
+.venv/bin/python -m PyInstaller src/capstone/capstone_backend.spec --clean
+```
+
+### 4. Start the backend
+
+The frontend currently expects the backend on port `8002`.
+
+```bash
+python -m capstone.run_server
+```
+
+### 5. Open a new terminal and start the frontend
+
+```bash
+cd /Users/yanshuyu/Desktop/capstone-project-team-17-1/frontend
+npm install
+npm start
+```
+
+### 6. Verify backend health
+
+Open:
+
+```text
+http://127.0.0.1:8002/health
+```
+
+If it returns a healthy response, the backend and frontend should be able to connect.
+
+### 7. Suggested peer-testing checks
+
+- Confirm the app launches without a frontend-backend connection error.
+- Test account login and verify the authenticated view loads correctly.
+- Upload a project and confirm it appears in the project list.
+- Open project views and verify charts, summaries, or visualizations render.
+- Restart the app/backend and confirm expected data persists through the hosted/local backend state.
 
 ## Usage
 
