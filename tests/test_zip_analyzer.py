@@ -256,63 +256,63 @@ class BuildAuthorEmailMapTestCase(unittest.TestCase):
             "commit:abc123|Alice Example|alice@example.com|1700000000|Add feature",
             "commit:def456|Bob Smith|bob@example.com|1700000001|Fix bug",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result["Alice Example"], "alice@example.com")
-        self.assertEqual(result["Bob Smith"], "bob@example.com")
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map["Alice Example"], "alice@example.com")
+        self.assertEqual(email_map["Bob Smith"], "bob@example.com")
 
     def test_skips_users_noreply_github_com(self):
         lines = [
             "commit:abc|Alice|12345+alice@users.noreply.github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_noreply_github_com(self):
         lines = [
             "commit:abc|Alice|alice@noreply.github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_bare_noreply_address(self):
         lines = [
             "commit:abc|Alice|noreply@github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_bot_authors(self):
         lines = [
             "commit:abc|dependabot[bot]|dependabot@github.com|1700000000|bump",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("dependabot[bot]", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("dependabot[bot]", email_map)
 
     def test_ignores_non_commit_lines(self):
         lines = [
             "Alice Example|alice@example.com|some random line",
             "0000 1111 Alice <alice@example.com> 1700000000 +0000\tcommit",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map, {})
 
     def test_first_occurrence_wins(self):
         lines = [
             "commit:aaa|Alice|first@example.com|1700000000|First",
             "commit:bbb|Alice|second@example.com|1700000001|Second",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result["Alice"], "first@example.com")
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map["Alice"], "first@example.com")
 
     def test_empty_input(self):
-        result = _build_author_email_map([])
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map([])
+        self.assertEqual(email_map, {})
 
     def test_missing_email_field(self):
         # Line has only 2 pipe-separated fields after "commit:"
         lines = ["commit:abc|AliceOnly"]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map, {})
 
 
 # ---------------------------------------------------------------------------

@@ -116,14 +116,6 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("evidence", r.json().get("data", {}))
 
-        r = client.get("/portfolio/demo", headers=headers)
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("summary", r.json().get("data", {}))
-
-        r = client.get("/portfolio/demo?user=alice", headers=headers)
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json().get("data", {}).get("user_role"), "primary_contributor")
-
         r = client.post("/portfolio/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)

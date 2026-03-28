@@ -564,6 +564,9 @@ def list_projects(request: Request):
                    f.size_bytes, f.path
             FROM uploads u
             JOIN files f ON f.file_id = u.file_id
+            WHERE u.id = (
+                SELECT MIN(u2.id) FROM uploads u2 WHERE u2.upload_id = u.upload_id
+            )
             ORDER BY datetime(u.created_at) DESC
             """
         ).fetchall()
