@@ -18,10 +18,12 @@ from capstone.activity_log import log_event
 from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
-from capstone.portfolio_retrieval import _db_session, get_portfolio_entry, get_portfolio_entries
+from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_portfolio_entry, get_portfolio_entries
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
 from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip
+from capstone.project_role import infer_project_role_from_snapshot
+from capstone.top_project_summaries import gather_evidence
 from capstone.api.portfolio_helpers import (
     ensure_indexes,
     ensure_portfolio_tables,
@@ -233,6 +235,76 @@ def _extract_title(project_id: str, snapshot: dict[str, Any]) -> str:
     title = _pick_first_str(snapshot, ["title", "project_name", "name", "repo_name", "repository"])
     return title or project_id
 
+
+def _stringify_evidence_value(value: Any) -> str:
+    if isinstance(value, dict):
+        label = str(value.get("label") or "").strip()
+        raw = value.get("value")
+        if isinstance(raw, dict):
+            raw = ", ".join(
+                str(v).strip()
+                for v in raw.values()
+                if str(v).strip()
+            )
+        elif isinstance(raw, list):
+            raw = ", ". join(str(v).strip() for v in raw if str(v).strip())
+        text = str(raw or "").strip()
+        return text or label
+    return str(value or "").strip()
+
+def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
+    summary = _extract_summary(snapshot) or ""
+    highlights = _extract_highlights(snapshot)
+
+    evidence_payload = _extract_evidence(snapshot)
+    evidence_items = evidence_payload.get("items", []) if isinstance(evidence_payload, dict) else []
+
+    evidence_lines = [
+        _stringify_evidence_value(item)
+        for item in evidence_items[:2]
+        if _stringify_evidence_value(item)
+    ]
+
+    if not evidence_lines and highlights:
+        evidence_lines = highlights[:2]
+        
+    if not evidence_lines:
+        file_summary = snapshot.get("file_summary") or {}
+        files_count = file_summary.get("file_count") or len(snapshot.get("files", []) or [])
+        if files_count:
+            evidence_lines.append(f"{files_count} files analyzed")
+
+    evidence_text = " • ".join(evidence_lines).strip()
+
+    collaboration = snapshot.get("collaboration", {}) or {}
+    classification = str(collaboration.get("classification") or "").strip().lower()
+    primary = str(collaboration.get("primary_contributor") or "").strip()
+    
+    inferred_role = str(snapshot.get("project_role") or "").strip()
+    if not inferred_role:
+        inferred_role = infer_project_role_from_snapshot(snapshot)
+
+    if classification == "individual":
+        role_text = inferred_role
+    elif primary:
+        role_text = f"{inferred_role} with strong contribution ownership"
+    else:
+        role_text = inferred_role
+        
+    if not summary:
+        title = _extract_title(project_id, snapshot)
+        tech = _extract_technologies(snapshot)
+        if tech:
+            summary = f"{title} uses {', '.join(tech[:4])} to deliver core project functionality."
+        else:
+            summary = f"{title} showcases applied software development work."
+
+    return {
+        "key_role": role_text,
+        "evidence_of_success": evidence_text,
+        "portfolio_blurb": summary
+    }
+    
 
 def _project_from_snapshot(project_id: str, snapshot: dict[str, Any]) -> PortfolioProject:
     return PortfolioProject(
@@ -486,7 +558,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
             if not snapshot:
                 raise HTTPException(status_code=404, detail="Project not found")
             
-            current = get_portfolio_customization(conn, id)
+            current = get_portfolio_customization(conn, id) or {}
             
             try:
                 customization = upsert_portfolio_customization(
@@ -753,12 +825,50 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
     with _db_session(db_dir) as conn:
         ensure_portfolio_tables(conn)
         ensure_indexes(conn)
+        
+        snapshot = helper_get_latest_snapshot(conn, id)
+        customization = get_portfolio_customization(conn, id) or {}
+        images = list_portfolio_images(conn, id)
 
-        entry = get_portfolio_entry(conn, id)
-        if not entry:
-            raise HTTPException(status_code=404, detail="Project portfolio not found")
+    if not snapshot and not customization:
+        raise HTTPException(status_code=404, detail="Project portfolio not found")
+    
+    analysis_defaults = (
+        _build_analysis_defaults(id, snapshot)
+        if isinstance(snapshot, dict)
+        else {
+            "key_role": "",
+            "evidence_of_success": "",
+            "portfolio_blurb": ""
+        }
+    )
+    
+    overrides = {
+        "key_role": str(customization.get("key_role") or ""),
+        "evidence_of_success": str(customization.get("evidence_of_success") or ""),
+        "portfolio_blurb": str(customization.get("portfolio_blurb") or "")
+    }
+    
+    resolved = {
+        "key_role": overrides["key_role"] or analysis_defaults["key_role"],
+        "evidence_of_success": overrides["evidence_of_success"] or analysis_defaults["evidence_of_success"],
+        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"]
+    }
 
-        return {"data": entry, "error": None}
+    payload = {
+        "project_id": id,
+        "template_id": str(customization.get("template_id") or "classic"),
+        "analysis_defaults": analysis_defaults,
+        "overrides": overrides,
+        "resolved": resolved,
+        "images": images
+    }
+    
+    if isinstance(snapshot, dict):
+        payload["title"] = _extract_title(id, snapshot)
+        payload["summary"] = _extract_summary(snapshot)
+        
+    return {"data": payload, "error": None}
 
 
 @router.get("/{id}/images")
