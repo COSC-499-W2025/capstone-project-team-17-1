@@ -3,6 +3,23 @@
 Capstone Analyzer is a local-first software analysis tool for processing project archives and generating portfolio/resume-oriented insights.  
 The system supports three workflows: CLI analysis, interactive menu usage, and FastAPI HTTP endpoints.
 
+## README Navigation
+
+- [Installation Guide for Future Development Team](#installation-guide-for-future-development-team)
+- [Backend Package (`src/capstone/`)](src/capstone)
+- [Frontend App (`frontend/`)](frontend)
+- [API Documentation (`docs/api.md`)](docs/api.md)
+- [Test Suite (`tests/`)](tests)
+- [Frontend Tests (`frontend/test/`)](frontend/test)
+- [Sample Test Data (`test_data/`)](test_data)
+- [Setup Scripts (`scripts/`)](scripts)
+- [Usage](#usage)
+- [API Route Map (Table)](#api-route-map-table)
+- [Test Report](#test-report)
+- [Known Bugs](#known-bugs)
+- [Test Data ZIPs](#test-data-zips)
+- [Work Breakdown Structure](#work-breakdown-structure)
+
 ## Tips
 For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
 ```
@@ -64,6 +81,102 @@ Requirements:
 - tkinter (required by the file picker in CLI interactive flows)
   - Ubuntu/Debian: `sudo apt-get install python3-tk`
   - macOS/Windows: usually included with standard Python installers
+
+## Installation Guide for Future Development Team
+
+This section is the recommended setup path for the next team working on the repository.
+
+### Deliverables Navigation
+
+| Deliverable / Review Topic | Where to start |
+|---|---|
+| Installation guide for future developers | [Installation Guide for Future Development Team](#installation-guide-for-future-development-team) |
+| Backend source code | [`src/capstone/`](src/capstone) |
+| CLI entry point | [`src/capstone/cli.py`](src/capstone/cli.py) |
+| Interactive app entry point | [`main.py`](main.py) |
+| FastAPI server | [`src/capstone/api/server.py`](src/capstone/api/server.py) |
+| API reference | [`docs/api.md`](docs/api.md) |
+| Electron frontend | [`frontend/`](frontend) |
+| Python backend tests | [`tests/`](tests) |
+| Frontend tests | [`frontend/test/`](frontend/test) |
+| Demo and regression ZIPs | [`test_data/`](test_data) |
+| Setup scripts | [`scripts/`](scripts) |
+| Known limitations and workarounds | [Known Bugs](#known-bugs) |
+
+### 1. Clone and create a Python environment
+
+```bash
+git clone https://github.com/COSC-499-W2025/capstone-project-team-17-1.git
+cd capstone-project-team-17-1
+python -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### 2. Install backend dependencies
+
+```bash
+pip install -e .
+pip install -r requirements-dev.txt
+```
+
+Why both commands are used:
+- `pip install -e .` installs the package in editable mode for development.
+- `requirements-dev.txt` adds test, API, and optional integration dependencies used across the repo.
+
+### 3. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+The Electron frontend test suite is under `frontend/test/`, and `npm install` is required before running packaged frontend workflows.
+
+### 4. Install system-level tools when needed
+
+- LaTeX is required for PDF resume export.
+- Run `bash scripts/setup.sh` on macOS/Linux.
+- Run `.\scripts\setup.ps1` on Windows PowerShell as Administrator.
+- `tkinter` is required for some interactive CLI file-picking flows.
+
+### 5. Verify the environment
+
+Backend:
+
+```bash
+capstone --help
+python -m pytest tests/test_config.py -q
+```
+
+Frontend:
+
+```bash
+cd frontend
+node --test test/**/*.test.mjs
+cd ..
+```
+
+### 6. Start the main workflows
+
+- CLI: `capstone analyze /path/to/project.zip`
+- Interactive menu: `python main.py`
+- API server: `capstone api --host 127.0.0.1 --port 8003 --db-dir data`
+
+### 7. Environment notes for future teams
+
+- The Python package target is [`src/capstone/`](src/capstone).
+- Main backend entry points are [`main.py`](main.py) and the CLI entry defined from [`src/capstone/cli.py`](src/capstone/cli.py).
+- The Electron app lives in [`frontend/`](frontend).
+- API route details are documented in [`docs/api.md`](docs/api.md).
+- Sample archives for demos and regression checks live in [`test_data/`](test_data).
+- The current test suite assumes local filesystem access for generated app data and logs.
 
 ## Usage
 
@@ -255,24 +368,73 @@ curl -X POST "http://127.0.0.1:8003/resume/generate" \
   -d '{"format":"json","limit":20}'
 ```
 
-## Testing
+## Test Report
 
-Backend/API:
+### Test Commands Used
 
-```bash
-python -m pytest
-```
+| Area | Command | Purpose |
+|---|---|---|
+| Python backend | `python -m pytest` | Full backend suite execution |
+| Python backend | `python -m pytest --collect-only -q` | Discover what tests are currently collectible |
+| Frontend | `cd frontend && node --test test/**/*.test.mjs` | Run renderer/helper tests with Node's built-in test runner |
 
-Alternative unittest run:
+### Test Status by Suite
 
-```bash
-python -m unittest discover -s tests -p "test_*.py" -v
-```
+| Suite | Files | Status in current environment | Notes |
+|---|---|---|---|
+| Frontend unit/runtime tests | [`frontend/test/`](frontend/test) | Passing | `38/38` tests passed |
+| Python backend subset | [`tests/test_code_bundle.py`](tests/test_code_bundle.py), [`tests/test_config.py`](tests/test_config.py), [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py), [`tests/test_llm_client.py`](tests/test_llm_client.py), [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py), [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py), [`tests/test_safe_delete.py`](tests/test_safe_delete.py) | Passing | These files ran successfully in the current environment |
+| Python backend full collection | [`tests/`](tests) | Blocked | Collection interrupted by log-file permission errors |
+| Python CLI/runtime checks | [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Failing | Runtime import path hits the same log-file issue |
 
-Testing notes:
-- API endpoints are tested with FastAPI TestClient through HTTP-style requests.
-- Prefer `python -m pytest` to avoid interpreter/environment mismatch.
-- Coverage focuses on API route behavior (status codes/payloads), core analysis/storage logic, and CLI-related integration paths.
+### Test Files Verified to Work
+
+| Area | Verified file |
+|---|---|
+| Python | [`tests/test_code_bundle.py`](tests/test_code_bundle.py) |
+| Python | [`tests/test_config.py`](tests/test_config.py) |
+| Python | [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py) |
+| Python | [`tests/test_llm_client.py`](tests/test_llm_client.py) |
+| Python | [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py) |
+| Python | [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py) |
+| Python | [`tests/test_safe_delete.py`](tests/test_safe_delete.py) |
+| Frontend | [`frontend/test/authShared.test.mjs`](frontend/test/authShared.test.mjs) |
+| Frontend | [`frontend/test/consentShared.test.mjs`](frontend/test/consentShared.test.mjs) |
+| Frontend | [`frontend/test/displayPreferencesShared.test.mjs`](frontend/test/displayPreferencesShared.test.mjs) |
+| Frontend | [`frontend/test/onboardingShared.test.mjs`](frontend/test/onboardingShared.test.mjs) |
+| Frontend | [`frontend/test/portfolioHeatmapRuntime.test.mjs`](frontend/test/portfolioHeatmapRuntime.test.mjs) |
+| Frontend | [`frontend/test/portfolioResumeShared.test.mjs`](frontend/test/portfolioResumeShared.test.mjs) |
+| Frontend | [`frontend/test/portfolioSkillLevels.test.mjs`](frontend/test/portfolioSkillLevels.test.mjs) |
+| Frontend | [`frontend/test/portfolioState.test.mjs`](frontend/test/portfolioState.test.mjs) |
+| Frontend | [`frontend/test/speechInput.test.mjs`](frontend/test/speechInput.test.mjs) |
+
+### Test Files Currently Blocked
+
+Python test collection found a larger backend suite under [`tests/`](tests), but many files currently fail during import/collection because logging initializes `~/Loom/log/capstone.log` immediately. In the current sandboxed environment that path is not writable, so collection aborts before test logic runs.
+
+| Status | Example files | Blocking reason |
+|---|---|---|
+| Import/collection blocked | [`tests/test_api_endpoints.py`](tests/test_api_endpoints.py), [`tests/test_api_projects_crud.py`](tests/test_api_projects_crud.py), [`tests/test_auth_routes.py`](tests/test_auth_routes.py), [`tests/test_cli.py`](tests/test_cli.py), [`tests/test_storage_and_projects.py`](tests/test_storage_and_projects.py), [`tests/test_zip_analyzer.py`](tests/test_zip_analyzer.py) | Importing backend modules triggers file logging to a non-writable default path |
+| Runtime blocked | [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Test execution reaches the same logging initialization failure |
+
+### Test Strategies Used
+
+| Strategy | How it is used in this repo |
+|---|---|
+| Unit testing | Pure Python modules such as config handling, prompt generation, code bundling, metrics extraction, and PDF helper logic are exercised in isolation |
+| API integration testing | FastAPI routes are tested through HTTP-style request/response assertions with `TestClient` |
+| CLI regression testing | Selected tests invoke CLI entry points and validate observable behavior rather than internal implementation details |
+| Filesystem and persistence testing | Storage and safe-delete flows use temporary directories/databases to validate state changes |
+| Frontend runtime logic testing | Node's built-in test runner validates renderer-side helpers, consent gating, onboarding logic, state selection, and speech-input fallbacks |
+| Failure-path testing | Several tests explicitly cover missing API keys, unavailable browser APIs, empty inputs, and fallback logic |
+
+### Current Test Result Summary
+
+| Metric | Result |
+|---|---|
+| Frontend Node test suite | `38/38` passed |
+| Python subset verified in this environment | `38` tests passed |
+| Python full-suite collection | Interrupted by `51` import/collection errors |
 
 ## Additional Notes
 
@@ -286,10 +448,21 @@ Testing notes:
 ## Test Data ZIPs
 
 The repo includes sample ZIPs for demos and validation under `test_data/`:
-- `test_data/test-data-code-collab-earlier.zip`
-- `test_data/test-data-code-collab-later.zip`
-- `test_data/test-data-multi-projects.zip`
-- Source bundle for regeneration: `test_data/multi_project_bundle/`
+- [`test_data/test-data-code-collab-earlier.zip`](test_data/test-data-code-collab-earlier.zip)
+- [`test_data/test-data-code-collab-later.zip`](test_data/test-data-code-collab-later.zip)
+- [`test_data/test-data-multi-projects.zip`](test_data/test-data-multi-projects.zip)
+- Source bundle for regeneration: [`test_data/multi_project_bundle/`](test_data/multi_project_bundle)
+
+## Known Bugs
+
+| Bug | Trigger | Impact | Workaround |
+|---|---|---|---|
+| Hard-coded default log destination can break imports in restricted environments | Importing modules that call [`get_logger()`](src/capstone/logging_utils.py), especially through [`src/capstone/storage.py`](src/capstone/storage.py), [`src/capstone/cli.py`](src/capstone/cli.py), or [`src/capstone/api/server.py`](src/capstone/api/server.py), when `~/Loom/log/` is not writable | Backend tests and some commands fail with `PermissionError` before business logic runs | Run in an environment where `~/Loom/log/` is writable, or refactor logging to use a configurable/test-local path |
+| CLI commands that import storage fail before executing command logic | Running commands such as the flow exercised by [`tests/test_clean.py`](tests/test_clean.py) in a restricted filesystem environment | CLI appears broken even though the failure is initialization-related | Use a writable home/log directory or patch logging initialization before running CLI tests |
+| Large parts of the backend test suite are blocked by logging initialization | Running `python -m pytest` or `python -m pytest --collect-only -q` against the full [`tests/`](tests) suite | API, storage, CLI, and analysis tests cannot be used as full regression coverage in the current environment | Fix the logger path handling first, then rerun the blocked suites |
+| PDF export is not self-contained | Calling resume/portfolio PDF generation without a local TeX engine; see [`src/capstone/resume_pdf_builder.py`](src/capstone/resume_pdf_builder.py) and [`src/capstone/portfolio_pdf_builder.py`](src/capstone/portfolio_pdf_builder.py) | PDF generation fails at runtime | Install `tectonic`, `xelatex`, `lualatex`, or `pdflatex`, or avoid PDF export in environments without LaTeX |
+| Interactive CLI file-picking depends on `tkinter` | Running interactive flows on systems where `tkinter` is not installed or not available to the Python build | File picker based workflows do not work as expected | Install `python3-tk` on Linux or use a Python distribution that bundles `tkinter` |
+| System metrics behavior is platform-sensitive | Using Windows-oriented monitoring assets such as [`src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe`](src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe) on non-Windows systems | Hardware monitoring features may be unavailable or inconsistent across macOS/Linux | Treat metrics features as Windows-first unless cross-platform support is explicitly added and tested |
 
 # Work Breakdown Structure
 # Milestone #1
