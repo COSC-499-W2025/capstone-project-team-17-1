@@ -79,7 +79,7 @@ const WIDGET_LABELS = {
       const backdrop = document.createElement("div");
       backdrop.id = "widget-spotlight-backdrop";
       backdrop.className = "widget-spotlight-backdrop";
-      backdrop.addEventListener("click", collapseExpandedCards);
+      /* Visual dim only — do not dismiss on click; collapse via the card expand button */
       document.body.appendChild(backdrop);
     }
   
@@ -174,7 +174,11 @@ const WIDGET_LABELS = {
     document.querySelectorAll(".dashboard-card.widget-fullscreen").forEach((card) => {
       card.classList.remove("widget-fullscreen");
     });
-  
+
+    document.querySelectorAll(".card-expand-btn").forEach((btn) => {
+      btn.setAttribute("aria-label", "Expand widget");
+    });
+
     document.body.classList.remove("widget-mode");
     document.getElementById("widget-spotlight-backdrop")?.classList.remove("active");
   }
@@ -182,11 +186,19 @@ const WIDGET_LABELS = {
   function toggleCardExpand(card) {
     const alreadyOpen = card.classList.contains("widget-fullscreen");
     collapseExpandedCards();
-  
+
     if (!alreadyOpen) {
       card.classList.add("widget-fullscreen");
       document.body.classList.add("widget-mode");
       document.getElementById("widget-spotlight-backdrop")?.classList.add("active");
+    }
+
+    const btn = card.querySelector(".card-expand-btn");
+    if (btn) {
+      btn.setAttribute(
+        "aria-label",
+        card.classList.contains("widget-fullscreen") ? "Collapse widget" : "Expand widget"
+      );
     }
   }
   
@@ -217,7 +229,6 @@ const WIDGET_LABELS = {
   
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
-          collapseExpandedCards();
           closePalette();
         }
       });

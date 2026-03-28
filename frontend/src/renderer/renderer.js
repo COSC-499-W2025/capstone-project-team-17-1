@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadRecentActivity,
     startMetrics,
   }).then(() => {
-    setInterval(loadRecentActivity, 1000);
+    setInterval(() => loadRecentActivity({ silent: true }), 1000);
   });
   startMetrics();
 

@@ -73,8 +73,13 @@ function renderActivity(logs) {
   const container = getContainer();
   if (!container) return;
 
-  const isNearBottom =
-    container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+  const prevScrollTop = container.scrollTop;
+  const prevScrollHeight = container.scrollHeight;
+  const clientH = container.clientHeight;
+  const rawDistFromBottom = prevScrollHeight - prevScrollTop - clientH;
+  const hasScrollableOverflow = prevScrollHeight > clientH + 1;
+  const stickToBottom =
+    !hasScrollableOverflow || rawDistFromBottom <= 50;
 
   const visibleLogs = logs.slice(0, 24);
 
@@ -95,9 +100,14 @@ function renderActivity(logs) {
     })
     .join("");
 
-  if (isNearBottom) {
-    container.scrollTop = container.scrollHeight;
-  }
+  requestAnimationFrame(() => {
+    if (stickToBottom) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.min(Math.max(0, prevScrollTop), maxScroll);
+  });
 }
 
 function renderCurrentActivity() {
@@ -108,20 +118,29 @@ function renderCurrentActivity() {
 
   if (!logs.length) {
     container.innerHTML = `<div class="activity-line">No recent activity.</div>`;
+    container.scrollTop = 0;
     return;
   }
 
   renderActivity(logs);
 }
 
-export async function loadRecentActivity() {
+/**
+ * @param {{ silent?: boolean }} [options]
+ * When `silent` is true (e.g. polling), keep existing markup until new data arrives and do not snap scroll
+ * unless the user was already at the bottom.
+ */
+export async function loadRecentActivity(options = {}) {
+  const silent = Boolean(options.silent);
   const container = getContainer();
   if (!container) return;
 
   ensureToolbar(container);
 
   try {
-    container.innerHTML = `<div class="activity-line">Loading activity...</div>`;
+    if (!silent) {
+      container.innerHTML = `<div class="activity-line">Loading activity...</div>`;
+    }
 
     const res = await fetch("http://127.0.0.1:8002/activity");
     if (!res.ok) {
@@ -134,10 +153,12 @@ export async function loadRecentActivity() {
     renderCurrentActivity();
   } catch (err) {
     console.error("Activity fetch failed:", err);
-    container.innerHTML = `
+    if (!silent) {
+      container.innerHTML = `
       <div class="activity-line level-error">
         Failed to load activity.
       </div>
     `;
+    }
   }
 }

@@ -1118,6 +1118,10 @@ svg {
    Key fix: remove max-height so it can shrink inside card
 ========================================================= */
 
+#activity-log-card {
+  min-height: min(400px, 42vh);
+}
+
 .activity-container {
   flex: 1;
   min-height: 0;
@@ -1644,6 +1648,45 @@ body.light .consent-detail-status {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+}
+
+/* Expanded dashboard widget: project health tiles stay square (avoid stretch in tall grids) */
+.dashboard-card.widget-fullscreen .health-grid {
+  align-content: start;
+  grid-auto-rows: auto;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 168px));
+  justify-content: start;
+}
+
+.dashboard-card.widget-fullscreen .health-mini-card {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.dashboard-card.widget-fullscreen .health-project {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 4px;
+}
+
+.dashboard-card.widget-fullscreen .health-stats {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  width: 100%;
 }
 
 /* =========================================================
@@ -7697,7 +7740,7 @@ body.light .heatmap-select {
 }
 
 #recent-activity {
-  min-height: 180px !important;
+  min-height: 260px !important;
   display: block !important;
   overflow-y: auto !important;
   opacity: 1 !important;
@@ -7856,6 +7899,9 @@ body::before {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   mask-composite: exclude;
   opacity: 0;
   transition: opacity 0.25s ease;
@@ -7896,11 +7942,25 @@ body::before {
   border-color: rgba(77, 166, 255, 0.4);
 }
 
+body.light .card-expand-btn {
+  border: 1px solid var(--border-subtle);
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+}
+
+body.light .card-expand-btn:hover {
+  background: #e6eef9;
+  border-color: rgba(43, 119, 214, 0.45);
+  color: var(--text-primary);
+}
+
 .widget-spotlight-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(4, 10, 25, 0.74);
-  backdrop-filter: blur(10px);
+  /* Very light dim so expanded card reads clearly (no backdrop-filter) */
+  background: rgba(4, 10, 25, 0.22);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
@@ -7912,8 +7972,31 @@ body::before {
   pointer-events: auto;
 }
 
+body.light .widget-spotlight-backdrop {
+  background: rgba(24, 45, 78, 0.12);
+}
+
+body.light .dashboard-card.widget-fullscreen {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(245, 249, 255, 0.99));
+  border-color: var(--border-subtle);
+  box-shadow:
+    0 8px 32px rgba(24, 45, 78, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
 body.widget-mode {
   overflow: hidden;
+}
+
+/*
+ * Spotlight backdrop is a direct child of body with z-index 998. The dashboard lives in
+ * .main-container without z-index, so the backdrop stacked above the whole main area and
+ * ate all pointer events. Raise main content above the backdrop while expanded; titlebar
+ * (1000) and win-controls (9999) stay on top.
+ */
+body.widget-mode .main-container {
+  position: relative;
+  z-index: 999;
 }
 
 .dashboard-card.widget-fullscreen {
@@ -7930,9 +8013,14 @@ body.widget-mode {
   z-index: 999 !important;
   overflow: auto !important;
   transform: none !important;
+  /* Fullscreen card blurs the entire viewport behind it; use opaque surface instead */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background:
+    linear-gradient(180deg, rgba(32, 46, 88, 0.94), rgba(18, 30, 58, 0.97));
   box-shadow:
-    0 28px 80px rgba(0, 0, 0, 0.52),
-    0 0 42px rgba(77, 166, 255, 0.16);
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    0 0 24px rgba(77, 166, 255, 0.12);
 }
 
 .widget-hidden-by-search {
@@ -8123,12 +8211,14 @@ body.widget-mode {
   transform: translateY(-1px);
 }
 
+/* Inner log panel: fills the Activity Log card (flex); no max-height so it can grow with the grid row */
 #recent-activity {
-  min-height: 180px;
-  max-height: 340px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   display: block;
-  padding: 8px 6px 4px;
+  padding: 12px 10px 8px;
   border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(5, 10, 24, 0.56), rgba(16, 24, 48, 0.32));
@@ -8232,8 +8322,4 @@ body.light #recent-activity .activity-line.level-error {
 
 body.light #recent-activity .activity-line.level-success {
   color: #0d7a4d;
-}
-  color: var(--text-primary);
-  display: block !important;
-  padding: 6px 0 !important;
 }
