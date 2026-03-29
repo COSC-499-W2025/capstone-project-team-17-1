@@ -37,18 +37,6 @@ def _user_dir(username: str) -> str:
     return hashlib.sha256(username.encode()).hexdigest()[:24]
 
 
-def get_user_db_path():
-
-    global CURRENT_USER
-
-    if CURRENT_USER is None:
-        return BASE_DIR / "guest_capstone.db"
-
-    path = BASE_DIR / "users" / _user_dir(CURRENT_USER)
-    path.mkdir(parents=True, exist_ok=True)
-
-    return path / "capstone.db"
-
 def _load_dotenv():
     """Load key=value pairs from a .env file in the project root (if present).
     Only sets variables that are not already set in the environment.
@@ -491,74 +479,10 @@ def _nuclear_reset(conn: sqlite3.Connection) -> None:
     _initialize_schema(conn)
 
 
-def _migrate_legacy_contributor_stats(conn: sqlite3.Connection) -> None:
-    """One-shot migration: contributor_stats (pre-M22) → contributors + project_contributors.
-
-    Runs only when the legacy contributor_stats table is present.  After
-    migration the table is dropped so this is idempotent across restarts.
-    """
-    if not conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'"
-    ).fetchone():
-        return
-
-    conn.execute("PRAGMA foreign_keys = OFF")
-
-    # Ensure user_id column exists (added by old M2).
-    cs_cols = {row[1] for row in conn.execute("PRAGMA table_info(contributor_stats)")}
-    if "user_id" not in cs_cols:
-        conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
-    if "weights_hash" not in cs_cols:
-        conn.execute("ALTER TABLE contributor_stats ADD COLUMN weights_hash TEXT")
-
-    # Resolve contributor TEXT → contributors.id, creating rows as needed.
-    contributors_list = conn.execute(
-        "SELECT DISTINCT contributor FROM contributor_stats "
-        "WHERE contributor IS NOT NULL AND TRIM(contributor) != '' AND user_id IS NULL"
-    ).fetchall()
-    for (contributor,) in contributors_list:
-        row = conn.execute(
-            "SELECT id FROM contributors WHERE github_username = ? ORDER BY id LIMIT 1",
-            (contributor,),
-        ).fetchone()
-        if row:
-            uid = int(row[0])
-        else:
-            cur = conn.execute(
-                "INSERT INTO contributors (github_username, email, github_url) VALUES (?, NULL, ?)",
-                (contributor, _default_github_url(contributor)),
-            )
-            uid = int(cur.lastrowid)
-        conn.execute(
-            "UPDATE contributor_stats SET user_id = ? WHERE contributor = ? AND user_id IS NULL",
-            (uid, contributor),
-        )
-
-    # Merge latest stats per (project_id, user_id) into project_contributors.
-    conn.execute("""
-        INSERT OR IGNORE INTO project_contributors
-            (project_id, contributor_id, commits, pull_requests, issues, reviews,
-             score, weights_hash, created_at)
-        SELECT cs.project_id, cs.user_id, cs.commits, cs.pull_requests, cs.issues,
-               cs.reviews, cs.score, cs.weights_hash, cs.created_at
-        FROM contributor_stats cs
-        WHERE cs.user_id IS NOT NULL
-          AND cs.id IN (
-              SELECT MAX(id) FROM contributor_stats
-              WHERE user_id IS NOT NULL GROUP BY project_id, user_id
-          )
-    """)
-
-    conn.execute("DROP TABLE contributor_stats")
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.commit()
-
-
 def _run_migrations(conn: sqlite3.Connection) -> None:
-    """Check schema currency; nuclear-reset when stale, then apply legacy data migrations."""
+    """Check schema currency; nuclear-reset when stale."""
     if not _schema_matches_expected(conn):
         _nuclear_reset(conn)
-    _migrate_legacy_contributor_stats(conn)
 
 
 def save_error_results(conn, project_id: str, errors: list[dict]):
@@ -594,87 +518,6 @@ def fetch_error_results(conn):
 
     return results
 
-def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
-    """
-    Repair user identity rows that were merged by generic noreply emails.
-    """
-    users = conn.execute(
-        "SELECT id, github_username, email FROM contributors ORDER BY id"
-    ).fetchall()
-
-    # First pass: normalize/remove noreply emails while preserving uniqueness.
-    for user_id, username, email in users:
-        if not _is_noreply_email(email):
-            continue
-        existing = conn.execute(
-            "SELECT id FROM contributors WHERE github_username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
-            (username,),
-        ).fetchone()
-        if existing and int(existing[0]) != int(user_id):
-            canonical_id = int(existing[0])
-            old_projects = conn.execute(
-                "SELECT project_id FROM project_contributors WHERE contributor_id = ?",
-                (int(user_id),),
-            ).fetchall()
-            for (project_id,) in old_projects:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO project_contributors (project_id, contributor_id)
-                    VALUES (?, ?)
-                    """,
-                    (project_id, canonical_id),
-                )
-            conn.execute("DELETE FROM project_contributors WHERE contributor_id = ?", (int(user_id),))
-            conn.execute("DELETE FROM contributors WHERE id = ?", (int(user_id),))
-        else:
-            conn.execute("UPDATE contributors SET email = NULL WHERE id = ?", (int(user_id),))
-
-    # Second pass: no-op after M22 (contributor_stats / user_projects are gone).
-    # Kept as a guard so M12 remains callable on pre-M22 DBs.
-    if not conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='contributor_stats'"
-    ).fetchone():
-        return
-
-    contributors = conn.execute(
-        "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
-    ).fetchall()
-    for (contributor,) in contributors:
-        row = conn.execute(
-            "SELECT id FROM contributors WHERE github_username = ? ORDER BY id LIMIT 1",
-            (contributor,),
-        ).fetchone()
-        if row:
-            canonical_user_id = int(row[0])
-        else:
-            cursor = conn.execute(
-                "INSERT INTO contributors (github_username, email, github_url) VALUES (?, NULL, ?)",
-                (contributor, _default_github_url(contributor)),
-            )
-            canonical_user_id = int(cursor.lastrowid)
-
-        conn.execute(
-            "UPDATE contributor_stats SET user_id = ? WHERE contributor = ?",
-            (canonical_user_id, contributor),
-        )
-
-        projects = conn.execute(
-            """
-            SELECT DISTINCT cs.project_id
-            FROM contributor_stats cs
-            JOIN projects p ON p.project_id = cs.project_id
-            WHERE cs.contributor = ? AND cs.project_id IS NOT NULL
-            """,
-            (contributor,),
-        ).fetchall()
-        for (project_id,) in projects:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO project_contributors (contributor_id, project_id)
-                VALUES (?, ?)
-                """,
-                (canonical_user_id, project_id),
-            )
 
 def set_current_user(user_id: str | None):
     global CURRENT_USER
