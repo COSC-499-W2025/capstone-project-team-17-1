@@ -13,10 +13,7 @@ from capstone.activity_log import log_event
 from capstone import file_store, storage
 from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
-from capstone.zip_analyzer import ZipAnalyzer
-from capstone.config import Preferences
-from capstone.modes import ModeResolution
-from capstone.resume_retrieval import build_resume_project_item
+from capstone.resume_retrieval import build_resume_project_summary
 from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
 import capstone.storage as storage_module
 class ProjectEdit(BaseModel):
@@ -46,19 +43,6 @@ _EXT_TO_SKILL = {
     ".json": "json",
     ".md": "markdown",
 }
-
-
-def _restore_user_from_request(request: Request | None) -> None:
-    """Restore storage.CURRENT_USER from the Bearer session when available."""
-    if request is None:
-        return
-    try:
-        from capstone.api.routes.auth import get_authenticated_storage_user_key
-
-        storage_user_key = get_authenticated_storage_user_key(request)
-        storage_module.set_current_user(storage_user_key)
-    except Exception:
-        pass
 
 
 def _normalize_token(value: str | None) -> str:
@@ -304,11 +288,9 @@ def _generate_project_id_from_zip(conn, tmp_zip_path: Path, filename: str) -> st
 
 @router.post("/upload")
 async def upload_project(
-    request: Request,
-    project_id: str = "",
-    file: UploadFile = File(...),
+    project_id: str,
+    file: UploadFile = File(...),   
 ):
-    _restore_user_from_request(request)
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -318,36 +300,24 @@ async def upload_project(
         tmp_path = Path(tmp.name)
 
     conn = storage.open_db()
-    try:
-        active_user = storage_module.get_current_user()
-        mode = "user" if active_user else "guest"
-        db_path = str(storage.get_database_path())
-        auto_detected = False
-        if not project_id:
-            project_id = _auto_detect_project_id(conn, tmp_path, filename)
-            auto_detected = bool(project_id)
-        if not project_id:
-            project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
+    auto_detected = False
+    if not project_id:
+        project_id = _auto_detect_project_id(conn, tmp_path, filename)
+        auto_detected = bool(project_id)
+    if not project_id:
+        project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
 
-        existing = conn.execute(
-            "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
-            (project_id,),
-        ).fetchone()
-        print(
-            "[projects/upload-duplicate-check] "
-            f"mode={mode!r} "
-            f"current_user={active_user!r} "
-            f"db_path={db_path!r} "
-            f"project_id={project_id!r} "
-            f"exists={bool(existing)!r}",
-            flush=True,
+    existing = conn.execute(
+        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project ID '{project_id}' already exists."
         )
-
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Project ID '{project_id}' already exists."
-            )
+    try:
         stored = file_store.ensure_file(
             conn,
             tmp_path,
@@ -364,17 +334,25 @@ async def upload_project(
 
     project_id = stored["upload_id"]
     
-    analyzer = ZipAnalyzer()
-    analyzer.analyze(
-        zip_path=Path(stored["path"]),
-        metadata_path=Path("data") / f"{project_id}_metadata.jsonl",
-        summary_path=Path("data") / f"{project_id}_summary.json",
-        mode=ModeResolution(requested="local", resolved="local", reason="project upload"),
-        preferences=Preferences(),
+    manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
+    
+    snapshot = {
+        "project_id": project_id,
+        "skills": manifest.get("skills", {}),
+        "root_name": manifest.get("root_name"),
+        "file_count": len(manifest.get("files", [])),
+        "file_summary": _build_file_summary_from_zip(Path(stored["path"])),
+    }
+    
+    storage.store_analysis_snapshot(
+        conn,
         project_id=project_id,
-        conn=conn,
+        classification="unknown",
+        primary_contributor=None,
+        snapshot=snapshot,
+        zip_path = stored["path"] 
     )
-    log_event("SUCCESS", f"Full analysis snapshot stored · Project: {project_id}")
+    log_event("SUCCESS", f"Analysis snapshot stored · Project: {project_id}")
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
     # Pass email alongside the git author name so upsert_user can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
@@ -395,16 +373,15 @@ async def upload_project(
         message = "Upload stored and matched to existing project automatically."
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
-    active_user = storage_module.get_current_user()
-    if active_user:
+    if storage_module.CURRENT_USER:
         try:
             upload_project_zip(
-                active_user,
+                storage_module.CURRENT_USER,
                 project_id,
                 Path(stored["path"]),
                 filename,
             )
-            upload_database(active_user)
+            upload_database(storage_module.CURRENT_USER)
         except Exception:
             log_event("WARNING", f"Cloud sync failed after upload · Project: {project_id}")
     return {
@@ -420,7 +397,7 @@ async def upload_project(
 
 
 @router.post("/upload-bundle")
-async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
+async def upload_project_bundle(file: UploadFile = File(...)):
     """Upload a multi-project zip bundle.
 
     Each top-level directory inside the zip is treated as a separate project
@@ -429,7 +406,6 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
     If the zip contains only one top-level directory it is stored the same as
     a regular ``POST /projects/upload`` call.
     """
-    _restore_user_from_request(request)
     filename = file.filename or "upload.zip"
     if not filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are supported")
@@ -495,15 +471,20 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                 project_id = stored["upload_id"]
 
                 manifest = _inspect_stored_zip_manifest(conn, stored["file_id"])
-                analyzer = ZipAnalyzer()
-                summary = analyzer.analyze(
-                    zip_path=Path(stored["path"]),
-                    metadata_path=Path("data") / f"{project_id}_metadata.jsonl",
-                    summary_path=Path("data") / f"{project_id}_summary.json",
-                    mode=ModeResolution(requested="local", resolved="local", reason="bundle upload"),
-                    preferences=Preferences(),
+                snapshot = {
+                    "project_id": project_id,
+                    "skills": manifest.get("skills", {}),
+                    "root_name": manifest.get("root_name") or sub_name,
+                    "file_count": len(manifest.get("files", [])),
+                    "source": "multi_project_zip",
+                    "file_summary": _build_file_summary_from_zip(sub_tmp_path),
+                }
+                storage.store_analysis_snapshot(
+                    conn,
                     project_id=project_id,
-                    conn=conn,
+                    classification="unknown",
+                    primary_contributor=None,
+                    snapshot=snapshot,
                 )
 
                 try:
@@ -523,15 +504,14 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                         "hash": stored["hash"],
                         "dedup": stored["dedup"],
                         "size_bytes": stored["size_bytes"],
-                        "file_count": int((summary.get("file_summary") or {}).get("file_count", 0)),
-                        "skills": summary.get("skills", []),
+                        "file_count": snapshot["file_count"],
+                        "skills": snapshot["skills"],
                     }
                 )
-                active_user = storage_module.get_current_user()
-                if active_user:
+                if storage_module.CURRENT_USER:
                     try:
                         upload_project_zip(
-                            active_user,
+                            storage_module.CURRENT_USER,
                             project_id,
                             Path(stored["path"]),
                             sub_filename,
@@ -550,10 +530,9 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
         except Exception:
             pass
 
-        active_user = storage_module.get_current_user()
-        if active_user:
+        if storage_module.CURRENT_USER:
             try:
-                upload_database(active_user)
+                upload_database(storage_module.CURRENT_USER)
             except Exception:
                 pass
 
@@ -565,26 +544,20 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
 
 
 @router.get("")
-def list_projects(request: Request):
+def list_projects():
     """
     Lists uploaded .zip projects from CAS storage.
     """
-    _restore_user_from_request(request)
     conn = storage.open_db()
-    try:
-        rows = conn.execute(
-            """
-            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-                   f.size_bytes, f.path
-            FROM uploads u
-            JOIN files f ON f.file_id = u.file_id
-            ORDER BY datetime(u.created_at) DESC
-            """
-        ).fetchall()
-    except Exception as exc:
-        if "no such table" not in str(exc).lower():
-            raise
-        rows = []
+    rows = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        ORDER BY datetime(u.created_at) DESC
+        """
+    ).fetchall()
     return {
         "count": len(rows),
         "projects": [
@@ -603,28 +576,22 @@ def list_projects(request: Request):
 
 
 @router.get("/{id}")
-def get_project(id: str, request: Request):
+def get_project(id: str):
     """
     Returns info for a specific uploaded project zip by upload_id.
     """
-    _restore_user_from_request(request)
     conn = storage.open_db()
-    try:
-        row = conn.execute(
-            """
-            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-                   f.size_bytes, f.path
-            FROM uploads u
-            JOIN files f ON f.file_id = u.file_id
-            WHERE u.upload_id = ?
-            LIMIT 1
-            """,
-            (id,),
-        ).fetchone()
-    except Exception as exc:
-        if "no such table" not in str(exc).lower():
-            raise
-        row = None
+    row = conn.execute(
+        """
+        SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
+               f.size_bytes, f.path
+        FROM uploads u
+        JOIN files f ON f.file_id = u.file_id
+        WHERE u.upload_id = ?
+        LIMIT 1
+        """,
+        (id,),
+    ).fetchone()
 
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -640,16 +607,13 @@ def get_project(id: str, request: Request):
     }
 
 @router.delete("/{id}")
-def delete_project(id: str, request: Request):
+def delete_project(id: str):
     """
-    Deletes a project and its associated stored file (ZIP upload) or
-    GitHub-imported entry (no local blob).
+    Deletes a project upload and its associated stored file.
     """
-    _restore_user_from_request(request)
     conn = storage.open_db()
 
-    # --- ZIP-upload path: project lives in uploads + files tables ---
-    upload_row = conn.execute(
+    row = conn.execute(
         """
         SELECT u.file_id, f.path, u.original_name
         FROM uploads u
@@ -659,70 +623,46 @@ def delete_project(id: str, request: Request):
         (id,),
     ).fetchone()
 
-    # --- GitHub-import path: project lives only in github_projects / project_analysis ---
-    github_row = conn.execute(
-        "SELECT project_id FROM github_projects WHERE project_id = ?",
-        (id,),
-    ).fetchone() if not upload_row else None
+    if not row:
+        log_event("ERROR", "Project not found · Project: ")
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    if not upload_row and not github_row:
-        # Last chance: project may exist only in project_analysis (e.g. older imports)
-        analysis_row = conn.execute(
-            "SELECT project_id FROM project_analysis WHERE project_id = ? LIMIT 1",
-            (id,),
-        ).fetchone()
-        if not analysis_row:
-            log_event("ERROR", "Project not found · Project: ")
-            raise HTTPException(status_code=404, detail="Project not found")
+    file_id, file_path, original_name = row
 
-    file_id = None
-    original_name = None
-
-    if upload_row:
-        file_id, file_path, original_name = upload_row
-
-        conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
-
-        remaining_refs = conn.execute(
-            "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
-            (file_id,),
-        ).fetchone()[0]
-
-        should_delete_blob = remaining_refs == 0
-
-        if should_delete_blob:
-            conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
-        else:
-            conn.execute(
-                "UPDATE files SET ref_count = CASE WHEN ref_count > 0 THEN ref_count - 1 ELSE 0 END WHERE file_id = ?",
-                (file_id,),
-            )
-
-    # Always remove shared analysis / contributor records and related metadata
+    # Remove project-level records first, then decide whether the shared file blob can be deleted.
+    conn.execute("DELETE FROM uploads WHERE upload_id = ?", (id,))
     conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM error_analysis_results WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_metadata WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM contributor_stats WHERE project_id = ?", (id,))
     conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM github_projects WHERE project_id = ?", (id,))
+
+    remaining_refs = conn.execute(
+        "SELECT COUNT(*) FROM uploads WHERE file_id = ?",
+        (file_id,),
+    ).fetchone()[0]
+
+    should_delete_blob = remaining_refs == 0
+
+    if should_delete_blob:
+        conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
+    else:
+        conn.execute(
+            "UPDATE files SET ref_count = CASE WHEN ref_count > 0 THEN ref_count - 1 ELSE 0 END WHERE file_id = ?",
+            (file_id,),
+        )
+
     conn.commit()
 
-    # Remove physical blob only when no other upload references it
-    if upload_row and should_delete_blob:
+    # Only remove the physical blob when no uploads reference it anymore.
+    if should_delete_blob:
         try:
             Path(file_path).unlink(missing_ok=True)
         except Exception:
             pass
 
-    # Best-effort cloud cleanup
-    active_user = storage_module.get_current_user()
-    if active_user:
+    # best effort cloud zip removal
+    if storage_module.CURRENT_USER:
         try:
             delete_project_zip(
-                active_user,
+                storage_module.CURRENT_USER,
                 id,
                 original_name or "project.zip",
             )
@@ -730,7 +670,7 @@ def delete_project(id: str, request: Request):
             pass
 
         try:
-            upload_database(active_user)
+            upload_database(storage_module.CURRENT_USER)
         except Exception:
             pass
 
@@ -1033,12 +973,15 @@ async def generate_project_resume(project_id: str, request: Request):
         for name in raw_skills:
             _add_skill(name)
 
-    # 5. Build project item from snapshot
-    project_item = build_resume_project_item(project_id, snap)
-    if not project_item.get("title"):
-        project_item["title"] = snap.get("project_name") or snap.get("root_name") or project_id
+    # 5. Build project summary text from snapshot
+    project_summary = build_resume_project_summary(project_id, snap)
+    project_title = (
+        snap.get("project_name")
+        or snap.get("root_name")
+        or project_id
+    )
 
-    project_items = [project_item]
+    project_items = [{"title": project_title, "content": project_summary}]
 
     # 6. Build header from user profile
     user_profile = storage.get_user_profile(conn, user_id) or {}

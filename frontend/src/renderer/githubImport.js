@@ -5,31 +5,25 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
-import { authFetch, hasAuthToken } from "./auth.js";
 async function checkGithubAuth() {
-    const res = await authFetch("/github/auth-status")
+    const res = await fetch("http://127.0.0.1:8002/github/auth-status")
     const data = await res.json()
     return data.authenticated
 }
 
 export async function loadGithubRepos() {
-    const res = await authFetch("/github/repos")
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body?.detail || `Failed to fetch GitHub repos (${res.status})`);
-    }
+    const res = await fetch("http://127.0.0.1:8002/github/repos")
     const repos = await res.json()
-    console.log("Fetched repos:", Array.isArray(repos) ? repos.length : 0);
-    console.log("Repo names:", Array.isArray(repos) ? repos.map((r) => r.full_name) : []);
 
     renderRepoCards(repos)
 }
 
 async function startGithubImport(owner, repo, projectId, branch) {
-  const url =
-  `/github/import?owner=${owner}&repo=${repo}&project_id=${projectId}&branch=${branch}`;
 
-  const res = await authFetch(url, {
+  const url =
+  `http://127.0.0.1:8002/github/import?owner=${owner}&repo=${repo}&project_id=${projectId}&branch=${branch}`;
+
+  const res = await fetch(url, {
     method: "POST"
   });
 
@@ -39,22 +33,6 @@ async function startGithubImport(owner, repo, projectId, branch) {
   }
 
   return res.json();
-}
-
-async function runGitAnalysis(projectId, repoFullName) {
-  if (!projectId) return null;
-  if (repoFullName) {
-    console.log("Running git analysis for:", repoFullName);
-  }
-  try {
-    const res = await authFetch(`/github/pull?project_id=${encodeURIComponent(projectId)}&refresh=true`, {
-      method: "POST",
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch (_) {
-    return null;
-  }
 }
 
 
@@ -103,14 +81,8 @@ async function initGithubSection() {
   `;
 
   try {
-    const res = await authFetch("/github/repos");
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body?.detail || `Failed to fetch GitHub repos (${res.status})`);
-    }
+    const res = await fetch("http://127.0.0.1:8002/github/repos");
     const repos = await res.json();
-    console.log("Fetched repos:", Array.isArray(repos) ? repos.length : 0);
-    console.log("Repo names:", Array.isArray(repos) ? repos.map((r) => r.full_name) : []);
     renderRepoCards(repos);
   } catch (e) {
     githubContainer.innerHTML = `
@@ -129,19 +101,13 @@ async function initGithubSection() {
 
   try {
 
-    const payload = await startGithubImport(owner, name, projectId, branch);
-    const project = payload?.summary || {};
-    console.log("Git project flag:", Boolean(project?.is_git_project));
-    console.log("Collaboration snapshot:", project?.collaboration || null);
-    if (project?.is_git_project) {
-      await runGitAnalysis(projectId, project?.repo_full_name);
-    }
+    await startGithubImport(owner, name, projectId, branch);
 
     // Cloud sync is a follow-up step. If it fails, keep the import successful locally.
     try {
-      if (hasAuthToken()) {
-        await authFetch("/cloud/db/upload", { method: "POST" });
-      }
+      await fetch("http://127.0.0.1:8002/cloud/db/upload", {
+        method: "POST"
+      });
     } catch (syncError) {
       console.warn("Cloud sync after GitHub import failed:", syncError);
     }
@@ -163,7 +129,7 @@ async function initGithubSection() {
   } catch (e) {
     console.error("GitHub import failed:", e);
     closeProgressModal();
-    alert(`GitHub import failed: ${e.message || e}`);
+    alert("GitHub import failed.");
   }
 
 }

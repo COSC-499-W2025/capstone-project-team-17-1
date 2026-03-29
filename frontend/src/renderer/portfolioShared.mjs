@@ -11,71 +11,59 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function toTitleCase(value) {
-  return String(value || "")
-    .split(/[\s-/]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function normalizeSkillName(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  const lower = raw.toLowerCase();
-  const canonicalMap = {
-    js: "JavaScript",
-    javascript: "JavaScript",
-    ts: "TypeScript",
-    typescript: "TypeScript",
-    json: "JSON",
-    html: "HTML",
-    css: "CSS",
-    sql: "SQL",
-    nosql: "NoSQL",
-    api: "API",
-    rest: "REST",
-    graphql: "GraphQL",
-    yaml: "YAML",
-    xml: "XML",
-    csv: "CSV",
-    aws: "AWS",
-    gcp: "GCP",
-    fastapi: "FastAPI",
-    sqlite: "SQLite",
-    postgresql: "PostgreSQL",
-    mongodb: "MongoDB",
-    redis: "Redis",
-    nodejs: "Node.js",
-    expressjs: "Express.js",
-    ui: "UI",
-    ux: "UX",
-    ci: "CI",
-    cd: "CD",
-  };
-
-  return canonicalMap[lower] || toTitleCase(raw);
-}
-
 function dedupeStrings(values) {
-  const seen = new Set();
-  const result = [];
-  asArray(values)
-    .map((v) => normalizeSkillName(v))
-    .filter(Boolean)
-    .forEach((value) => {
-      const key = value.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push(value);
-    });
-  return result;
+  return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
 }
 
-function buildContributionSummary(project, details) {
+function getEvidenceText(portfolioEntry = {}) {
+  const directEvidence = String(
+    portfolioEntry?.evidence_of_success ||
+      portfolioEntry?.evidenceOfSuccess ||
+      ""
+  ).trim();
+
+  if (directEvidence) {
+    return directEvidence;
+  }
+
+  const structuredEvidence = portfolioEntry?.evidence;
+  if (
+    structuredEvidence &&
+    typeof structuredEvidence === "object" &&
+    Array.isArray(structuredEvidence.items)
+  ) {
+    const values = structuredEvidence.items
+      .map((item) => String(item?.value || "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    if (values.length) {
+      return values.join(" • ");
+    }
+  }
+
+  return "";
+}
+
+function buildContributionSummary(project, details, portfolioEntry = {}) {
+  const keyRole = String(
+    portfolioEntry?.key_role ||
+      portfolioEntry?.keyRole ||
+      ""
+  ).trim();
+
+  const evidence = getEvidenceText(portfolioEntry);
+
   const highlights = dedupeStrings(details?.highlights);
   const technologies = dedupeStrings(details?.technologies);
+
+  if (keyRole && evidence) {
+    return `${keyRole} • ${evidence}`;
+  }
+
+  if (keyRole) {
+    return keyRole;
+  }
 
   if (highlights.length) {
     return highlights[0];
@@ -88,12 +76,18 @@ function buildContributionSummary(project, details) {
   return `Contributed to ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"} in this project.`;
 }
 
-function buildImpactSummary(project, details) {
+function buildImpactSummary(project, details, portfolioEntry = {}) {
+  const evidence = getEvidenceText(portfolioEntry);
+
   const highlights = dedupeStrings(details?.highlights);
   const impactSignals = [
     `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed`,
     `${project.total_skills || 0} skill signal${project.total_skills === 1 ? "" : "s"} detected`,
   ];
+
+  if (evidence) {
+    return `${evidence} Backed by ${impactSignals.join(" and ")}.`;
+  }
 
   if (highlights.length > 1) {
     return `${highlights[1]} Backed by ${impactSignals.join(" and ")}.`;
@@ -199,8 +193,79 @@ function getProjectDetailsMap(summaryData) {
   return map;
 }
 
+function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
+  const title = String(
+    portfolioEntry?.name ||
+      details?.title ||
+      project.project_id ||
+      ""
+  ).trim();
+
+  const summary = String(
+  portfolioEntry?.portfolio_blurb ||
+    portfolioEntry?.summary ||
+    details?.summary ||
+    ""
+  ).trim() ||
+    `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills || 0} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+
+  const keyRole = String(
+    portfolioEntry?.key_role ||
+      portfolioEntry?.keyRole ||
+      ""
+  ).trim();
+
+  const evidence = String(
+    portfolioEntry?.evidence_of_success ||
+      portfolioEntry?.evidence ||
+      ""
+  ).trim();
+
+  const templateId = String(portfolioEntry?.template_id || portfolioEntry?.templateId || "classic").trim();
+
+  const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
+  const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
+
+  return {
+    title,
+    summary,
+    keyRole,
+    evidence,
+    templateId,
+    images,
+    coverImage,
+  };
+}
+
+function getProjectCardImageSrc(projectId, portfolioEntry, getPortfolioImageUrl, getProjectThumbnailUrl) {
+  const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
+  const cover = images.find((img) => img?.is_cover) || images[0];
+
+  if (cover?.id && typeof getPortfolioImageUrl === "function") {
+    return getPortfolioImageUrl(projectId, cover.id);
+  }
+
+  if (typeof getProjectThumbnailUrl === "function") {
+    return getProjectThumbnailUrl(projectId);
+  }
+
+  return "";
+}
+
+function buildPortfolioEntryMap(entries) {
+  const map = new Map();
+
+  asArray(entries).forEach((entry) => {
+    const projectId = String(entry?.project_id || "").trim();
+    if (!projectId) return;
+    map.set(projectId, entry);
+  });
+
+  return map;
+}
+
 function getTimelineSkillName(skill) {
-  return normalizeSkillName(skill?.name || skill?.skill || "unknown") || "unknown";
+  return String(skill?.name || skill?.skill || "unknown").trim() || "unknown";
 }
 
 function getTimelineSkillWeight(skill) {
@@ -216,28 +281,12 @@ function getSkillDepthLevel(depthScore) {
   return "Foundation";
 }
 
-function getSkillGrowthLabel({
-  previousWeight,
-  currentWeight,
-  appearanceCount,
-  projectCount,
-  previousComplexity,
-  currentComplexity,
-}) {
+function getSkillGrowthLabel(previousWeight, currentWeight, appearanceCount) {
   if (appearanceCount <= 1) return "Baseline established";
 
-  const weightDelta = currentWeight - previousWeight;
-  const complexityDelta = currentComplexity - previousComplexity;
-
-  if (weightDelta >= 0.08 && (projectCount >= 2 || complexityDelta >= 0.75)) {
-    return "Depth increasing";
-  }
-  if (complexityDelta >= 1.2 || projectCount >= 3) {
-    return "Expanding across projects";
-  }
-  if (weightDelta <= -0.08 && complexityDelta <= -0.75) {
-    return "Applying in lighter scope";
-  }
+  const delta = currentWeight - previousWeight;
+  if (delta >= 0.08) return "Depth increasing";
+  if (delta <= -0.08) return "Applying in lighter scope";
   return "Depth sustained";
 }
 
@@ -245,16 +294,10 @@ function buildTimelineEntries(timeline) {
   const seenCounts = new Map();
   const previousWeights = new Map();
   const cumulativeWeights = new Map();
-  const projectSets = new Map();
-  const previousComplexities = new Map();
 
   return timeline.map((entry) => {
     const rawSkills = Array.isArray(entry.skills) ? entry.skills : [];
     const aggregatedSkills = new Map();
-    const projectId = String(entry?.project_id || "").trim();
-    const projectMetrics =
-      entry?.project_metrics && typeof entry.project_metrics === "object" ? entry.project_metrics : {};
-    const currentComplexity = Number(projectMetrics?.complexity_score || 0);
 
     rawSkills.forEach((skill) => {
       const name = getTimelineSkillName(skill);
@@ -278,49 +321,23 @@ function buildTimelineEntries(timeline) {
       const nextCount = previousCount + 1;
       const previousWeight = previousWeights.get(name) || 0;
       const cumulativeWeight = (cumulativeWeights.get(name) || 0) + weight;
-      const projectSet = new Set(projectSets.get(name) || []);
-      if (projectId) {
-        projectSet.add(projectId);
-      }
-      const projectCount = projectSet.size;
-      const previousComplexity = Number(previousComplexities.get(name) || 0);
       const depthScore = cumulativeWeight + nextCount * 0.35;
-      const growthLabel = getSkillGrowthLabel({
-        previousWeight,
-        currentWeight: weight,
-        appearanceCount: nextCount,
-        projectCount,
-        previousComplexity,
-        currentComplexity,
-      });
+      const growthLabel = getSkillGrowthLabel(previousWeight, weight, nextCount);
 
       seenCounts.set(name, nextCount);
       previousWeights.set(name, weight);
       cumulativeWeights.set(name, cumulativeWeight);
-      projectSets.set(name, projectSet);
-      previousComplexities.set(name, currentComplexity);
 
       if (previousCount > 0) recurringCount += 1;
       else newCount += 1;
-      if (
-        previousCount > 0 &&
-        (
-          weight > previousWeight + 0.08 ||
-          projectCount >= 2 ||
-          currentComplexity > previousComplexity + 0.75
-        )
-      ) {
-        growthCount += 1;
-      }
+      if (previousCount > 0 && weight > previousWeight + 0.08) growthCount += 1;
 
       return {
         name,
         appearanceCount: nextCount,
-        projectCount,
         weight,
         previousWeight,
         cumulativeWeight,
-        currentComplexity,
         depthScore,
         level: getSkillDepthLevel(depthScore),
         growthLabel,
@@ -341,7 +358,7 @@ function buildTimelineEntries(timeline) {
   });
 }
 
-function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl }) {
+function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl, portfolioEntryMap, getPortfolioImageUrl }) {
   if (!projects.length) {
     return `
       <div class="empty-state">
@@ -356,17 +373,49 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
   return topProjects
     .map((project, index) => {
       const details = projectDetailsMap.get(project.project_id);
-      const title = details?.title || project.project_id;
-      const summary =
-        details?.summary ||
-        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+      const portfolioEntry = portfolioEntryMap?.get(String(project.project_id)) || null;
+      const display = getPortfolioProjectDisplay(project, details, portfolioEntry);
 
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const highlights = dedupeStrings(details?.highlights).slice(0, 2);
       const processSteps = isPrivateMode ? buildProjectProcess(project, details, index) : [];
       const evolutionSummary = isPrivateMode ? buildProjectEvolution(project, details) : "";
-      const contributionSummary = buildContributionSummary(project, details);
-      const impactSummary = buildImpactSummary(project, details);
+      const contributionSummary = buildContributionSummary(project, details, portfolioEntry);
+      const impactSummary = buildImpactSummary(project, details, portfolioEntry);
+
+      const imageSrc = getProjectCardImageSrc(
+        project.project_id,
+        portfolioEntry,
+        getPortfolioImageUrl,
+        getProjectThumbnailUrl
+      );
+
+      const mediaMarkup = imageSrc
+        ? `
+          <img
+            class="top-project-thumbnail"
+            src="${escapeHtml(imageSrc)}"
+            alt="${escapeHtml(display.title)} thumbnail"
+            loading="lazy"
+            onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+          />
+          <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
+            <div class="thumbnail-placeholder-art">
+              <span class="thumbnail-placeholder-sun"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+            </div>
+          </div>
+        `
+        : `
+          <div class="top-project-thumbnail-fallback" aria-hidden="true">
+            <div class="thumbnail-placeholder-art">
+              <span class="thumbnail-placeholder-sun"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+            </div>
+          </div>
+        `;
 
       return `
         <div class="top-project-card">
@@ -374,28 +423,16 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
             class="top-project-media top-project-thumbnail-button"
             type="button"
             data-project-thumbnail-trigger="${escapeHtml(project.project_id)}"
-            aria-label="Upload thumbnail for ${escapeHtml(title)}"
+            aria-label="Upload thumbnail for ${escapeHtml(display.title)}"
           >
             <div class="top-project-rank">#${index + 1}</div>
-            <img
-              class="top-project-thumbnail"
-              src="${escapeHtml(getProjectThumbnailUrl(project.project_id))}"
-              alt="${escapeHtml(title)} thumbnail"
-              loading="lazy"
-              onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
-            />
-            <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
-              <div class="thumbnail-placeholder-art">
-                <span class="thumbnail-placeholder-sun"></span>
-                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
-                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
-              </div>
-            </div>
+            ${mediaMarkup}
             <span class="top-project-thumbnail-overlay">Upload thumbnail</span>
           </button>
+
           <div class="top-project-body">
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(summary)}</p>
+            <h3>${escapeHtml(display.title)}</h3>
+            <p>${escapeHtml(display.summary)}</p>
 
             ${
               highlights.length
@@ -461,6 +498,7 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
               <span class="stack-pill">${project.total_files} Files</span>
               <span class="stack-pill">${project.total_skills} Skills</span>
+              <span class="stack-pill">${escapeHtml(display.templateId.replaceAll("_", " "))}</span>
               ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
             </div>
           </div>
@@ -471,15 +509,7 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
 }
 
 function buildSkillsTimelineMarkup(timeline) {
-  const visibleTimeline = timeline.filter((entry) => {
-    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
-    const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
-      ? entry.project_metrics
-      : {};
-    return skills.length > 0 || Number(metrics.file_count || 0) > 0 || Number(metrics.active_days || 0) > 0;
-  });
-
-  if (!visibleTimeline.length) {
+  if (!timeline.length) {
     return `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
@@ -490,7 +520,7 @@ function buildSkillsTimelineMarkup(timeline) {
     `;
   }
 
-  return buildTimelineEntries(visibleTimeline)
+  return buildTimelineEntries(timeline)
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
 
@@ -531,15 +561,11 @@ function buildSkillsTimelineMarkup(timeline) {
                 skills.length
                   ? skills
                       .map((skill) => {
-                        const metaParts = [
-                          `${skill.status} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"}`,
-                          `${skill.projectCount} project${skill.projectCount === 1 ? "" : "s"}`,
-                        ];
                         return `
-                            <span class="timeline-skill-pill">
+                          <span class="timeline-skill-pill">
                             <span class="timeline-skill-name">${escapeHtml(skill.name)}</span>
                             <span class="timeline-skill-meta">${escapeHtml(skill.level)} · ${escapeHtml(skill.growthLabel)}</span>
-                            <span class="timeline-skill-meta">${escapeHtml(metaParts.join(" · "))}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(skill.status)} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"} · weight ${skill.weight.toFixed(2)}</span>
                           </span>
                         `;
                       })
@@ -555,6 +581,7 @@ function buildSkillsTimelineMarkup(timeline) {
 }
 
 export {
+  buildPortfolioEntryMap,
   buildSkillsTimelineMarkup,
   buildTopProjectsMarkup,
   formatTimelineTimestamp,

@@ -1,8 +1,7 @@
 import os
 import traceback
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
@@ -15,8 +14,7 @@ from capstone.api.routes.activity_log import router as activity_router
 from capstone.api.routes.recent_projects import router as dashboard_router
 from capstone.api.routes.errors import router as errors_router
 from capstone.api.routes.health import router as health_router
-from capstone.api.routes.github_endpoints import router as github_router, put_github_token
-from capstone.api.routes.sienna import router as sienna_router
+from capstone.api.routes.github_endpoints import router as github_router
 from capstone.api.routes.auth import router as auth_router, configure as configure_auth
 from capstone.api.routes.cloud import router as cloud_router
 from capstone.api.routes.project_viewer import router as project_viewer_router
@@ -81,28 +79,6 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         allow_headers=["*"],
     )
 
-    @app.middleware("http")
-    async def storage_current_user_middleware(request: Request, call_next):
-        """Bind SQLite scope to the Bearer session on every request (guest = None)."""
-        import capstone.storage as storage_module
-        from capstone.api.routes.auth import get_authenticated_storage_user_key
-
-        storage_user_key = get_authenticated_storage_user_key(request)
-        token = storage_module.bind_request_user(storage_user_key)
-        mode = "user" if storage_user_key else "guest"
-        print(
-            "[storage-bind] "
-            f"path={request.url.path!r} "
-            f"mode={mode!r} "
-            f"user_id={storage_user_key!r} "
-            f"db_path={str(storage_module.get_database_path())!r}",
-            flush=True,
-        )
-        try:
-            return await call_next(request)
-        finally:
-            storage_module.reset_request_user(token)
-
     @app.get("/")
     def root():
         return {"message": "Capstone API is running"}
@@ -125,10 +101,8 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.include_router(dashboard_router)
     app.include_router(activity_router)
     app.include_router(errors_router)
-    app.include_router(sienna_router)
     app.include_router(health_router)
     app.include_router(github_router)
-    app.add_api_route("/api/github/token", put_github_token, methods=["PUT"], tags=["github"])
     app.include_router(cloud_router)
     app.include_router(project_viewer_router)
     configure_auth(db_dir)

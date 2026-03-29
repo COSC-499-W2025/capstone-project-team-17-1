@@ -1,6 +1,6 @@
 import { switchPage } from "./navigation.js";
-import { authFetch } from "./auth.js";
-import { renderMarkdown } from "./AskSienna/markdown.js";
+
+const API = "http://127.0.0.1:8002";
 const MONACO_CDN = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min";
 
 let _currentProjectId = null;
@@ -207,7 +207,7 @@ function _activateViewerTab(tabName) {
 async function _loadFileTree(projectId) {
   const sidebar = document.getElementById("pv-sidebar");
   try {
-    const res = await authFetch(`/projects/${encodeURIComponent(projectId)}/tree`);
+    const res = await fetch(`${API}/projects/${encodeURIComponent(projectId)}/tree`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     _treeData = data.tree;
@@ -328,8 +328,8 @@ async function _loadFileContent(path) {
   _unsavedChanges = false;
 
   try {
-    const res = await authFetch(
-      `/projects/${encodeURIComponent(_currentProjectId)}/file?path=${encodeURIComponent(path)}`
+    const res = await fetch(
+      `${API}/projects/${encodeURIComponent(_currentProjectId)}/file?path=${encodeURIComponent(path)}`
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -412,7 +412,7 @@ async function _saveCurrentFile() {
   saveBtn.disabled = true;
 
   try {
-    const res = await authFetch(`/projects/update-file`, {
+    const res = await fetch(`${API}/projects/update-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -447,17 +447,18 @@ async function _saveCurrentFile() {
 async function _loadAnalysis(projectId) {
   const panel = document.getElementById("pv-analysis-panel");
   try {
-    const analysisRes = await authFetch(`/projects/${encodeURIComponent(projectId)}/analysis`);
+    const [analysisRes, collabRes] = await Promise.all([
+      fetch(`${API}/projects/${encodeURIComponent(projectId)}/analysis`),
+      fetch(`${API}/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null),
+    ]);
+
     if (!analysisRes.ok) throw new Error(`HTTP ${analysisRes.status}`);
     const data = await analysisRes.json();
     _analysisData = data.analysis;
 
-    let collabInfo = data.collaboration || null;
-    if (!collabInfo) {
-      const collabRes = await authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`).catch(() => null);
-      if (collabRes && collabRes.ok) {
-        collabInfo = await collabRes.json();
-      }
+    let collabInfo = null;
+    if (collabRes && collabRes.ok) {
+      collabInfo = await collabRes.json();
     }
 
     _renderAnalysisDashboard(panel, _analysisData, collabInfo);
@@ -490,9 +491,8 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
   const topSkillsByYear = data.top_skills_by_year || {};
   const years = Object.keys(topSkillsByYear).sort();
 
-  const isGit = Boolean(collabInfo && (collabInfo.is_git_project || collabInfo.is_github));
+  const isGit = collabInfo && collabInfo.is_github;
   const contributors = (collabInfo && collabInfo.contributors) || [];
-  const contributorsSummary = _formatAnalysisContributorsSummary(collab, collabInfo);
 
   container.innerHTML = `
     <div class="pv-analysis-dashboard">
@@ -551,8 +551,8 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
             ${collab.primary_contributor
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Primary Contributor</span><span class="pv-collab-value">${_esc(collab.primary_contributor)}</span></div>`
               : ""}
-            ${contributorsSummary
-              ? `<div class="pv-collab-row"><span class="pv-collab-label">Contributors</span><span class="pv-collab-value">${_esc(contributorsSummary)}</span></div>`
+            ${collab.contributors
+              ? `<div class="pv-collab-row"><span class="pv-collab-label">Contributors</span><span class="pv-collab-value">${Array.isArray(collab.contributors) ? collab.contributors.length : collab.contributors}</span></div>`
               : ""}
             ${collab.classification
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Classification</span><span class="pv-collab-value">${_esc(collab.classification)}</span></div>`
@@ -560,7 +560,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
             ${collab.bot_contributors && collab.bot_contributors.length
               ? `<div class="pv-collab-row"><span class="pv-collab-label">Bots</span><span class="pv-collab-value">${collab.bot_contributors.join(", ")}</span></div>`
               : ""}
-            ${!collab.primary_contributor && !contributorsSummary
+            ${!collab.primary_contributor && !collab.contributors
               ? '<span class="pv-no-data">No collaboration data available</span>'
               : ""}
           </div>
@@ -638,7 +638,7 @@ function _renderAnalysisDashboard(container, data, collabInfo) {
 async function _loadCollaboration(projectId) {
   const panel = document.getElementById("pv-collaboration-panel");
   try {
-    const res = await authFetch(`/projects/collaboration/${encodeURIComponent(projectId)}`);
+    const res = await fetch(`${API}/projects/collaboration/${encodeURIComponent(projectId)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _collabData = await res.json();
     _renderCollaborationTab(panel, _collabData);
@@ -652,25 +652,16 @@ async function _loadCollaboration(projectId) {
 }
 
 function _renderCollaborationTab(container, data) {
-  const isGit = Boolean(data.is_git_project || data.is_github);
+  const isGit = data.is_github;
   const contributors = data.contributors || [];
   const first = data.first_commit_date;
   const last = data.last_commit_date;
-  const durationDays = Number(data.project_duration_days) || 0;
+  const durationDays = data.project_duration_days || 0;
   const bots = data.bot_contributors || [];
-  const daysActive =
-    (data.days_active_inclusive != null && Number(data.days_active_inclusive) > 0)
-      ? Number(data.days_active_inclusive)
-      : (_inclusiveCalendarDaysBetween(first, last) ?? null);
 
   const durationText = durationDays > 0
     ? `${Math.floor(durationDays / 365)}y ${Math.floor((durationDays % 365) / 30)}m ${durationDays % 30}d`
-    : (() => {
-        const inc = _inclusiveCalendarDaysBetween(first, last);
-        if (inc == null || inc <= 0) return "—";
-        const dd = inc - 1;
-        return `${Math.floor(dd / 365)}y ${Math.floor((dd % 365) / 30)}m ${dd % 30}d`.replace(/^(0y )?(0m )?/, "") || `${inc} day${inc === 1 ? "" : "s"}`;
-      })();
+    : "—";
 
   container.innerHTML = `
     <div class="pv-analysis-dashboard">
@@ -692,7 +683,7 @@ function _renderCollaborationTab(container, data) {
           <div class="pv-stat-label">Bot Contributors</div>
         </div>
         <div class="pv-stat-card">
-          <div class="pv-stat-value">${daysActive != null ? daysActive : "—"}</div>
+          <div class="pv-stat-value">${durationDays || "—"}</div>
           <div class="pv-stat-label">Days Active</div>
         </div>
       </div>
@@ -800,15 +791,12 @@ function _initSienna() {
 
   close?.addEventListener("click", () => panel.classList.add("hidden"));
 
-  const history = [];
-
   const handleSend = () => {
     const text = input?.value?.trim();
     if (!text) return;
     _addSiennaMessage(messages, "user", text);
-    history.push({ role: "user", content: text });
     input.value = "";
-    _getSiennaResponse(messages, text, history);
+    _getSiennaResponse(messages, text);
   };
 
   send?.addEventListener("click", handleSend);
@@ -820,46 +808,80 @@ function _initSienna() {
 function _addSiennaMessage(container, role, text) {
   const msg = document.createElement("div");
   msg.className = `pv-sienna-msg ${role}`;
-  if (role === "assistant") {
-    msg.innerHTML = renderMarkdown(text || "");
-  } else {
-    msg.textContent = text;
-  }
+  msg.textContent = text;
   container.appendChild(msg);
   container.scrollTop = container.scrollHeight;
 }
 
-async function _getSiennaResponse(container, question, history = []) {
+async function _getSiennaResponse(container, question) {
   _addSiennaMessage(container, "assistant", "Thinking...");
   const thinkingEl = container.lastChild;
 
   try {
-    const res = await authFetch("/sienna/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: question,
-        project_id: _currentProjectId,
-        debug: /debug|bug|error|issue|fix|inspect|trace|review code|broken|failing/i.test(question),
-        history: history.slice(-10),
-      }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const detail = payload?.detail || "I couldn't process that right now.";
-      thinkingEl.innerHTML = renderMarkdown(detail);
-      history.push({ role: "assistant", content: detail });
-      return;
+    if (!_analysisData) {
+      const res = await fetch(
+        `${API}/projects/${encodeURIComponent(_currentProjectId)}/analysis`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        _analysisData = data.analysis;
+      }
     }
-    const answer = String(payload?.text || payload?.reply || "").trim()
-      || "I can only help with your Loom projects or Loom features.";
-    thinkingEl.innerHTML = renderMarkdown(answer);
-    history.push({ role: "assistant", content: answer });
+
+    const answer = _generateLocalAnswer(question, _analysisData);
+    thinkingEl.textContent = answer;
   } catch {
-    const fallback = "Sorry, I couldn't process that question right now.";
-    thinkingEl.innerHTML = renderMarkdown(fallback);
-    history.push({ role: "assistant", content: fallback });
+    thinkingEl.textContent = "Sorry, I couldn't process that question right now.";
   }
+}
+
+function _generateLocalAnswer(question, analysis) {
+  const q = question.toLowerCase();
+  if (!analysis) return "No analysis data is available for this project yet.";
+
+  if (q.includes("explain") && (q.includes("project") || q.includes("this"))) {
+    const fs = analysis.file_summary || {};
+    const langs = Object.keys(analysis.languages || {}).slice(0, 5).join(", ");
+    const fws = (analysis.frameworks || []).join(", ");
+    return `This project contains ${fs.file_count || "unknown number of"} files. ` +
+      `Languages used: ${langs || "unknown"}. ` +
+      `Frameworks: ${fws || "none detected"}. ` +
+      `It was scanned in ${analysis.scan_duration_seconds?.toFixed(2) || "unknown"} seconds.`;
+  }
+
+  if (q.includes("technolog") || q.includes("stack") || q.includes("framework")) {
+    const langs = Object.keys(analysis.languages || {}).join(", ");
+    const fws = (analysis.frameworks || []).join(", ");
+    return `Technologies: ${langs || "none"}. Frameworks: ${fws || "none detected"}.`;
+  }
+
+  if (q.includes("skill")) {
+    const skills = (analysis.skills || []).slice(0, 8);
+    if (!skills.length) return "No skills data available.";
+    return "Top skills: " + skills.map(s =>
+      `${s.skill || s.name} (${Math.round((s.confidence || 0) * 100)}%)`
+    ).join(", ");
+  }
+
+  if (q.includes("contributor") || q.includes("collaborat") || q.includes("who")) {
+    const c = analysis.collaboration || {};
+    return c.primary_contributor
+      ? `Primary contributor: ${c.primary_contributor}. Classification: ${c.classification || "unknown"}.`
+      : "No collaboration data available.";
+  }
+
+  if (q.includes("warning") || q.includes("issue") || q.includes("problem")) {
+    const count = analysis.warning_count ?? (analysis.warnings || []).length;
+    return `There are ${count} warnings in this project.`;
+  }
+
+  if (q.includes("file") && (q.includes("how many") || q.includes("count"))) {
+    return `This project has ${analysis.file_summary?.file_count || "unknown"} files.`;
+  }
+
+  return `This project uses ${Object.keys(analysis.languages || {}).slice(0, 3).join(", ") || "unknown languages"} ` +
+    `with ${(analysis.frameworks || []).length} frameworks. ` +
+    `Ask me about technologies, skills, contributors, or warnings!`;
 }
 
 // ─── Syntax highlighting fallback (lightweight) ───────────────────
@@ -915,64 +937,20 @@ function _formatBytes(bytes) {
   return `${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-function _coerceDateInput(v) {
-  if (v == null || v === "") return null;
-  if (typeof v === "number" && !Number.isNaN(v)) {
-    const sec = v > 1e12 ? v / 1000 : v;
-    const d = new Date(sec * 1000);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function _formatAnalysisContributorsSummary(collab, collabInfo) {
-  const list = collabInfo?.contributors;
-  if (Array.isArray(list) && list.length) {
-    return list
-      .map((c) => (typeof c === "string" ? c : (c?.name || c?.login || c?.author || "")))
-      .filter(Boolean)
-      .slice(0, 20)
-      .join(", ");
-  }
-  const c = collab?.contributors;
-  if (!c) return "";
-  if (Array.isArray(c)) {
-    return c
-      .map((x) => (typeof x === "string" ? x : (x?.name || x?.login || x?.author || String(x))))
-      .filter(Boolean)
-      .slice(0, 20)
-      .join(", ");
-  }
-  if (typeof c === "object") {
-    return Object.keys(c)
-      .filter((k) => typeof k === "string" && k.trim())
-      .slice(0, 20)
-      .join(", ");
-  }
-  return String(c);
-}
-
-function _inclusiveCalendarDaysBetween(firstStr, lastStr) {
-  const a = _coerceDateInput(firstStr);
-  const b = _coerceDateInput(lastStr);
-  if (!a || !b) return null;
-  const utcMidnight = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  const diff = Math.round((utcMidnight(b) - utcMidnight(a)) / 86400000);
-  if (diff < 0) return null;
-  return diff + 1;
-}
-
 function _formatDate(dateStr) {
-  if (!dateStr && dateStr !== 0) return "—";
-  const d = _coerceDateInput(dateStr);
-  if (!d) return typeof dateStr === "string" ? dateStr : "—";
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch { return dateStr; }
 }
 
 function _formatMonthYear(dateStr) {
-  if (!dateStr && dateStr !== 0) return "—";
-  const d = _coerceDateInput(dateStr);
-  if (!d) return typeof dateStr === "string" ? dateStr : "—";
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short" });
+  } catch { return dateStr; }
 }

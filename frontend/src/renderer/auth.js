@@ -4,87 +4,26 @@ import { loadRecentProjects } from "./recentProjects.js";
 import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
-import { refreshConsentUI, renderConsentSettings, setConsentSettingsMessage } from "./consentBanner.js";
+import { refreshConsentUI, renderConsentSettings } from "./consentBanner.js";
 import { maybeShowOnboardingForAudience, reopenOnboarding } from "./onboarding.js";
-import { shouldRequireLoginForTab, shouldRequireLoginForSettingsTab } from "./authShared.mjs";
+import { shouldRequireLoginForTab } from "./authShared.mjs";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
-import { beginPostLoginDashboardReload, finishPostLoginDashboardReload } from "./dashboardInit.js";
-import {
-  migrateLegacyAuthStorage,
-  getStoredAuthToken,
-  setStoredAuthToken,
-  clearStoredAuthTokens,
-  getRememberLoginPreference,
-  setRememberLoginPreference,
-  relocateStoredAuthToken,
-  AUTH_TOKEN_KEY,
-} from "./authStorage.js";
 
 const API_BASE = "http://127.0.0.1:8002";
-
-/** Bumped when auth token identity or storage mode changes so stale dashboard fetches skip DOM writes. */
-let _authDataEpoch = 0;
-
-export function captureAuthDataEpoch() {
-  return _authDataEpoch;
-}
-
-export function authDomWriteAllowed(epoch) {
-  return _authDataEpoch === epoch;
-}
-
-function bumpAuthDataEpoch() {
-  _authDataEpoch++;
-}
-
+const AUTH_TOKEN_KEY = "loom_auth_token";
 let authMode = "login";
 let currentUser = null;
 let privateModeEnabled = false;
-let pendingPublicPage = null;
-let _educationEntries = [];
-let _githubTokenState = {
-  maskedDisplay: "",
-  configured: false,
-  editing: false,
-};
-let latestConsentState = {
-  local_consent: false,
-  external_consent: false,
-  bannerVisible: false,
-};
 
-export function getAuthToken() {
-  return getStoredAuthToken();
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-/**
- * @param {string | null} token
- * @param {{ persistent?: boolean }} [options] — login/register should pass persistent explicitly
- */
-function setAuthToken(token, options = {}) {
-  const prev = getStoredAuthToken();
+function setAuthToken(token) {
   if (token) {
-    const persistent =
-      typeof options.persistent === "boolean"
-        ? options.persistent
-        : isRememberLoginEffectiveOn();
-    setStoredAuthToken(token, { persistent });
-    if (prev !== token) bumpAuthDataEpoch();
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
   } else {
-    clearStoredAuthTokens();
-    if (prev) bumpAuthDataEpoch();
-  }
-}
-
-/** Whether "stay signed in" is effectively on (preference or legacy local token). */
-export function isRememberLoginEffectiveOn() {
-  const p = getRememberLoginPreference();
-  if (p === true) return true;
-  if (p === false) return false;
-  try {
-    return Boolean(getStoredAuthToken() && localStorage.getItem(AUTH_TOKEN_KEY));
-  } catch (_) {
-    return false;
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   }
 }
 
@@ -176,37 +115,6 @@ function setActiveTabByKey(tabKey) {
   });
 }
 
-function activateSettingsTab(tab = "general") {
-  document.querySelectorAll(".settings-nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.settingsTab === tab);
-  });
-  document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
-    panel.classList.toggle("active", panel.id === `settings-tab-${tab}`);
-  });
-}
-
-async function ensureConsentState() {
-  // Reuse the shared consent 
-  try {
-    latestConsentState = await refreshConsentUI();
-  } catch (_) {
-    latestConsentState = {
-      local_consent: false,
-      external_consent: false,
-      bannerVisible: false,
-    };
-  }
-  return latestConsentState;
-}
-
-function showConsentRequiredSettings(message = "Grant consent in Privacy & Consent before using Ask Sienna.") {
-  // Ask Sienna is gated by consent
-  showSavedPage("settings", "settings-page");
-  activateSettingsTab("privacy");
-  renderSettingsProfile();
-  setConsentSettingsMessage(message);
-}
-
 function goToPage(tabKey, pageId) {
   switchPage(pageId);
   setActiveTabByKey(tabKey);
@@ -217,15 +125,6 @@ function showSavedPage(tabKey, pageId) {
   if (!tabKey || !pageId) return;
   switchPage(pageId);
   setActiveTabByKey(tabKey);
-}
-
-function getActivePageSnapshot() {
-  const activeTab = document.querySelector(".nav-tab.active");
-  const activePage = document.querySelector(".page.active");
-  const tabKey = activeTab?.dataset.tab || "";
-  const pageId = activePage?.id || activeTab?.dataset.page || "";
-  if (!tabKey || !pageId) return null;
-  return { tabKey, pageId };
 }
 
 function restoreLastAllowedPage({ requirePrivate = false } = {}) {
@@ -260,10 +159,6 @@ export async function authFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
-export function hasAuthToken() {
-  return Boolean(getAuthToken());
-}
-
 async function ensureCurrentUser() {
   if (currentUser) return currentUser;
   if (!getAuthToken()) return null;
@@ -288,158 +183,8 @@ export async function openLoginFlow() {
       mode = boot.has_users ? "login" : "register";
     }
   } catch (_) {}
-  const rememberChk = document.getElementById("auth-remember-me");
-  if (rememberChk) rememberChk.checked = false;
   setAuthFormMode(mode);
   showAuthModal(true);
-}
-
-export async function openSettingsAndPromptLogin(settingsTab = "account") {
-  showSavedPage("settings", "settings-page");
-  const fallbackSettingsTab = shouldRequireLoginForSettingsTab(settingsTab, currentUser)
-    ? "privacy"
-    : settingsTab;
-  pendingPublicPage = {
-    tabKey: "settings",
-    pageId: "settings-page",
-    settingsTab: fallbackSettingsTab,
-  };
-  activateSettingsTab(fallbackSettingsTab);
-  renderSettingsProfile();
-  if (shouldRequireLoginForSettingsTab(settingsTab, currentUser)) {
-    setConsentSettingsMessage("");
-    await openLoginFlow();
-  }
-}
-
-function _applyGithubTokenView() {
-  const input = document.getElementById("gh-token-input");
-  const editBtn = document.getElementById("gh-token-edit-btn");
-  const saveBtn = document.getElementById("gh-token-save-btn");
-  const cancelBtn = document.getElementById("gh-token-cancel-btn");
-  const showRow = document.getElementById("gh-token-show-row");
-  const showChk = document.getElementById("gh-token-show-chk");
-  if (!input || !editBtn || !saveBtn || !cancelBtn || !showRow || !showChk) return;
-
-  if (!_githubTokenState.editing) {
-    input.disabled = true;
-    input.value = _githubTokenState.configured ? _githubTokenState.maskedDisplay : "";
-    input.placeholder = _githubTokenState.configured ? "" : "No token saved yet";
-    input.type = "text";
-    input.autocomplete = "off";
-    showChk.checked = false;
-    const showLabel = document.getElementById("gh-token-show-label");
-    if (showLabel) showLabel.textContent = "Show token";
-    editBtn.classList.remove("hidden");
-    saveBtn.classList.add("hidden");
-    cancelBtn.classList.add("hidden");
-    showRow.classList.add("hidden");
-  } else {
-    input.disabled = false;
-    input.value = "";
-    input.placeholder = "Paste new personal access token";
-    showChk.checked = false;
-    const showLabelEd = document.getElementById("gh-token-show-label");
-    if (showLabelEd) showLabelEd.textContent = "Show token";
-    input.type = "password";
-    input.autocomplete = "new-password";
-    editBtn.classList.add("hidden");
-    saveBtn.classList.remove("hidden");
-    cancelBtn.classList.remove("hidden");
-    showRow.classList.remove("hidden");
-  }
-}
-
-async function _refreshGithubTokenStatus() {
-  try {
-    const res = await authFetch("/github/token/status");
-    if (!res.ok) {
-      _githubTokenState.configured = false;
-      _githubTokenState.maskedDisplay = "";
-      return;
-    }
-    const data = await res.json();
-    _githubTokenState.configured = Boolean(data.configured);
-    _githubTokenState.maskedDisplay = typeof data.masked_token === "string" ? data.masked_token : "";
-  } catch (_) {
-    _githubTokenState.configured = false;
-    _githubTokenState.maskedDisplay = "";
-  }
-}
-
-function _bindGithubTokenSettings() {
-  _githubTokenState.editing = false;
-  const editBtn = document.getElementById("gh-token-edit-btn");
-  const saveBtn = document.getElementById("gh-token-save-btn");
-  const cancelBtn = document.getElementById("gh-token-cancel-btn");
-  const showChk = document.getElementById("gh-token-show-chk");
-  const input = document.getElementById("gh-token-input");
-  if (!editBtn || !saveBtn || !cancelBtn || !showChk || !input) return;
-
-  editBtn.addEventListener("click", () => {
-    document.getElementById("gh-token-msg").textContent = "";
-    _githubTokenState.editing = true;
-    _applyGithubTokenView();
-  });
-
-  cancelBtn.addEventListener("click", async () => {
-    document.getElementById("gh-token-msg").textContent = "";
-    _githubTokenState.editing = false;
-    await _refreshGithubTokenStatus();
-    _applyGithubTokenView();
-  });
-
-  showChk.addEventListener("change", () => {
-    if (!_githubTokenState.editing) return;
-    input.type = showChk.checked ? "text" : "password";
-    const showLabel = document.getElementById("gh-token-show-label");
-    if (showLabel) showLabel.textContent = showChk.checked ? "Hide token" : "Show token";
-  });
-
-  saveBtn.addEventListener("click", async () => {
-    const msg = document.getElementById("gh-token-msg");
-    const raw = (input.value || "").trim();
-    if (!raw) {
-      if (msg) msg.textContent = "Enter a new token to save.";
-      return;
-    }
-    if (msg) msg.textContent = "Validating and saving...";
-    saveBtn.disabled = true;
-    try {
-      const res = await authFetch("/api/github/token", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: raw }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const d = data.detail;
-        const detailText = Array.isArray(d)
-          ? d.map((x) => (typeof x === "object" && x?.msg) || String(x)).join(" ")
-          : (d || `Save failed (${res.status})`);
-        if (msg) msg.textContent = detailText;
-        return;
-      }
-      _githubTokenState.editing = false;
-      _githubTokenState.configured = true;
-      _githubTokenState.maskedDisplay = typeof data.masked_token === "string" ? data.masked_token : _githubTokenState.maskedDisplay;
-      showChk.checked = false;
-      _applyGithubTokenView();
-      if (msg) {
-        const who = data.github_login ? ` (@${data.github_login})` : "";
-        msg.textContent = `GitHub token saved${who}.`;
-      }
-    } catch (_) {
-      if (msg) msg.textContent = "Save failed: network error.";
-    } finally {
-      saveBtn.disabled = false;
-    }
-  });
-
-  _refreshGithubTokenStatus().then(() => {
-    _githubTokenState.editing = false;
-    _applyGithubTokenView();
-  });
 }
 
 function renderSettingsProfile() {
@@ -450,7 +195,6 @@ function renderSettingsProfile() {
       profileEl.innerHTML = `<p class="settings-login-prompt">Login to view and edit your profile.</p>`;
     } else {
       profileEl.innerHTML = `
-        <div class="settings-card settings-profile-card">
         <div class="settings-card-header">
           <h3>User Profile</h3>
           <p class="settings-card-desc">Update your personal information and public links.</p>
@@ -473,61 +217,12 @@ function renderSettingsProfile() {
           <label class="settings-form-label" for="pf-portfolio">Portfolio URL</label>
           <input id="pf-portfolio" class="settings-input" value="${currentUser.portfolio_url || ""}" />
         </div>
-
-        <div class="settings-edu-section">
-          <div class="settings-edu-section-header">
-            <span class="settings-edu-section-title">Education</span>
-            <span class="settings-edu-section-desc">Optional. Add your academic background.</span>
-          </div>
-          <div id="edu-cards-container" class="edu-cards-container"></div>
-          <div class="edu-add-zone" id="edu-add-zone">
-            <button class="edu-add-btn" id="edu-add-btn" title="Add education">＋</button>
-          </div>
-        </div>
-
         <div class="settings-form-actions">
           <button id="profile-save-btn" class="settings-save-btn">Save Profile</button>
           <span id="profile-msg" class="settings-feedback-msg"></span>
         </div>
-        </div>
-
-        <div class="settings-card settings-github-token-card">
-          <div class="settings-card-header">
-            <h3>GitHub</h3>
-            <p class="settings-card-desc">Personal access token used to list and import repositories. Update it if organization or classroom repos are missing (for example, after enabling SSO or new scopes).</p>
-          </div>
-          <div class="settings-form-grid">
-            <label class="settings-form-label" for="gh-token-input">GitHub Token</label>
-            <div class="settings-github-token-field-col">
-              <input id="gh-token-input" class="settings-input" disabled autocomplete="off" />
-              <label class="settings-github-show-toggle hidden" id="gh-token-show-row">
-                <input type="checkbox" id="gh-token-show-chk" />
-                <span id="gh-token-show-label">Show token</span>
-              </label>
-            </div>
-          </div>
-          <div class="settings-form-actions settings-github-token-actions">
-            <button type="button" id="gh-token-edit-btn" class="settings-action-btn">Edit</button>
-            <button type="button" id="gh-token-save-btn" class="settings-save-btn hidden">Save Changes</button>
-            <button type="button" id="gh-token-cancel-btn" class="settings-action-btn hidden">Cancel</button>
-            <span id="gh-token-msg" class="settings-feedback-msg"></span>
-          </div>
-          <p class="settings-github-token-footnote">
-            <a class="settings-inline-link" href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">Create or manage tokens on GitHub</a>
-          </p>
-        </div>
       `;
       document.getElementById("profile-save-btn")?.addEventListener("click", saveProfile);
-      document.getElementById("edu-add-btn")?.addEventListener("click", () => {
-        _educationEntries.push({ university: "", degree: "", start_date: "", end_date: "" });
-        _renderEduCards();
-      });
-      // Load education from backend then render
-      authFetch("/auth/me/education").then(r => r.json()).then(data => {
-        _educationEntries = Array.isArray(data.data) ? data.data : [];
-        _renderEduCards();
-      }).catch(() => { _educationEntries = []; _renderEduCards(); });
-      _bindGithubTokenSettings();
     }
   }
 
@@ -538,16 +233,6 @@ function renderSettingsProfile() {
       securityEl.innerHTML = `<p class="settings-login-prompt">Login to manage security settings.</p>`;
     } else {
       securityEl.innerHTML = `
-        <div class="settings-card settings-session-card">
-          <div class="settings-card-header">
-            <h3>Stay signed in</h3>
-            <p class="settings-card-desc">When off, your session lasts until you quit the app; the next launch starts in guest mode until you log in again.</p>
-          </div>
-          <label class="settings-remember-label" for="settings-remember-login">
-            <input type="checkbox" id="settings-remember-login" />
-            <span>Remember me on this device</span>
-          </label>
-        </div>
         <div class="settings-card-header">
           <h3>Change Password</h3>
           <p class="settings-card-desc">Update your account password. New password must be at least 6 characters.</p>
@@ -563,71 +248,12 @@ function renderSettingsProfile() {
           <span id="password-msg" class="settings-feedback-msg"></span>
         </div>
       `;
-      const rememberSettings = document.getElementById("settings-remember-login");
-      if (rememberSettings) {
-        rememberSettings.checked = isRememberLoginEffectiveOn();
-        rememberSettings.addEventListener("change", async () => {
-          await applyRememberLoginFromSettings(rememberSettings.checked);
-        });
-      }
       document.getElementById("password-save-btn")?.addEventListener("click", changePassword);
     }
   }
 
   // ── Privacy tab: consent ──────────────────────────────────────
   renderConsentSettings();
-}
-
-function _renderEduCards() {
-  const container = document.getElementById("edu-cards-container");
-  if (!container) return;
-  container.innerHTML = "";
-  _educationEntries.forEach((entry, idx) => {
-    const isCurrent = !entry.end_date || entry.end_date.toLowerCase() === "present";
-    const card = document.createElement("div");
-    card.className = "edu-card";
-    card.innerHTML = `
-      <button class="edu-card-delete" title="Remove" data-idx="${idx}">×</button>
-      <div class="edu-card-fields">
-        <input class="settings-input edu-university" placeholder="University / School" value="${entry.university || ""}" data-idx="${idx}" data-field="university" />
-        <input class="settings-input edu-degree" placeholder="Degree (e.g. BSc Computer Science)" value="${entry.degree || ""}" data-idx="${idx}" data-field="degree" />
-        <div class="edu-card-dates">
-          <input class="settings-input edu-start" placeholder="Start (e.g. Sep 2020)" value="${entry.start_date || ""}" data-idx="${idx}" data-field="start_date" />
-          <input class="settings-input edu-end" placeholder="End (e.g. May 2024)" value="${isCurrent ? "" : (entry.end_date || "")}" data-idx="${idx}" data-field="end_date" ${isCurrent ? "disabled" : ""} />
-          <label class="edu-current-label">
-            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent && entry.university ? "checked" : ""} />
-            <span>Current</span>
-          </label>
-        </div>
-        <div class="edu-card-location">
-          <input class="settings-input edu-city" placeholder="City" value="${entry.city || ""}" data-idx="${idx}" data-field="city" />
-          <input class="settings-input edu-state" placeholder="State / Province" value="${entry.state || ""}" data-idx="${idx}" data-field="state" />
-        </div>
-      </div>
-    `;
-    // delete
-    card.querySelector(".edu-card-delete").addEventListener("click", () => {
-      _educationEntries.splice(idx, 1);
-      _renderEduCards();
-    });
-    // field edits
-    card.querySelectorAll("[data-field]").forEach(input => {
-      input.addEventListener("input", e => {
-        _educationEntries[e.target.dataset.idx][e.target.dataset.field] = e.target.value;
-      });
-    });
-    // current checkbox
-    card.querySelector(".edu-current-chk").addEventListener("change", e => {
-      const i = parseInt(e.target.dataset.idx);
-      if (e.target.checked) {
-        _educationEntries[i].end_date = "Present";
-      } else {
-        _educationEntries[i].end_date = "";
-      }
-      _renderEduCards();
-    });
-    container.appendChild(card);
-  });
 }
 
 async function saveProfile() {
@@ -644,20 +270,11 @@ async function saveProfile() {
   };
 
   try {
-    const [res, eduRes] = await Promise.all([
-      authFetch("/auth/me", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }),
-      authFetch("/auth/me/education", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          education: _educationEntries.filter(e => (e.university || "").trim()),
-        }),
-      }),
-    ]);
+    const res = await authFetch("/auth/me", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
     if (!res.ok) {
       if (msg) msg.textContent = `Failed: ${data.detail || "save failed"}`;
@@ -727,32 +344,13 @@ function closeModalToPublic() {
   if (githubUrlInput) githubUrlInput.value = "";
   if (passwordInput) passwordInput.value = "";
   if (error) error.textContent = "";
-  const rememberChk = document.getElementById("auth-remember-me");
-  if (rememberChk) rememberChk.checked = false;
   showAuthModal(false);
-  if (!currentUser && pendingPublicPage?.tabKey && pendingPublicPage?.pageId) {
-    showSavedPage(pendingPublicPage.tabKey, pendingPublicPage.pageId);
-    if (pendingPublicPage.tabKey === "settings") {
-      activateSettingsTab(pendingPublicPage.settingsTab || "privacy");
-      renderSettingsProfile();
-    }
-    pendingPublicPage = null;
-    return;
-  }
-  pendingPublicPage = null;
   if (!currentUser && !restoreLastAllowedPage()) {
     goToPage("dashboard", "dashboard-page");
   }
 }
 
 async function syncCloudDbAndRefresh() {
-  try {
-    await authFetch("/cloud/db/download", { method: "POST" });
-    await authFetch("/cloud/projects/download-all", { method: "POST" });
-  } catch (_) {
-    // No cloud backup yet or offline — continue with local DB
-  }
-
   await Promise.all([
     loadProjects(),
     loadRecentProjects(),
@@ -761,19 +359,7 @@ async function syncCloudDbAndRefresh() {
     loadMostUsedSkills(),
   ]);
   notifyPortfolioDataUpdated();
-}
-
-/** Settings toggle: move token between storages and refresh widgets. */
-export async function applyRememberLoginFromSettings(persist) {
-  const token = getAuthToken();
-  if (token) {
-    relocateStoredAuthToken(token, persist);
-    bumpAuthDataEpoch();
-    await syncCloudDbAndRefresh();
-  } else {
-    setRememberLoginPreference(persist);
-  }
-}
+}  
 
 export async function initAuthFlow() {
   const loginBtn = document.getElementById("login-btn");
@@ -793,23 +379,22 @@ export async function initAuthFlow() {
     return;
   }
 
-  migrateLegacyAuthStorage();
+  setModeUI(false, null);
   setAuthFormMode("login");
-  goToPage("dashboard", "dashboard-page");
+  restoreSavedPageOptimistically();
 
   // ── Settings tab switching ────────────────────────────────────
   document.querySelectorAll(".settings-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.settingsTab;
-      if (shouldRequireLoginForSettingsTab(tab, currentUser)) {
-        // Public mode can only stay on the consent tab inside Setting
-        activateSettingsTab("privacy");
-        renderSettingsProfile();
-        openSettingsAndPromptLogin(tab);
-        return;
-      }
-      setConsentSettingsMessage("");
-      activateSettingsTab(tab);
+      document.querySelectorAll(".settings-nav-item").forEach((b) =>
+        b.classList.remove("active")
+      );
+      btn.classList.add("active");
+      document.querySelectorAll(".settings-tab-panel").forEach((p) =>
+        p.classList.remove("active")
+      );
+      document.getElementById(`settings-tab-${tab}`)?.classList.add("active");
     });
   });
 
@@ -832,16 +417,13 @@ export async function initAuthFlow() {
 
   async function performLogout() {
     logoutBtn.disabled = true;
-    const tokenBeforeLogout = getAuthToken();
-
-    try {
-      if (tokenBeforeLogout) {
-        await authFetch("/auth/logout", { method: "POST" });
-      }
-    } catch (_) {}
     setAuthToken(null);
     setModeUI(false, null);
     goToPage("dashboard", "dashboard-page");
+
+    try {
+      await authFetch("/auth/logout", { method: "POST" });
+    } catch (_) {}
 
     await Promise.all([
       loadProjects(),
@@ -877,23 +459,13 @@ export async function initAuthFlow() {
         await openLoginFlow();
         return false;
       }
-      if (tabKey === "chat") {
-        const consentState = await ensureConsentState();
-        if (!consentState?.external_consent) {
-          // Block Sienna before opening the page 
-          showConsentRequiredSettings();
-          return false;
-        }
-      }
       if (tabKey === "settings") {
         const user = await ensureCurrentUser();
-        renderSettingsProfile();
-        if (user) {
-          activateSettingsTab("general");
-        } else {
-          activateSettingsTab("privacy");
-          setConsentSettingsMessage("");
+        if (shouldRequireLoginForTab(tabKey, user)) {
+          await openLoginFlow();
+          return false;
         }
+        renderSettingsProfile();
       }
       if (tabKey === "customization") {
         const user = await ensureCurrentUser();
@@ -906,29 +478,21 @@ export async function initAuthFlow() {
     },
   });
 
-  try {
-    let bootUser = null;
-    const existingToken = getAuthToken();
-    if (existingToken) {
-      const meRes = await authFetch("/auth/me");
-      if (meRes.ok) {
-        const meData = await meRes.json();
-        bootUser = meData.user || null;
-      }
-    }
+    try {
+    const user = await ensureCurrentUser();
 
-    if (bootUser) {
-      setModeUI(true, bootUser);
+    if (user) {
+      setModeUI(true, user);
       await syncCloudDbAndRefresh();
-      const consentState = await ensureConsentState();
+      const consentState = await refreshConsentUI();
       if (!consentState?.bannerVisible) {
-        maybeShowOnboardingForAudience(bootUser.username || bootUser.id || "guest");
+        maybeShowOnboardingForAudience(user.username || user.id || "guest");
       }
       if (!restoreLastAllowedPage({ requirePrivate: true })) {
         goToPage("dashboard", "dashboard-page");
       }
     } else {
-      if (existingToken) setAuthToken(null);
+      setAuthToken(null);
       setModeUI(false, null);
       if (!restoreLastAllowedPage()) {
         goToPage("dashboard", "dashboard-page");
@@ -942,7 +506,7 @@ export async function initAuthFlow() {
         loadMostUsedSkills(),
       ]);
       notifyPortfolioDataUpdated();
-      const consentState = await ensureConsentState();
+      const consentState = await refreshConsentUI();
       if (!consentState?.bannerVisible) {
         maybeShowOnboardingForAudience("guest");
       }
@@ -998,31 +562,13 @@ export async function initAuthFlow() {
       return;
     }
 
-    const wasGuest = !privateModeEnabled;
-    const rememberMe = document.getElementById("auth-remember-me")?.checked === true;
-    setAuthToken(data.token, { persistent: rememberMe });
+    setAuthToken(data.token);
     setModeUI(true, data.user);
     showAuthModal(false);
-    pendingPublicPage = null;
     goToPage("dashboard", "dashboard-page");
 
-    if (wasGuest) {
-      const dashEpoch = beginPostLoginDashboardReload();
-      try {
-        await syncCloudDbAndRefresh();
-        try {
-          const { loadRecentActivity } = await import("./activity.js");
-          await loadRecentActivity();
-        } catch (_) {
-          /* activity is non-blocking */
-        }
-      } finally {
-        finishPostLoginDashboardReload(dashEpoch);
-      }
-    } else {
-      await syncCloudDbAndRefresh();
-    }
-    const consentState = await ensureConsentState();
+    await syncCloudDbAndRefresh();
+    const consentState = await refreshConsentUI();
     if (!consentState?.bannerVisible) {
       maybeShowOnboardingForAudience(data.user?.username || data.user?.id || "guest");
     }
@@ -1036,11 +582,6 @@ export async function initAuthFlow() {
   });
 
  window.addEventListener("consent:state-changed", (event) => {
-  latestConsentState = {
-    local_consent: Boolean(event.detail?.local_consent),
-    external_consent: Boolean(event.detail?.external_consent),
-    bannerVisible: Boolean(event.detail?.bannerVisible),
-  };
   if (event.detail?.bannerVisible) return;
   maybeShowOnboardingForAudience(currentUser?.username || currentUser?.id || "guest");
  });

@@ -52,5 +52,3 @@ Thumbs.db
 uploads/
 data/*.db
 data/capstone.db
-
-.claude/

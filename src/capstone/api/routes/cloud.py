@@ -25,20 +25,16 @@ class ProjectZipPayload(BaseModel):
 
 
 def _get_current_username(request: Request) -> str:
-    username = auth_routes.get_authenticated_username(request)
-    storage_user_key = auth_routes.get_authenticated_storage_user_key(request)
-    if storage_user_key:
-        storage.set_current_user(storage_user_key)
-        print(
-            "[cloud-route] "
-            f"username={username!r} "
-            f"user_id={storage_user_key!r} "
-            f"local_db={str(storage.get_database_path())!r} "
-            f"cloud_db_key={f'users/{storage_user_key}/capstone.db'!r} "
-            f"project_prefix={f'users/{storage_user_key}/projects/'!r}",
-            flush=True,
-        )
-        return storage_user_key
+    token = auth_routes._extract_bearer(request)
+    session = auth_routes._SESSIONS.get(token) if token else None
+
+    if session and session.get("user") and session["user"].get("username"):
+        username = session["user"]["username"]
+        storage.CURRENT_USER = username
+        return username
+
+    if storage.CURRENT_USER:
+        return storage.CURRENT_USER
 
     raise HTTPException(status_code=401, detail="no authenticated user")
 
@@ -59,7 +55,7 @@ def debug_db():
     conn = storage.open_db()
     try:
         return {
-            "current_user": storage.get_current_user(),
+            "current_user": storage.CURRENT_USER,
             "db_path": str(storage.get_database_path()),
         }
     finally:

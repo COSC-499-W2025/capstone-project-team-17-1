@@ -1,5 +1,3 @@
-import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
-
 function getHealthColor(score) {
   const clamp = Math.max(0, Math.min(100, score));
 
@@ -25,7 +23,6 @@ function getHealthEmoji(score) {
 }
 
 export async function loadProjectHealth() {
-  const epoch = captureAuthDataEpoch();
   const container = document.getElementById("project-health-container");
   if (!container) return;
 
@@ -36,10 +33,8 @@ export async function loadProjectHealth() {
   `;
 
   try {
-    const res = await authFetch("/analytics/project-health");
+    const res = await fetch("http://127.0.0.1:8002/analytics/project-health");
     const projects = await res.json();
-
-    if (!authDomWriteAllowed(epoch)) return;
 
     container.innerHTML = "";
 
@@ -82,13 +77,11 @@ export async function loadProjectHealth() {
     });
 
   } catch (err) {
-    if (authDomWriteAllowed(epoch)) {
-      container.innerHTML = `
+    container.innerHTML = `
       <div class="error-empty-state">
         Failed to load project health.
       </div>
     `;
-    }
     console.error("Health fetch failed:", err);
   }
 }

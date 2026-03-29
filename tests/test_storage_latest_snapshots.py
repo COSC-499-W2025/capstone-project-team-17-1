@@ -9,8 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone import storage
-from capstone.storage import fetch_latest_snapshots
+from capstone.storage import open_db, close_db, fetch_latest_snapshots
 
 
 def _insert_row(conn, project_id: str, created_at: str, snapshot_obj, classification: str = "solo"):
@@ -35,17 +34,10 @@ class TestFetchLatestSnapshots(unittest.TestCase):
         self.addCleanup(td.cleanup)
 
         db_dir = Path(td.name)
-        original_base_dir = storage.BASE_DIR
-        original_current_user = storage.CURRENT_USER
-        storage.close_db()
-        storage.BASE_DIR = db_dir
-        storage.CURRENT_USER = None
-        conn = storage.open_db(db_dir)
+        conn = open_db(db_dir)
 
         # close must happen before td.cleanup
-        self.addCleanup(storage.close_db)
-        self.addCleanup(setattr, storage, "BASE_DIR", original_base_dir)
-        self.addCleanup(setattr, storage, "CURRENT_USER", original_current_user)
+        self.addCleanup(close_db)
         return conn
 
     def test_empty_db_returns_empty_list(self):
@@ -84,3 +76,4 @@ class TestFetchLatestSnapshots(unittest.TestCase):
         _insert_row(conn, "BAD", "2025-01-03 00:00:00", "not valid json")
 
         got = fetch_latest_snapshots(conn)
+

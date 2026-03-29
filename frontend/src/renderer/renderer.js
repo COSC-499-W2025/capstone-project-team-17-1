@@ -1,4 +1,3 @@
-import { initDashboardFX } from "./dashboard_fx.js";
 import { initPortfolioEditor } from "./portfolioEditor.js";
 import { initChat } from "./chat.js";
 import { initJobMatch } from "./jobMatch.js";
@@ -34,13 +33,13 @@ uploadBtn?.addEventListener("click", openUploadModal);
 // Initial Page Setup
 // -----------------------------
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
 
   initThemeToggle();
 
   initWindowControls();
   initChat();
-  await initAuthFlow();
+  initAuthFlow();
   
   initPortfolio();
   initPortfolioEditor();
@@ -50,7 +49,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initDisplayPreferences();
   initConsentBanner();
   initOnboarding();
-  initDashboardFX();
 
   loadProjects();
 
@@ -62,7 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadRecentActivity,
     startMetrics,
   }).then(() => {
-    setInterval(() => loadRecentActivity({ silent: true }), 1000);
+    setInterval(loadRecentActivity, 1000);
   });
   startMetrics();
 

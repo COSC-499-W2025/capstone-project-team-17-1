@@ -1,4 +1,5 @@
-import { authFetch, isPrivateMode } from "./auth.js";
+import { authFetch } from "./auth.js";
+import { buildOnePageResumeExportBundle, openResumePreview } from "./portfolio.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -65,303 +66,9 @@ async function fetchResumeDetail(resumeId) {
   return data.data;
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-// ---------------------------------------------------------------------------
-// Custom dialog helpers — window.confirm/alert use native OS dialogs which
-// steal keyboard focus from the Electron renderer on Windows, making every
-// text input unresponsive until the window is clicked.  Always use these
-// instead of the native versions.
-// ---------------------------------------------------------------------------
-
-function _confirmDialog(message, okLabel = "Delete") {
-  return new Promise((resolve) => {
-    const modal = document.createElement("div");
-    modal.className = "auth-modal";
-    modal.style.cssText = "z-index:4000";
-    modal.innerHTML = `
-      <div class="auth-dialog" style="text-align:center;max-width:360px">
-        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
-        <div style="display:flex;gap:10px;justify-content:center">
-          <button class="re-cf-cancel secondary-btn">Cancel</button>
-          <button class="re-cf-ok danger-btn">${escapeHtml(okLabel)}</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    const ok = modal.querySelector(".re-cf-ok");
-    const cancel = modal.querySelector(".re-cf-cancel");
-    const finish = (val) => { modal.remove(); resolve(val); };
-    ok.addEventListener("click", () => finish(true));
-    cancel.addEventListener("click", () => finish(false));
-    modal.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") finish(false);
-      if (e.key === "Enter") finish(true);
-    });
-    cancel.focus();
-  });
-}
-
-function _alertDialog(message) {
-  return new Promise((resolve) => {
-    const modal = document.createElement("div");
-    modal.className = "auth-modal";
-    modal.style.cssText = "z-index:4000";
-    modal.innerHTML = `
-      <div class="auth-dialog" style="text-align:center;max-width:360px">
-        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
-        <div style="display:flex;justify-content:center">
-          <button class="re-cf-ok secondary-btn">OK</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    const okBtn = modal.querySelector(".re-cf-ok");
-    okBtn.addEventListener("click", () => { modal.remove(); resolve(); });
-    modal.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" || e.key === "Enter") { modal.remove(); resolve(); }
-    });
-    okBtn.focus();
-  });
-}
-
-function normalizeSkillName(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const lower = raw.toLowerCase();
-  const canonicalMap = {
-    js: "JavaScript",
-    javascript: "JavaScript",
-    ts: "TypeScript",
-    typescript: "TypeScript",
-    html: "HTML",
-    css: "CSS",
-    sql: "SQL",
-    api: "API",
-    json: "JSON",
-    yaml: "YAML",
-    xml: "XML",
-    aws: "AWS",
-    gcp: "GCP",
-    fastapi: "FastAPI",
-    sqlite: "SQLite",
-    mongodb: "MongoDB",
-    postgresql: "PostgreSQL",
-  };
-  if (canonicalMap[lower]) return canonicalMap[lower];
-  return raw
-    .split(/[\s-/]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function dedupeStrings(values) {
-  const seen = new Set();
-  const result = [];
-  (Array.isArray(values) ? values : []).forEach((value) => {
-    const normalized = normalizeSkillName(value);
-    if (!normalized) return;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    result.push(normalized);
-  });
-  return result;
-}
-
-function groupSkillsByExpertise(skills) {
-  const levels = {
-    Advanced: [],
-    Proficient: [],
-    Developing: [],
-    Foundation: [],
-  };
-
-  const ordered = dedupeStrings(skills);
-  ordered.forEach((skill, index) => {
-    if (index < 4) levels.Advanced.push(skill);
-    else if (index < 8) levels.Proficient.push(skill);
-    else if (index < 12) levels.Developing.push(skill);
-    else levels.Foundation.push(skill);
-  });
-
-  return levels;
-}
-
-function buildStyledResumePreviewHtml(resume) {
-  const sections = Array.isArray(resume?.sections) ? resume.sections.filter((section) => section?.is_enabled !== false) : [];
-  const headerSection = sections.find((section) => section?.key === "header");
-  const summarySection = sections.find((section) => section?.key === "summary");
-  const educationSection = sections.find((section) => section?.key === "education");
-  const skillSection = sections.find((section) => ["skills", "core_skill"].includes(section?.key));
-  const projectSection = sections.find((section) => ["project", "projects"].includes(section?.key));
-  const achievementSection = sections.find((section) => ["achievement", "achievements", "award", "awards"].includes(section?.key));
-
-  const headerItem = headerSection?.items?.[0] || {};
-  const headerMeta = headerItem?.metadata || {};
-  const name = headerMeta.full_name || resume?.title || "Resume";
-  const role = resume?.target_role || "";
-
-  const summaryText = (summarySection?.items || [])
-    .map((item) => String(item?.content || item?.title || "").trim())
-    .filter(Boolean)
-    .join(" ");
-
-  const educationItems = (educationSection?.items || []).filter((item) => item?.is_enabled !== false);
-  const educationText = educationItems.length
-    ? educationItems
-        .map((item) => [item?.title, item?.subtitle].filter(Boolean).join(", "))
-        .filter(Boolean)
-        .join(" | ")
-    : "No education details yet.";
-
-  const awards = (achievementSection?.items || [])
-    .filter((item) => item?.is_enabled !== false)
-    .map((item) => String(item?.title || item?.content || "").trim())
-    .filter(Boolean);
-
-  const rawSkillTokens = (skillSection?.items || [])
-    .filter((item) => item?.is_enabled !== false)
-    .flatMap((item) => {
-      const content = String(item?.content || item?.summary || "").trim();
-      const titled = String(item?.title || "").trim();
-      const fromContent = content
-        ? content.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean)
-        : [];
-      return titled ? [titled, ...fromContent] : fromContent;
-    });
-  const expertiseGroups = groupSkillsByExpertise(rawSkillTokens);
-  const expertiseSections = Object.entries(expertiseGroups);
-
-  const projectItems = (projectSection?.items || []).filter((item) => item?.is_enabled !== false);
-  const totalProjects = projectItems.length;
-  const totalSkills = dedupeStrings(rawSkillTokens).length;
-  const totalBullets = projectItems.reduce(
-    (sum, item) => sum + ((Array.isArray(item?.bullets) ? item.bullets.filter(Boolean).length : 0)),
-    0
-  );
-  const highlightCount = awards.length + totalBullets;
-  const professionalSummary =
-    summaryText ||
-    `Portfolio-focused builder with ${totalProjects} selected project${totalProjects === 1 ? "" : "s"} and ${totalSkills} highlighted skill${totalSkills === 1 ? "" : "s"}.`;
-
-  return `
-    <div class="resume-preview-sheet">
-      <div class="resume-preview-hero">
-        <h1>${escapeHtml(name)}</h1>
-        <p class="resume-preview-role">${escapeHtml(role)}</p>
-      </div>
-
-      <div class="resume-preview-section">
-        <h3>Professional Summary</h3>
-        <p>${escapeHtml(professionalSummary)}</p>
-      </div>
-
-      <div class="resume-preview-grid">
-        <div class="resume-preview-section">
-          <h3>Education</h3>
-          <p>${escapeHtml(educationText)}</p>
-        </div>
-
-        <div class="resume-preview-section">
-          <h3>Awards</h3>
-          <ul>
-            ${
-              awards.length
-                ? awards.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
-                : `<li>No awards yet.</li>`
-            }
-          </ul>
-        </div>
-      </div>
-
-      <div class="resume-preview-section">
-        <h3>Skills by Expertise Level</h3>
-        <div class="resume-preview-grid">
-          ${
-            expertiseSections.length
-              ? expertiseSections
-                  .map(
-                    ([title, skills]) => `
-                      <div>
-                        <strong>${escapeHtml(title)}</strong>
-                        <p>${skills.length ? escapeHtml(skills.join(", ")) : `No ${escapeHtml(title.toLowerCase())} skills yet.`}</p>
-                      </div>
-                    `
-                  )
-                  .join("")
-              : `<div><p>No skills listed yet.</p></div>`
-          }
-        </div>
-      </div>
-
-      <div class="resume-preview-section">
-        <h3>Selected Projects</h3>
-        ${
-          projectItems.length
-            ? projectItems
-                .map((item) => {
-                  const title = String(item?.title || "Untitled Project").trim();
-                  const summary = String(item?.content || item?.summary || item?.subtitle || "").trim();
-                  return `
-                    <div class="resume-preview-project">
-                      <div class="resume-preview-project-title">${escapeHtml(title)}</div>
-                      <div class="resume-preview-project-meta">${escapeHtml(summary || "No project summary yet.")}</div>
-                    </div>
-                  `;
-                })
-                .join("")
-            : `<p>No projects selected yet.</p>`
-        }
-      </div>
-
-      <div class="resume-preview-section">
-        <h3>Portfolio Highlights</h3>
-        <ul>
-          <li>${totalProjects} selected project${totalProjects === 1 ? "" : "s"} included in this preview</li>
-          <li>${totalSkills} skill signal${totalSkills === 1 ? "" : "s"} represented across the resume</li>
-          <li>${highlightCount} supporting bullet${highlightCount === 1 ? "" : "s"} and award highlight${highlightCount === 1 ? "" : "s"} surfaced from resume content</li>
-        </ul>
-      </div>
-    </div>
-  `;
-}
-
-async function openResumePreview(resumeId) {
-  const modal = document.getElementById("resume-preview-modal");
-  const body = document.getElementById("resume-preview-body");
-  if (!modal || !body) return;
-
-  body.innerHTML = `<p class="muted-text">Loading resume preview...</p>`;
-  modal.classList.remove("hidden");
-
-  try {
-    const resume = await fetchResumeDetail(resumeId);
-    body.innerHTML = buildStyledResumePreviewHtml(resume);
-  } catch (err) {
-    console.error("Failed to open resume preview:", err);
-    body.innerHTML = `<p class="muted-text">Unable to load resume preview.</p>`;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Resume list
 // ---------------------------------------------------------------------------
-
-// ID of the most-recently generated resume — used to flash the card on render
-let _newResumeId = null;
-
-// Multi-select state: Set of selected resume IDs + id→title map for naming exports
-let _selectedResumeIds = new Set();
-let _resumeTitleMap = {};  // id → title
 
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
@@ -387,19 +94,13 @@ function saveStarred(starredSet) {
 
 function applySavedOrder(resumes) {
   const saved = getSavedResumeOrder();
-  if (!saved.length) {
-    // No saved order: newest first (highest id = most recently created)
-    return [...resumes].sort((a, b) => b.id - a.id);
-  }
+  if (!saved.length) return resumes;
   const rank = new Map(saved.map((id, i) => [String(id), i]));
-  const inOrder = [];
-  const newItems = [];
-  for (const r of resumes) {
-    (rank.has(String(r.id)) ? inOrder : newItems).push(r);
-  }
-  inOrder.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
-  newItems.sort((a, b) => b.id - a.id);
-  return [...newItems, ...inOrder];
+  return [...resumes].sort((a, b) => {
+    const ai = rank.has(String(a.id)) ? rank.get(String(a.id)) : Infinity;
+    const bi = rank.has(String(b.id)) ? rank.get(String(b.id)) : Infinity;
+    return ai - bi;
+  });
 }
 
 function setupListDragDrop(container) {
@@ -466,23 +167,6 @@ function setupListDragDrop(container) {
 }
 
 // ---------------------------------------------------------------------------
-// Bulk select helpers
-// ---------------------------------------------------------------------------
-
-async function _openExportSequential(ids) {
-  for (const id of ids) {
-    await new Promise((resolve) => openExportModal(id, _resumeTitleMap[id] || "", resolve));
-  }
-}
-
-async function _bulkDelete(ids) {
-  if (!await _confirmDialog(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
-  await Promise.all(ids.map((id) => deleteResume(id).catch(() => {})));
-  _selectedResumeIds.clear();
-  await renderResumeList();
-}
-
-// ---------------------------------------------------------------------------
 // Resume list rendering
 // ---------------------------------------------------------------------------
 
@@ -500,10 +184,6 @@ async function renderResumeList() {
 
   const resumes = applySavedOrder(rawResumes);
 
-  // Reset selection when list re-renders; rebuild title map
-  _selectedResumeIds.clear();
-  _resumeTitleMap = Object.fromEntries(resumes.map((r) => [r.id, r.title || "Untitled Resume"]));
-
   const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -514,13 +194,9 @@ async function renderResumeList() {
     const isStarred = starred.has(String(r.id));
     return `
       <div class="resume-list-card" data-resume-id="${r.id}">
-        <span class="resume-cb-wrapper">
-          <input type="checkbox" class="resume-select-cb" data-resume-id="${r.id}">
-          <span class="resume-cb-visual"></span>
-        </span>
         <div class="resume-list-card-header">
-          ${isPrivateMode() ? `<span class="resume-card-drag" title="Drag to reorder">⠿</span>` : ""}
-          ${isPrivateMode() ? `<button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>` : ""}
+          <span class="resume-card-drag" title="Drag to reorder">⠿</span>
+          <button class="resume-star-btn ${isStarred ? "starred" : ""}" data-resume-id="${r.id}" title="${isStarred ? "Unstar" : "Star"}">★</button>
           <div class="resume-list-card-body">
             <div class="resume-list-title">${r.title || "Untitled Resume"}</div>
             <div class="resume-list-meta">
@@ -530,7 +206,7 @@ async function renderResumeList() {
             </div>
           </div>
           <div class="resume-list-actions">
-            <button class="secondary-btn preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
+            <button class="preview-btn resume-preview-action" data-resume-id="${r.id}">Preview</button>
             <button class="export-btn resume-export-action" data-resume-id="${r.id}" data-resume-title="${r.title || "Untitled Resume"}">Export</button>
             <button class="danger-btn resume-delete-action" data-resume-id="${r.id}">Delete</button>
             <span class="resume-expand-chevron">▾</span>
@@ -543,19 +219,7 @@ async function renderResumeList() {
     `;
   }).join("");
 
-  if (isPrivateMode()) {
-    setupListDragDrop(container);
-  }
-
-  // Flash newly generated card
-  if (_newResumeId) {
-    const newCard = container.querySelector(`[data-resume-id="${_newResumeId}"]`);
-    if (newCard) {
-      newCard.classList.add("resume-card-new");
-      newCard.addEventListener("animationend", () => newCard.classList.remove("resume-card-new"), { once: true });
-    }
-    _newResumeId = null;
-  }
+  setupListDragDrop(container);
 
   container.querySelectorAll(".resume-list-card").forEach((card) => {
     const header = card.querySelector(".resume-list-card-header");
@@ -571,8 +235,7 @@ async function renderResumeList() {
         e.target.closest(".resume-export-action") ||
         e.target.closest(".resume-preview-action") ||
         e.target.closest(".resume-star-btn") ||
-        e.target.closest(".resume-card-drag") ||
-        e.target.closest(".resume-cb-wrapper")
+        e.target.closest(".resume-card-drag")
       ) return;
 
       const isOpen = card.classList.contains("expanded");
@@ -625,46 +288,19 @@ async function renderResumeList() {
   container.querySelectorAll(".resume-preview-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openResumePreview(btn.dataset.resumeId);
+      openResumePreview();
     });
   });
 
   container.querySelectorAll(".resume-export-action").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const id = btn.dataset.resumeId;
-      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
-        _openExportSequential([..._selectedResumeIds]);
-      } else {
-        openExportModal(id, btn.dataset.resumeTitle);
-      }
+      openExportModal(btn.dataset.resumeId, btn.dataset.resumeTitle);
     });
   });
 
   container.querySelectorAll(".resume-delete-action").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.resumeId;
-      if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
-        _bulkDelete([..._selectedResumeIds]);
-      } else {
-        confirmDeleteResume(id);
-      }
-    });
-  });
-
-  container.querySelectorAll(".resume-select-cb").forEach((cb) => {
-    cb.addEventListener("change", (e) => {
-      e.stopPropagation();
-      const id = cb.dataset.resumeId;
-      const card = cb.closest(".resume-list-card");
-      if (cb.checked) {
-        _selectedResumeIds.add(id);
-        card.classList.add("re-selected");
-      } else {
-        _selectedResumeIds.delete(id);
-        card.classList.remove("re-selected");
-      }
-    });
+    btn.addEventListener("click", () => confirmDeleteResume(btn.dataset.resumeId));
   });
 }
 
@@ -693,7 +329,7 @@ async function openNewResumeModal() {
                 ${p.project_id}
                 <span class="project-classification-badge ${badgeClass}" style="margin-left:6px">${badgeLabel}</span>
               </span>
-              <span class="resume-modal-item-meta">${p.total_skills} skills</span>
+              <span class="resume-modal-item-meta">${p.total_files} files · ${p.total_skills} skills</span>
             </span>
           </label>
         `;
@@ -824,8 +460,7 @@ async function openNewResumeModal() {
     const contributorId = selectedContributor?.value || null;
 
     try {
-      const newResume = await generateResume(projectIds, title, contributorId);
-      _newResumeId = newResume?.id ?? null;
+      await generateResume(projectIds, title, contributorId);
       modal.remove();
       await renderResumeList();
     } catch (err) {
@@ -852,7 +487,7 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function openExportModal(resumeId, resumeTitle, onClose) {
+function openExportModal(resumeId, resumeTitle) {
   document.getElementById("export-modal")?.remove();
 
   const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
@@ -906,30 +541,34 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
 
     try {
+      const bundle = await buildOnePageResumeExportBundle();
+
       if (format === "pdf") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=pdf`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
-        const blob = await res.blob();
-        cache[format] = { blob, url: URL.createObjectURL(blob) };
-      } else if (format === "json") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=json`);
+        const res = await authFetch("/resumes/render-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume: bundle.pdfPayload }),
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || `Server error (${res.status})`);
         }
         const payload = await res.json();
-        const resume = payload?.data ?? payload;
-        cache[format] = { text: JSON.stringify(resume, null, 2) };
-      } else {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
+        const encoded = payload?.data?.payload;
+        if (!encoded) {
+          throw new Error("PDF payload missing.");
         }
-        cache[format] = { text: await res.text() };
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        cache[format] = { blob, url: URL.createObjectURL(blob) };
+      } else if (format === "json") {
+        cache[format] = { text: JSON.stringify(bundle.snapshot, null, 2) };
+      } else {
+        cache[format] = { text: bundle.markdown };
       }
 
       renderPreview(format, cache[format]);
@@ -954,7 +593,6 @@ function openExportModal(resumeId, resumeTitle, onClose) {
   function cleanup() {
     if (cache.pdf?.url) URL.revokeObjectURL(cache.pdf.url);
     modal.remove();
-    onClose?.();
   }
 
   modal.querySelector(".export-modal-close").onclick = cleanup;
@@ -968,9 +606,9 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     });
   });
 
-  document.getElementById("export-download-btn").addEventListener("click", async () => {
+  document.getElementById("export-download-btn").addEventListener("click", () => {
     const data = cache[currentFormat];
-    if (!data) { await _alertDialog("Please wait for the preview to finish loading."); return; }
+    if (!data) { alert("Please wait for the preview to finish loading."); return; }
 
     if (currentFormat === "pdf") {
       downloadBlob(data.blob, `${slug}.pdf`);
@@ -989,12 +627,12 @@ function openExportModal(resumeId, resumeTitle, onClose) {
 // ---------------------------------------------------------------------------
 
 async function confirmDeleteResume(resumeId) {
-  if (!await _confirmDialog("Delete this resume?")) return;
+  if (!confirm("Delete this resume?")) return;
   try {
     await deleteResume(resumeId);
     await renderResumeList();
   } catch (_) {
-    await _alertDialog("Failed to delete resume.");
+    alert("Failed to delete resume.");
   }
 }
 
@@ -1004,17 +642,11 @@ async function confirmDeleteResume(resumeId) {
 // ---------------------------------------------------------------------------
 
 function ce(field, value, ctx = "") {
-  if (!isPrivateMode()) {
-    return `<span data-field="${field}" ${ctx}>${value ?? ""}</span>`;
-  }
   return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
 function ceHeader(field, value, ctx = "") {
   // Header metadata fields save via data-header-field (collected as full metadata dict)
-  if (!isPrivateMode()) {
-    return `<span data-header-field="${field}" ${ctx}>${value ?? ""}</span>`;
-  }
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
@@ -1022,8 +654,8 @@ function ceHeader(field, value, ctx = "") {
 function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
-  const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
-  const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
+  const del  = `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>`;
+  const drag = `<span class="re-item-drag" title="Drag to reorder">⠿</span>`;
   const bullets = (item.bullets || []).filter(Boolean);
 
   if (sectionKey === "core_skill") {
@@ -1044,12 +676,11 @@ function buildItemHtml(rid, sid, sectionKey, item) {
     return `
       <div class="re-item" data-item-id="${iid}">
         ${drag}${del}
-        <div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content || item.title || ""}</div>
+        <div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content || item.title || ""}</div>
       </div>`;
   }
 
   // education / experience / project / custom
-  const showDateSep = item.start_date || item.end_date;
   return `
     <div class="re-item" data-item-id="${iid}">
       ${drag}${del}
@@ -1057,19 +688,16 @@ function buildItemHtml(rid, sid, sectionKey, item) {
         <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
         <span class="re-item-date">
           ${ce("start_date", item.start_date || "", ctx)}
-          <span class="re-date-sep"${showDateSep ? "" : ' style="display:none"'}> – </span>
+          <span class="re-date-sep"> – </span>
           ${ce("end_date", item.end_date || "", ctx)}
         </span>
       </div>
-      ${(item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) ? `
-      <div class="re-item-sub-row">
-        ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
-        ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
-      </div>` : ""}
-      ${item.content  ? `<div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content}</div>` : ""}
+      ${item.subtitle !== undefined ? `<div class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</div>` : ""}
+      ${item.location ? `<div class="re-item-meta">${ce("location", item.location, ctx)}</div>` : ""}
+      ${item.content  ? `<div class="re-item-content re-editable" contenteditable="true" data-field="content" ${ctx}>${item.content}</div>` : ""}
       ${bullets.length ? `
         <ul class="re-bullets">
-          ${bullets.map((b) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="bullet" ${ctx} class="${isPrivateMode() ? "re-editable" : ""}">${b}</li>`).join("")}
+          ${bullets.map((b) => `<li contenteditable="true" data-field="bullet" ${ctx} class="re-editable">${b}</li>`).join("")}
         </ul>` : ""}
     </div>`;
 }
@@ -1142,23 +770,22 @@ function buildResumeHtml(resume) {
     return `
       <div class="re-section" data-section-id="${sid}">
         <div class="re-section-head">
-          ${isPrivateMode() ? `<span class="re-section-drag" title="Drag to reorder">⠿</span>` : ""}
+          <span class="re-section-drag" title="Drag to reorder">⠿</span>
           <div class="re-section-label">${ce("label", sec.label || sec.key, `data-resume-id="${rid}" data-section-id="${sid}"`)}</div>
-          ${isPrivateMode() ? `<button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>` : ""}
+          <button class="re-section-delete" data-resume-id="${rid}" data-section-id="${sid}" title="Delete section">×</button>
         </div>
         <div class="re-section-body" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">
           ${itemsHtml}
         </div>
-        ${isPrivateMode() ? `<div class="re-section-footer">
+        <div class="re-section-footer">
           <button class="re-add-item-btn" data-resume-id="${rid}" data-section-id="${sid}" data-section-key="${key}">+ Add item</button>
           <button class="re-add-section-btn" data-resume-id="${rid}" data-after-section-id="${sid}">+ Add section</button>
-        </div>` : ""}
+        </div>
       </div>`;
   }).join("");
 
   return `
     <div class="re-sheet">
-      ${!isPrivateMode() ? `<div class="skills-group-card"><p class="muted-text resume-public-warning">Log in to Private Mode to edit this resume. Public Mode supports preview, export, and delete only.</p></div>` : ""}
       ${heroHtml}
       ${headerSecHtml}
       ${sectionsHtml || ""}
@@ -1318,10 +945,6 @@ function setupDragDrop(container) {
 }
 
 function attachEditListeners(container) {
-  if (!isPrivateMode()) {
-    return;
-  }
-
   // --- shared helpers (closed over container for header-field saves) ---
   function showSaved(el) {
     const existing = el.parentElement?.querySelector(".re-saved");
@@ -1462,13 +1085,13 @@ function attachEditListeners(container) {
       const anyEl  = card?.querySelector("[data-resume-id]");
       if (!anyEl) return;
       const { resumeId: rid, sectionId: sid, itemId: iid } = anyEl.dataset;
-      if (!await _confirmDialog("Delete this item?")) return;
+      if (!confirm("Delete this item?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
         card.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to delete item."); }
+      } catch (_) { alert("Failed to delete item."); }
       return;
     }
 
@@ -1477,13 +1100,13 @@ function attachEditListeners(container) {
     if (delSecBtn) {
       const { resumeId: rid, sectionId: sid } = delSecBtn.dataset;
       const secEl = container.querySelector(`.re-section[data-section-id="${sid}"]`);
-      if (!await _confirmDialog("Delete this entire section?")) return;
+      if (!confirm("Delete this entire section?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
         secEl?.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to delete section."); }
+      } catch (_) { alert("Failed to delete section."); }
       return;
     }
 
@@ -1510,7 +1133,7 @@ function attachEditListeners(container) {
           recalcExpand(container);
           updateCardMeta(container, rid);
         }
-      } catch (_) { await _alertDialog("Failed to add item."); }
+      } catch (_) { alert("Failed to add item."); }
       return;
     }
 
@@ -1565,7 +1188,7 @@ function attachEditListeners(container) {
         initAllEditables(newSec);
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to add section."); }
+      } catch (_) { alert("Failed to add section."); }
     }
   });
 }
@@ -1575,16 +1198,18 @@ function attachEditListeners(container) {
 // ---------------------------------------------------------------------------
 
 export function initResume() {
-  const newResumeBtn = document.getElementById("new-resume-btn");
-  newResumeBtn?.addEventListener("click", openNewResumeModal);
+  document.getElementById("new-resume-btn")?.addEventListener("click", openNewResumeModal);
 
-  document.addEventListener("auth:mode-changed", () => {
-    renderResumeList();
+  document.addEventListener("auth:mode-changed", (e) => {
+    if (e.detail?.isPrivate) {
+      // Logged in: backend resolves user_id from token, just render
+      renderResumeList();
+    } else {
+      // Logged out / public mode
+      const container = document.getElementById("resume-list-container");
+      if (container) {
+        container.innerHTML = `<p class="muted-text">Click "New Resume" to create your first resume.</p>`;
+      }
+    }
   });
-
-  // initAuthFlow() dispatches auth:mode-changed while this module is still loading,
-  // before the listener above exists — so we must load the list once now. At this
-  // point initAuthFlow has already finished (see renderer.js order), so /resumes
-  // sees the correct session and is not the early-startup race this comment used to avoid.
-  void renderResumeList();
 }

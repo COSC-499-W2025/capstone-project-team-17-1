@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import sqlite3
 from typing import Optional
 
 import requests
@@ -44,10 +45,46 @@ def _save_sessions() -> None:
         pass
 
 
-def _storage_user_key_for_user(user: dict | None) -> str | None:
-    username = ((user or {}).get("username") or "").strip()
-    return storage.resolve_storage_user_key(username)
+def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
+    guest_db = storage.BASE_DIR / "data" / "guest" / "capstone.db"
+    if not guest_db.exists():
+        return
 
+    previous_user = storage.CURRENT_USER
+    try:
+        storage.CURRENT_USER = username
+        user_db = storage.get_database_path()
+    finally:
+        storage.CURRENT_USER = previous_user
+
+    user_db.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        user_conn = sqlite3.connect(user_db)
+        row = user_conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_analysis'"
+        ).fetchone()
+        has_project_table = bool(row and row[0])
+        existing_projects = 0
+        if has_project_table:
+            existing_projects = user_conn.execute("SELECT COUNT(*) FROM project_analysis").fetchone()[0]
+        user_conn.close()
+    except Exception:
+        existing_projects = 0
+
+    if existing_projects:
+        return
+
+    try:
+        source = sqlite3.connect(guest_db)
+        target = sqlite3.connect(user_db)
+        source.backup(target)
+        target.execute("DELETE FROM privacy_consent")
+        target.commit()
+        target.close()
+        source.close()
+    except Exception:
+        pass
 
 class RegisterRequest(BaseModel):
     username: str
@@ -208,20 +245,6 @@ def get_authenticated_username(request: Request) -> Optional[str]:
     username = (user or {}).get("username")
     return str(username).strip() if username else None
 
-
-def get_authenticated_storage_user_key(request: Request) -> Optional[str]:
-    token = _extract_bearer(request)
-    session = _SESSIONS.get(token) if token else None
-    if not session:
-        return None
-    user = session.get("user")
-    cached = session.get("storage_user_key")
-    resolved = storage.resolve_storage_user_key(cached or (user or {}).get("username"))
-    if resolved and session.get("storage_user_key") != resolved:
-        session["storage_user_key"] = resolved
-        _save_sessions()
-    return resolved
-
 @router.get("/bootstrap")
 def bootstrap(request: Request):
     token = _extract_bearer(request)
@@ -262,18 +285,13 @@ def register(payload: RegisterRequest):
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
+    storage.CURRENT_USER = user["username"]
+    _migrate_guest_data_into_user_db_if_needed(user["username"])
     contributor_id = _resolve_contributor_id(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id, "storage_user_key": storage_user_key}
+    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
     _save_sessions()
-    print(
-        f"[auth/register] username={user.get('username')!r} user_id={storage_user_key!r} "
-        f"local_db={str(storage.get_database_path())!r}",
-        flush=True,
-    )
 
     return {
         "token": token,
@@ -295,18 +313,13 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
+    storage.CURRENT_USER = user["username"]
+    _migrate_guest_data_into_user_db_if_needed(user["username"])
     contributor_id = _resolve_contributor_id(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id, "storage_user_key": storage_user_key}
+    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id}
     _save_sessions()
-    print(
-        f"[auth/login] username={user.get('username')!r} user_id={storage_user_key!r} "
-        f"local_db={str(storage.get_database_path())!r}",
-        flush=True,
-    )
 
     return {
         "token": token,
@@ -318,22 +331,12 @@ def me(request: Request):
     session = _require_session(request)
     user = session["user"]
     # Always restore CURRENT_USER from the session — critical after server restart
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
+    storage.CURRENT_USER = user["username"]
     # Re-resolve contributor_id if missing (sessions persisted before this change)
     if "contributor_id" not in session:
         contributor_id = _resolve_contributor_id(user)
         session["contributor_id"] = contributor_id
         _save_sessions()
-    if "storage_user_key" not in session:
-        session["storage_user_key"] = storage_user_key
-        _save_sessions()
-    print(
-        f"[auth/me] username={user.get('username')!r} user_id={storage_user_key!r} "
-        f"mode={'user' if storage_user_key else 'guest'} "
-        f"local_db={str(storage.get_database_path())!r}",
-        flush=True,
-    )
     return {"user": user}
 
 @router.put("/me")
@@ -358,56 +361,19 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
-    storage_user_key = _storage_user_key_for_user(updated_user)
-    storage.set_current_user(storage_user_key)
+    storage.CURRENT_USER = updated_user["username"]
     contributor_id = _resolve_contributor_id(updated_user)
 
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
         _SESSIONS[token]["user"] = updated_user
         _SESSIONS[token]["contributor_id"] = contributor_id
-        _SESSIONS[token]["storage_user_key"] = storage_user_key
         _save_sessions()
 
     return {
         "ok": True,
         "user": updated_user,
     }
-
-
-@router.get("/me/education")
-def get_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        return {"data": [], "error": None}
-    from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
-        entries = storage.get_user_education(conn, contributor_id)
-    return {"data": entries, "error": None}
-
-
-@router.put("/me/education")
-async def update_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        raise HTTPException(status_code=400, detail="contributor_id not resolved — re-login required")
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-    entries = payload.get("education")
-    if not isinstance(entries, list):
-        raise HTTPException(status_code=400, detail="education must be a list")
-    for e in entries:
-        if not isinstance(e, dict) or not str(e.get("university") or "").strip():
-            raise HTTPException(status_code=400, detail="each entry requires a university field")
-    from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
-        storage.replace_user_education(conn, contributor_id, entries)
-        result = storage.get_user_education(conn, contributor_id)
-    return {"data": result, "error": None}
 
 
 @router.post("/password")
@@ -435,15 +401,9 @@ def change_password(payload: ChangePasswordRequest, request: Request):
 @router.post("/logout")
 def logout(request: Request):
     token = _extract_bearer(request)
-    before_user = storage.get_current_user()
     if token:
         _SESSIONS.pop(token, None)
         _save_sessions()
 
-    storage.set_current_user(None)
-    print(
-        f"[auth/logout] previous_user={before_user!r} mode='guest' "
-        f"local_db={str(storage.get_database_path())!r}",
-        flush=True,
-    )
+    storage.CURRENT_USER = None
     return {"ok": True}

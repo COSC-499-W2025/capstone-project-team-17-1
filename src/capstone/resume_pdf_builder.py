@@ -182,7 +182,6 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
     summary = (
         _as_clean_text(entry.get("entrySummary"))
         or _as_clean_text(entry.get("summary"))
-        or _as_clean_text(entry.get("content"))
         or _as_clean_text(entry.get("entryBody"))
         or _as_clean_text(entry.get("body"))
         or _as_clean_text(entry.get("excerpt"))

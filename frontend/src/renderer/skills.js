@@ -6,6 +6,7 @@ import {
   authDomWriteAllowed,
   getAuthToken,
 } from "./auth.js";
+import { isPrivateMode } from "./auth.js";
 
 const SKILLS_CHART_MODE_KEY = "loom_dashboard_skills_chart_mode";
 const SKILL_CHART_MODES = ["bar", "pie", "donut", "radar"];
@@ -14,19 +15,16 @@ const SKILL_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#f97316", "#a78bfa"];
 let skillsChart = null;
 
 export async function loadMostUsedSkills() {
-  const epoch = captureAuthDataEpoch();
+
   const container = document.getElementById("most-used-skills");
   if (!container) return;
 
   console.log("Loading most used skills...");
-  let result = await window.skillsAPI.loadMostUsedSkills(getAuthToken());
+  let result = await window.skillsAPI.loadMostUsedSkills();
 
-  const hasToken = hasAuthToken();
-  if ((isPrivateMode() || hasToken) && (!result || result.empty)) {
+  if (isPrivateMode() && (!result || result.empty)) {
     result = await buildPrivateTimelineSkills();
   }
-
-  if (!authDomWriteAllowed(epoch)) return;
 
   console.log("Skills result:", result);
 
@@ -336,7 +334,7 @@ export async function loadMostUsedSkills() {
 
 async function buildPrivateTimelineSkills() {
   try {
-    const res = await authFetch("/skills/timeline");
+    const res = await fetch("http://127.0.0.1:8002/skills/timeline");
     if (!res.ok) {
       return { empty: true };
     }

@@ -1,5 +1,4 @@
-import { authFetch, openSettingsAndPromptLogin, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
-import { switchPage } from "./navigation.js";
+import { authFetch } from "./auth.js";
 
 const API_BASE = "http://127.0.0.1:8002";
 
@@ -23,7 +22,12 @@ function renderLocalConsentPrompt(container, { inline = false } = {}) {
   `;
 
   document.getElementById("open-settings-consent-btn")?.addEventListener("click", () => {
-    openSettingsAndPromptLogin("privacy");
+    document.querySelectorAll(".nav-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === "settings");
+    });
+    document.querySelectorAll(".page").forEach((page) => {
+      page.classList.toggle("active", page.id === "settings-page");
+    });
   });
 }
 
@@ -81,7 +85,6 @@ async function runErrorAnalysis(container) {
 }
 
 export async function loadErrorAnalysis() {
-  const epoch = captureAuthDataEpoch();
   const container = document.getElementById("error-analysis-container");
   if (!container) return;
 
@@ -94,8 +97,6 @@ export async function loadErrorAnalysis() {
   try {
     const res = await authFetch("/errors");
     const data = await res.json();
-
-    if (!authDomWriteAllowed(epoch)) return;
 
     container.innerHTML = "";
 
@@ -209,18 +210,9 @@ if (data.status === "ok") {
       </div>
     `;
 
+    // Fake fix button behavior (future hook)
     box.querySelector(".fix-btn")?.addEventListener("click", () => {
-      const prompt = `Please help me fix this issue in project "${error.project_id}".\n\nError: ${error.title}\nDetails: ${error.detail}`;
-      const siennaTab = document.querySelector('.nav-tab[data-tab="chat"]');
-      document.querySelectorAll(".nav-tab").forEach((t) => t.classList.remove("active"));
-      siennaTab?.classList.add("active");
-      switchPage("chat-page");
-      document.dispatchEvent(new CustomEvent("sienna:autoprompt", {
-        detail: {
-          projectId: error.project_id,
-          message: prompt,
-        },
-      }));
+      alert(`Opening fix flow for "${error.title}" 🚀`);
     });
 
     container.appendChild(box);
@@ -239,13 +231,11 @@ if (data.status === "ok") {
     `;
 
   } catch (err) {
-    if (authDomWriteAllowed(epoch)) {
-      container.innerHTML = `
+    container.innerHTML = `
       <div class="error-empty-state">
         Failed to load error analysis.
       </div>
     `;
-    }
     console.error("Error loading analysis:", err);
   }
 }

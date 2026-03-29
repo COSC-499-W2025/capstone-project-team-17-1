@@ -1,44 +1,10 @@
-// mostUsedSkills.js — runs in preload; token may be passed from renderer (preferred).
+// mostUsedSkills.js
 
 const API_BASE = "http://127.0.0.1:8002";
-const AUTH_TOKEN_KEY = "loom_auth_token";
-const REMEMBER_LOGIN_STORAGE_KEY = "loom_remember_login";
 
-function _rememberPref() {
+async function fetchAllSkills() {
   try {
-    const v = localStorage.getItem(REMEMBER_LOGIN_STORAGE_KEY);
-    if (v === "0") return false;
-    if (v === "1") return true;
-    return null;
-  } catch (_) {
-    return null;
-  }
-}
-
-function _getAuthTokenFromStorage() {
-  try {
-    const pref = _rememberPref();
-    if (pref === false) return sessionStorage.getItem(AUTH_TOKEN_KEY);
-    if (pref === true) return localStorage.getItem(AUTH_TOKEN_KEY);
-    const localTok = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (localTok) return localTok;
-    return sessionStorage.getItem(AUTH_TOKEN_KEY);
-  } catch (_) {
-    return null;
-  }
-}
-
-function _authHeaders(tokenOverride) {
-  const token =
-    tokenOverride !== undefined && tokenOverride !== null && String(tokenOverride).length > 0
-      ? String(tokenOverride)
-      : _getAuthTokenFromStorage();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function fetchAllSkills(tokenOverride) {
-  try {
-    const response = await fetch(`${API_BASE}/skills`, { headers: _authHeaders(tokenOverride) });
+    const response = await fetch(`${API_BASE}/skills`);
     if (!response.ok) {
       throw new Error("Failed to fetch skills");
     }
@@ -62,11 +28,10 @@ function computeTopSkills(skillData) {
     .slice(0, 5); // top 5
 }
 
-async function loadMostUsedSkills(tokenOverride) {
+async function loadMostUsedSkills() {
   const baseURL = "http://127.0.0.1:8002";
-  const headers = _authHeaders(tokenOverride);
 
-  const projectsRes = await fetch(`${baseURL}/projects`, { headers });
+  const projectsRes = await fetch(`${baseURL}/projects`);
   const projectsData = await projectsRes.json();
 
   if (!projectsData.projects || projectsData.projects.length === 0) {
@@ -78,17 +43,12 @@ async function loadMostUsedSkills(tokenOverride) {
 
   for (const project of projectsData.projects) {
     const projectId = project.project_id || project.id || project.name;
-    if (!projectId) continue;
 
     const skillsRes = await fetch(
-      `${baseURL}/projects/${encodeURIComponent(projectId)}/skills`,
-      { headers }
+      `${baseURL}/projects/${projectId}/skills`
     );
 
-    if (!skillsRes.ok) {
-      if ([400, 404, 409].includes(skillsRes.status)) continue;
-      continue;
-    }
+    if (!skillsRes.ok) continue;
 
     const skillsData = await skillsRes.json();
 

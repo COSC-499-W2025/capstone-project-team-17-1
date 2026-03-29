@@ -1,20 +1,11 @@
 import { openProjectViewer } from "./projectViewer.js";
-import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 
 export async function loadRecentProjects() {
-  const epoch = captureAuthDataEpoch();
   try {
-    const res = await authFetch("/dashboard/recent-projects");
-    if (!res.ok) {
-      throw new Error(`Failed to load recent projects: ${res.status}`);
-    }
+    const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
     const projects = await res.json();
 
     const container = document.getElementById("recent-projects-container");
-    if (!container) return;
-
-    if (!authDomWriteAllowed(epoch)) return;
-
     container.innerHTML = "";
 
     projects.slice(0, 5).forEach(project => {
