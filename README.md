@@ -924,7 +924,8 @@ The Level 0 diagram presents the overall context of the Capstone Analyzer System
 Users submit requests such as repository uploads, analysis, and portfolio or resume generation. The system retrieves repository data and metadata from GitHub, sends project context to the AI analysis service to generate insights, and handles user authentication through the auth service. All project data and generated results are stored and retrieved from cloud storage. The system then returns analysis results, authentication status, and generated outputs back to the user.
 
 # DFD Level 1
-<img width="1326" height="584" alt="Screenshot 2026-03-28 at 5 36 04 PM" src="https://github.com/user-attachments/assets/014f51c0-e972-41a2-9afe-11ecf019c54e" />
+<img width="1292" height="568" alt="Screenshot 2026-03-28 at 6 23 59 PM" src="https://github.com/user-attachments/assets/d1a7d132-635a-4afc-992f-4b0685bc5373" />
+
 The Level 1 diagram decomposes the Capstone Analyzer System into its core functional components and illustrates the internal data flow between them.
 
 The process begins with Ingest Project Sources, where project data is collected either from user-uploaded archives or external repositories such as GitHub. The retrieved files are stored in the File/Artifact Store and passed to the Analyze Project Artifacts module. This module processes artifact contents to extract structured information such as project snapshots, detected skills, metrics, and contributor data, which are then stored in the Project Database. During this stage, system-generated errors, warnings, and activity logs are recorded in the Activity/Error Logs.
