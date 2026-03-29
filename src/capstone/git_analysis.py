@@ -12,6 +12,7 @@ from .collaboration_analysis import build_collaboration_analysis, to_compact_col
 from .external_artifacts import discover_repository, fetch_repository_artifacts
 from .logging_utils import get_logger
 from .storage import open_db, store_analysis_snapshot
+from .project_role import infer_project_role_from_snapshot
 
 logger = get_logger(__name__)
 
@@ -156,6 +157,7 @@ def analyze_repository(
         "primary_contributor": analysis.primary_contributor,
         "collaboration": collaboration,
     }
+    snapshot["project_role"] = infer_project_role_from_snapshot(snapshot)
     # capture where the repo actually lives 
     repository = discover_repository(repo_path)
     if repository:
