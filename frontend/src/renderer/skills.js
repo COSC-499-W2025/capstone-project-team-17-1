@@ -1,6 +1,17 @@
+import {
+  isPrivateMode,
+  authFetch,
+  hasAuthToken,
+  captureAuthDataEpoch,
+  authDomWriteAllowed,
+  getAuthToken,
+} from "./auth.js";
 import { isPrivateMode } from "./auth.js";
 
 const SKILLS_CHART_MODE_KEY = "loom_dashboard_skills_chart_mode";
+const SKILL_CHART_MODES = ["bar", "pie", "donut", "radar"];
+const SKILL_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#f97316", "#a78bfa"];
+
 let skillsChart = null;
 
 export async function loadMostUsedSkills() {
@@ -28,18 +39,33 @@ export async function loadMostUsedSkills() {
     return;
   }
 
+  const topSkills = result.skills.slice(0, 5);
+
   function capitalize(str) {
     if (!str) return "";
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
+  function getLabels() {
+    return topSkills.map((skill) => capitalize(skill.skill));
+  }
+
+  function getValues() {
+    return topSkills.map((skill) =>
+      Number((skill.confidence * 100).toFixed(1))
+    );
+  }
+
   function getChartMode() {
     const saved = localStorage.getItem(SKILLS_CHART_MODE_KEY);
-    return saved === "pie" ? "pie" : "bar";
+    return SKILL_CHART_MODES.includes(saved) ? saved : "bar";
   }
 
   function saveChartMode(mode) {
-    localStorage.setItem(SKILLS_CHART_MODE_KEY, mode === "pie" ? "pie" : "bar");
+    localStorage.setItem(
+      SKILLS_CHART_MODE_KEY,
+      SKILL_CHART_MODES.includes(mode) ? mode : "bar"
+    );
   }
 
   function destroyChart() {
@@ -49,18 +75,53 @@ export async function loadMostUsedSkills() {
     }
   }
 
+  function renderViewToggle(activeMode) {
+    return `
+      <div class="skills-view-toggle" role="tablist" aria-label="Most used skills chart type">
+        ${SKILL_CHART_MODES.map(
+          (mode) => `
+          <button
+            type="button"
+            class="skills-view-btn ${activeMode === mode ? "active" : ""}"
+            data-skills-view="${mode}"
+          >
+            ${capitalize(mode)}
+          </button>
+        `
+        ).join("")}
+      </div>
+    `;
+  }
+
+  function renderLegend() {
+    return topSkills
+      .map(
+        (skill, index) => `
+        <div class="skills-pie-legend-row">
+          <div class="skills-pie-legend-left">
+            <span
+              class="skills-pie-legend-swatch"
+              style="background: ${SKILL_COLORS[index % SKILL_COLORS.length]};"
+            ></span>
+            <span class="skills-pie-legend-name">${capitalize(skill.skill)}</span>
+          </div>
+          <span class="skills-pie-legend-meta">${(
+            skill.confidence * 100
+          ).toFixed(1)}%</span>
+        </div>
+      `
+      )
+      .join("");
+  }
+
   function renderBarView() {
     container.innerHTML = `
       <div class="skills-header-row">
         <h3 class="skills-title">Most Used Skills</h3>
-        <div class="skills-view-toggle" role="tablist" aria-label="Most used skills chart type">
-          <button type="button" class="skills-view-btn active" data-skills-view="bar">Bar</button>
-          <button type="button" class="skills-view-btn" data-skills-view="pie">Pie</button>
-        </div>
+        ${renderViewToggle("bar")}
       </div>
       <div class="skills-wrapper">
-        ${result.skills
-          .slice(0, 5)
+        ${topSkills
           .map(
             (skill) => `
             <div class="skill-row-modern">
@@ -69,7 +130,7 @@ export async function loadMostUsedSkills() {
               </div>
               <div class="skill-middle-modern">
                 <div class="skill-bar-modern">
-                  <div 
+                  <div
                     class="skill-bar-fill-modern"
                     data-width="${(skill.confidence * 100).toFixed(1)}%"
                     style="width: 0%"
@@ -79,9 +140,7 @@ export async function loadMostUsedSkills() {
                   ${(skill.confidence * 100).toFixed(1)}%
                 </span>
               </div>
-              <div class="skill-right-modern">
-                
-              </div>
+              <div class="skill-right-modern"></div>
             </div>
           `
           )
@@ -97,67 +156,150 @@ export async function loadMostUsedSkills() {
     void document.body.offsetHeight;
 
     bars.forEach((bar) => {
-      const targetWidth = bar.dataset.width;
-      bar.style.width = targetWidth;
+      bar.style.width = bar.dataset.width;
     });
   }
 
-  function renderPieView() {
+  function renderCircularView(mode = "pie") {
     container.innerHTML = `
       <div class="skills-header-row">
         <h3 class="skills-title">Most Used Skills</h3>
-        <div class="skills-view-toggle" role="tablist" aria-label="Most used skills chart type">
-          <button type="button" class="skills-view-btn" data-skills-view="bar">Bar</button>
-          <button type="button" class="skills-view-btn active" data-skills-view="pie">Pie</button>
-        </div>
+        ${renderViewToggle(mode)}
       </div>
       <div class="skills-pie-layout">
         <div class="skills-pie-canvas-wrap">
-          <canvas id="most-used-skills-pie"></canvas>
+          <canvas id="most-used-skills-chart"></canvas>
         </div>
         <div class="skills-pie-legend">
-          ${result.skills.slice(0, 5).map((skill) => `
-            <div class="skills-pie-legend-row">
-              <span class="skills-pie-legend-name">${capitalize(skill.skill)}</span>
-              <span class="skills-pie-legend-meta">${(skill.confidence * 100).toFixed(1)}%</span>
-            </div>
-          `).join("")}
+          ${renderLegend()}
         </div>
       </div>
     `;
 
-    const canvas = container.querySelector("#most-used-skills-pie");
-    if (canvas && window.Chart) {
-      skillsChart = new window.Chart(canvas, {
-        type: "pie",
-        data: {
-          labels: result.skills.slice(0, 5).map((skill) => capitalize(skill.skill)),
-          datasets: [
-            {
-              data: result.skills.slice(0, 5).map((skill) => Number((skill.confidence * 100).toFixed(1))),
-              backgroundColor: ["#38bdf8", "#22c55e", "#f59e0b", "#f97316", "#a78bfa"],
-              borderColor: "#0f172a",
-              borderWidth: 2,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false,
+    const canvas = container.querySelector("#most-used-skills-chart");
+    if (!canvas || !window.Chart) return;
+
+    skillsChart = new window.Chart(canvas, {
+      type: mode === "donut" ? "doughnut" : "pie",
+      data: {
+        labels: getLabels(),
+        datasets: [
+          {
+            data: getValues(),
+            backgroundColor: SKILL_COLORS,
+            borderColor: "#0f172a",
+            borderWidth: 2,
+            hoverOffset: 8,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: mode === "donut" ? "58%" : 0,
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                return `${context.label}: ${context.parsed.toFixed(1)}%`;
+              },
             },
           },
         },
-      });
-    }
+      },
+    });
+  }
+
+  function renderRadarView() {
+    container.innerHTML = `
+      <div class="skills-header-row">
+        <h3 class="skills-title">Most Used Skills</h3>
+        ${renderViewToggle("radar")}
+      </div>
+      <div class="skills-pie-layout">
+        <div class="skills-pie-canvas-wrap">
+          <canvas id="most-used-skills-chart"></canvas>
+        </div>
+        <div class="skills-pie-legend">
+          ${renderLegend()}
+        </div>
+      </div>
+    `;
+
+    const canvas = container.querySelector("#most-used-skills-chart");
+    if (!canvas || !window.Chart) return;
+
+    const values = getValues();
+    const maxValue = Math.max(...values, 20);
+    const suggestedMax = Math.ceil(maxValue / 5) * 5;
+
+    skillsChart = new window.Chart(canvas, {
+      type: "radar",
+      data: {
+        labels: getLabels(),
+        datasets: [
+          {
+            label: "Skill share %",
+            data: values,
+            backgroundColor: "rgba(56, 189, 248, 0.18)",
+            borderColor: "#38bdf8",
+            borderWidth: 2,
+            pointBackgroundColor: SKILL_COLORS,
+            pointBorderColor: "#0f172a",
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                return `${context.label}: ${context.raw.toFixed(1)}%`;
+              },
+            },
+          },
+        },
+        scales: {
+          r: {
+            beginAtZero: true,
+            suggestedMax,
+            ticks: {
+              display: false,
+              backdropColor: "transparent",
+            },
+            angleLines: {
+              color: "rgba(255, 255, 255, 0.12)",
+            },
+            grid: {
+              color: "rgba(255, 255, 255, 0.12)",
+            },
+            pointLabels: {
+              color: "rgba(255, 255, 255, 0.9)",
+              font: {
+                size: 12,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   function bindViewToggle() {
     container.querySelectorAll("[data-skills-view]").forEach((button) => {
       button.addEventListener("click", () => {
-        const nextMode = button.dataset.skillsView === "pie" ? "pie" : "bar";
+        const nextMode = button.dataset.skillsView || "bar";
         if (nextMode === getChartMode()) return;
         saveChartMode(nextMode);
         renderCurrentView();
@@ -167,16 +309,27 @@ export async function loadMostUsedSkills() {
 
   function renderCurrentView() {
     destroyChart();
-    if (getChartMode() === "pie") {
-      renderPieView();
-    } else {
-      renderBarView();
+
+    switch (getChartMode()) {
+      case "pie":
+        renderCircularView("pie");
+        break;
+      case "donut":
+        renderCircularView("donut");
+        break;
+      case "radar":
+        renderRadarView();
+        break;
+      case "bar":
+      default:
+        renderBarView();
+        break;
     }
+
     bindViewToggle();
   }
 
   renderCurrentView();
-
 }
 
 async function buildPrivateTimelineSkills() {
@@ -200,7 +353,9 @@ async function buildPrivateTimelineSkills() {
       const skills = Array.isArray(entry?.skills) ? entry.skills : [];
 
       skills.forEach((skill) => {
-        const name = String(skill?.skill || skill?.name || "").trim().toLowerCase();
+        const name = String(skill?.skill || skill?.name || "")
+          .trim()
+          .toLowerCase();
         if (!name) return;
 
         const weight = Number(skill?.weight ?? skill?.score ?? 1) || 1;
@@ -217,7 +372,9 @@ async function buildPrivateTimelineSkills() {
       return { empty: true };
     }
 
-    const totalWeight = [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
+    const totalWeight =
+      [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
+
     const skills = [...totals.entries()]
       .map(([skill, weight]) => ({
         skill,

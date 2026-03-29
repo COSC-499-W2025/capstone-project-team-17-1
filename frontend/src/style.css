@@ -950,7 +950,7 @@ svg {
 .skills-title {
   font-size: 20px;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 #most-used-skills {
@@ -1028,6 +1028,106 @@ svg {
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+}
+
+.skills-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.skills-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.skills-view-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.skills-view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skills-view-btn.active {
+  background: rgba(77, 166, 255, 0.18);
+  border-color: rgba(77, 166, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(77, 166, 255, 0.12) inset;
+}
+
+.skills-pie-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 16px;
+  align-items: center;
+  min-height: 220px;
+}
+
+.skills-pie-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+}
+
+.skills-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.skills-pie-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.skills-pie-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skills-pie-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.skills-pie-legend-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+
+.skills-pie-legend-meta {
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+#most-used-skills canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* =========================================================
