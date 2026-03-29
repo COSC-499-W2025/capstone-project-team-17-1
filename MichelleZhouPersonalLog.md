@@ -9,6 +9,7 @@
 - [T2 Week 8 Personal Log](#T2-week-8-personal-log)
 - [T2 Week 9 Personal Log](#T2-week-9-personal-log)
 - [T2 Week 10 Personal Log](#T2-week-10-personal-log)
+- [T2 Week 12 Personal Log](#T2-week-12-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -388,4 +389,26 @@ This week also involved reviewing several pull requests related to portfolio fun
 
 Additionally:
 Moving forward, I will continue improving the integration between backend analysis features and the Electron dashboard. This will include refining how portfolio insights and project rankings are presented to users and improving the overall usability of the portfolio customization interface. I will also continue debugging integration issues and assisting with frontend development to ensure the remaining backend features are surfaced clearly within the application UI.
+
+## T2 Week 12 Personal Log
+
+- (Mar 16 - Mar 29, 2026)<br />
+
+<img width="968" height="569" alt="image" src="https://github.com/user-attachments/assets/1a28ad5f-fea1-4d84-84e1-ae76c3e0014d" />
+
+Weekly Recap: This week focused on significantly improving the Portfolio customization workflow across both the backend and frontend. The main objective was to turn the Portfolio page from a mostly manual editing screen into a more analysis driven system that automatically pulls in meaningful project information while still allowing user customization. This involved backend work to generate portfolio defaults from project snapshots, frontend work to hydrate and edit those values properly, image upload and preview support, save and autosave improvements, and multiple rounds of debugging to fix broken state updates, missing data, and GitHub import regressions. A large part of the work also involved tracing how project analysis data flowed from the database into the portfolio editor, then fixing the pipeline so key role, evidence of success, and portfolio summary fields could be populated from real analysis results instead of staying blank.
+
+Coding tasks I implemented a major backend update for the portfolio routes so each project portfolio entry now returns analysis defaults, user overrides, resolved values, and image data. This included generating key role, evidence of success, and portfolio summary from the latest project snapshot and merging those values with saved customizations. I also added project role inference logic on the backend so projects can be assigned roles such as frontend developer, backend developer, full stack developer, and similar classifications based on detected technologies and frameworks. Along with this, I improved the evidence generation logic so the Evidence of Success field can use richer project analysis data instead of only showing a simple file count.
+
+On the frontend, I updated the Portfolio editor so it now hydrates from backend resolved data rather than relying only on manual input. I implemented support for project image uploads, cover image selection, image deletion, and image display inside both the editor and live preview. I also added reset to default analysis support for each project card so users can restore backend generated content after making edits. In addition, I improved the starred project and featured project behavior so selected projects can be persisted and used more reliably inside the portfolio customization interface and live preview. I also worked on button styling and portfolio editing controls to make the project cards feel more polished and usable.
+
+Testing or Debugging Tasks A large portion of this week involved debugging issues in the portfolio data flow and state management. Initially, the editor fields for key role, evidence of success, and portfolio summary were remaining empty even though backend generation logic had been added. I traced this issue through the frontend hydration logic and then into the backend portfolio snapshot retrieval flow, where I found that portfolio routes were not always receiving the correct snapshot structure. I fixed the snapshot retrieval helper so portfolio routes now receive the actual parsed snapshot dictionary instead of an object wrapper that caused analysis defaults to be skipped.
+
+I also debugged several autosave and save state issues. At one point autosave was rerendering the page and causing in progress user input to disappear. I fixed this by changing the save flow so silent autosaves no longer reload the entire portfolio page. I also fixed multiple dirty state bugs where image uploads, image deletion, and cover image changes were being saved to the backend correctly but still left the page in a false unsaved state. In addition, I fixed project level save behavior so saving a single project updates the saved snapshot properly instead of continuing to show unsaved changes.
+
+Another major debugging task involved GitHub import failures that appeared after role and portfolio changes were introduced. I traced the issue to the archive analysis path and fixed collaboration serialization in the zip analyzer so GitHub imports worked again. I also fixed issues related to image loading, including invalid local file paths and missing portfolio image table setup, which had caused uploaded images to fail to render in the app.
+
+Reviewing or collaboration tasks This week also involved reviewing how multiple backend and frontend files interacted as part of the portfolio workflow. I went through the portfolio route, portfolio helpers, portfolio state logic, editor logic, zip analysis flow, collaboration analysis, and related rendering code to ensure the whole system stayed consistent after changes were introduced. A lot of the work this week involved checking that backend route outputs matched what the frontend expected and making sure state changes in the editor were synchronized correctly with live preview and saved database content. I also prepared a PR summary covering the portfolio customization improvements, bug fixes, backend changes, and testing work completed during this development cycle.
+
+I additionally added backend unit tests for the new portfolio behavior. These tests cover portfolio helper behavior, snapshot retrieval, customization persistence, image handling, analysis default generation, and the portfolio route logic that merges analysis defaults with saved overrides. This helped verify that the backend changes were not only working manually but also testable in a more repeatable way.
 
