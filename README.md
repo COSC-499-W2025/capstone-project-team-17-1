@@ -915,6 +915,13 @@ The system must be able to ... :
   - 34.2 Restrict dashboard changes in public mode to search controls
   - 34.3 Restrict dashboard changes in public mode to filter controls
 
+# DFD Level 0
+<img width="1110" height="658" alt="Screenshot 2026-03-28 at 5 10 56 PM" src="https://github.com/user-attachments/assets/8c76963e-fec6-4e9f-bfaa-69034abd803d" />
+
+The Level 0 diagram presents the overall context of the Capstone Analyzer System and its interactions with external entities. The system acts as a central hub that connects users, GitHub, an AI analysis service, an authentication service, and cloud storage.
+
+Users submit requests such as repository uploads, analysis, and portfolio or resume generation. The system retrieves repository data and metadata from GitHub, sends project context to the AI analysis service to generate insights, and handles user authentication through the auth service. All project data and generated results are stored and retrieved from cloud storage. The system then returns analysis results, authentication status, and generated outputs back to the user.
+
 # DFD Level 1
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
 <img width="1134" height="569" alt="image" src="https://github.com/user-attachments/assets/4c2d9c6b-ff7a-452c-85e7-b1f4403be251" />
