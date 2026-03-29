@@ -14,6 +14,7 @@ The system supports three workflows: CLI analysis, interactive menu usage, and F
 - [Known Bugs](#known-bugs)
 - [Test Data ZIPs](#test-data-zips)
 - [Work Breakdown Structure](#work-breakdown-structure)
+- [DFD Level 0](#dfd-level-0)
 - [DFD Level 1](#dfd-level-1)
 - [system_architecture_design](#system_architecture_design)
 - [Team Contract](#team-contract)
@@ -924,12 +925,6 @@ Users submit requests such as repository uploads, analysis, and portfolio or res
 
 # DFD Level 1
 <img width="1326" height="584" alt="Screenshot 2026-03-28 at 5 36 04 PM" src="https://github.com/user-attachments/assets/014f51c0-e972-41a2-9afe-11ecf019c54e" />
-
-
-# system_architecture_design
-https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/system_architecture_design.md
-<img width="1617" height="1074" alt="image" src="https://github.com/user-attachments/assets/38a4aacd-d73c-4b7a-a808-a95611492823" /><br/>
-
 The Level 1 diagram decomposes the Capstone Analyzer System into its core functional components and illustrates the internal data flow between them.
 
 The process begins with Ingest Project Sources, where project data is collected either from user-uploaded archives or external repositories such as GitHub. The retrieved files are stored in the File/Artifact Store and passed to the Analyze Project Artifacts module. This module processes artifact contents to extract structured information such as project snapshots, detected skills, metrics, and contributor data, which are then stored in the Project Database. During this stage, system-generated errors, warnings, and activity logs are recorded in the Activity/Error Logs.
@@ -938,6 +933,15 @@ Based on the analyzed data, the Generate Portfolio and Resume module produces po
 
 Finally, the Present Dashboard and Reports module retrieves processed data, metrics, and logs to generate dashboards, visualizations, and reports for the user. The user can interact with the system through requests such as project uploads, generation requests, and filtered views, and receives outputs including portfolios, resumes, and analytical dashboards.
 
+# system_architecture_design
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/system_architecture_design.md
+<img width="1617" height="1074" alt="image" src="https://github.com/user-attachments/assets/38a4aacd-d73c-4b7a-a808-a95611492823" /><br/>
+
+The document proposes a local first app that mines a user’s own files to help them understand and showcase their work history. It targets students and early professionals who want clear timelines, trends, and portfolio style summaries without sending data off the device. In scope are scanning chosen folders, classifying common file types, deduplicating with strong hashes, storing results in a local data store, and presenting dashboards plus simple exports. Users control what is scanned, can pause or resume, and see transparent previews and progress with errors surfaced. Typical use cases include presentations, reviews, resumes, and quick retrospectives.
+
+Functionally, the system lets a user pick sources, crawls and classifies artifacts, builds searchable indexes and filters by time, type, project, and path, and produces insights like activity timelines and type distributions. Non functional goals stress fast setup, efficient and resumable scans, responsiveness, accessibility, and strong privacy and security. Data stays local with least privilege, encrypted storage using the operating system keystore, a localhost only API with per session tokens, secure deletion, and redaction of sensitive patterns in cached snippets. Maintainability expectations include straightforward developer setup, high automated test coverage, pinned dependencies, signed releases, and clear documentation.
+
+For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
 ## Team Contract
 https://docs.google.com/document/d/1Lw_CeWKMtIAGRbn4z4xmESP87En25rSU8GsUcTXPijQ/edit?usp=sharing
 ## Vision and Goals
