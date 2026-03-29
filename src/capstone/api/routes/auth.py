@@ -376,41 +376,6 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     }
 
 
-@router.get("/me/education")
-def get_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        return {"data": [], "error": None}
-    from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
-        entries = storage.get_user_education(conn, contributor_id)
-    return {"data": entries, "error": None}
-
-
-@router.put("/me/education")
-async def update_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        raise HTTPException(status_code=400, detail="contributor_id not resolved — re-login required")
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-    entries = payload.get("education")
-    if not isinstance(entries, list):
-        raise HTTPException(status_code=400, detail="education must be a list")
-    for e in entries:
-        if not isinstance(e, dict) or not str(e.get("university") or "").strip():
-            raise HTTPException(status_code=400, detail="each entry requires a university field")
-    from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
-        storage.replace_user_education(conn, contributor_id, entries)
-        result = storage.get_user_education(conn, contributor_id)
-    return {"data": result, "error": None}
-
-
 @router.post("/password")
 def change_password(payload: ChangePasswordRequest, request: Request):
     user = _session_user(request)

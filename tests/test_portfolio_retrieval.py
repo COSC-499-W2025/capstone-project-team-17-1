@@ -16,7 +16,6 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from capstone.api.portfolio_helpers import ensure_indexes, list_snapshots
 from capstone.storage import fetch_latest_snapshot as get_latest_snapshot
-from capstone import storage
 from capstone.api.server import create_app
 from fastapi.testclient import TestClient
 
@@ -48,23 +47,13 @@ class PortfolioRetrievalTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
-        self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
-        storage.BASE_DIR = self.dbdir
-        storage.CURRENT_USER = None
-        db_path = self.dbdir / "data" / "guest" / "capstone.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(db_path)
+        self.con = sqlite3.connect(self.dbdir / "capstone.db")
         self.con.executescript(SCHEMA)
         ensure_indexes(self.con)
         seed(self.con, "demo", 5)
 
     def tearDown(self):
         self.con.close()
-        storage.close_db()
-        storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
         self.tmp.cleanup()
 
     def test_get_latest_snapshot(self):
@@ -113,8 +102,6 @@ class PortfolioRetrievalTests(unittest.TestCase):
             "skills": ["Python"],
         }
         r = client.post("/resume", json=create_payload, headers=headers)
-        if r.status_code == 404:
-            self.skipTest("Legacy /resume routes are not mounted in this backend configuration")
         self.assertEqual(r.status_code, 200)
         entry_id = r.json()["data"]["id"]
 
@@ -160,8 +147,6 @@ class PortfolioRetrievalTests(unittest.TestCase):
             },
             headers=headers,
         )
-        if r.status_code == 404:
-            self.skipTest("Legacy /resume routes are not mounted in this backend configuration")
         self.assertEqual(r.status_code, 200)
 
         r = client.post("/resume-projects/generate", json={"projectIds": ["demo"]}, headers=headers)
@@ -201,7 +186,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
 
         # should reject missing projectId on resume-projects
         r = client.post("/resume-projects", json={"summary": "x", "isActive": True}, headers=headers)
-        self.assertIn(r.status_code, {400, 404, 422})
+        self.assertIn(r.status_code, {400, 422})
 
 if __name__ == "__main__":
     unittest.main()

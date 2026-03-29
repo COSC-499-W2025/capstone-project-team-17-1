@@ -18,3 +18,9 @@ contextBridge.exposeInMainWorld("backendAPI", {
 contextBridge.exposeInMainWorld("skillsAPI", {
   loadMostUsedSkills: skills.loadMostUsedSkills
 });
+
+
+
+contextBridge.exposeInMainWorld("loomAI", {
+  chat: async (messages) => ipcRenderer.invoke("ai:chat", messages),
+});

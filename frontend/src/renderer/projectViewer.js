@@ -1,6 +1,4 @@
 import { switchPage } from "./navigation.js";
-import { authFetch } from "./auth.js";
-import { renderMarkdown } from "./AskSienna/markdown.js";
 
 const API = "http://127.0.0.1:8002";
 const MONACO_CDN = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min";
@@ -793,15 +791,12 @@ function _initSienna() {
 
   close?.addEventListener("click", () => panel.classList.add("hidden"));
 
-  const history = [];
-
   const handleSend = () => {
     const text = input?.value?.trim();
     if (!text) return;
     _addSiennaMessage(messages, "user", text);
-    history.push({ role: "user", content: text });
     input.value = "";
-    _getSiennaResponse(messages, text, history);
+    _getSiennaResponse(messages, text);
   };
 
   send?.addEventListener("click", handleSend);
@@ -813,46 +808,80 @@ function _initSienna() {
 function _addSiennaMessage(container, role, text) {
   const msg = document.createElement("div");
   msg.className = `pv-sienna-msg ${role}`;
-  if (role === "assistant") {
-    msg.innerHTML = renderMarkdown(text || "");
-  } else {
-    msg.textContent = text;
-  }
+  msg.textContent = text;
   container.appendChild(msg);
   container.scrollTop = container.scrollHeight;
 }
 
-async function _getSiennaResponse(container, question, history = []) {
+async function _getSiennaResponse(container, question) {
   _addSiennaMessage(container, "assistant", "Thinking...");
   const thinkingEl = container.lastChild;
 
   try {
-    const res = await authFetch("/sienna/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: question,
-        project_id: _currentProjectId,
-        debug: /debug|bug|error|issue|fix|inspect|trace|review code|broken|failing/i.test(question),
-        history: history.slice(-10),
-      }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const detail = payload?.detail || "I couldn't process that right now.";
-      thinkingEl.innerHTML = renderMarkdown(detail);
-      history.push({ role: "assistant", content: detail });
-      return;
+    if (!_analysisData) {
+      const res = await fetch(
+        `${API}/projects/${encodeURIComponent(_currentProjectId)}/analysis`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        _analysisData = data.analysis;
+      }
     }
-    const answer = String(payload?.text || payload?.reply || "").trim()
-      || "I can only help with your Loom projects or Loom features.";
-    thinkingEl.innerHTML = renderMarkdown(answer);
-    history.push({ role: "assistant", content: answer });
+
+    const answer = _generateLocalAnswer(question, _analysisData);
+    thinkingEl.textContent = answer;
   } catch {
-    const fallback = "Sorry, I couldn't process that question right now.";
-    thinkingEl.innerHTML = renderMarkdown(fallback);
-    history.push({ role: "assistant", content: fallback });
+    thinkingEl.textContent = "Sorry, I couldn't process that question right now.";
   }
+}
+
+function _generateLocalAnswer(question, analysis) {
+  const q = question.toLowerCase();
+  if (!analysis) return "No analysis data is available for this project yet.";
+
+  if (q.includes("explain") && (q.includes("project") || q.includes("this"))) {
+    const fs = analysis.file_summary || {};
+    const langs = Object.keys(analysis.languages || {}).slice(0, 5).join(", ");
+    const fws = (analysis.frameworks || []).join(", ");
+    return `This project contains ${fs.file_count || "unknown number of"} files. ` +
+      `Languages used: ${langs || "unknown"}. ` +
+      `Frameworks: ${fws || "none detected"}. ` +
+      `It was scanned in ${analysis.scan_duration_seconds?.toFixed(2) || "unknown"} seconds.`;
+  }
+
+  if (q.includes("technolog") || q.includes("stack") || q.includes("framework")) {
+    const langs = Object.keys(analysis.languages || {}).join(", ");
+    const fws = (analysis.frameworks || []).join(", ");
+    return `Technologies: ${langs || "none"}. Frameworks: ${fws || "none detected"}.`;
+  }
+
+  if (q.includes("skill")) {
+    const skills = (analysis.skills || []).slice(0, 8);
+    if (!skills.length) return "No skills data available.";
+    return "Top skills: " + skills.map(s =>
+      `${s.skill || s.name} (${Math.round((s.confidence || 0) * 100)}%)`
+    ).join(", ");
+  }
+
+  if (q.includes("contributor") || q.includes("collaborat") || q.includes("who")) {
+    const c = analysis.collaboration || {};
+    return c.primary_contributor
+      ? `Primary contributor: ${c.primary_contributor}. Classification: ${c.classification || "unknown"}.`
+      : "No collaboration data available.";
+  }
+
+  if (q.includes("warning") || q.includes("issue") || q.includes("problem")) {
+    const count = analysis.warning_count ?? (analysis.warnings || []).length;
+    return `There are ${count} warnings in this project.`;
+  }
+
+  if (q.includes("file") && (q.includes("how many") || q.includes("count"))) {
+    return `This project has ${analysis.file_summary?.file_count || "unknown"} files.`;
+  }
+
+  return `This project uses ${Object.keys(analysis.languages || {}).slice(0, 3).join(", ") || "unknown languages"} ` +
+    `with ${(analysis.frameworks || []).length} frameworks. ` +
+    `Ask me about technologies, skills, contributors, or warnings!`;
 }
 
 // ─── Syntax highlighting fallback (lightweight) ───────────────────

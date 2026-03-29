@@ -359,29 +359,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_education (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            university TEXT NOT NULL,
-            degree TEXT,
-            start_date TEXT,
-            end_date TEXT,
-            city TEXT,
-            state TEXT,
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-        """
-    )
-    # Migrate older user_education tables that are missing city / state columns.
-    _edu_cols = {r[1] for r in conn.execute("PRAGMA table_info(user_education)").fetchall()}
-    if "city" not in _edu_cols:
-        conn.execute("ALTER TABLE user_education ADD COLUMN city TEXT")
-    if "state" not in _edu_cols:
-        conn.execute("ALTER TABLE user_education ADD COLUMN state TEXT")
 
 
 
@@ -606,34 +583,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE user_projects_old")
         conn.commit()
 
-    # Repair dangling FKs left by an interrupted resume timestamp migration.
-    # When a prior run renamed resumes→resumes_old, SQLite auto-rewrote the FK inside
-    # resume_sections to point at 'resumes_old'.  If the process then crashed before
-    # rebuilding resume_sections, that table is left with a FK to a non-existent table.
-    # Fix: patch sqlite_master in-place (no RENAME, so no cascade side-effects).
-    for _tbl, _good_ref in (
-        ("resume_sections", "resumes"),
-        ("resume_items", "resume_sections"),
-    ):
-        _fk_rows = conn.execute(f"PRAGMA foreign_key_list({_tbl})").fetchall()
-        _bad = [r[2] for r in _fk_rows if r[2] != _good_ref]
-        if _bad:
-            _ref = _bad[0]
-            _still_exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (_ref,)
-            ).fetchone()
-            if not _still_exists:
-                conn.execute("PRAGMA foreign_keys = OFF")
-                conn.execute("PRAGMA writable_schema = ON")
-                conn.execute(
-                    f"UPDATE sqlite_master SET sql = REPLACE(REPLACE(sql, '\"' || ? || '\"', ?), ? , ?) "
-                    f"WHERE type='table' AND name=?",
-                    (_ref, _good_ref, _ref, _good_ref, _tbl),
-                )
-                conn.execute("PRAGMA writable_schema = OFF")
-                conn.execute("PRAGMA foreign_keys = ON")
-                conn.commit()
-
     # Align resume timestamp columns with users (UTC CURRENT_TIMESTAMP defaults).
     resume_ts_specs = {
         "resumes": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
@@ -659,10 +608,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
 
     if needs_resume_ts_migration:
         conn.execute("PRAGMA foreign_keys = OFF")
-        # Prevent SQLite from auto-rewriting FK references in child tables when we
-        # rename a parent table.  Without this, resume_sections.FK gets rewritten to
-        # point at 'resumes_old', which breaks inserts after resumes_old is dropped.
-        conn.execute("PRAGMA legacy_alter_table = ON")
 
         conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
         conn.execute(
@@ -770,7 +715,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             """
         )
 
-        conn.execute("PRAGMA legacy_alter_table = OFF")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
 
@@ -2118,54 +2062,6 @@ def update_user_profile(
     conn.commit()
 
 
-def get_user_education(conn: sqlite3.Connection, user_id: int) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT id, university, degree, start_date, end_date, city, state, sort_order
-        FROM user_education
-        WHERE user_id = ?
-        ORDER BY sort_order, id
-        """,
-        (int(user_id),),
-    ).fetchall()
-    return [
-        {
-            "id": r[0],
-            "university": r[1],
-            "degree": r[2],
-            "start_date": r[3],
-            "end_date": r[4],
-            "city": r[5],
-            "state": r[6],
-            "sort_order": r[7],
-        }
-        for r in rows
-    ]
-
-
-def replace_user_education(conn: sqlite3.Connection, user_id: int, entries: list[dict]) -> None:
-    """Replace all education entries for a user."""
-    conn.execute("DELETE FROM user_education WHERE user_id = ?", (int(user_id),))
-    for idx, entry in enumerate(entries):
-        conn.execute(
-            """
-            INSERT INTO user_education (user_id, university, degree, start_date, end_date, city, state, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                int(user_id),
-                str(entry.get("university") or "").strip(),
-                str(entry.get("degree") or "").strip() or None,
-                str(entry.get("start_date") or "").strip() or None,
-                str(entry.get("end_date") or "").strip() or None,
-                str(entry.get("city") or "").strip() or None,
-                str(entry.get("state") or "").strip() or None,
-                idx,
-            ),
-        )
-    conn.commit()
-
-
 def upsert_default_resume_modules(
     conn: sqlite3.Connection,
     *,
@@ -2173,17 +2069,13 @@ def upsert_default_resume_modules(
     header: dict[str, str],
     core_skills: list[str],
     projects: list[dict[str, str]],
-    education: list[dict] | None = None,
-    summary: str | None = None,
     resume_title: str | None = None,
     create_new: bool = False,
 ) -> str:
     """
     Ensure a draft modular resume exists for the user and persist default modules.
     - header/core_skill/project are refreshed from latest generated data.
-    - education is populated from user profile data when provided.
-    - summary is auto-populated when provided, else ensured as an empty template.
-    - experience is ensured as an empty template (insert only when missing).
+    - summary/education/experience are ensured as empty templates (insert only when missing).
     """
     row = None
     if not create_new:
@@ -2327,7 +2219,7 @@ def upsert_default_resume_modules(
         project_items.append(
             {
                 "title": project.get("title") or "Project",
-                "subtitle": project.get("subtitle") or project.get("stack") or "",
+                "subtitle": project.get("stack") or "",
                 "start_date": project.get("start_date") or "",
                 "end_date": project.get("end_date") or "",
                 "location": project.get("location") or "",
@@ -2336,62 +2228,14 @@ def upsert_default_resume_modules(
         )
     _replace_items("project", project_items)
 
-    # Education: populate from user profile data if provided, else ensure empty template.
-    if education:
-        edu_items = []
-        for e in education:
-            city = str(e.get("city") or "").strip()
-            state = str(e.get("state") or "").strip()
-            location = ", ".join(p for p in [city, state] if p)
-            edu_items.append({
-                "title": e.get("university") or "University",
-                "subtitle": e.get("degree") or "",
-                "start_date": e.get("start_date") or "",
-                "end_date": e.get("end_date") or "Present",
-                "location": location,
-            })
-        _replace_items("education", edu_items)
-    else:
-        section_id = section_ids["education"]
-        existing = conn.execute(
-            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
-            (section_id,),
-        ).fetchone()
-        if not existing:
-            conn.execute(
-                """
-                INSERT INTO resume_items (
-                    id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
-                )
-                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
-                """,
-                (str(uuid.uuid4()), section_id),
-            )
-
-    # Summary: populate from generated text when provided, else ensure empty template.
-    if summary:
-        _replace_items("summary", [{"title": "Summary", "content": summary}])
-    else:
-        section_id = section_ids["summary"]
-        existing = conn.execute(
-            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
-            (section_id,),
-        ).fetchone()
-        if not existing:
-            conn.execute(
-                """
-                INSERT INTO resume_items (
-                    id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
-                )
-                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
-                """,
-                (str(uuid.uuid4()), section_id),
-            )
-
-    # Ensure empty template for experience (insert only if missing).
-    for key, title in (("experience", "Event"),):
+    # Ensure empty templates for summary/education/experience (insert only if missing).
+    # Education/Experience placeholders use entry-title defaults expected by PDF rendering.
+    template_titles = {
+        "summary": "Summary",
+        "education": "University",
+        "experience": "Event",
+    }
+    for key, label in (("summary", "Summary"), ("education", "Education"), ("experience", "Experience")):
         section_id = section_ids[key]
         existing = conn.execute(
             "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
@@ -2406,7 +2250,7 @@ def upsert_default_resume_modules(
                 )
                 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
                 """,
-                (str(uuid.uuid4()), section_id, title),
+                (str(uuid.uuid4()), section_id, template_titles[key]),
             )
 
     conn.commit()
