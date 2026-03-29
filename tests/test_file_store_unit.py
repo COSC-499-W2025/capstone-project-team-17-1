@@ -20,25 +20,14 @@ class FileStoreUnitTests(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
 
         # isolate DB and files root
-        self._original_base_dir = storage.BASE_DIR
-        self._original_db_dir = getattr(storage, "DB_DIR", None)
-        self._original_current_user = storage.CURRENT_USER
-        self._original_files_root = file_store.DEFAULT_FILES_ROOT
         storage.close_db()
-        storage.BASE_DIR = Path(self.tmpdir.name)
         storage.DB_DIR = Path(self.tmpdir.name) / "data"
-        storage.CURRENT_USER = None
         file_store.DEFAULT_FILES_ROOT = Path(self.tmpdir.name) / "files"
 
         self.conn = storage.open_db(storage.DB_DIR)
 
     def tearDown(self) -> None:
         storage.close_db()
-        storage.BASE_DIR = self._original_base_dir
-        if self._original_db_dir is not None:
-            storage.DB_DIR = self._original_db_dir
-        storage.CURRENT_USER = self._original_current_user
-        file_store.DEFAULT_FILES_ROOT = self._original_files_root
 
     def _make_zip_file(self) -> Path:
         tmp_zip = Path(self.tmpdir.name) / "demo.zip"
@@ -108,9 +97,6 @@ class FileStoreUnitTests(unittest.TestCase):
         self.assertTrue(Path(second["path"]).exists())
 
     def test_cleanup_orphans_removes_unreferenced(self) -> None:
-        if not hasattr(file_store, "cleanup_orphans"):
-            self.skipTest("cleanup_orphans is not exposed by the current file_store module")
-
         zip_path = self._make_zip_file()
         meta = file_store.ensure_file(self.conn, zip_path, original_name="demo.zip", source="unit")
         file_id = meta["file_id"]

@@ -767,24 +767,6 @@ def get_project_collaboration(project_id: str):
         (project_id,),
     ).fetchone())
 
-    cached = snapshot.get("collaboration_cached")
-    if isinstance(cached, dict) and isinstance(cached.get("contributors"), list):
-        return {
-            "project_id": project_id,
-            "is_github": is_github,
-            "classification": cached.get("classification") or collab.get("classification") or "unknown",
-            "primary_contributor": cached.get("primary_contributor") or collab.get("primary_contributor"),
-            "total_contributors": int(cached.get("total_contributors") or len(cached.get("contributors") or [])),
-            "contributors": cached.get("contributors") or [],
-            "bot_contributors": cached.get("bot_contributors") or [],
-            "first_commit_date": cached.get("first_commit_date"),
-            "last_commit_date": cached.get("last_commit_date"),
-            "project_duration_days": int(cached.get("project_duration_days") or 0),
-            "project_timeline": cached.get("project_timeline") or {},
-            "scores": cached.get("scores") or {},
-            "review_totals": cached.get("review_totals") or {},
-        }
-
     git_result = None
     try:
         zip_path = _get_zip_path_for_project(project_id)
@@ -914,7 +896,7 @@ def get_project_collaboration(project_id: str):
             except Exception as exc:
                 logger.warning("Failed to merge GitHub PR stats for %s: %s", project_id, exc)
 
-    response_payload = {
+    return {
         "project_id": project_id,
         "is_github": is_github,
         "classification": classification,
@@ -929,39 +911,6 @@ def get_project_collaboration(project_id: str):
         "scores": collab.get("scores") or {},
         "review_totals": collab.get("review_totals") or {},
     }
-
-    # Persist computed collaboration so future loads (including after restart)
-    # can return instantly from DB without recomputing git history.
-    try:
-        snapshot_copy = dict(snapshot or {})
-        snapshot_copy["collaboration_cached"] = {
-            "classification": response_payload["classification"],
-            "primary_contributor": response_payload["primary_contributor"],
-            "total_contributors": response_payload["total_contributors"],
-            "contributors": response_payload["contributors"],
-            "bot_contributors": response_payload["bot_contributors"],
-            "first_commit_date": response_payload["first_commit_date"],
-            "last_commit_date": response_payload["last_commit_date"],
-            "project_duration_days": response_payload["project_duration_days"],
-            "project_timeline": response_payload["project_timeline"],
-            "scores": response_payload["scores"],
-            "review_totals": response_payload["review_totals"],
-        }
-        if isinstance(snapshot_copy.get("collaboration"), dict):
-            snapshot_copy["collaboration"]["classification"] = response_payload["classification"]
-            snapshot_copy["collaboration"]["primary_contributor"] = response_payload["primary_contributor"]
-            snapshot_copy["collaboration"]["bot_contributors"] = response_payload["bot_contributors"]
-        storage.store_analysis_snapshot(
-            conn,
-            project_id=project_id,
-            classification=response_payload["classification"] or "unknown",
-            primary_contributor=response_payload["primary_contributor"],
-            snapshot=snapshot_copy,
-        )
-    except Exception as exc:
-        logger.warning("Failed to persist collaboration cache for %s: %s", project_id, exc)
-
-    return response_payload
 
 
 # ── Language detection ─────────────────────────────────────────────

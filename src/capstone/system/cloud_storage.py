@@ -5,10 +5,6 @@ from botocore.exceptions import ClientError
 
 import capstone.storage as storage
 from capstone import file_store
-def _is_sync_allowed_user(user_id: str | None) -> bool:
-    lowered = (user_id or "").strip().lower()
-    return bool(lowered and lowered not in {"guest", "guestuser"})
-
 
 ACCOUNT_ID = "86d88cc4dc44fe96fa122040e6eff0dd"
 ACCESS_KEY = "6616152c724e55cca30ef9a406bb6085"
@@ -115,8 +111,6 @@ def delete_project_zip(user_id: str, project_id: str, filename: str = "project.z
 
 
 def upload_database(user_id: str):
-    if not _is_sync_allowed_user(user_id):
-        return {"status": "skipped_guest"}
     local_db = get_local_db_path(user_id)
 
     if not local_db.exists():
@@ -155,8 +149,6 @@ def download_database(user_id: str):
 # ------------------------------------------------
 
 def upload_project_zip(user_id: str, project_id: str, local_zip_path: Path, filename: str | None = None):
-    if not _is_sync_allowed_user(user_id):
-        return {"status": "skipped_guest"}
     local_zip_path = Path(local_zip_path)
 
     if not local_zip_path.exists():
