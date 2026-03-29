@@ -3,6 +3,10 @@ import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 import { loadProjects } from "./projects.js";
 import { loadRecentProjects } from "./recentProjects.js";
+import { loadProjectHealth } from "./projectHealth.js";
+import { loadErrorAnalysis } from "./errors.js";
+import { loadMostUsedSkills } from "./skills.js";
+import { authFetch } from "./auth.js";
 
 export function openUploadModal() {
   const existing = document.getElementById("upload-modal");
@@ -79,20 +83,21 @@ async function submitZipUpload() {
   const fileInput = document.getElementById("zip-input");
   const file = fileInput.files[0];
 
-  if (!projectId || !file) {
-    alert("Please provide project ID and ZIP file.");
+  if (!file) {
+    alert("Please choose a ZIP file.");
     return;
   }
 
   const formData = new FormData();
   formData.append("file", file);
 
-  const url = `http://127.0.0.1:8002/projects/upload?project_id=${encodeURIComponent(projectId)}`;
+  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const url = `/projects/upload${query}`;
 
   console.log("Sending project_id:", projectId, "URL:", url);
 
   try {
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method: "POST",
       body: formData
     });
@@ -103,7 +108,13 @@ async function submitZipUpload() {
     }
 
     document.getElementById("upload-modal")?.remove();
-    loadProjects();
+    await Promise.all([
+      loadProjects(),
+      loadRecentProjects(),
+      loadProjectHealth(),
+      loadErrorAnalysis(),
+      loadMostUsedSkills(),
+    ]);
     notifyPortfolioDataUpdated();
   } catch (err) {
     console.error("ZIP upload failed:", err);
@@ -147,7 +158,7 @@ export function renderGithubLogin(container) {
     return;
   }
 
-  const res = await fetch(`http://127.0.0.1:8002/github/login?token=${encodeURIComponent(token)}`, {
+  const res = await authFetch(`/github/login?token=${encodeURIComponent(token)}`, {
     method: "POST"
   });
 
@@ -163,6 +174,10 @@ export function renderGithubLogin(container) {
 export function renderRepoCards(repos) {
   const githubContainer = document.getElementById("github-section-body");
   if (!githubContainer) return;
+  console.log("Processed repos:", Array.isArray(repos) ? repos.length : 0);
+  if (Array.isArray(repos)) {
+    console.log("Processed repo names:", repos.map((r) => r.full_name || r.name));
+  }
 
   if (!repos || repos.length === 0) {
     githubContainer.innerHTML = `
@@ -180,10 +195,11 @@ export function renderRepoCards(repos) {
     <div id="github-repo-list" class="github-repo-list"></div>
   `;
 
-  const list = document.getElementById("github-repo-list");
-
   function draw(filtered) {
+    const list = githubContainer.querySelector("#github-repo-list");
+    if (!list) return;
     list.innerHTML = "";
+    console.log("Final rendered repos:", Array.isArray(filtered) ? filtered.length : 0);
 
     filtered.forEach(repo => {
       const card = document.createElement("div");
@@ -238,8 +254,10 @@ export function renderRepoCards(repos) {
         let branches = [];
 
         try {
-          const res = await fetch(
-            `http://127.0.0.1:8002/github/branches?owner=${owner}&repo=${name}`
+          const ownerQ = encodeURIComponent(owner);
+          const repoQ = encodeURIComponent(name);
+          const res = await authFetch(
+            `/github/branches?owner=${ownerQ}&repo=${repoQ}`
           );
 
           const data = await res.json();
@@ -315,7 +333,7 @@ startImport(owner, name, buildProjectId(selectedBranch), selectedBranch);
 
   draw(repos);
 
-  document.getElementById("github-repo-search")?.addEventListener("input", (e) => {
+  githubContainer.querySelector("#github-repo-search")?.addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
 
     const filtered = repos.filter(r => {

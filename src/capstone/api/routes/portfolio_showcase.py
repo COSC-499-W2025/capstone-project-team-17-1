@@ -51,16 +51,22 @@ async def _get_payload(request: Request) -> dict:
 
 @router.get("/users")
 def list_users(request: Request):
+    from capstone.github_contributors import _is_bot_contributor
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute("""
-            SELECT DISTINCT u.id, u.username
+            SELECT DISTINCT u.id, u.username, u.email
             FROM users u
             INNER JOIN user_projects up ON u.id = up.user_id
             INNER JOIN project_analysis pa ON up.project_id = pa.project_id
             ORDER BY LOWER(u.username)
         """).fetchall()
-    users = [{"id": r[0], "username": r[1]} for r in rows if r and r[1] and "[bot]" not in r[1].lower()]
+    users = [
+        {"id": r[0], "username": r[1]}
+        for r in rows
+        if r and r[1]
+        and not _is_bot_contributor(r[1])
+    ]
     return {"data": users, "error": None}
 
 @router.get("/users/{user}/projects")

@@ -11,8 +11,66 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function toTitleCase(value) {
+  return String(value || "")
+    .split(/[\s-/]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function normalizeSkillName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const lower = raw.toLowerCase();
+  const canonicalMap = {
+    js: "JavaScript",
+    javascript: "JavaScript",
+    ts: "TypeScript",
+    typescript: "TypeScript",
+    json: "JSON",
+    html: "HTML",
+    css: "CSS",
+    sql: "SQL",
+    nosql: "NoSQL",
+    api: "API",
+    rest: "REST",
+    graphql: "GraphQL",
+    yaml: "YAML",
+    xml: "XML",
+    csv: "CSV",
+    aws: "AWS",
+    gcp: "GCP",
+    fastapi: "FastAPI",
+    sqlite: "SQLite",
+    postgresql: "PostgreSQL",
+    mongodb: "MongoDB",
+    redis: "Redis",
+    nodejs: "Node.js",
+    expressjs: "Express.js",
+    ui: "UI",
+    ux: "UX",
+    ci: "CI",
+    cd: "CD",
+  };
+
+  return canonicalMap[lower] || toTitleCase(raw);
+}
+
 function dedupeStrings(values) {
-  return [...new Set(asArray(values).map((v) => String(v).trim()).filter(Boolean))];
+  const seen = new Set();
+  const result = [];
+  asArray(values)
+    .map((v) => normalizeSkillName(v))
+    .filter(Boolean)
+    .forEach((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(value);
+    });
+  return result;
 }
 
 function getEvidenceText(portfolioEntry = {}) {
@@ -265,7 +323,7 @@ function buildPortfolioEntryMap(entries) {
 }
 
 function getTimelineSkillName(skill) {
-  return String(skill?.name || skill?.skill || "unknown").trim() || "unknown";
+  return normalizeSkillName(skill?.name || skill?.skill || "unknown") || "unknown";
 }
 
 function getTimelineSkillWeight(skill) {
@@ -281,12 +339,28 @@ function getSkillDepthLevel(depthScore) {
   return "Foundation";
 }
 
-function getSkillGrowthLabel(previousWeight, currentWeight, appearanceCount) {
+function getSkillGrowthLabel({
+  previousWeight,
+  currentWeight,
+  appearanceCount,
+  projectCount,
+  previousComplexity,
+  currentComplexity,
+}) {
   if (appearanceCount <= 1) return "Baseline established";
 
-  const delta = currentWeight - previousWeight;
-  if (delta >= 0.08) return "Depth increasing";
-  if (delta <= -0.08) return "Applying in lighter scope";
+  const weightDelta = currentWeight - previousWeight;
+  const complexityDelta = currentComplexity - previousComplexity;
+
+  if (weightDelta >= 0.08 && (projectCount >= 2 || complexityDelta >= 0.75)) {
+    return "Depth increasing";
+  }
+  if (complexityDelta >= 1.2 || projectCount >= 3) {
+    return "Expanding across projects";
+  }
+  if (weightDelta <= -0.08 && complexityDelta <= -0.75) {
+    return "Applying in lighter scope";
+  }
   return "Depth sustained";
 }
 
@@ -294,10 +368,16 @@ function buildTimelineEntries(timeline) {
   const seenCounts = new Map();
   const previousWeights = new Map();
   const cumulativeWeights = new Map();
+  const projectSets = new Map();
+  const previousComplexities = new Map();
 
   return timeline.map((entry) => {
     const rawSkills = Array.isArray(entry.skills) ? entry.skills : [];
     const aggregatedSkills = new Map();
+    const projectId = String(entry?.project_id || "").trim();
+    const projectMetrics =
+      entry?.project_metrics && typeof entry.project_metrics === "object" ? entry.project_metrics : {};
+    const currentComplexity = Number(projectMetrics?.complexity_score || 0);
 
     rawSkills.forEach((skill) => {
       const name = getTimelineSkillName(skill);
@@ -321,23 +401,49 @@ function buildTimelineEntries(timeline) {
       const nextCount = previousCount + 1;
       const previousWeight = previousWeights.get(name) || 0;
       const cumulativeWeight = (cumulativeWeights.get(name) || 0) + weight;
+      const projectSet = new Set(projectSets.get(name) || []);
+      if (projectId) {
+        projectSet.add(projectId);
+      }
+      const projectCount = projectSet.size;
+      const previousComplexity = Number(previousComplexities.get(name) || 0);
       const depthScore = cumulativeWeight + nextCount * 0.35;
-      const growthLabel = getSkillGrowthLabel(previousWeight, weight, nextCount);
+      const growthLabel = getSkillGrowthLabel({
+        previousWeight,
+        currentWeight: weight,
+        appearanceCount: nextCount,
+        projectCount,
+        previousComplexity,
+        currentComplexity,
+      });
 
       seenCounts.set(name, nextCount);
       previousWeights.set(name, weight);
       cumulativeWeights.set(name, cumulativeWeight);
+      projectSets.set(name, projectSet);
+      previousComplexities.set(name, currentComplexity);
 
       if (previousCount > 0) recurringCount += 1;
       else newCount += 1;
-      if (previousCount > 0 && weight > previousWeight + 0.08) growthCount += 1;
+      if (
+        previousCount > 0 &&
+        (
+          weight > previousWeight + 0.08 ||
+          projectCount >= 2 ||
+          currentComplexity > previousComplexity + 0.75
+        )
+      ) {
+        growthCount += 1;
+      }
 
       return {
         name,
         appearanceCount: nextCount,
+        projectCount,
         weight,
         previousWeight,
         cumulativeWeight,
+        currentComplexity,
         depthScore,
         level: getSkillDepthLevel(depthScore),
         growthLabel,
@@ -509,7 +615,15 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
 }
 
 function buildSkillsTimelineMarkup(timeline) {
-  if (!timeline.length) {
+  const visibleTimeline = timeline.filter((entry) => {
+    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
+      ? entry.project_metrics
+      : {};
+    return skills.length > 0 || Number(metrics.file_count || 0) > 0 || Number(metrics.active_days || 0) > 0;
+  });
+
+  if (!visibleTimeline.length) {
     return `
       <div class="skills-group-card">
         <h3>No timeline data yet</h3>
@@ -520,7 +634,7 @@ function buildSkillsTimelineMarkup(timeline) {
     `;
   }
 
-  return buildTimelineEntries(timeline)
+  return buildTimelineEntries(visibleTimeline)
     .map((entry) => {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];
 
@@ -561,11 +675,15 @@ function buildSkillsTimelineMarkup(timeline) {
                 skills.length
                   ? skills
                       .map((skill) => {
+                        const metaParts = [
+                          `${skill.status} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"}`,
+                          `${skill.projectCount} project${skill.projectCount === 1 ? "" : "s"}`,
+                        ];
                         return `
-                          <span class="timeline-skill-pill">
+                            <span class="timeline-skill-pill">
                             <span class="timeline-skill-name">${escapeHtml(skill.name)}</span>
                             <span class="timeline-skill-meta">${escapeHtml(skill.level)} · ${escapeHtml(skill.growthLabel)}</span>
-                            <span class="timeline-skill-meta">${escapeHtml(skill.status)} · ${skill.appearanceCount} snapshot${skill.appearanceCount === 1 ? "" : "s"} · weight ${skill.weight.toFixed(2)}</span>
+                            <span class="timeline-skill-meta">${escapeHtml(metaParts.join(" · "))}</span>
                           </span>
                         `;
                       })

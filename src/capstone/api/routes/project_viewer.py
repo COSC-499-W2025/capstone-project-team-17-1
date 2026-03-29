@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, HTTPException, Query
@@ -30,6 +31,9 @@ from capstone.logging_utils import get_logger
 from capstone.system.cloud_storage import (
     upload_project_zip as cloud_upload_zip,
     upload_database as cloud_upload_db,
+    list_objects as cloud_list_objects,
+    download_file as cloud_download_file,
+    BUCKET_NAME as CLOUD_BUCKET,
 )
 import capstone.storage as storage_module
 
@@ -110,6 +114,36 @@ def _get_file_id_for_project(project_id: str) -> str:
             if fpath and project_id.lower() in Path(fpath).name.lower():
                 logger.info("Project %s found via filename match in files table", project_id)
                 return fid
+
+    storage_user_key = storage.resolve_storage_user_key(storage.get_current_user())
+    if storage_user_key:
+        prefix = f"users/{storage_user_key}/projects/{project_id}/"
+        listing = cloud_list_objects(CLOUD_BUCKET, prefix) or {}
+        candidates = listing.get("Contents") or []
+        if candidates:
+            key = str(candidates[0].get("Key") or "")
+            if key:
+                filename = Path(key).name or "project.zip"
+                with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix or ".zip", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                try:
+                    cloud_download_file(CLOUD_BUCKET, key, tmp_path)
+                    stored = file_store.ensure_file(
+                        conn,
+                        tmp_path,
+                        original_name=filename,
+                        source="project_viewer_cloud_recovery",
+                        upload_id=project_id,
+                        mime="application/zip",
+                    )
+                    conn.commit()
+                    logger.info("Project %s recovered from cloud project prefix", project_id)
+                    return stored["file_id"]
+                finally:
+                    try:
+                        tmp_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
     raise HTTPException(status_code=404, detail="Project not found")
 
@@ -334,15 +368,16 @@ def update_project_file(payload: UpdateFilePayload):
         tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to update file: {exc}")
 
-    if storage_module.CURRENT_USER:
+    active_user = storage_module.get_current_user()
+    if active_user:
         try:
             cloud_upload_zip(
-                storage_module.CURRENT_USER,
+                active_user,
                 project_id,
                 zip_path,
                 zip_path.name,
             )
-            cloud_upload_db(storage_module.CURRENT_USER)
+            cloud_upload_db(active_user)
         except Exception:
             logger.warning("Cloud sync failed after file update for %s", project_id)
 
@@ -352,14 +387,61 @@ def update_project_file(payload: UpdateFilePayload):
 
 # ── Analysis ───────────────────────────────────────────────────────
 
+# Keys the project viewer Analysis tab reads (see frontend projectViewer.js _renderAnalysisDashboard).
+# Omitting the rest shrinks JSON and browser parse time; full snapshot remains in project_analysis for other features.
+_VIEWER_ANALYSIS_KEYS = frozenset({
+    "project_id",
+    "classification",
+    "primary_contributor",
+    "file_summary",
+    "languages",
+    "frameworks",
+    "collaboration",
+    "scan_duration_seconds",
+    "warnings",
+    "warning_count",
+    "skills",
+    "skill_timeline",
+    "top_skills_by_year",
+    "collaboration_cached",
+    "is_git_project",
+    "source",
+    "repo_url",
+    "repo_full_name",
+})
+
+
+def _slim_snapshot_for_project_viewer(snapshot: dict) -> dict:
+    return {k: snapshot[k] for k in _VIEWER_ANALYSIS_KEYS if k in snapshot}
+
+
 @router.get("/{project_id}/analysis")
 def get_project_analysis(project_id: str):
-    """Return the analysis snapshot for a project."""
+    """Return analysis data for the project viewer (slim payload + optional bundled collaboration).
+
+    The full snapshot is still stored in ``project_analysis.snapshot``; this endpoint returns only
+    fields needed by the Analysis UI to reduce transfer and parse cost.
+
+    When collaboration has been computed and cached, includes a ``collaboration`` object
+    (same shape as GET /collaboration/{id}) so the viewer can render without a second request.
+    GitHub timeline enrichment is skipped when the cache already holds GitHub-sourced dates
+    (see ``project_timeline.source == \"github_api\"``) so repeat visits are not blocked on network.
+    """
     conn = storage.open_db()
     snapshot = storage.fetch_latest_snapshot(conn, project_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="No analysis data found for this project")
-    return {"project_id": project_id, "analysis": snapshot}
+    out: dict = {"project_id": project_id, "analysis": _slim_snapshot_for_project_viewer(snapshot)}
+    cached = snapshot.get("collaboration_cached")
+    if isinstance(cached, dict) and isinstance(cached.get("contributors"), list):
+        collab_payload = _collaboration_payload_from_snapshot_cache(conn, project_id, snapshot, cached)
+        timeline_before = dict(collab_payload.get("project_timeline") or {})
+        _enrich_collaboration_payload_github_timeline(conn, project_id, collab_payload)
+        out["collaboration"] = collab_payload
+        _maybe_persist_github_enriched_collaboration_cache(
+            conn, project_id, snapshot, collab_payload, timeline_before
+        )
+    return out
 
 
 # ── Collaboration data ─────────────────────────────────────────────
@@ -369,6 +451,197 @@ _BOT_TOKENS = {"bot", "ci", "automation", "github-classroom", "dependabot"}
 # In-memory cache for GitHub PR/review stats: (owner, repo) -> (prs_by_login, reviews_by_login, cached_at)
 _github_pr_cache: dict[tuple[str, str], tuple[dict[str, int], dict[str, int], float]] = {}
 _GITHUB_CACHE_TTL_SEC = 300  # 5 minutes
+
+# GitHub Repos API timeline: (owner, repo) -> (payload dict, cached_at)
+_github_timeline_cache: dict[tuple[str, str], tuple[dict, float]] = {}
+
+
+def _normalize_git_epoch_seconds(ts: int) -> int:
+    """Git %ct is seconds; some exports use milliseconds — normalize to UTC epoch seconds."""
+    if ts > 10**11:  # > ~5138 CE if interpreted as seconds → treat as ms
+        return int(ts // 1000)
+    return int(ts)
+
+
+def _parse_github_datetime(iso_str: str) -> datetime | None:
+    if not iso_str or not isinstance(iso_str, str):
+        return None
+    try:
+        return datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _fetch_github_repository_timeline(owner: str, repo: str, token: str | None) -> dict | None:
+    """
+    Timeline for this repo from GitHub (REST): repo created_at, last push, and latest commit date.
+    Returns keys first_commit_date, last_commit_date, project_duration_days, project_timeline (ISO strings).
+    """
+    if not owner or not repo:
+        return None
+    o = quote(owner, safe="")
+    r = quote(repo, safe="")
+    repo_url = f"https://api.github.com/repos/{o}/{r}"
+    repo_data = _github_request(repo_url, token=token)
+    if not isinstance(repo_data, dict):
+        return None
+    created_at = repo_data.get("created_at")
+    pushed_at = repo_data.get("pushed_at")
+    if not created_at or not pushed_at:
+        return None
+
+    d_created = _parse_github_datetime(created_at)
+    d_pushed = _parse_github_datetime(pushed_at)
+    if not d_created or not d_pushed:
+        return None
+
+    d_last = d_pushed
+    commits_url = f"https://api.github.com/repos/{o}/{r}/commits?per_page=1"
+    commits = _github_request(commits_url, token=token)
+    last_iso = pushed_at
+    if isinstance(commits, list) and commits:
+        c0 = commits[0]
+        if isinstance(c0, dict):
+            commit_obj = c0.get("commit") or {}
+            cd = (commit_obj.get("committer") or {}).get("date") or (commit_obj.get("author") or {}).get("date")
+            if isinstance(cd, str):
+                d_c = _parse_github_datetime(cd)
+                if d_c and d_c > d_last:
+                    d_last = d_c
+                    last_iso = cd
+
+    # Calendar span (inclusive) for "days active"
+    dc = d_created.date()
+    dl = d_last.date()
+    span_days = max(0, (dl - dc).days)
+    days_active_inclusive = span_days + 1 if dl >= dc else 0
+
+    return {
+        "first_commit_date": created_at,
+        "last_commit_date": last_iso,
+        "project_duration_days": span_days,
+        "days_active_inclusive": days_active_inclusive,
+        "project_timeline": {
+            "first_commit_date": created_at,
+            "last_commit_date": last_iso,
+            "duration_days": span_days,
+            "days_active_inclusive": days_active_inclusive,
+            "source": "github_api",
+        },
+    }
+
+
+def _fetch_github_repository_timeline_cached(owner: str, repo: str, token: str | None) -> dict | None:
+    key = (owner.lower(), repo.lower())
+    now = time.time()
+    if key in _github_timeline_cache:
+        payload, t0 = _github_timeline_cache[key]
+        if now - t0 < _GITHUB_CACHE_TTL_SEC:
+            return payload
+    payload = _fetch_github_repository_timeline(owner, repo, token)
+    if payload:
+        _github_timeline_cache[key] = (payload, now)
+    return payload
+
+
+def _maybe_persist_github_enriched_collaboration_cache(
+    conn,
+    project_id: str,
+    snapshot: dict,
+    collab_payload: dict,
+    timeline_before: dict,
+) -> None:
+    """If GitHub timeline was just applied, merge into collaboration_cached so later reads skip the API."""
+    after = collab_payload.get("project_timeline") or {}
+    if after.get("source") != "github_api":
+        return
+    if (timeline_before or {}).get("source") == "github_api":
+        return
+    try:
+        snapshot_copy = dict(snapshot or {})
+        cc = dict(snapshot_copy.get("collaboration_cached") or {})
+        cc["first_commit_date"] = collab_payload.get("first_commit_date")
+        cc["last_commit_date"] = collab_payload.get("last_commit_date")
+        cc["project_duration_days"] = collab_payload.get("project_duration_days")
+        cc["project_timeline"] = collab_payload.get("project_timeline")
+        cc["days_active_inclusive"] = collab_payload.get("days_active_inclusive", 0)
+        snapshot_copy["collaboration_cached"] = cc
+        storage.store_analysis_snapshot(
+            conn,
+            project_id=project_id,
+            classification=str(collab_payload.get("classification") or "unknown"),
+            primary_contributor=collab_payload.get("primary_contributor"),
+            snapshot=snapshot_copy,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to persist GitHub timeline into collaboration cache for %s: %s",
+            project_id,
+            exc,
+        )
+
+
+def _enrich_collaboration_payload_github_timeline(
+    conn,
+    project_id: str,
+    payload: dict,
+) -> None:
+    """Mutate payload dates/timeline from GitHub Repos + commits API when linked to a GitHub repo."""
+    if not payload.get("is_github"):
+        return
+    pt_existing = payload.get("project_timeline") or {}
+    if pt_existing.get("source") == "github_api":
+        # Already persisted after a GitHub enrich — avoid blocking every Analysis open on live API calls.
+        return
+    row = conn.execute(
+        "SELECT owner, repo FROM github_projects WHERE project_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    if not row:
+        return
+    own = (row[0] if isinstance(row, tuple) else row["owner"] or "").strip()
+    rep = (row[1] if isinstance(row, tuple) else row["repo"] or "").strip()
+    if not own or not rep:
+        return
+    token = storage.get_github_token()
+    gh = _fetch_github_repository_timeline_cached(own, rep, token)
+    if not gh:
+        return
+    payload["first_commit_date"] = gh["first_commit_date"]
+    payload["last_commit_date"] = gh["last_commit_date"]
+    payload["project_duration_days"] = gh["project_duration_days"]
+    payload["project_timeline"] = gh["project_timeline"]
+    payload["days_active_inclusive"] = gh.get("days_active_inclusive")
+
+
+def _collaboration_payload_from_snapshot_cache(
+    conn,
+    project_id: str,
+    snapshot: dict,
+    cached: dict,
+) -> dict:
+    collab = snapshot.get("collaboration") or {}
+    is_github = bool(conn.execute(
+        "SELECT 1 FROM github_projects WHERE project_id = ? LIMIT 1",
+        (project_id,),
+    ).fetchone())
+    return {
+        "project_id": project_id,
+        "is_github": is_github,
+        "is_git_project": bool(is_github or snapshot.get("is_git_project")),
+        "classification": cached.get("classification") or collab.get("classification") or "unknown",
+        "primary_contributor": cached.get("primary_contributor") or collab.get("primary_contributor"),
+        "total_contributors": int(cached.get("total_contributors") or len(cached.get("contributors") or [])),
+        "contributors": cached.get("contributors") or [],
+        "bot_contributors": cached.get("bot_contributors") or [],
+        "first_commit_date": cached.get("first_commit_date"),
+        "last_commit_date": cached.get("last_commit_date"),
+        "project_duration_days": int(cached.get("project_duration_days") or 0),
+        "project_timeline": cached.get("project_timeline") or {},
+        "days_active_inclusive": int(cached.get("days_active_inclusive") or 0),
+        "scores": cached.get("scores") or {},
+        "review_totals": cached.get("review_totals") or {},
+    }
 
 
 def _normalize_contributor_key(name: str) -> tuple[list[str], list[str], str | None, str | None]:
@@ -688,7 +961,7 @@ def _compute_collaboration_from_git(
         reviews_by_author[author] = reviews_by_author.get(author, 0) + reviews
         lines = rec.lines_added + rec.lines_deleted
         lines_by_author[author] = lines_by_author.get(author, 0) + lines
-        ts = rec.timestamp
+        ts = _normalize_git_epoch_seconds(rec.timestamp)
         all_timestamps.append(ts)
         prev = last_commit_by_author.get(author, 0)
         if ts > prev:
@@ -712,6 +985,12 @@ def _compute_collaboration_from_git(
     else:
         last_date = None
     duration_days = (last_ts - first_ts) // 86400 if first_ts and last_ts else 0
+    if first_ts and last_ts:
+        d0 = datetime.utcfromtimestamp(first_ts).date()
+        d1 = datetime.utcfromtimestamp(last_ts).date()
+        days_active_inclusive = max(1, (d1 - d0).days + 1) if d1 >= d0 else 0
+    else:
+        days_active_inclusive = 0
 
     contributors = []
     for author in authors:
@@ -749,7 +1028,10 @@ def _compute_collaboration_from_git(
             "first_commit_date": first_date,
             "last_commit_date": last_date,
             "duration_days": duration_days,
+            "days_active_inclusive": days_active_inclusive,
+            "source": "git_log",
         },
+        "days_active_inclusive": days_active_inclusive,
     }
 
 
@@ -766,6 +1048,16 @@ def get_project_collaboration(project_id: str):
         "SELECT 1 FROM github_projects WHERE project_id = ? LIMIT 1",
         (project_id,),
     ).fetchone())
+
+    cached = snapshot.get("collaboration_cached")
+    if isinstance(cached, dict) and isinstance(cached.get("contributors"), list):
+        payload = _collaboration_payload_from_snapshot_cache(conn, project_id, snapshot, cached)
+        timeline_before = dict(payload.get("project_timeline") or {})
+        _enrich_collaboration_payload_github_timeline(conn, project_id, payload)
+        _maybe_persist_github_enriched_collaboration_cache(
+            conn, project_id, snapshot, payload, timeline_before
+        )
+        return payload
 
     git_result = None
     try:
@@ -872,10 +1164,17 @@ def get_project_collaboration(project_id: str):
         duration_days = file_summary.get("duration_days", 0)
         primary = collab.get("primary_contributor") or (contributors[0]["name"] if contributors else None)
         classification = collab.get("classification", "unknown")
+        d0 = _parse_github_datetime(first_date) if isinstance(first_date, str) else None
+        d1 = _parse_github_datetime(last_date) if isinstance(last_date, str) else None
+        days_ai_fs = 0
+        if d0 and d1 and d1.date() >= d0.date():
+            days_ai_fs = (d1.date() - d0.date()).days + 1
         project_timeline = {
             "first_commit_date": first_date,
             "last_commit_date": last_date,
             "duration_days": duration_days,
+            "days_active_inclusive": days_ai_fs,
+            "source": "file_summary",
         }
 
         if is_github and contributors:
@@ -896,9 +1195,10 @@ def get_project_collaboration(project_id: str):
             except Exception as exc:
                 logger.warning("Failed to merge GitHub PR stats for %s: %s", project_id, exc)
 
-    return {
+    response_payload = {
         "project_id": project_id,
         "is_github": is_github,
+        "is_git_project": bool(is_github or snapshot.get("is_git_project")),
         "classification": classification,
         "primary_contributor": primary,
         "total_contributors": len(contributors),
@@ -911,6 +1211,53 @@ def get_project_collaboration(project_id: str):
         "scores": collab.get("scores") or {},
         "review_totals": collab.get("review_totals") or {},
     }
+
+    _enrich_collaboration_payload_github_timeline(conn, project_id, response_payload)
+
+    dai = response_payload.get("days_active_inclusive")
+    if dai is None:
+        dai = (response_payload.get("project_timeline") or {}).get("days_active_inclusive")
+    if dai is None:
+        fd, ld = response_payload.get("first_commit_date"), response_payload.get("last_commit_date")
+        if isinstance(fd, str) and isinstance(ld, str):
+            d0, d1 = _parse_github_datetime(fd), _parse_github_datetime(ld)
+            if d0 and d1 and d1.date() >= d0.date():
+                dai = (d1.date() - d0.date()).days + 1
+    response_payload["days_active_inclusive"] = int(dai or 0)
+
+    # Persist computed collaboration so future loads (including after restart)
+    # can return instantly from DB without recomputing git history.
+    try:
+        snapshot_copy = dict(snapshot or {})
+        snapshot_copy["collaboration_cached"] = {
+            "classification": response_payload["classification"],
+            "primary_contributor": response_payload["primary_contributor"],
+            "total_contributors": response_payload["total_contributors"],
+            "contributors": response_payload["contributors"],
+            "bot_contributors": response_payload["bot_contributors"],
+            "first_commit_date": response_payload["first_commit_date"],
+            "last_commit_date": response_payload["last_commit_date"],
+            "project_duration_days": response_payload["project_duration_days"],
+            "project_timeline": response_payload["project_timeline"],
+            "days_active_inclusive": response_payload.get("days_active_inclusive", 0),
+            "scores": response_payload["scores"],
+            "review_totals": response_payload["review_totals"],
+        }
+        if isinstance(snapshot_copy.get("collaboration"), dict):
+            snapshot_copy["collaboration"]["classification"] = response_payload["classification"]
+            snapshot_copy["collaboration"]["primary_contributor"] = response_payload["primary_contributor"]
+            snapshot_copy["collaboration"]["bot_contributors"] = response_payload["bot_contributors"]
+        storage.store_analysis_snapshot(
+            conn,
+            project_id=project_id,
+            classification=response_payload["classification"] or "unknown",
+            primary_contributor=response_payload["primary_contributor"],
+            snapshot=snapshot_copy,
+        )
+    except Exception as exc:
+        logger.warning("Failed to persist collaboration cache for %s: %s", project_id, exc)
+
+    return response_payload
 
 
 # ── Language detection ─────────────────────────────────────────────

@@ -117,7 +117,7 @@ test("buildTopProjectsMarkup highlights contribution and impact evidence", () =>
   });
 
   assert.match(markup, /Contribution/);
-  assert.match(markup, /Implemented incremental uploads/);
+  assert.match(markup, /Implemented Incremental Uploads/);
   assert.match(markup, /Evidence of Success/);
   assert.match(markup, /View Details/);
   assert.match(markup, /data-evidence-details-panel="proj-a"/);
@@ -157,7 +157,7 @@ test("buildSkillsTimelineMarkup renders timeline nodes with timestamps, project 
   assert.match(markup, /2 snapshots/);
 });
 
-test("buildSkillsTimelineMarkup renders empty rows without inventing progression data", () => {
+test("buildSkillsTimelineMarkup hides fully empty timeline rows", () => {
   const markup = buildSkillsTimelineMarkup([
     {
       timestamp: "2026-03-09T09:00:00Z",
@@ -166,8 +166,8 @@ test("buildSkillsTimelineMarkup renders empty rows without inventing progression
     },
   ]);
 
-  assert.match(markup, /0 skills/);
-  assert.match(markup, /No skills recorded/);
+  assert.match(markup, /No timeline data yet/);
+  assert.doesNotMatch(markup, /No skills recorded/);
 });
 
 test("buildSkillsTimelineMarkup renders empty state when timeline data is missing", () => {

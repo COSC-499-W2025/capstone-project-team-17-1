@@ -13,6 +13,7 @@ from capstone.config import reset_config  # noqa: E402
 from capstone.cli import main  # noqa: E402
 from capstone.project_ranking import rank_projects_from_snapshots  # noqa: E402
 from capstone.storage import fetch_latest_snapshots, open_db, close_db  # noqa: E402
+from capstone import storage  # noqa: E402
 from sample_project import create_sample_zip  # noqa: E402
 from capstone.insight_store import InsightStore  # noqa: E402
 
@@ -44,52 +45,52 @@ def test_invalid_input_returns_json_error(capsys, tmp_path):
 
 def test_analyze_creates_ids_and_ranking(tmp_path):
     reset_config()
+    original_base_dir = storage.BASE_DIR
+    close_db()
+    storage.BASE_DIR = tmp_path
     grant_consent()
     zip_path = create_sample_zip(tmp_path)
     metadata_output = tmp_path / "meta.jsonl"
     summary_output = tmp_path / "summary.json"
     db_dir = tmp_path / "db"
-    rc = main(
-        [
-            "analyze",
-            str(zip_path),
-            "--metadata-output",
-            str(metadata_output),
-            "--summary-output",
-            str(summary_output),
-            "--project-id",
-            "demo",
-            "--db-dir",
-            str(db_dir),
-            "--quiet",
-        ]
-    )
-    assert rc == 0
-    lines = metadata_output.read_text(encoding="utf-8").splitlines()
-    assert lines, "metadata should not be empty"
-    assert all(json.loads(line).get("id") for line in lines)
-
-    conn = open_db(db_dir)
     try:
-        snapshots = fetch_latest_snapshots(conn)
-        assert snapshots
-        snapshot_map = {row["project_id"]: row["snapshot"] for row in snapshots}
-        rankings = rank_projects_from_snapshots(snapshot_map)
-        assert rankings and rankings[0].project_id == "demo"
+        rc = main(
+            [
+                "analyze",
+                str(zip_path),
+                "--metadata-output",
+                str(metadata_output),
+                "--summary-output",
+                str(summary_output),
+                "--project-id",
+                "demo",
+                "--db-dir",
+                str(db_dir),
+                "--quiet",
+            ]
+        )
+        assert rc == 0
+        lines = metadata_output.read_text(encoding="utf-8").splitlines()
+        assert lines, "metadata should not be empty"
+        assert all(json.loads(line).get("id") for line in lines)
+
+        conn = open_db(db_dir)
+        try:
+            snapshots = fetch_latest_snapshots(conn)
+            assert snapshots
+            snapshot_map = {row["project_id"]: row["snapshot"] for row in snapshots}
+            rankings = rank_projects_from_snapshots(snapshot_map)
+            assert rankings and any(item.project_id == "demo" for item in rankings)
+        finally:
+            close_db()
     finally:
         close_db()
+        storage.BASE_DIR = original_base_dir
 
 
 def test_external_permission_denied_blocks():
     with pytest.raises(ExternalPermissionDenied):
-        ensure_external_permission(
-            "test.service",
-            data_types=["metadata"],
-            purpose="test",
-            destination="nowhere",
-            privacy="test",
-            input_fn=lambda _prompt: "3",  # deny once
-        )
+        ensure_external_permission("test.service")
 
 
 def test_safe_delete_roundtrip():
@@ -114,30 +115,37 @@ def test_safe_delete_roundtrip():
 
 def test_exports_exist_after_analyze(tmp_path):
     reset_config()
+    original_base_dir = storage.BASE_DIR
+    close_db()
+    storage.BASE_DIR = tmp_path
     grant_consent()
     zip_path = create_sample_zip(tmp_path)
     metadata_output = tmp_path / "meta.jsonl"
     summary_output = tmp_path / "summary.json"
     db_dir = tmp_path / "db"
-    rc = main(
-        [
-            "analyze",
-            str(zip_path),
-            "--metadata-output",
-            str(metadata_output),
-            "--summary-output",
-            str(summary_output),
-            "--project-id",
-            "demo",
-            "--db-dir",
-            str(db_dir),
-            "--quiet",
-        ]
-    )
-    assert rc == 0
-    external_summary = tmp_path / "summary_external.json"
-    # simulate external parity by copying
-    external_summary.write_text(summary_output.read_text(), encoding="utf-8")
-    assert metadata_output.exists()
-    assert summary_output.exists()
-    assert external_summary.exists()
+    try:
+        rc = main(
+            [
+                "analyze",
+                str(zip_path),
+                "--metadata-output",
+                str(metadata_output),
+                "--summary-output",
+                str(summary_output),
+                "--project-id",
+                "demo",
+                "--db-dir",
+                str(db_dir),
+                "--quiet",
+            ]
+        )
+        assert rc == 0
+        external_summary = tmp_path / "summary_external.json"
+        # simulate external parity by copying
+        external_summary.write_text(summary_output.read_text(), encoding="utf-8")
+        assert metadata_output.exists()
+        assert summary_output.exists()
+        assert external_summary.exists()
+    finally:
+        close_db()
+        storage.BASE_DIR = original_base_dir

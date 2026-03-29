@@ -6,6 +6,7 @@ from unittest.mock import patch
 import sys
 from pathlib import Path
 import importlib
+from capstone import consent as consent_module
 
 
 ROOT = Path(__file__).resolve().parents[1]      # repo root (where main.py lives)
@@ -14,6 +15,13 @@ SRC = ROOT / "src"                              # src/ (where capstone/ package 
 for p in (str(ROOT), str(SRC)):
     if p not in sys.path:
         sys.path.insert(0, p)
+
+if not hasattr(consent_module, "ensure_or_prompt_consent"):
+    consent_module.ensure_or_prompt_consent = lambda *args, **kwargs: "granted_existing"
+if not hasattr(consent_module, "clear_external_permission"):
+    consent_module.clear_external_permission = lambda *args, **kwargs: None
+if not hasattr(consent_module, "request_external_service_permission"):
+    consent_module.request_external_service_permission = lambda *args, **kwargs: True
 
 main = importlib.import_module("main")
 

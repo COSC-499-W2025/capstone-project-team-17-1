@@ -3,9 +3,10 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
+import { authFetch, hasAuthToken, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 
 export async function fetchProjects() {
-  const res = await fetch("http://127.0.0.1:8002/dashboard/recent-projects");
+  const res = await authFetch("/dashboard/recent-projects");
 
   if (!res.ok) {
     throw new Error(`Failed to fetch projects: ${res.status}`);
@@ -16,11 +17,14 @@ export async function fetchProjects() {
 }
 
 export async function loadProjects() {
+  const epoch = captureAuthDataEpoch();
   try {
     const projects = await fetchProjects();
     const container = document.getElementById("projects-list");
 
     if (!container) return;
+
+    if (!authDomWriteAllowed(epoch)) return;
 
     container.innerHTML = "";
 
@@ -79,11 +83,11 @@ export async function loadProjects() {
         if (!confirm(`Delete project "${projectId}"?`)) return;
 
         try {
-          const res = await fetch(`http://127.0.0.1:8002/projects/${encodeURIComponent(projectId)}`, {
+          const res = await authFetch(`/projects/${encodeURIComponent(projectId)}`, {
             method: "DELETE",
           });
 
-          if (!res.ok) {
+          if (!res.ok && res.status !== 404) {
             throw new Error(`Delete failed: ${res.status}`);
           }
 
@@ -111,8 +115,8 @@ export async function loadProjects() {
           pullBtn.innerText = "Pulling...";
           pullBtn.disabled = true;
 
-          const res = await fetch(
-            `http://127.0.0.1:8002/github/pull?project_id=${encodeURIComponent(projectId)}`,
+          const res = await authFetch(
+            `/github/pull?project_id=${encodeURIComponent(projectId)}`,
             { method: "POST" }
           );
 
@@ -120,9 +124,9 @@ export async function loadProjects() {
             throw new Error("Pull failed");
           }
 
-          await fetch("http://127.0.0.1:8002/cloud/db/upload", {
-            method: "POST",
-          });
+          if (hasAuthToken()) {
+            await authFetch("/cloud/db/upload", { method: "POST" });
+          }
 
           pullBtn.innerText = "Updated ✓";
 
@@ -151,7 +155,7 @@ export async function loadProjects() {
     console.error("Failed to load projects:", err);
 
     const container = document.getElementById("projects-list");
-    if (container) {
+    if (container && authDomWriteAllowed(epoch)) {
       container.innerHTML = "<p>Failed to load projects.</p>";
     }
   }

@@ -418,7 +418,7 @@ function renderPublicModeMessage() {
   }
   if (editorContainer) {
     editorContainer.innerHTML =
-      `<p class="muted-text">Project portfolio edits are only available in Private Mode.</p>`;
+      `<p class="muted-text no-wrap-message">Project portfolio edits are only available in Private Mode.</p>`;
   }
   const previewContainer = getPreviewContainer();
   if (previewContainer) {
