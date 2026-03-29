@@ -1,5 +1,7 @@
 import boto3
 import shutil
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from botocore.exceptions import ClientError
 
@@ -132,6 +134,23 @@ def download_database(user_id: str):
 
     if not object_exists(BUCKET_NAME, key):
         return {"status": "no_cloud_db"}
+
+    head = s3.head_object(Bucket=BUCKET_NAME, Key=key)
+    cloud_modified = head["LastModified"]
+    if getattr(cloud_modified, "tzinfo", None) is None:
+        cloud_modified = cloud_modified.replace(tzinfo=timezone.utc)
+
+    if local_db.exists():
+        local_mtime = datetime.fromtimestamp(local_db.stat().st_mtime, tz=timezone.utc)
+        # Local database is newer than cloud backup — do not clobber fresh local data
+        # (e.g. new resumes created since last upload). Push local to cloud instead.
+        if local_mtime > cloud_modified:
+            upload_database(user_id)
+            return {
+                "status": "skipped_local_newer_uploaded",
+                "key": key,
+                "local_db": str(local_db),
+            }
 
     tmp_path = local_db.with_suffix(".tmp")
     download_file(BUCKET_NAME, key, tmp_path)
