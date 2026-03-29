@@ -73,9 +73,55 @@ function dedupeStrings(values) {
   return result;
 }
 
-function buildContributionSummary(project, details) {
+function getEvidenceText(portfolioEntry = {}) {
+  const directEvidence = String(
+    portfolioEntry?.evidence_of_success ||
+      portfolioEntry?.evidenceOfSuccess ||
+      ""
+  ).trim();
+
+  if (directEvidence) {
+    return directEvidence;
+  }
+
+  const structuredEvidence = portfolioEntry?.evidence;
+  if (
+    structuredEvidence &&
+    typeof structuredEvidence === "object" &&
+    Array.isArray(structuredEvidence.items)
+  ) {
+    const values = structuredEvidence.items
+      .map((item) => String(item?.value || "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    if (values.length) {
+      return values.join(" • ");
+    }
+  }
+
+  return "";
+}
+
+function buildContributionSummary(project, details, portfolioEntry = {}) {
+  const keyRole = String(
+    portfolioEntry?.key_role ||
+      portfolioEntry?.keyRole ||
+      ""
+  ).trim();
+
+  const evidence = getEvidenceText(portfolioEntry);
+
   const highlights = dedupeStrings(details?.highlights);
   const technologies = dedupeStrings(details?.technologies);
+
+  if (keyRole && evidence) {
+    return `${keyRole} • ${evidence}`;
+  }
+
+  if (keyRole) {
+    return keyRole;
+  }
 
   if (highlights.length) {
     return highlights[0];
@@ -88,12 +134,18 @@ function buildContributionSummary(project, details) {
   return `Contributed to ${project.total_files || 0} analyzed file${project.total_files === 1 ? "" : "s"} in this project.`;
 }
 
-function buildImpactSummary(project, details) {
+function buildImpactSummary(project, details, portfolioEntry = {}) {
+  const evidence = getEvidenceText(portfolioEntry);
+
   const highlights = dedupeStrings(details?.highlights);
   const impactSignals = [
     `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed`,
     `${project.total_skills || 0} skill signal${project.total_skills === 1 ? "" : "s"} detected`,
   ];
+
+  if (evidence) {
+    return `${evidence} Backed by ${impactSignals.join(" and ")}.`;
+  }
 
   if (highlights.length > 1) {
     return `${highlights[1]} Backed by ${impactSignals.join(" and ")}.`;
@@ -196,6 +248,77 @@ function getProjectDetailsMap(summaryData) {
       highlights: dedupeStrings(project.highlights),
     });
   });
+  return map;
+}
+
+function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
+  const title = String(
+    portfolioEntry?.name ||
+      details?.title ||
+      project.project_id ||
+      ""
+  ).trim();
+
+  const summary = String(
+  portfolioEntry?.portfolio_blurb ||
+    portfolioEntry?.summary ||
+    details?.summary ||
+    ""
+  ).trim() ||
+    `${project.total_files || 0} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills || 0} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+
+  const keyRole = String(
+    portfolioEntry?.key_role ||
+      portfolioEntry?.keyRole ||
+      ""
+  ).trim();
+
+  const evidence = String(
+    portfolioEntry?.evidence_of_success ||
+      portfolioEntry?.evidence ||
+      ""
+  ).trim();
+
+  const templateId = String(portfolioEntry?.template_id || portfolioEntry?.templateId || "classic").trim();
+
+  const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
+  const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
+
+  return {
+    title,
+    summary,
+    keyRole,
+    evidence,
+    templateId,
+    images,
+    coverImage,
+  };
+}
+
+function getProjectCardImageSrc(projectId, portfolioEntry, getPortfolioImageUrl, getProjectThumbnailUrl) {
+  const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
+  const cover = images.find((img) => img?.is_cover) || images[0];
+
+  if (cover?.id && typeof getPortfolioImageUrl === "function") {
+    return getPortfolioImageUrl(projectId, cover.id);
+  }
+
+  if (typeof getProjectThumbnailUrl === "function") {
+    return getProjectThumbnailUrl(projectId);
+  }
+
+  return "";
+}
+
+function buildPortfolioEntryMap(entries) {
+  const map = new Map();
+
+  asArray(entries).forEach((entry) => {
+    const projectId = String(entry?.project_id || "").trim();
+    if (!projectId) return;
+    map.set(projectId, entry);
+  });
+
   return map;
 }
 
@@ -341,7 +464,7 @@ function buildTimelineEntries(timeline) {
   });
 }
 
-function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl }) {
+function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl, portfolioEntryMap, getPortfolioImageUrl }) {
   if (!projects.length) {
     return `
       <div class="empty-state">
@@ -356,17 +479,49 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
   return topProjects
     .map((project, index) => {
       const details = projectDetailsMap.get(project.project_id);
-      const title = details?.title || project.project_id;
-      const summary =
-        details?.summary ||
-        `${project.total_files} file${project.total_files === 1 ? "" : "s"} analyzed • ${project.total_skills} detected skill signal${project.total_skills === 1 ? "" : "s"}`;
+      const portfolioEntry = portfolioEntryMap?.get(String(project.project_id)) || null;
+      const display = getPortfolioProjectDisplay(project, details, portfolioEntry);
 
       const technologies = dedupeStrings(details?.technologies).slice(0, 4);
       const highlights = dedupeStrings(details?.highlights).slice(0, 2);
       const processSteps = isPrivateMode ? buildProjectProcess(project, details, index) : [];
       const evolutionSummary = isPrivateMode ? buildProjectEvolution(project, details) : "";
-      const contributionSummary = buildContributionSummary(project, details);
-      const impactSummary = buildImpactSummary(project, details);
+      const contributionSummary = buildContributionSummary(project, details, portfolioEntry);
+      const impactSummary = buildImpactSummary(project, details, portfolioEntry);
+
+      const imageSrc = getProjectCardImageSrc(
+        project.project_id,
+        portfolioEntry,
+        getPortfolioImageUrl,
+        getProjectThumbnailUrl
+      );
+
+      const mediaMarkup = imageSrc
+        ? `
+          <img
+            class="top-project-thumbnail"
+            src="${escapeHtml(imageSrc)}"
+            alt="${escapeHtml(display.title)} thumbnail"
+            loading="lazy"
+            onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+          />
+          <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
+            <div class="thumbnail-placeholder-art">
+              <span class="thumbnail-placeholder-sun"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+            </div>
+          </div>
+        `
+        : `
+          <div class="top-project-thumbnail-fallback" aria-hidden="true">
+            <div class="thumbnail-placeholder-art">
+              <span class="thumbnail-placeholder-sun"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+            </div>
+          </div>
+        `;
 
       return `
         <div class="top-project-card">
@@ -374,28 +529,16 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
             class="top-project-media top-project-thumbnail-button"
             type="button"
             data-project-thumbnail-trigger="${escapeHtml(project.project_id)}"
-            aria-label="Upload thumbnail for ${escapeHtml(title)}"
+            aria-label="Upload thumbnail for ${escapeHtml(display.title)}"
           >
             <div class="top-project-rank">#${index + 1}</div>
-            <img
-              class="top-project-thumbnail"
-              src="${escapeHtml(getProjectThumbnailUrl(project.project_id))}"
-              alt="${escapeHtml(title)} thumbnail"
-              loading="lazy"
-              onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
-            />
-            <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
-              <div class="thumbnail-placeholder-art">
-                <span class="thumbnail-placeholder-sun"></span>
-                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
-                <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
-              </div>
-            </div>
+            ${mediaMarkup}
             <span class="top-project-thumbnail-overlay">Upload thumbnail</span>
           </button>
+
           <div class="top-project-body">
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(summary)}</p>
+            <h3>${escapeHtml(display.title)}</h3>
+            <p>${escapeHtml(display.summary)}</p>
 
             ${
               highlights.length
@@ -461,6 +604,7 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
               <span class="stack-pill">${project.total_files} Files</span>
               <span class="stack-pill">${project.total_skills} Skills</span>
+              <span class="stack-pill">${escapeHtml(display.templateId.replaceAll("_", " "))}</span>
               ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
             </div>
           </div>
@@ -555,6 +699,7 @@ function buildSkillsTimelineMarkup(timeline) {
 }
 
 export {
+  buildPortfolioEntryMap,
   buildSkillsTimelineMarkup,
   buildTopProjectsMarkup,
   formatTimelineTimestamp,

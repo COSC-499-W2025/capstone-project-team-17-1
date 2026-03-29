@@ -51,8 +51,15 @@ function safeParse(raw) {
           : {},
       jobTarget:
         parsed?.jobTarget && typeof parsed.jobTarget === "object"
-          ? parsed.jobTarget
-          : cloneDefaultState().jobTarget,
+          ? {
+            title: typeof parsed.jobTarget.title === "string" ? parsed.jobTarget.title: "",
+            company: typeof parsed.jobTarget.company === "string" ? parsed.jobTarget.company : "",
+              description:
+                typeof parsed.jobTarget.description === "string"
+                  ? parsed.jobTarget.description
+                  : "",
+            }
+          : { ...DEFAULT_STATE.jobTarget },
     };
   } catch {
     return null;
@@ -71,11 +78,34 @@ function normalizeProjectOverrides(value) {
       return;
     }
 
-    normalized[String(projectId)] = {
+  normalized[String(projectId)] = {
       keyRole: typeof override.keyRole === "string" ? override.keyRole : "",
       evidence: typeof override.evidence === "string" ? override.evidence : "",
       portfolioBlurb:
         typeof override.portfolioBlurb === "string" ? override.portfolioBlurb : "",
+      templateId: typeof override.templateId === "string" ? override.templateId : "classic",
+      images: Array.isArray(override.images) ? override.images : [],
+      analysisDefaults:
+        override.analysisDefaults && typeof override.analysisDefaults === "object"
+          ? {
+              keyRole:
+                typeof override.analysisDefaults.keyRole === "string"
+                  ? override.analysisDefaults.keyRole
+                  : "",
+              evidence:
+                typeof override.analysisDefaults.evidence === "string"
+                  ? override.analysisDefaults.evidence
+                  : "",
+              portfolioBlurb:
+                typeof override.analysisDefaults.portfolioBlurb === "string"
+                  ? override.analysisDefaults.portfolioBlurb
+                  : "",
+            }
+          : {
+              keyRole: "",
+              evidence: "",
+              portfolioBlurb: "",
+            },
     };
   });
 
@@ -97,15 +127,28 @@ function normalizeCustomization(value) {
   };
 
   const featuredProjectIds = Array.isArray(value.featuredProjectIds)
-    ? value.featuredProjectIds.map((id) => String(id))
+    ? value.featuredProjectIds.map((id) => String(id).trim()).filter(Boolean)
     : [];
 
   const projectOverrides = normalizeProjectOverrides(value.projectOverrides);
+
+  const jobTarget =
+    value.jobTarget && typeof value.jobTarget === "object"
+      ? {
+          title: typeof value.jobTarget.title === "string" ? value.jobTarget.title : "",
+          company: typeof value.jobTarget.company === "string" ? value.jobTarget.company : "",
+          description:
+            typeof value.jobTarget.description === "string"
+              ? value.jobTarget.description
+              : "",
+        }
+      : { ...DEFAULT_STATE.jobTarget };
 
   return {
     sectionVisibility,
     featuredProjectIds,
     projectOverrides,
+    jobTarget
   };
 }
 
