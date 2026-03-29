@@ -455,6 +455,29 @@ body.light .theme-toggle::before {
   100% { background-position: -200% 0; }
 }
 
+/* Skeleton: lines/shimmer are tuned for dark cards; override for light surfaces */
+body.light .skeleton-card.card {
+  background: linear-gradient(145deg, #e8ecf4, #f2f5fb);
+  border-color: var(--border);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+body.light .skeleton-line {
+  background: rgba(19, 41, 75, 0.11);
+}
+
+body.light .skeleton-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.72) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
 .tab-panel {
   flex: 1;
   min-height: 0;
@@ -2440,6 +2463,119 @@ transition: all 0.2s ease;
 /* =========================================================
    PORTFOLIO CARD POPUP
 ========================================================= */
+
+.customization-project-editor {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.customization-project-editor.active {
+  border-color: rgba(77, 166, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(77, 166, 255, 0.12);
+}
+
+.customization-project-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.portfolio-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portfolio-card-collapsed-preview {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.portfolio-card-expanded-content {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.portfolio-card-theme-preview {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.portfolio-theme-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.portfolio-theme-cover-image {
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  object-fit: cover;
+  display: block;
+  border-radius: 14px;
+}
+
+.portfolio-theme-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.portfolio-theme-block {
+  display: grid;
+  gap: 6px;
+}
+
+.portfolio-theme-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-theme-gallery-item img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+}
+
+.portfolio-theme-gallery-item p {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+
+
+/* =========================================================
+   LIVE PREVIEW PORTFOLIO
+
+.live-preview-project-card {
+  width: 100%;
+  overflow: hidden;
+}
+
+.live-preview-hero-image {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+}
+
+.portfolio-timeline-card {
+  grid-column: 1 / -1;
+}
 
 .customization-project-editor {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -6545,6 +6681,898 @@ transition: all 0.2s ease;
     min-width: 124px;
     height: 100%;
     font-size: 1rem;
+}
+
+/* =========================================================
+   LIGHT MODE CONSISTENCY OVERRIDES
+body.light .project-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+}
+
+body.light .project-card:hover {
+  background: var(--surface-2);
+}
+
+body.light .upload-overlay,
+body.light .branch-modal {
+  background: var(--overlay-scrim);
+}
+
+body.light .upload-window,
+body.light .branch-modal-box {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-elevated);
+}
+
+body.light .upload-header button {
+  color: var(--text-primary);
+}
+
+body.light .upload-tab {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+body.light .file-upload-name,
+body.light .github-login-sub,
+body.light .github-login-hint {
+  color: var(--text-secondary);
+}
+
+body.light .github-token-input,
+body.light .github-search,
+body.light .github-panel input {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border);
+}
+
+body.light .github-repo-card,
+body.light .github-empty,
+body.light .github-loading {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+body.light .pv-sienna-panel {
+  background: var(--surface-elevated);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-elevated);
+}
+
+body.light .pv-sienna-header,
+body.light .pv-sienna-msg.assistant,
+body.light .pv-sienna-input-row input {
+  color: var(--text-primary);
+}
+
+body.light .pv-sienna-msg.assistant,
+body.light .pv-sienna-input-row input {
+  background: var(--surface-muted);
+  border-color: var(--border-subtle);
+}
+
+body.light .pv-sienna-msg.user {
+  background: #dbeafe;
+  border: 1px solid #bcd6f5;
+  color: #0f2f57;
+}
+
+body.light .pv-sienna-header {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-subtle);
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-sienna-close {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-sienna-close:hover {
+  color: var(--text-primary);
+}
+
+body.light .pv-sienna-input-row {
+  border-top-color: var(--border-subtle);
+}
+
+body.light .sienna-conversation-card,
+body.light .sienna-toolbar.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+}
+
+body.light .sienna-title,
+body.light .sienna-subtitle,
+body.light .sienna-picker-label,
+body.light .sienna-bubble.assistant,
+body.light .sienna-empty-state,
+body.light #sienna-error {
+  color: var(--text-primary);
+}
+
+body.light .sienna-composer {
+  background: linear-gradient(180deg, rgba(245, 247, 250, 0), rgba(245, 247, 250, 0.95) 42%);
+}
+
+body.light .sienna-input-shell {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+}
+
+body.light .sienna-input {
+  color: var(--text-primary);
+}
+
+body.light .sienna-input::placeholder {
+  color: var(--text-secondary);
+}
+
+body.light .sienna-icon-btn,
+body.light .sienna-replay-btn {
+  background: var(--surface-muted);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+body.light .sienna-icon-btn:hover {
+  background: rgba(19, 41, 75, 0.12);
+  border-color: rgba(19, 41, 75, 0.24);
+}
+
+body.light .sienna-markdown pre,
+body.light .pv-sienna-msg pre {
+  background: rgba(19, 41, 75, 0.08);
+  border-color: var(--border-subtle);
+}
+
+/* Unified button system (light mode) */
+body.light .primary-btn,
+body.light .ai-consent-btn,
+body.light .consent-primary-btn,
+body.light .github-upload-btn,
+body.light .preview-btn {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+  border: 1px solid transparent;
+}
+
+body.light .primary-btn:hover,
+body.light .ai-consent-btn:hover,
+body.light .consent-primary-btn:hover,
+body.light .github-upload-btn:hover,
+body.light .preview-btn:hover {
+  filter: brightness(0.96);
+}
+
+body.light .pull-btn,
+body.light .settings-action-btn,
+body.light .upload-tab {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light .pull-btn:hover,
+body.light .settings-action-btn:hover {
+  background: #e6eef9;
+}
+
+/* Neutral button system for non-CTA actions in light mode */
+body.light .btn-secondary,
+body.light #logout-btn,
+body.light .view-btn,
+body.light .project-button,
+body.light #new-resume-btn,
+body.light #refresh-portfolio-btn,
+body.light #analyze-job-btn,
+body.light .settings-save-btn,
+body.light .settings-action-btn,
+body.light .project-details-toggle,
+body.light #consent-settings-details {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light .btn-secondary:hover,
+body.light #logout-btn:hover,
+body.light .view-btn:hover,
+body.light .project-button:hover,
+body.light #new-resume-btn:hover,
+body.light #refresh-portfolio-btn:hover,
+body.light #analyze-job-btn:hover,
+body.light .settings-save-btn:hover,
+body.light .settings-action-btn:hover,
+body.light .project-details-toggle:hover,
+body.light #consent-settings-details:hover {
+  background: #e5e7eb;
+  filter: none;
+}
+
+/* Error Analysis controls: neutral in light mode, keep dark defaults */
+body.light #rerun-analysis-btn,
+body.light .fix-btn {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light #rerun-analysis-btn:hover,
+body.light .fix-btn:hover {
+  background: #e5e7eb;
+}
+
+body.light #logout-btn {
+  border-radius: 999px;
+}
+
+/* Keep only major CTA actions gradient in light mode */
+body.light #upload-project-btn,
+body.light .consent-primary-btn {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+  border: 1px solid transparent;
+}
+
+/* Projects tab upload should be neutral in light mode */
+body.light #upload-project-btn {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light #upload-project-btn:hover {
+  background: #e5e7eb;
+  filter: none;
+}
+
+/* Public/private mode badge readability */
+body.light .mode-badge {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light .mode-badge.public,
+body.light .mode-badge.private {
+  background: #eef2f7;
+  color: #111827;
+  border-color: var(--border);
+}
+
+/* Collaborative/individual badges should be subtle and readable */
+body.light .badge-individual,
+body.light .badge-collaborative {
+  background: #eef2f7;
+  color: #111827;
+  border: 1px solid var(--border);
+}
+
+/* Resume card hover checkbox should match light theme */
+body.light .resume-cb-visual {
+  border-color: var(--input-border);
+  background: var(--input-bg);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
+}
+
+body.light .resume-select-cb:checked + .resume-cb-visual {
+  background: #4f8ef7;
+  border-color: #4f8ef7;
+}
+
+body.light .resume-list-card.re-selected {
+  border-color: #a9c6eb;
+  background: #eaf2fd;
+}
+
+body.light .resume-expand-chevron {
+  color: var(--text-secondary);
+}
+
+body.light .resume-list-expand-inner {
+  border-top-color: var(--border);
+}
+
+/* New Resume modal primary action should be neutral in light mode */
+body.light #resume-generate-btn {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light #resume-generate-btn:hover {
+  background: #e5e7eb;
+  filter: none;
+}
+
+/* Portfolio filter popup (tab-selection) light-mode surface/readability */
+body.light .tab-selection-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+body.light .tab-selection-title {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .tab-selection-subtitle {
+  color: var(--text-primary);
+}
+
+body.light .tab-selection-option {
+  background: var(--card-inner-bg);
+  border-color: var(--border);
+}
+
+body.light .tab-selection-option:hover {
+  background: #e5e7eb;
+  border-color: var(--border);
+}
+
+body.light .tab-selection-option:has(input:checked) {
+  background: #dbe8f8;
+  border-color: #a9c6eb;
+  box-shadow: inset 0 0 0 1px rgba(31, 79, 138, 0.12);
+}
+
+body.light .tab-selection-option-check {
+  border-color: var(--input-border);
+  background: var(--input-bg);
+}
+
+body.light .tab-selection-option-check::after {
+  background: #2f7de1;
+}
+
+body.light .tab-selection-option-label {
+  color: var(--text-primary);
+}
+
+/* Logout confirmation modal + buttons in light mode */
+body.light .logout-modal {
+  background: rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(4px);
+}
+
+body.light .logout-modal-dialog {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2);
+}
+
+body.light .logout-modal-title {
+  color: var(--text-primary);
+}
+
+body.light .logout-modal-body {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .logout-btn-cancel,
+body.light .logout-btn-confirm {
+  background: var(--card-inner-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+body.light .logout-btn-cancel:hover,
+body.light .logout-btn-confirm:hover {
+  background: #e5e7eb;
+}
+
+body.light .re-add-item-btn,
+body.light .re-add-section-btn {
+  border-color: var(--button-outline-border);
+  color: var(--button-outline-text);
+}
+
+/* Search / input consistency (light mode) */
+body.light .dashboard-search-input,
+body.light .dashboard-filter-select,
+body.light .dashboard-filter-select option,
+body.light .dashboard-search-input::placeholder {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+body.light .dashboard-search-input,
+body.light .dashboard-filter-select {
+  border: 1px solid var(--input-border);
+}
+
+body.light .dashboard-search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Dashboard inner cards / sections */
+body.light .health-mini-card,
+body.light .error-item,
+body.light .error-empty-state,
+body.light .error-healthy-state,
+body.light .pv-analysis-section,
+body.light .pv-stat-card {
+  background: var(--card-inner-bg);
+  border: 1px solid var(--border);
+}
+
+/* Project viewer — Analysis & Collaboration: readable text on light cards */
+body.light .pv-analysis-section h3 {
+  color: var(--text-primary);
+}
+
+body.light .pv-stat-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-name,
+body.light .pv-skill-name {
+  color: var(--text-primary);
+}
+
+body.light .pv-lang-pct,
+body.light .pv-skill-pct {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-bar-bg,
+body.light .pv-skill-bar-bg,
+body.light .pv-period-bar {
+  background: rgba(19, 41, 75, 0.08);
+}
+
+body.light .pv-tag {
+  background: rgba(43, 119, 214, 0.12);
+  color: #1f4f8a;
+  border-color: rgba(43, 119, 214, 0.25);
+}
+
+body.light .pv-tag-bot {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: rgba(180, 83, 9, 0.35);
+  color: #9a3412;
+}
+
+body.light .pv-collab-row {
+  background: rgba(19, 41, 75, 0.04);
+}
+
+body.light .pv-collab-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-value {
+  color: #1f4f8a;
+}
+
+body.light .pv-timeline-year {
+  color: var(--text-primary);
+}
+
+body.light .pv-no-data {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-title {
+  color: var(--text-primary);
+}
+
+body.light .pv-collab-notice {
+  background: rgba(234, 179, 8, 0.18);
+  border-color: rgba(180, 130, 0, 0.35);
+  color: #7c5200;
+}
+
+body.light .pv-period-labels {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-ranking-header {
+  color: var(--text-secondary);
+  opacity: 1;
+  border-bottom-color: var(--border);
+}
+
+body.light .pv-ranking-row {
+  background: rgba(19, 41, 75, 0.03);
+}
+
+body.light .pv-ranking-row:hover {
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-rank-col {
+  color: #1f4f8a;
+}
+
+body.light .pv-rank-first {
+  background: rgba(43, 119, 214, 0.1);
+  border-color: rgba(43, 119, 214, 0.28);
+}
+
+body.light .pv-analysis-loading,
+body.light .pv-analysis-error {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+body.light .pv-analysis-hint {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .health-project,
+body.light .health-stats {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+/* System health gauge readability (light mode) */
+body.light .status-dot.active { background: var(--gauge-good); }
+body.light .status-dot.inactive { background: var(--gauge-critical); }
+body.light .bg-arc { stroke: var(--gauge-track); }
+
+/* Recent projects: improve inner-card separation in light mode */
+body.light .recent-project-item {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
+}
+
+body.light .recent-project-item:hover {
+  background: #eef3fb;
+}
+
+body.light .recent-project-item .project-header,
+body.light .recent-project-item .project-meta,
+body.light .recent-project-item .project-date {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+/* Mini VS Code viewer: full light-mode treatment */
+body.light .pv-top-bar {
+  color: var(--text-primary);
+}
+
+body.light .pv-back-btn {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: #111827;
+  font-weight: 700;
+}
+
+body.light .pv-back-btn:hover {
+  color: #0f3d75;
+  text-decoration: underline;
+  transform: none;
+}
+
+body.light .pv-title,
+body.light .pv-project-name {
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+  background: none;
+}
+
+body.light .pv-tab {
+  background: #eef3fb;
+  color: var(--text-secondary);
+}
+
+body.light .pv-tab:hover {
+  background: #e6eef9;
+  color: var(--text-primary);
+}
+
+body.light .pv-tab.active {
+  background: #dde9f8;
+  color: #183a67;
+  border-bottom-color: #2b77d6;
+}
+
+body.light .pv-sidebar {
+  background: #f2f6fc;
+  border-right-color: var(--border);
+}
+
+body.light .pv-tree-item:hover {
+  background: #e9f1fb;
+}
+
+body.light .pv-tree-item.file:hover {
+  background: #dde9f8;
+}
+
+body.light .pv-tree-arrow {
+  color: rgba(19, 41, 75, 0.5);
+}
+
+body.light .pv-file-tabs {
+  background: #f2f6fc;
+  border-bottom-color: var(--border);
+}
+
+body.light .pv-file-tab {
+  background: #edf3fb;
+  border-right-color: var(--border);
+  color: var(--text-primary);
+}
+
+body.light .pv-file-tab:hover {
+  background: #e5edf8;
+}
+
+body.light .pv-file-tab.active {
+  background: #dbe8f8;
+  border-bottom-color: #2b77d6;
+}
+
+body.light .pv-code-header {
+  background: #eef3fb;
+  border-bottom-color: var(--border);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+body.light .pv-code-lang {
+  background: #dbe8f8;
+  color: #1f4f8a;
+}
+
+body.light .pv-code {
+  background: #f8fbff;
+  color: #1a2f4e;
+}
+
+body.light .pv-line-num {
+  color: rgba(26, 47, 78, 0.35);
+}
+
+/* Ask Sienna chat bubbles: clear user/AI separation */
+body.light .sienna-bubble.user {
+  background: #dbeafe;
+  color: #0f2f57;
+  border: 1px solid #bcd6f5;
+}
+
+body.light .sienna-bubble.assistant {
+  background: #f4f6fa;
+  color: #1a2f4e;
+  border: 1px solid #d9e1ee;
+}
+
+/* Settings cards and layered sections */
+body.light .settings-sidebar {
+  background: #f3f7fc;
+  border-right-color: var(--border);
+}
+
+body.light .settings-sidebar-header {
+  border-bottom-color: var(--border);
+}
+
+body.light .settings-nav-item {
+  color: var(--text-secondary);
+}
+
+body.light .settings-nav-item:hover {
+  background: #e8f0fa;
+  color: var(--text-primary);
+}
+
+body.light .settings-nav-item.active {
+  background: #dbe8f8;
+  color: #1f4f8a;
+}
+
+body.light .settings-tab-panel .settings-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(24, 45, 78, 0.08);
+}
+
+body.light .settings-card-header {
+  border-bottom-color: var(--border);
+}
+
+body.light .edu-card {
+  background: var(--card-inner);
+  border-color: var(--border);
+}
+
+/* Most-used skills toggle: readable and consistent */
+body.light .skills-view-btn {
+  background: #eef3fb;
+  border-color: var(--border);
+  color: #111827;
+}
+
+body.light .skills-view-btn.active {
+  background: #dbe8f8;
+  border-color: #a9c6eb;
+  color: #1f4f8a;
+}
+
+/* Final critical light-mode readability fixes */
+body.light .sienna-composer,
+body.light .sienna-input-shell,
+body.light .sienna-input {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+body.light .sienna-input-shell {
+  z-index: 3;
+}
+
+body.light .sienna-project-select,
+body.light .sienna-picker-label,
+body.light .sienna-voice-toggle,
+body.light .sienna-voice-toggle span {
+  color: var(--text-primary);
+}
+
+body.light .sienna-project-select,
+body.light .sienna-voice-toggle {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+}
+
+body.light .secondary-btn,
+body.light .export-btn {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light .secondary-btn:hover,
+body.light .export-btn:hover {
+  background: #e6eef9;
+}
+
+body.light .preview-btn {
+  color: var(--text-primary);
+}
+
+body.light .pv-tab {
+  color: var(--text-primary);
+}
+
+body.light .customization-toggle-item,
+body.light .customization-project-pick,
+body.light .customization-project-editor,
+body.light .customization-featured-order-item {
+  background: var(--card-inner);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+body.light .customization-rank-wrap input,
+body.light .contributor-select,
+body.light .heatmap-select {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border);
+}
+
+#recent-activity {
+  min-height: 260px !important;
+  display: block !important;
+  overflow-y: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* new addition which is fx */
+
+body {
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(0, 183, 255, 0.10), transparent 30%),
+    radial-gradient(circle at 85% 18%, rgba(116, 60, 255, 0.12), transparent 28%),
+    radial-gradient(circle at 52% 82%, rgba(0, 255, 170, 0.07), transparent 32%);
+  pointer-events: none;
+  z-index: -4;
+}
+
+.aurora-scene {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -3;
+  overflow: hidden;
+}
+
+.aurora-blob {
+  position: absolute;
+  width: 38vw;
+  height: 38vw;
+  filter: blur(70px);
+  border-radius: 50%;
+  opacity: 0.22;
+  mix-blend-mode: screen;
+  animation: auroraFloat 18s ease-in-out infinite;
+}
+
+.aurora-a {
+  top: -8%;
+  left: 6%;
+  background: radial-gradient(circle, rgba(0, 179, 255, 0.65), transparent 65%);
+}
+
+.aurora-b {
+  top: 8%;
+  right: -4%;
+  background: radial-gradient(circle, rgba(115, 68, 255, 0.55), transparent 65%);
+  animation-delay: -6s;
+}
+
+.aurora-c {
+  bottom: -12%;
+  left: 28%;
+  background: radial-gradient(circle, rgba(0, 255, 174, 0.35), transparent 65%);
+  animation-delay: -12s;
+}
+
+.aurora-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+}
+
+.aurora-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image:
+    radial-gradient(circle at 20% 20%, white 0.5px, transparent 0.8px),
+    radial-gradient(circle at 70% 60%, white 0.5px, transparent 0.8px),
+    radial-gradient(circle at 40% 80%, white 0.5px, transparent 0.8px);
+  background-size: 140px 140px;
+}
+
+.cursor-glow {
+  position: fixed;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(71, 175, 255, 0.20), rgba(71, 175, 255, 0.06) 45%, transparent 72%);
+  filter: blur(12px);
+  z-index: -2;
+  transition: transform 0.08s linear;
+}
+
+@keyframes auroraFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
   
   #chat-clear-btn {

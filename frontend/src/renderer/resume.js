@@ -92,6 +92,12 @@ function saveStarred(starredSet) {
   localStorage.setItem("resume_list_starred", JSON.stringify([...starredSet]));
 }
 
+function _resumeSortTime(r) {
+  const raw = r.updated_at || r.created_at || "";
+  const t = Date.parse(String(raw).replace(" ", "T"));
+  return Number.isFinite(t) ? t : 0;
+}
+
 function applySavedOrder(resumes) {
   const saved = getSavedResumeOrder();
   if (!saved.length) return resumes;
@@ -101,6 +107,18 @@ function applySavedOrder(resumes) {
     const bi = rank.has(String(b.id)) ? rank.get(String(b.id)) : Infinity;
     return ai - bi;
   });
+  if (!saved.length) {
+    return [...resumes].sort((a, b) => _resumeSortTime(b) - _resumeSortTime(a));
+  }
+  const rank = new Map(saved.map((id, i) => [String(id), i]));
+  const inOrder = [];
+  const newItems = [];
+  for (const r of resumes) {
+    (rank.has(String(r.id)) ? inOrder : newItems).push(r);
+  }
+  inOrder.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
+  newItems.sort((a, b) => _resumeSortTime(b) - _resumeSortTime(a));
+  return [...newItems, ...inOrder];
 }
 
 function setupListDragDrop(container) {
