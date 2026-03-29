@@ -1,5 +1,3 @@
-import json
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -10,44 +8,20 @@ from fastapi.testclient import TestClient
 from capstone import storage
 
 
-def _make_db(tmp_path: Path):
-    """
-    Create the SQLite DB in the exact location expected by API helpers:
-      sqlite3.connect(Path(db_dir) / "capstone.db")
-    """
-    db_path = tmp_path / "data" / "guest" / "capstone.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS project_analysis (
-        project_id TEXT NOT NULL,
-        classification TEXT,
-        primary_contributor TEXT,
-        snapshot TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    )
-    """)
-    conn.commit()
-    conn.close()
-    return db_path
-
-
 def _insert_snapshot(tmp_path: Path, project_id: str = "p1"):
-    db_path = _make_db(tmp_path)
-    conn = sqlite3.connect(db_path)
-
     snapshot = {
         "metrics": {"Accuracy": "92%", "Users": "50+"},
         "skills": ["Python"],
     }
-
-    conn.execute(
-        "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (project_id, "demo", "raunak", json.dumps(snapshot), "2026-01-11T00:00:00Z"),
+    conn = storage.open_db()
+    storage.store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification="demo",
+        primary_contributor="raunak",
+        snapshot=snapshot,
     )
-    conn.commit()
-    conn.close()
+    storage.close_db()
 
 
 def test_portfolios_evidence_happy_path(tmp_path, monkeypatch):
@@ -107,7 +81,8 @@ def test_portfolios_evidence_not_found(tmp_path, monkeypatch):
     storage.close_db()
     storage.BASE_DIR = tmp_path
     storage.CURRENT_USER = None
-    _make_db(tmp_path)  # empty DB but table exists
+    storage.open_db()  # initialise schema; no data inserted
+    storage.close_db()
 
     app = create_app(db_dir=str(tmp_path), auth_token=None)
     client = TestClient(app)

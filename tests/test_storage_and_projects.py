@@ -70,6 +70,10 @@ class StorageTests(unittest.TestCase):
         base_dir = Path(self._tmpdir.name) / "db"
         conn = storage.open_db(base_dir)
 
+        # contributors must exist before store_contributor_stats (post-M22 schema)
+        storage.upsert_contributor(conn, "alice")
+        storage.upsert_contributor(conn, "bob")
+
         storage.store_contributor_stats(
             conn,
             project_id="demo",
