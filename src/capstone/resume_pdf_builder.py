@@ -182,6 +182,7 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
     summary = (
         _as_clean_text(entry.get("entrySummary"))
         or _as_clean_text(entry.get("summary"))
+        or _as_clean_text(entry.get("content"))
         or _as_clean_text(entry.get("entryBody"))
         or _as_clean_text(entry.get("body"))
         or _as_clean_text(entry.get("excerpt"))
@@ -475,7 +476,7 @@ def render_latex_from_template(
 
 
 def _pick_tex_engine() -> str | None:
-    for engine in ("xelatex", "lualatex", "pdflatex"):
+    for engine in ("tectonic", "xelatex", "lualatex", "pdflatex"):
         if shutil.which(engine):
             return engine
     return None
@@ -498,7 +499,9 @@ def build_pdf_with_latex(
     )
     engine = _pick_tex_engine()
     if not engine:
-        raise RuntimeError("No LaTeX engine found. Install xelatex, lualatex, or pdflatex.")
+        raise RuntimeError(
+            "No LaTeX engine found. Install tectonic, xelatex, lualatex, or pdflatex."
+        )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
@@ -506,8 +509,13 @@ def build_pdf_with_latex(
         pdf_path = tmp / "resume.pdf"
         tex_path.write_text(tex_source, encoding="utf-8")
 
+        if engine == "tectonic":
+            cmd = [engine, "--keep-logs", "--outdir", str(tmp), tex_path.name]
+        else:
+            cmd = [engine, "-interaction=nonstopmode", "-halt-on-error", tex_path.name]
+
         proc = subprocess.run(
-            [engine, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
+            cmd,
             cwd=tmp,
             capture_output=True,
             text=True,
@@ -523,5 +531,4 @@ def build_pdf_with_latex(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(pdf_path.read_bytes())
         return output_path
-
 

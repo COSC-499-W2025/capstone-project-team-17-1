@@ -11,15 +11,16 @@ from pathlib import Path
 from typing import BinaryIO, Tuple
 
 from .logging_utils import get_logger
+from .storage import BASE_DIR  # <-- IMPORTANT
 
 logger = get_logger(__name__)
 
-# Default root where file blobs are stored when no bucketed subdirectories are used.
-DEFAULT_FILES_ROOT = Path("data") / "files"
+# Production-safe files root (AppData when frozen)
+DEFAULT_FILES_ROOT = BASE_DIR / "data" / "files"
+DEFAULT_FILES_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def hash_file_stream(path: Path | str, *, chunk_size: int = 64 * 1024) -> Tuple[str, int]:
-    """Stream a file to compute sha256 hex digest and size."""
     hasher = hashlib.sha256()
     size = 0
     with open(path, "rb") as fh:
@@ -32,9 +33,8 @@ def hash_file_stream(path: Path | str, *, chunk_size: int = 64 * 1024) -> Tuple[
     return hasher.hexdigest(), size
 
 
-def _storage_path(root: Path, file_hash: str) -> Path:
-    """Return flat storage path for a given hash."""
-    return root / file_hash
+def _storage_path(root: Path, file_hash: str, ext: str = "") -> Path:
+    return root / f"{file_hash}{ext}"
 
 
 def ensure_file(
@@ -48,17 +48,15 @@ def ensure_file(
     files_root: Path | None = None,
     upload_id: str | None = None,
 ) -> dict:
-    """Ingest a file with deduplication. Returns metadata dict."""
     root = files_root or DEFAULT_FILES_ROOT
     root.mkdir(parents=True, exist_ok=True)
 
     file_hash, size_bytes = hash_file_stream(source_path)
-    file_id = file_hash  # content-addressable
-
-    # Reuse provided upload_id for incremental uploads; otherwise create new
+    ext = Path(original_name or "").suffix.lower() if original_name else ""
+    file_id = file_hash
     effective_upload_id = upload_id or str(uuid.uuid4())
 
-    with conn:  # ensures transactional behavior
+    with conn:
         existing = conn.execute(
             "SELECT file_id, path, size_bytes FROM files WHERE hash = ?",
             (file_hash,),
@@ -66,17 +64,19 @@ def ensure_file(
 
     if existing:
         existing_id, path_str, stored_size = existing
+
         if stored_size != size_bytes:
             raise ValueError("Hash collision detected: stored size differs")
 
-        dest_path = Path(path_str or _storage_path(root, file_hash))
+        dest_path = Path(path_str) if path_str else _storage_path(root, file_hash, ext)
 
-        # If the DB says it exists but file missing, restore it
         if not dest_path.exists():
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = dest_path.with_suffix(".tmp")
+
             with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
                 shutil.copyfileobj(src, dst, length=64 * 1024)
+
             os.replace(tmp_path, dest_path)
 
             conn.execute(
@@ -112,14 +112,15 @@ def ensure_file(
             "upload_id": effective_upload_id,
         }
 
-    # Not deduped: store new blob and insert file row
-    dest_path = _storage_path(root, file_hash)
+    # Store new blob
+    dest_path = _storage_path(root, file_hash, ext)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dest_path.with_suffix(".tmp")
 
     with open(source_path, "rb") as src, open(tmp_path, "wb") as dst:
         shutil.copyfileobj(src, dst, length=64 * 1024)
-    os.replace(tmp_path, dest_path)  # atomic move
+
+    os.replace(tmp_path, dest_path)
 
     conn.execute(
         """
@@ -159,7 +160,6 @@ def _record_upload(
     file_hash: str,
     file_id: str,
 ) -> None:
-    """Insert an upload record (non-destructive)."""
     conn.execute(
         """
         INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id)
@@ -170,65 +170,24 @@ def _record_upload(
 
 
 def open_file(conn: sqlite3.Connection, file_id: str, *, files_root: Path | None = None) -> BinaryIO:
-    """Open a stored file by id and return a binary handle."""
     row = conn.execute(
         "SELECT path FROM files WHERE file_id = ?",
         (file_id,),
     ).fetchone()
+
     if not row:
         raise FileNotFoundError(f"file_id not found: {file_id}")
+
     path = Path(row[0])
-    # allow overriding root to facilitate tests or relocation
-    if files_root:
-        dest_path = _storage_path(files_root, file_id)
-        if dest_path.exists():
-            path = dest_path
-    return open(path, "rb")
-
-
-def cleanup_orphans(
-    conn: sqlite3.Connection,
-    *,
-    files_root: Path | None = None,
-    dry_run: bool = False,
-) -> dict:
-    """
-    Remove file blobs and DB rows that are no longer referenced.
-
-    Orphan criteria:
-      - files.ref_count <= 0, or
-      - no matching uploads rows for the file_id.
-    Returns {"checked": n, "deleted_rows": x, "deleted_files": y}.
-    """
     root = files_root or DEFAULT_FILES_ROOT
-    stats = {"checked": 0, "deleted_rows": 0, "deleted_files": 0}
 
-    rows = conn.execute(
-        """
-        SELECT f.file_id, f.path, f.ref_count,
-               (SELECT COUNT(1) FROM uploads u WHERE u.file_id = f.file_id) AS upload_refs
-        FROM files f
-        """
-    ).fetchall()
+    if not path.exists():
+        # Recover from cross-machine paths (e.g. Windows absolute path synced into DB).
+        candidates = list(root.glob(f"{file_id}*"))
+        if candidates:
+            path = candidates[0]
+            conn.execute("UPDATE files SET path = ? WHERE file_id = ?", (str(path), file_id))
+        else:
+            raise FileNotFoundError(f"stored file path does not exist for file_id={file_id}: {row[0]}")
 
-    for file_id, path_str, ref_count, upload_refs in rows:
-        stats["checked"] += 1
-        is_orphan = (ref_count or 0) <= 0 or (upload_refs or 0) == 0
-        if not is_orphan:
-            continue
-
-        dest_path = Path(path_str or _storage_path(root, file_id))
-        if not dry_run and dest_path.exists():
-            try:
-                dest_path.unlink()
-                stats["deleted_files"] += 1
-            except Exception:
-                logger.warning("Failed to delete orphan file %s", dest_path, exc_info=True)
-
-        if not dry_run:
-            conn.execute("DELETE FROM files WHERE file_id = ?", (file_id,))
-            stats["deleted_rows"] += 1
-
-    if not dry_run:
-        conn.commit()
-    return stats
+    return open(path, "rb")

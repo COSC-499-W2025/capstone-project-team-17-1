@@ -13,22 +13,78 @@ This module centralizes:
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import json
 import sqlite3
 import uuid
 from pathlib import Path
 from typing import Iterable, Optional
-
+from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
+import os
+import sys
 
 logger = get_logger(__name__)
 
-DB_DIR = Path("data")
+def _user_dir(username: str) -> str:
+    """Return a filesystem-safe, case-sensitive directory name for a username.
+    Uses SHA256 so 'erensun408' and 'ErenSun408' always get different dirs,
+    even on case-insensitive filesystems (Windows/macOS).
+    """
+    return hashlib.sha256(username.encode()).hexdigest()[:24]
+
+
+def _load_dotenv():
+    """Load key=value pairs from a .env file in the project root (if present).
+    Only sets variables that are not already set in the environment.
+    No external dependencies required.
+    """
+    # Walk up from this file to find the project root (.env lives next to pyproject.toml)
+    here = Path(__file__).resolve()
+    for parent in [here.parent, here.parent.parent, here.parent.parent.parent]:
+        env_file = parent / ".env"
+        if env_file.exists():
+            with open(env_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+            break
+
+_load_dotenv()
+
+
+def resolve_storage_user_key(user_id: str | None) -> str | None:
+    """Return user_id stripped if it represents a real user, else None."""
+    token = (user_id or "").strip()
+    return token or None
+
+def get_base_data_dir():
+
+    local_appdata = os.getenv("LOCALAPPDATA")
+    appdata = os.getenv("APPDATA")
+    home = os.path.expanduser("~")
+    root = local_appdata or appdata or home
+    base = Path(root) / "Loom"
+
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
-
+CURRENT_USER = None
+_REQUEST_STORAGE_USER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "storage_current_user", default=None
+)
+_SCHEMA_READY: set[str] = set()
 
 def _is_noreply_email(email: str | None) -> bool:
     if not email:
@@ -63,12 +119,130 @@ def _default_github_url(username: str | None) -> str | None:
     return f"https://github.com/{token}"
 
 
+def _has_required_schema(conn: sqlite3.Connection) -> bool:
+    """
+    Return True when the core tables needed for read endpoints already exist.
+    This allows the app to keep serving reads if the database is temporarily
+    opened in a readonly state and schema bootstrapping cannot run.
+    """
+    required = {
+        "project_analysis",
+        "files",
+        "uploads",
+        "error_analysis_results",
+    }
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+    ).fetchall()
+    existing = {str(row[0]) for row in rows}
+    return required.issubset(existing)
+
+
 # Schema + migrations
 
 def _initialize_schema(conn: sqlite3.Connection) -> None:
-    # Main analysis snapshots per project
-    conn.execute(
-        """
+    """Create all tables and indexes. No migration logic — see _run_migrations."""
+
+    # --- Parent tables (no FKs) ---
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user (
+            id INTEGER PRIMARY KEY CHECK(id = 1),
+            username TEXT NOT NULL,
+            password_hash TEXT,
+            github_username TEXT,
+            github_url TEXT,
+            github_token_enc TEXT,
+            full_name TEXT,
+            phone_number TEXT,
+            city TEXT,
+            state_region TEXT,
+            portfolio_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TIMESTAMP
+        )
+    """)
+    # Ensure singleton row exists so resumes/user_education FKs are always satisfiable.
+    # upsert_user() overwrites this with the real login profile on first sign-in.
+    conn.execute("INSERT OR IGNORE INTO user (id, username) VALUES (1, 'guest')")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contributors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            github_username TEXT NOT NULL,
+            email TEXT,
+            github_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # project_metadata removed in M21 — superseded by projects.status / first_commit_at / last_commit_at
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      TEXT NOT NULL UNIQUE,
+            name            TEXT NOT NULL,
+            source          TEXT NOT NULL DEFAULT 'zip',
+            github_url      TEXT,
+            github_branch   TEXT,
+            has_git         INTEGER NOT NULL DEFAULT 0,
+            type            TEXT,
+            status          TEXT NOT NULL DEFAULT 'ongoing',
+            first_commit_at TEXT,
+            last_commit_at  TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS files (
+            file_id TEXT PRIMARY KEY,
+            hash TEXT UNIQUE,
+            size_bytes INTEGER NOT NULL,
+            mime TEXT,
+            path TEXT NOT NULL,
+            ref_count INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS privacy_consent (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_consent INTEGER DEFAULT 0,
+            external_consent INTEGER DEFAULT 0,
+            updated_at TEXT
+        )
+    """)
+
+    # github_projects removed in M21 — superseded by projects (source, github_url, github_branch)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS github_auth (
+            id INTEGER PRIMARY KEY,
+            access_token TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # --- Child tables ---
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS uploads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            upload_id TEXT NOT NULL,
+            original_name TEXT,
+            uploader TEXT,
+            source TEXT,
+            hash TEXT,
+            file_id TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (file_id) REFERENCES files(file_id)
+        )
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_analysis (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
@@ -77,14 +251,13 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             snapshot JSON NOT NULL,
             repo_url TEXT,
             token_enc TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            zip_path TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
-        """
+    """)
 
-    )
-        # Human-in-the-loop edits / overrides for portfolio + resume output
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_overrides (
             project_id TEXT PRIMARY KEY,
             key_role TEXT,
@@ -93,129 +266,82 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             resume_bullets_json TEXT,
             selected INTEGER,
             rank INTEGER,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    # Contributor stats history (append-only; we fetch latest per contributor)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS project_metadata (
-            project_id TEXT PRIMARY KEY,
-            start_date TEXT,
-            end_date TEXT,
-            status TEXT
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
     """)
-    
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS contributor_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            contributor TEXT NOT NULL,
-            user_id INTEGER,
-            commits INTEGER NOT NULL DEFAULT 0,
-            pull_requests INTEGER NOT NULL DEFAULT 0,
-            issues INTEGER NOT NULL DEFAULT 0,
-            reviews INTEGER NOT NULL DEFAULT 0,
-            score REAL NOT NULL DEFAULT 0,
-            weights_hash TEXT,
-            source TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS error_analysis_results (
+            project_id TEXT PRIMARY KEY,
+            errors_json TEXT,
+            updated_at TEXT,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
             filename TEXT,
             content_type TEXT,
             image_b64 TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_project_images_project
-        ON project_images (project_id, created_at)
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
-        ON contributor_stats (project_id, contributor, created_at)
-        """
-    )
-
-    # Users derived from contribution data (GitHub or local logs)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            email TEXT,
-            full_name TEXT,
-            phone_number TEXT,
-            city TEXT,
-            state_region TEXT,
-            github_url TEXT,
-            portfolio_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
-        ON users (username, COALESCE(email, ''))
-        """
-    )
+    """)
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_projects (
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS project_evidence (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
             project_id TEXT NOT NULL,
-            contributor_name TEXT,
-            first_commit_at TEXT,
-            last_commit_at TEXT,
+            evidence_type TEXT NOT NULL,
+            label TEXT,
+            value TEXT,
+            source TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (user_id, project_id),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_user_projects_project
-        ON user_projects (project_id)
-        """
-    )
+    """)
 
-    # Modular resume schema (MVP).
-    conn.execute(
-        """
+    # contributor_stats removed in M22 — superseded by project_contributors
+    # user_projects removed in M22 — superseded by project_contributors
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS project_contributors (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      TEXT NOT NULL,
+            contributor_id  INTEGER NOT NULL,
+            first_commit_at TEXT,
+            last_commit_at  TEXT,
+            commits         INTEGER NOT NULL DEFAULT 0,
+            pull_requests   INTEGER NOT NULL DEFAULT 0,
+            issues          INTEGER NOT NULL DEFAULT 0,
+            reviews         INTEGER NOT NULL DEFAULT 0,
+            score           REAL NOT NULL DEFAULT 0,
+            weights_hash    TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, contributor_id),
+            FOREIGN KEY (contributor_id) REFERENCES contributors(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS resumes (
             id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL DEFAULT 1,
             title TEXT NOT NULL DEFAULT 'Default Resume',
             target_role TEXT,
             status TEXT NOT NULL DEFAULT 'draft',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS resume_sections (
             id TEXT PRIMARY KEY,
             resume_id TEXT NOT NULL,
@@ -228,10 +354,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS resume_items (
             id TEXT PRIMARY KEY,
             section_id TEXT NOT NULL,
@@ -249,613 +374,260 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_resumes_user
-        ON resumes (user_id, updated_at)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
-        ON resume_sections (resume_id, sort_order)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_resume_items_section
-        ON resume_items (section_id, sort_order)
-        """
-    )
+    """)
 
-    # Evidence of success (metrics/feedback/evaluations), append-only
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS project_evidence (
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_education (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            evidence_type TEXT NOT NULL,   -- metric | feedback | evaluation | other
-            label TEXT,                    -- short name e.g. "Stars", "Grade", "Client feedback"
-            value TEXT,                    -- store as text; can be numeric or freeform
-            source TEXT,                   -- where it came from (user, github, etc.)
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_id INTEGER NOT NULL DEFAULT 1,
+            university TEXT NOT NULL,
+            degree TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            city TEXT,
+            state TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_project_evidence_project
-        ON project_evidence (project_id, created_at)
-        """
-    )
+    """)
 
-    # ---- Migrations / backfills ----
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_images_project ON project_images (project_id, created_at)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_contributors_identity ON contributors (github_username, COALESCE(email, ''))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_contributors_project ON project_contributors (project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_contributors_contributor ON project_contributors (contributor_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes (user_id, updated_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_sections_resume ON resume_sections (resume_id, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resume_items_section ON resume_items (section_id, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_evidence_project ON project_evidence (project_id, created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files (hash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file ON uploads (file_id)")
 
-    # 1) contributor_stats legacy migration: if an older schema has "line_changes"
-    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
-    columns = {row[1] for row in info}
-    if "line_changes" in columns:
-        conn.execute("ALTER TABLE contributor_stats RENAME TO contributor_stats_old")
-        conn.execute(
-            """
-            CREATE TABLE contributor_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id TEXT NOT NULL,
-                contributor TEXT NOT NULL,
-                commits INTEGER NOT NULL DEFAULT 0,
-                pull_requests INTEGER NOT NULL DEFAULT 0,
-                issues INTEGER NOT NULL DEFAULT 0,
-                reviews INTEGER NOT NULL DEFAULT 0,
-                score REAL NOT NULL DEFAULT 0,
-                weights_hash TEXT,
-                source TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        select_weights = "weights_hash" if "weights_hash" in columns else "NULL AS weights_hash"
-        conn.execute(
-            f"""
-            INSERT INTO contributor_stats (
-                project_id,
-                contributor,
-                commits,
-                pull_requests,
-                issues,
-                reviews,
-                score,
-                weights_hash,
-                source,
-                created_at
-            )
-            SELECT
-                project_id,
-                contributor,
-                commits,
-                pull_requests,
-                issues,
-                reviews,
-                score,
-                {select_weights},
-                source,
-                created_at
-            FROM contributor_stats_old
-            """
-        )
-        conn.execute("DROP TABLE contributor_stats_old")
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_contributor_stats_project
-            ON contributor_stats (project_id, contributor, created_at)
-            """
-        )
-        conn.commit()
-
-    # Add user_id column to contributor_stats when missing
-    info = conn.execute("PRAGMA table_info(contributor_stats)").fetchall()
-    columns = {row[1] for row in info}
-    if "user_id" not in columns:
-        conn.execute("ALTER TABLE contributor_stats ADD COLUMN user_id INTEGER")
-        conn.commit()
-
-    # Add profile columns to users when missing (backward-compatible migration).
-    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
-    user_columns = {row[1] for row in user_info}
-    for column_name, column_type in (
-        ("full_name", "TEXT"),
-        ("phone_number", "TEXT"),
-        ("city", "TEXT"),
-        ("state_region", "TEXT"),
-        ("github_url", "TEXT"),
-        ("portfolio_url", "TEXT"),
-    ):
-        if column_name not in user_columns:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
 
-    # Add per-user per-project activity period columns when missing.
-    user_projects_info = conn.execute("PRAGMA table_info(user_projects)").fetchall()
-    user_projects_columns = {row[1] for row in user_projects_info}
-    for column_name in ("first_commit_at", "last_commit_at"):
-        if column_name not in user_projects_columns:
-            conn.execute(f"ALTER TABLE user_projects ADD COLUMN {column_name} TEXT")
-    conn.commit()
 
-    desired_users_order = [
-        "id",
-        "username",
-        "email",
-        "full_name",
-        "phone_number",
-        "city",
-        "state_region",
-        "github_url",
-        "portfolio_url",
-        "created_at",
-        "updated_at",
+_SQLITE_INTERNAL = {"sqlite_sequence", "sqlite_stat1", "sqlite_stat2", "sqlite_stat3", "sqlite_stat4"}
+
+
+
+def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
+    """Return True when the live DB schema matches _initialize_schema output.
+
+    Rules:
+    - Expected and actual table sets must match exactly.
+    - For every table, the column sets must match exactly.
+    """
+    ref = sqlite3.connect(":memory:")
+    try:
+        _initialize_schema(ref)
+        expected_tables = {
+            row[0] for row in ref.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        } - _SQLITE_INTERNAL
+        actual_tables = {
+            row[0] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        } - _SQLITE_INTERNAL
+        if expected_tables != actual_tables:
+            logger.info(
+                "Schema mismatch in tables: expected_only=%s actual_only=%s",
+                sorted(expected_tables - actual_tables),
+                sorted(actual_tables - expected_tables),
+            )
+            return False
+        for table in expected_tables:
+            expected_cols = {
+                row[1]
+                for row in ref.execute(f"PRAGMA table_info('{table}')")
+            }
+            actual_cols = {
+                row[1]
+                for row in conn.execute(f"PRAGMA table_info('{table}')")
+            }
+            if expected_cols != actual_cols:
+                logger.info(
+                    "Schema mismatch in table %r: expected %s, got %s",
+                    table,
+                    expected_cols - actual_cols,
+                    actual_cols - expected_cols,
+                )
+                return False
+        return True
+    finally:
+        ref.close()
+
+
+def _nuclear_reset(conn: sqlite3.Connection) -> None:
+    """Drop all user tables and reinitialise from _initialize_schema."""
+    logger.warning("Schema mismatch detected — dropping all tables and reinitialising")
+    conn.execute("PRAGMA foreign_keys = OFF")
+    tables = [
+        row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
     ]
-    user_info = conn.execute("PRAGMA table_info(users)").fetchall()
-    current_users_order = [row[1] for row in user_info]
-    if all(col in current_users_order for col in desired_users_order) and current_users_order != desired_users_order:
-        conn.execute("PRAGMA foreign_keys = OFF")
-        conn.execute("ALTER TABLE users RENAME TO users_old")
-        conn.execute(
-            """
-            CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                email TEXT,
-                full_name TEXT,
-                phone_number TEXT,
-                city TEXT,
-                state_region TEXT,
-                github_url TEXT,
-                portfolio_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO users (
-                id, username, email, full_name, phone_number, city, state_region,
-                github_url, portfolio_url, created_at, updated_at
-            )
-            SELECT
-                id,
-                username,
-                email,
-                full_name,
-                phone_number,
-                city,
-                state_region,
-                CASE
-                    WHEN github_url IS NULL OR TRIM(github_url) = ''
-                    THEN ('https://github.com/' || username)
-                    ELSE github_url
-                END,
-                portfolio_url,
-                created_at,
-                updated_at
-            FROM users_old
-            """
-        )
-        conn.execute("DROP TABLE users_old")
-        conn.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity
-            ON users (username, COALESCE(email, ''))
-            """
-        )
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.commit()
-
-    # Repair legacy FK if user_projects points to users_old.
-    fk_rows = conn.execute("PRAGMA foreign_key_list(user_projects)").fetchall()
-    fk_targets = {row[2] for row in fk_rows if len(row) > 2}
-    if "users_old" in fk_targets:
-        conn.execute("ALTER TABLE user_projects RENAME TO user_projects_old")
-        conn.execute(
-            """
-            CREATE TABLE user_projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                project_id TEXT NOT NULL,
-                contributor_name TEXT,
-                first_commit_at TEXT,
-                last_commit_at TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (user_id, project_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_user_projects_project
-            ON user_projects (project_id)
-            """
-        )
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO user_projects (
-                id, user_id, project_id, contributor_name, first_commit_at, last_commit_at, created_at
-            )
-            SELECT id, user_id, project_id, contributor_name, NULL, NULL, created_at
-            FROM user_projects_old
-            """
-        )
-        conn.execute("DROP TABLE user_projects_old")
-        conn.commit()
-
-    # Align resume timestamp columns with users (UTC CURRENT_TIMESTAMP defaults).
-    resume_ts_specs = {
-        "resumes": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
-        "resume_sections": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
-        "resume_items": {"created_at": "CURRENT_TIMESTAMP", "updated_at": "CURRENT_TIMESTAMP"},
-    }
-    needs_resume_ts_migration = False
-    for table_name, expected in resume_ts_specs.items():
-        table_info = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-        column_map = {row[1]: row for row in table_info}
-        for column_name, expected_default in expected.items():
-            row = column_map.get(column_name)
-            if not row:
-                needs_resume_ts_migration = True
-                break
-            col_type = str(row[2] or "").upper()
-            default_value = str(row[4] or "").upper()
-            if col_type != "TIMESTAMP" or default_value != expected_default:
-                needs_resume_ts_migration = True
-                break
-        if needs_resume_ts_migration:
-            break
-
-    if needs_resume_ts_migration:
-        conn.execute("PRAGMA foreign_keys = OFF")
-
-        conn.execute("ALTER TABLE resumes RENAME TO resumes_old")
-        conn.execute(
-            """
-            CREATE TABLE resumes (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL DEFAULT 'Default Resume',
-                target_role TEXT,
-                status TEXT NOT NULL DEFAULT 'draft',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO resumes (id, user_id, title, target_role, status, created_at, updated_at)
-            SELECT id, user_id, title, target_role, status, created_at, updated_at
-            FROM resumes_old
-            """
-        )
-        conn.execute("DROP TABLE resumes_old")
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_resumes_user
-            ON resumes (user_id, updated_at)
-            """
-        )
-
-        conn.execute("ALTER TABLE resume_sections RENAME TO resume_sections_old")
-        conn.execute(
-            """
-            CREATE TABLE resume_sections (
-                id TEXT PRIMARY KEY,
-                resume_id TEXT NOT NULL,
-                key TEXT NOT NULL,
-                label TEXT NOT NULL,
-                is_custom INTEGER NOT NULL DEFAULT 0,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                is_enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO resume_sections (
-                id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
-            )
-            SELECT id, resume_id, key, label, is_custom, sort_order, is_enabled, created_at, updated_at
-            FROM resume_sections_old
-            """
-        )
-        conn.execute("DROP TABLE resume_sections_old")
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_resume_sections_resume
-            ON resume_sections (resume_id, sort_order)
-            """
-        )
-
-        conn.execute("ALTER TABLE resume_items RENAME TO resume_items_old")
-        conn.execute(
-            """
-            CREATE TABLE resume_items (
-                id TEXT PRIMARY KEY,
-                section_id TEXT NOT NULL,
-                title TEXT,
-                subtitle TEXT,
-                start_date TEXT,
-                end_date TEXT,
-                location TEXT,
-                content TEXT,
-                bullets_json TEXT,
-                metadata_json TEXT,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                is_enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (section_id) REFERENCES resume_sections(id) ON DELETE CASCADE
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO resume_items (
-                id, section_id, title, subtitle, start_date, end_date, location, content,
-                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
-            )
-            SELECT
-                id, section_id, title, subtitle, start_date, end_date, location, content,
-                bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
-            FROM resume_items_old
-            """
-        )
-        conn.execute("DROP TABLE resume_items_old")
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_resume_items_section
-            ON resume_items (section_id, sort_order)
-            """
-        )
-
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.commit()
-
-    # 2) project_analysis legacy columns backfill / add columns if missing
-    info = conn.execute("PRAGMA table_info(project_analysis)").fetchall()
-    columns = {row[1] for row in info}
-
-    # Some older DBs may have had project_name instead of project_id
-    if "project_id" not in columns:
-        conn.execute("ALTER TABLE project_analysis ADD COLUMN project_id TEXT")
-    if "repo_url" not in columns:
-        conn.execute("ALTER TABLE project_analysis ADD COLUMN repo_url TEXT")
-    if "token_enc" not in columns:
-        conn.execute("ALTER TABLE project_analysis ADD COLUMN token_enc TEXT")
-
-    if "project_name" in columns:
-        # Copy project_name into project_id if project_id is NULL
-        conn.execute(
-            """
-            UPDATE project_analysis
-            SET project_id = COALESCE(project_id, project_name)
-            WHERE project_id IS NULL
-            """
-        )
+    for table in tables:
+        conn.execute(f"DROP TABLE IF EXISTS [{table}]")
     conn.commit()
+    _initialize_schema(conn)
 
-    # 3) legacy github_sources table migration into project_analysis
-    legacy_source = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='github_sources'"
-    ).fetchone()
-    if legacy_source:
-        rows = conn.execute("SELECT project_id, repo_url, token_enc FROM github_sources").fetchall()
-        for project_id, repo_url, token_enc in rows:
-            existing = conn.execute(
-                "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
-                (project_id,),
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    """
-                    UPDATE project_analysis
-                    SET repo_url = ?, token_enc = ?
-                    WHERE project_id = ?
-                    """,
-                    (repo_url, token_enc, project_id),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO project_analysis (
-                        project_id,
-                        classification,
-                        primary_contributor,
-                        snapshot,
-                        repo_url,
-                        token_enc
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (project_id, "unknown", None, json.dumps({}), repo_url, token_enc),
-        )
-        conn.execute("DROP TABLE github_sources")
-        conn.commit()
 
-    # content-addressable file store tables
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS files (
-            file_id TEXT PRIMARY KEY,
-            hash TEXT UNIQUE,
-            size_bytes INTEGER NOT NULL,
-            mime TEXT,
-            path TEXT NOT NULL,
-            ref_count INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS uploads (
-            upload_id TEXT PRIMARY KEY,
-            original_name TEXT,
-            uploader TEXT,
-            source TEXT,
-            hash TEXT NOT NULL,
-            file_id TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_files_hash
-        ON files (hash)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_uploads_file
-        ON uploads (file_id)
-        """
-    )
-    _repair_user_identity_links(conn)
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Check schema currency; nuclear-reset when stale."""
+    if not _schema_matches_expected(conn):
+        _nuclear_reset(conn)
+
+
+def save_error_results(conn, project_id: str, errors: list[dict]):
+    conn.execute("""
+        INSERT INTO error_analysis_results (project_id, errors_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(project_id)
+        DO UPDATE SET
+            errors_json = excluded.errors_json,
+            updated_at = excluded.updated_at
+    """, (project_id, json.dumps(errors), datetime.utcnow().isoformat()))
     conn.commit()
 
 
-def _repair_user_identity_links(conn: sqlite3.Connection) -> None:
+def fetch_error_results(conn):
+    rows = conn.execute("""
+        SELECT project_id, errors_json
+        FROM error_analysis_results
+    """).fetchall()
+
+    # No rows means analysis has never been run; return None so the caller
+    # can distinguish "never analyzed" from "analyzed and clean" (empty list).
+    if not rows:
+        return None
+
+    results = []
+    for row in rows:
+        project_id, errors_json = row
+        errors = json.loads(errors_json) if errors_json else []
+        for err in errors:
+            err["project_id"] = project_id
+        results.extend(errors)
+
+    return results
+
+
+def set_current_user(user_id: str | None):
+    global CURRENT_USER
+    resolved = resolve_storage_user_key(user_id)
+    CURRENT_USER = resolved
+    _REQUEST_STORAGE_USER.set(resolved)
+
+
+def bind_request_user(user_id: str | None) -> contextvars.Token:
     """
-    Repair user identity rows that were merged by generic noreply emails.
+    Bind request-local storage user context and mirror it globally for legacy code.
+    Returns a context token so middleware can reset after the request completes.
     """
-    users = conn.execute(
-        "SELECT id, username, email FROM users ORDER BY id"
-    ).fetchall()
+    resolved = resolve_storage_user_key(user_id)
+    token = _REQUEST_STORAGE_USER.set(resolved)
+    global CURRENT_USER
+    CURRENT_USER = resolved
+    return token
 
-    # First pass: normalize/remove noreply emails while preserving uniqueness.
-    for user_id, username, email in users:
-        if not _is_noreply_email(email):
-            continue
-        existing = conn.execute(
-            "SELECT id FROM users WHERE username = ? AND (email IS NULL OR TRIM(email) = '') ORDER BY id LIMIT 1",
-            (username,),
-        ).fetchone()
-        if existing and int(existing[0]) != int(user_id):
-            canonical_id = int(existing[0])
-            conn.execute(
-                "UPDATE contributor_stats SET user_id = ? WHERE user_id = ?",
-                (canonical_id, int(user_id)),
-            )
-            old_links = conn.execute(
-                """
-                SELECT project_id, contributor_name
-                FROM user_projects
-                WHERE user_id = ?
-                """,
-                (int(user_id),),
-            ).fetchall()
-            for project_id, contributor_name in old_links:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
-                    VALUES (?, ?, ?)
-                    """,
-                    (canonical_id, project_id, contributor_name),
-                )
-            conn.execute("DELETE FROM user_projects WHERE user_id = ?", (int(user_id),))
-            conn.execute("DELETE FROM users WHERE id = ?", (int(user_id),))
-        else:
-            conn.execute("UPDATE users SET email = NULL WHERE id = ?", (int(user_id),))
 
-    # Second pass: enforce contributor -> username mapping for every stats row.
-    contributors = conn.execute(
-        "SELECT DISTINCT contributor FROM contributor_stats WHERE contributor IS NOT NULL AND TRIM(contributor) != ''"
-    ).fetchall()
-    for (contributor,) in contributors:
-        row = conn.execute(
-            "SELECT id FROM users WHERE username = ? ORDER BY id LIMIT 1",
-            (contributor,),
-        ).fetchone()
-        if row:
-            canonical_user_id = int(row[0])
-        else:
-            cursor = conn.execute(
-                "INSERT INTO users (username, email, github_url) VALUES (?, NULL, ?)",
-                (contributor, _default_github_url(contributor)),
-            )
-            canonical_user_id = int(cursor.lastrowid)
+def reset_request_user(token: contextvars.Token) -> None:
+    try:
+        _REQUEST_STORAGE_USER.reset(token)
+    except Exception:
+        # Defensive fallback to guest context if reset token is invalid.
+        _REQUEST_STORAGE_USER.set(None)
 
-        conn.execute(
-            "UPDATE contributor_stats SET user_id = ? WHERE contributor = ?",
-            (canonical_user_id, contributor),
-        )
 
-        projects = conn.execute(
-            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? AND project_id IS NOT NULL",
-            (contributor,),
-        ).fetchall()
-        for (project_id,) in projects:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO user_projects (user_id, project_id, contributor_name)
-                VALUES (?, ?, ?)
-                """,
-                (canonical_user_id, project_id, contributor),
-            )
-            conn.execute(
-                """
-                DELETE FROM user_projects
-                WHERE contributor_name = ?
-                  AND project_id = ?
-                  AND user_id != ?
-                """,
-                (contributor, project_id, canonical_user_id),
-            )
+def get_current_user() -> str | None:
+    scoped_user = _REQUEST_STORAGE_USER.get()
+    if scoped_user is not None:
+        return resolve_storage_user_key(scoped_user)
+    return resolve_storage_user_key(CURRENT_USER)
 
+_UNSET = object()  # sentinel — distinguishes "not passed" from None
+
+
+def get_database_path(user=_UNSET) -> Path:
+    # Allow overriding the DB path for local debugging.
+    # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
+    # override = os.getenv("LOOM_DB_PATH")
+    override = None
+    if override:
+        p = Path(override)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
+    if user is _UNSET:
+        storage_user_key = get_current_user()
+    elif user is None:
+        storage_user_key = None
+    else:
+        storage_user_key = resolve_storage_user_key(user)
+
+    if storage_user_key:
+        path = BASE_DIR / "data" / "users" / _user_dir(storage_user_key)
+        path.mkdir(parents=True, exist_ok=True)
+        return path / "capstone.db"
+
+    path = BASE_DIR / "data" / "guest"
+    path.mkdir(parents=True, exist_ok=True)
+    return path / "capstone.db"
 
 # -----------------------------
 # DB lifecycle
 # -----------------------------
-def open_db(base_dir: Path | None = None) -> sqlite3.Connection:
-    """Open (or create) a sqlite database stored under the configured directory."""
-    global _DB_HANDLE, _DB_PATH
-
-    target_dir = base_dir or DB_DIR
+def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
+    target_dir = base_dir or BASE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
-    db_path = target_dir / "capstone.db"
-
-    if _DB_HANDLE is not None and _DB_PATH == db_path:
-        logger.debug("Reusing existing database handle at %s", db_path)
-        return _DB_HANDLE
-
-    if _DB_HANDLE is not None:
-        try:
-            _DB_HANDLE.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close previous database handle", exc_info=True)
+    db_path = get_database_path(user=user)
+    db_key = str(db_path.resolve())
 
     logger.info("Opening database at %s", db_path)
-    _DB_PATH = db_path
-    _DB_HANDLE = sqlite3.connect(db_path, check_same_thread=False)
 
-    # Reasonable defaults for sqlite usage
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+
     try:
-        _DB_HANDLE.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA foreign_keys = ON")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA busy_timeout = 5000")
     except Exception:
         pass
 
-    _initialize_schema(_DB_HANDLE)
-    _migrate_uploads_table(_DB_HANDLE)
-    return _DB_HANDLE
+    if db_key not in _SCHEMA_READY:
+        try:
+            _run_migrations(conn)
+            _initialize_schema(conn)
+            _SCHEMA_READY.add(db_key)
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            if "readonly" not in message and "locked" not in message:
+                raise
+            if not _has_required_schema(conn):
+                raise
+            _SCHEMA_READY.add(db_key)
+            logger.warning(
+                "Skipping schema initialization for %s because database is temporarily unavailable for writes: %s",
+                db_path,
+                exc,
+            )
 
+    return conn
 
-def close_db() -> None:
+def close_db(conn: sqlite3.Connection | None = None) -> None:
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:  # pragma: no cover
+            logger.warning("Failed to close DB connection", exc_info=True)
+        return
+
     """Close the shared database handle if it exists."""
     global _DB_HANDLE, _DB_PATH
     if _DB_HANDLE is not None:
@@ -867,50 +639,6 @@ def close_db() -> None:
             _DB_HANDLE = None
             _DB_PATH = None
 
-# --- migration: allow multiple uploads per upload_id (incremental snapshots)
-def _migrate_uploads_table(conn: sqlite3.Connection) -> None:
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='uploads'"
-    ).fetchone()
-    if not row or not row[0]:
-        return
-
-    sql = row[0].lower()
-    # If upload_id is a primary key/unique, we need to migrate
-    if "upload_id" in sql and ("primary key" in sql or "unique" in sql):
-        conn.execute("ALTER TABLE uploads RENAME TO uploads_old")
-
-        # New schema: autoincrement primary key, upload_id is NOT unique
-        conn.execute(
-            """
-            CREATE TABLE uploads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                upload_id TEXT NOT NULL,
-                original_name TEXT,
-                uploader TEXT,
-                source TEXT,
-                hash TEXT,
-                file_id TEXT NOT NULL,
-                created_at TEXT DEFAULT (datetime('now')),
-                FOREIGN KEY(file_id) REFERENCES files(file_id)
-            )
-            """
-        )
-
-        # Copy old rows over (id will be auto-generated)
-        conn.execute(
-            """
-            INSERT INTO uploads (upload_id, original_name, uploader, source, hash, file_id, created_at)
-            SELECT upload_id, original_name, uploader, source, hash, file_id, created_at
-            FROM uploads_old
-            """
-        )
-
-        conn.execute("DROP TABLE uploads_old")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_upload_id ON uploads(upload_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file_id ON uploads(file_id)")
-        conn.commit()
-
 # Snapshots
 
 def store_analysis_snapshot(
@@ -919,8 +647,10 @@ def store_analysis_snapshot(
     classification: str = "unknown",
     primary_contributor: str | None = None,
     snapshot: dict | None = None,
+    zip_path: str | None = None,
+    repo_url: str | None = None,
 ) -> None:
-    """Insert a new snapshot row for a project."""
+    """Insert a new snapshot row for a project and upsert the projects table."""
     if not project_id:
         raise ValueError("project_id must be provided")
 
@@ -929,14 +659,39 @@ def store_analysis_snapshot(
     doc.setdefault("classification", classification)
     doc.setdefault("primary_contributor", primary_contributor)
 
+    # Ensure the parent projects row exists before inserting into project_analysis (FK)
+    _collab = doc.get("collaboration") or {}
+    _first = _collab.get("first_commit_date")
+    _last = _collab.get("last_commit_date")
+    _source = "zip" if zip_path else "github"
+    _github_url = repo_url or doc.get("repo_url") or doc.get("github_url")
+    _type = classification if classification not in ("unknown", "") else None
+    upsert_project(
+        conn,
+        project_id,
+        source=_source,
+        github_url=_github_url,
+        has_git=bool(_first),
+        type=_type,
+        first_commit_at=_first,
+        last_commit_at=_last,
+    )
+
     payload = json.dumps(doc)
     conn.execute(
         """
-        INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO project_analysis (
+            project_id,
+            classification,
+            primary_contributor,
+            snapshot,
+            zip_path
+        )
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (project_id, classification, primary_contributor, payload),
+        (project_id, classification, primary_contributor, payload, zip_path),
     )
+
     conn.commit()
 
 
@@ -970,6 +725,46 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     row = cursor.fetchone()
     return json.loads(row[0]) if row else None
 
+def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
+    """
+    Returns the latest snapshot + zip_path for each project.
+    Used exclusively for AI error analysis.
+    Uses MAX(id) rowid-based selection to match recent_projects.py and avoid
+    datetime() parsing failures on rows with NULL or non-standard created_at.
+    """
+
+    rows = conn.execute(
+        """
+        SELECT pa.project_id,
+               pa.snapshot,
+               pa.zip_path,
+               pa.created_at
+        FROM project_analysis pa
+        WHERE pa.id IN (
+            SELECT MAX(id)
+            FROM project_analysis
+            GROUP BY project_id
+        )
+        ORDER BY pa.id DESC
+        """
+    ).fetchall()
+
+    snapshots = []
+
+    for project_id, snapshot_json, zip_path, created_at in rows:
+        try:
+            snapshot = json.loads(snapshot_json)
+        except Exception:
+            snapshot = {}
+
+        snapshots.append({
+            "project_id": project_id,
+            "snapshot": snapshot,
+            "zip_path": zip_path,
+            "created_at": created_at,
+        })
+
+    return snapshots
 
 def fetch_project_snapshot_history(
     conn: sqlite3.Connection,
@@ -1220,6 +1015,9 @@ def store_github_source(
 
     token_enc = _encrypt_token(token)
 
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id, source="github", github_url=repo_url)
+
     existing = conn.execute(
         "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
         (project_id,),
@@ -1310,7 +1108,7 @@ def store_uploaded_file_bytes(
 
     # Where to store the file on disk
     # Keep it deterministic so dedupe is easy.
-    root = base_dir or DB_DIR
+    root = base_dir or BASE_DIR
     files_dir = root / "blobs"
     files_dir.mkdir(parents=True, exist_ok=True)
     blob_path = files_dir / f"{file_hash}.bin"
@@ -1408,40 +1206,51 @@ def store_contributor_stats(
     reviews: int = 0,
     score: float = 0.0,
     weights_hash: str | None = None,
-    source: str | None = None,
+    source: str | None = None,  # kept for API compat; no longer stored
 ) -> None:
     if not project_id:
         raise ValueError("project_id must be provided")
     if not contributor:
         raise ValueError("contributor must be provided")
 
+    contributor_id = int(user_id) if user_id else None
+    if contributor_id is None:
+        row = conn.execute(
+            "SELECT id FROM contributors WHERE github_username = ? ORDER BY id LIMIT 1",
+            (contributor,),
+        ).fetchone()
+        if row:
+            contributor_id = int(row[0])
+    if contributor_id is None:
+        return  # cannot store without a linked contributor
+
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id)
+
     conn.execute(
         """
-        INSERT INTO contributor_stats (
-            project_id,
-            contributor,
-            user_id,
-            commits,
-            pull_requests,
-            issues,
-            reviews,
-            score,
-            weights_hash,
-            source
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO project_contributors
+            (project_id, contributor_id, commits, pull_requests, issues, reviews,
+             score, weights_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, contributor_id) DO UPDATE SET
+            commits       = excluded.commits,
+            pull_requests = excluded.pull_requests,
+            issues        = excluded.issues,
+            reviews       = excluded.reviews,
+            score         = excluded.score,
+            weights_hash  = COALESCE(excluded.weights_hash, weights_hash),
+            updated_at    = CURRENT_TIMESTAMP
         """,
         (
             project_id,
-            contributor,
-            user_id,
+            contributor_id,
             int(commits),
             int(pull_requests),
             int(issues),
             int(reviews),
             float(score),
             weights_hash,
-            source,
         ),
     )
     conn.commit()
@@ -1456,39 +1265,24 @@ def fetch_latest_contributor_stats(
 
     cursor = conn.execute(
         """
-        WITH latest_time AS (
-            SELECT contributor, MAX(created_at) AS created_at
-            FROM contributor_stats
-            WHERE project_id = ?
-            GROUP BY contributor
-        ),
-        latest_row AS (
-            SELECT cs.contributor, MAX(cs.id) AS id
-            FROM contributor_stats cs
-            JOIN latest_time lt
-              ON lt.contributor = cs.contributor
-             AND lt.created_at = cs.created_at
-            WHERE cs.project_id = ?
-            GROUP BY cs.contributor
-        )
         SELECT
-            cs.id,
-            cs.project_id,
-            cs.contributor,
-            cs.user_id,
-            cs.commits,
-            cs.pull_requests,
-            cs.issues,
-            cs.reviews,
-            cs.score,
-            cs.weights_hash,
-            cs.source,
-            cs.created_at
-        FROM contributor_stats cs
-        JOIN latest_row lr ON lr.id = cs.id
-        ORDER BY cs.score DESC, cs.contributor ASC
+            pc.id,
+            pc.project_id,
+            c.github_username AS contributor,
+            pc.contributor_id  AS user_id,
+            pc.commits,
+            pc.pull_requests,
+            pc.issues,
+            pc.reviews,
+            pc.score,
+            pc.weights_hash,
+            pc.created_at
+        FROM project_contributors pc
+        JOIN contributors c ON c.id = pc.contributor_id
+        WHERE pc.project_id = ?
+        ORDER BY pc.score DESC, c.github_username ASC
         """,
-        (project_id, project_id),
+        (project_id,),
     )
 
     rows = cursor.fetchall()
@@ -1496,7 +1290,7 @@ def fetch_latest_contributor_stats(
     for row in rows:
         (
             row_id,
-            project_id,
+            proj_id,
             contributor,
             user_id,
             commits,
@@ -1505,22 +1299,21 @@ def fetch_latest_contributor_stats(
             reviews,
             score,
             weights_hash,
-            source,
             created_at,
         ) = row
         payload.append(
             {
-            "id": row_id,
-            "project_id": project_id,
-            "contributor": contributor,
-            "user_id": user_id,
-            "commits": commits,
-            "pull_requests": pull_requests,
-            "issues": issues,
-            "reviews": reviews,
+                "id": row_id,
+                "project_id": proj_id,
+                "contributor": contributor,
+                "user_id": user_id,
+                "commits": commits,
+                "pull_requests": pull_requests,
+                "issues": issues,
+                "reviews": reviews,
                 "score": score,
                 "weights_hash": weights_hash,
-                "source": source,
+                "source": None,  # removed; kept for dict-key compat
                 "created_at": created_at,
             }
         )
@@ -1619,8 +1412,8 @@ def update_contributor_score(
 ) -> None:
     conn.execute(
         """
-        UPDATE contributor_stats
-        SET score = ?, weights_hash = ?
+        UPDATE project_contributors
+        SET score = ?, weights_hash = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (float(score), weights_hash, int(row_id)),
@@ -1711,37 +1504,37 @@ def fetch_project_overrides(conn: sqlite3.Connection, project_id: str) -> dict |
 # Users and user-project links
 # -----------------------------
 
-def upsert_user(
+def upsert_contributor(
     conn: sqlite3.Connection,
-    username: str,
+    github_username: str,
     *,
     email: str | None = None,
 ) -> int:
-    if not username:
-        raise ValueError("username must be provided")
-    username = str(username).strip()
+    if not github_username:
+        raise ValueError("github_username must be provided")
+    github_username = str(github_username).strip()
     email = _normalize_user_email(email)
-    default_github = _default_github_url(username)
+    default_github = _default_github_url(github_username)
 
-    # Prefer matching by email when available, otherwise by username.
+    # Prefer matching by email when available, otherwise by github_username.
     row = None
     if email:
         row = conn.execute(
-            "SELECT id, username, email FROM users WHERE email = ? LIMIT 1",
+            "SELECT id, github_username, email FROM contributors WHERE email = ? LIMIT 1",
             (email,),
         ).fetchone()
     if not row:
         row = conn.execute(
-            "SELECT id, username, email FROM users WHERE username = ? LIMIT 1",
-            (username,),
+            "SELECT id, github_username, email FROM contributors WHERE github_username = ? LIMIT 1",
+            (github_username,),
         ).fetchone()
     if row:
         user_id = int(row[0])
         conn.execute(
             """
-            UPDATE users
+            UPDATE contributors
             SET
-                username = COALESCE(?, username),
+                github_username = COALESCE(?, github_username),
                 email = COALESCE(?, email),
                 github_url = CASE
                     WHEN github_url IS NULL OR TRIM(github_url) = ''
@@ -1751,90 +1544,188 @@ def upsert_user(
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (username, email, default_github, user_id),
+            (github_username, email, default_github, user_id),
         )
         conn.commit()
         return user_id
 
     cursor = conn.execute(
         """
-        INSERT INTO users (username, email, github_url)
+        INSERT INTO contributors (github_username, email, github_url)
         VALUES (?, ?, ?)
         """,
-        (username, email, default_github),
+        (github_username, email, default_github),
     )
     conn.commit()
     return int(cursor.lastrowid)
 
 
-def get_user_profile(conn: sqlite3.Connection, user_id: int) -> dict | None:
+def get_contributor_profile(conn: sqlite3.Connection, contributor_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT
-            id,
-            username,
-            email,
-            full_name,
-            phone_number,
-            city,
-            state_region,
-            github_url,
-            portfolio_url
-        FROM users
+        SELECT id, github_username, email, github_url
+        FROM contributors
         WHERE id = ?
         LIMIT 1
         """,
-        (int(user_id),),
+        (int(contributor_id),),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": int(row[0]),
+        "github_username": row[1],
+        "email": row[2],
+        "github_url": row[3],
+    }
+
+
+def get_user(conn: sqlite3.Connection) -> dict | None:
+    """Return the single login account row, or None if not yet set."""
+    row = conn.execute(
+        """
+        SELECT id, username, password_hash, github_username, github_url,
+               github_token_enc, full_name, phone_number, city, state_region,
+               portfolio_url, created_at, last_login_at
+        FROM user
+        WHERE id = 1
+        LIMIT 1
+        """
     ).fetchone()
     if not row:
         return None
     return {
         "id": int(row[0]),
         "username": row[1],
-        "email": row[2],
-        "full_name": row[3],
-        "phone_number": row[4],
-        "city": row[5],
-        "state_region": row[6],
-        "github_url": row[7],
-        "portfolio_url": row[8],
+        "password_hash": row[2],
+        "github_username": row[3],
+        "github_url": row[4],
+        "github_token_enc": row[5],
+        "full_name": row[6],
+        "phone_number": row[7],
+        "city": row[8],
+        "state_region": row[9],
+        "portfolio_url": row[10],
+        "created_at": row[11],
+        "last_login_at": row[12],
     }
+
+
+def upsert_user(
+    conn: sqlite3.Connection,
+    username: str,
+    *,
+    password_hash: str | None = None,
+    github_username: str | None = None,
+    github_url: str | None = None,
+    github_token_enc: str | None = None,
+    full_name: str | None = None,
+    phone_number: str | None = None,
+    city: str | None = None,
+    state_region: str | None = None,
+    portfolio_url: str | None = None,
+) -> None:
+    if not username:
+        raise ValueError("username must be provided")
+    conn.execute(
+        """
+        INSERT INTO user (id, username, password_hash, github_username, github_url,
+                          github_token_enc, full_name, phone_number, city, state_region,
+                          portfolio_url)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            username = excluded.username,
+            password_hash = COALESCE(excluded.password_hash, password_hash),
+            github_username = COALESCE(excluded.github_username, github_username),
+            github_url = COALESCE(excluded.github_url, github_url),
+            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            full_name = COALESCE(excluded.full_name, full_name),
+            phone_number = COALESCE(excluded.phone_number, phone_number),
+            city = COALESCE(excluded.city, city),
+            state_region = COALESCE(excluded.state_region, state_region),
+            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url)
+        """,
+        (username, password_hash, github_username, github_url, github_token_enc,
+         full_name, phone_number, city, state_region, portfolio_url),
+    )
+    conn.commit()
 
 
 def update_user_profile(
     conn: sqlite3.Connection,
-    user_id: int,
     *,
     full_name: str | None = None,
     phone_number: str | None = None,
     city: str | None = None,
     state_region: str | None = None,
+    github_username: str | None = None,
     github_url: str | None = None,
     portfolio_url: str | None = None,
 ) -> None:
+    """Update profile fields on the login account row."""
     conn.execute(
         """
-        UPDATE users
+        UPDATE user
         SET
             full_name = COALESCE(?, full_name),
             phone_number = COALESCE(?, phone_number),
             city = COALESCE(?, city),
             state_region = COALESCE(?, state_region),
+            github_username = COALESCE(?, github_username),
             github_url = COALESCE(?, github_url),
-            portfolio_url = COALESCE(?, portfolio_url),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+            portfolio_url = COALESCE(?, portfolio_url)
+        WHERE id = 1
         """,
-        (
-            full_name,
-            phone_number,
-            city,
-            state_region,
-            github_url,
-            portfolio_url,
-            int(user_id),
-        ),
+        (full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
     )
+    conn.commit()
+
+
+def get_user_education(conn: sqlite3.Connection, user_id: int) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, university, degree, start_date, end_date, city, state, sort_order
+        FROM user_education
+        WHERE user_id = ?
+        ORDER BY sort_order, id
+        """,
+        (int(user_id),),
+    ).fetchall()
+    return [
+        {
+            "id": r[0],
+            "university": r[1],
+            "degree": r[2],
+            "start_date": r[3],
+            "end_date": r[4],
+            "city": r[5],
+            "state": r[6],
+            "sort_order": r[7],
+        }
+        for r in rows
+    ]
+
+
+def replace_user_education(conn: sqlite3.Connection, user_id: int, entries: list[dict]) -> None:
+    """Replace all education entries for a user."""
+    conn.execute("DELETE FROM user_education WHERE user_id = ?", (int(user_id),))
+    for idx, entry in enumerate(entries):
+        conn.execute(
+            """
+            INSERT INTO user_education (user_id, university, degree, start_date, end_date, city, state, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(user_id),
+                str(entry.get("university") or "").strip(),
+                str(entry.get("degree") or "").strip() or None,
+                str(entry.get("start_date") or "").strip() or None,
+                str(entry.get("end_date") or "").strip() or None,
+                str(entry.get("city") or "").strip() or None,
+                str(entry.get("state") or "").strip() or None,
+                idx,
+            ),
+        )
     conn.commit()
 
 
@@ -1845,13 +1736,17 @@ def upsert_default_resume_modules(
     header: dict[str, str],
     core_skills: list[str],
     projects: list[dict[str, str]],
+    education: list[dict] | None = None,
+    summary: str | None = None,
     resume_title: str | None = None,
     create_new: bool = False,
 ) -> str:
     """
     Ensure a draft modular resume exists for the user and persist default modules.
     - header/core_skill/project are refreshed from latest generated data.
-    - summary/education/experience are ensured as empty templates (insert only when missing).
+    - education is populated from user profile data when provided.
+    - summary is auto-populated when provided, else ensured as an empty template.
+    - experience is ensured as an empty template (insert only when missing).
     """
     row = None
     if not create_new:
@@ -1995,7 +1890,7 @@ def upsert_default_resume_modules(
         project_items.append(
             {
                 "title": project.get("title") or "Project",
-                "subtitle": project.get("stack") or "",
+                "subtitle": project.get("subtitle") or project.get("stack") or "",
                 "start_date": project.get("start_date") or "",
                 "end_date": project.get("end_date") or "",
                 "location": project.get("location") or "",
@@ -2004,14 +1899,62 @@ def upsert_default_resume_modules(
         )
     _replace_items("project", project_items)
 
-    # Ensure empty templates for summary/education/experience (insert only if missing).
-    # Education/Experience placeholders use entry-title defaults expected by PDF rendering.
-    template_titles = {
-        "summary": "Summary",
-        "education": "University",
-        "experience": "Event",
-    }
-    for key, label in (("summary", "Summary"), ("education", "Education"), ("experience", "Experience")):
+    # Education: populate from user profile data if provided, else ensure empty template.
+    if education:
+        edu_items = []
+        for e in education:
+            city = str(e.get("city") or "").strip()
+            state = str(e.get("state") or "").strip()
+            location = ", ".join(p for p in [city, state] if p)
+            edu_items.append({
+                "title": e.get("university") or "University",
+                "subtitle": e.get("degree") or "",
+                "start_date": e.get("start_date") or "",
+                "end_date": e.get("end_date") or "Present",
+                "location": location,
+            })
+        _replace_items("education", edu_items)
+    else:
+        section_id = section_ids["education"]
+        existing = conn.execute(
+            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
+            (section_id,),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled
+                )
+                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                """,
+                (str(uuid.uuid4()), section_id),
+            )
+
+    # Summary: populate from generated text when provided, else ensure empty template.
+    if summary:
+        _replace_items("summary", [{"title": "Summary", "content": summary}])
+    else:
+        section_id = section_ids["summary"]
+        existing = conn.execute(
+            "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
+            (section_id,),
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO resume_items (
+                    id, section_id, title, subtitle, start_date, end_date, location, content,
+                    bullets_json, metadata_json, sort_order, is_enabled
+                )
+                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                """,
+                (str(uuid.uuid4()), section_id),
+            )
+
+    # Ensure empty template for experience (insert only if missing).
+    for key, title in (("experience", "Event"),):
         section_id = section_ids[key]
         existing = conn.execute(
             "SELECT 1 FROM resume_items WHERE section_id = ? LIMIT 1",
@@ -2026,7 +1969,7 @@ def upsert_default_resume_modules(
                 )
                 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
                 """,
-                (str(uuid.uuid4()), section_id, template_titles[key]),
+                (str(uuid.uuid4()), section_id, title),
             )
 
     conn.commit()
@@ -2082,13 +2025,18 @@ def _section_row_to_dict(row: tuple, items: list[dict] | None = None) -> dict:
 
 
 def fetch_resumes(conn: sqlite3.Connection, user_id: int) -> list[dict]:
-    """List all resumes for a user (no sections/items)."""
+    """List all resumes for a user (no sections/items, but includes section_count)."""
     rows = conn.execute(
         """
-        SELECT id, user_id, title, target_role, status, created_at, updated_at
-        FROM resumes
-        WHERE user_id = ?
-        ORDER BY datetime(updated_at) DESC, id DESC
+        SELECT r.id, r.user_id, r.title, r.target_role, r.status,
+               r.created_at, r.updated_at,
+               COUNT(s.id) AS section_count
+        FROM resumes r
+        LEFT JOIN resume_sections s
+               ON s.resume_id = r.id AND s.is_enabled = 1
+        WHERE r.user_id = ?
+        GROUP BY r.id
+        ORDER BY datetime(r.updated_at) DESC, r.id DESC
         """,
         (int(user_id),),
     ).fetchall()
@@ -2097,6 +2045,7 @@ def fetch_resumes(conn: sqlite3.Connection, user_id: int) -> list[dict]:
             "id": r[0], "user_id": r[1], "title": r[2],
             "target_role": r[3], "status": r[4],
             "created_at": r[5], "updated_at": r[6],
+            "section_count": r[7],
         }
         for r in rows
     ]
@@ -2382,12 +2331,12 @@ def reorder_resume_items(conn: sqlite3.Connection, section_id: str, ids: list[st
     return fetch_resume_items(conn, section_id)
 
 
-def link_user_to_project(
+def link_contributor_to_project(
     conn: sqlite3.Connection,
     user_id: int,
     project_id: str,
     *,
-    contributor_name: str | None = None,
+    contributor_name: str | None = None,  # kept for API compat; no longer stored
     first_commit_at: str | None = None,
     last_commit_at: str | None = None,
 ) -> None:
@@ -2395,43 +2344,31 @@ def link_user_to_project(
         raise ValueError("user_id must be provided")
     if not project_id:
         raise ValueError("project_id must be provided")
+    # Ensure the parent projects row exists (FK constraint added in M24)
+    upsert_project(conn, project_id)
     conn.execute(
         """
-        INSERT OR IGNORE INTO user_projects (
-            user_id, project_id, contributor_name, first_commit_at, last_commit_at
-        )
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO project_contributors (project_id, contributor_id, first_commit_at, last_commit_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(project_id, contributor_id) DO UPDATE SET
+            first_commit_at = CASE
+                WHEN first_commit_at IS NULL THEN excluded.first_commit_at
+                WHEN excluded.first_commit_at IS NOT NULL
+                     AND excluded.first_commit_at < first_commit_at THEN excluded.first_commit_at
+                ELSE first_commit_at END,
+            last_commit_at = CASE
+                WHEN last_commit_at IS NULL THEN excluded.last_commit_at
+                WHEN excluded.last_commit_at IS NOT NULL
+                     AND excluded.last_commit_at > last_commit_at THEN excluded.last_commit_at
+                ELSE last_commit_at END,
+            updated_at = CURRENT_TIMESTAMP
         """,
-        (int(user_id), project_id, contributor_name, first_commit_at, last_commit_at),
+        (project_id, int(user_id), first_commit_at, last_commit_at),
     )
-    existing = conn.execute(
-        """
-        SELECT contributor_name, first_commit_at, last_commit_at
-        FROM user_projects
-        WHERE user_id = ? AND project_id = ?
-        """,
-        (int(user_id), project_id),
-    ).fetchone()
-    if existing:
-        merged_name = contributor_name if contributor_name is not None else existing[0]
-        merged_first = existing[1]
-        merged_last = existing[2]
-        if first_commit_at and (not merged_first or str(first_commit_at) < str(merged_first)):
-            merged_first = first_commit_at
-        if last_commit_at and (not merged_last or str(last_commit_at) > str(merged_last)):
-            merged_last = last_commit_at
-        conn.execute(
-            """
-            UPDATE user_projects
-            SET contributor_name = ?, first_commit_at = ?, last_commit_at = ?
-            WHERE user_id = ? AND project_id = ?
-            """,
-            (merged_name, merged_first, merged_last, int(user_id), project_id),
-        )
     conn.commit()
 
 
-def fetch_user_project_activity_periods(
+def fetch_project_contributor_activity_periods(
     conn: sqlite3.Connection,
     *,
     user_id: int,
@@ -2444,8 +2381,8 @@ def fetch_user_project_activity_periods(
     rows = conn.execute(
         f"""
         SELECT project_id, first_commit_at, last_commit_at
-        FROM user_projects
-        WHERE user_id = ?
+        FROM project_contributors
+        WHERE contributor_id = ?
           AND project_id IN ({placeholders})
         """,
         (int(user_id), *cleaned),
@@ -2460,7 +2397,7 @@ def fetch_user_project_activity_periods(
     }
 
 
-def upsert_users_from_contributors(
+def bulk_upsert_contributors(
     conn: sqlite3.Connection,
     project_id: str,
     contributors: Iterable[object],
@@ -2471,42 +2408,124 @@ def upsert_users_from_contributors(
     if not project_id:
         return
     for row in contributors:
-        username = getattr(row, "contributor", None) or getattr(row, "username", None)
+        github_username = getattr(row, "contributor", None) or getattr(row, "username", None)
         email = getattr(row, "email", None)
-        if not username:
+        if not github_username:
             continue
-        user_id = upsert_user(conn, username, email=email)
-        link_user_to_project(conn, user_id, project_id, contributor_name=username)
+        user_id = upsert_contributor(conn, github_username, email=email)
+        link_contributor_to_project(conn, user_id, project_id, contributor_name=github_username)
 
 def save_project_metadata(conn, project_id, meta):
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO project_metadata
-        (project_id, start_date, end_date, status)
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            project_id,
-            meta["start_date"],
-            meta["end_date"],
-            meta["status"],
-        ),
+    """Save project timeline/status. Writes to projects table (project_metadata was removed in M21)."""
+    upsert_project(
+        conn,
+        project_id,
+        status=meta.get("status") or "ongoing",
+        first_commit_at=meta.get("start_date"),
+        last_commit_at=meta.get("end_date"),
     )
-    conn.commit()
 
 def load_project_metadata(conn):
-    cursor = conn.cursor()
-    cursor.execute("SELECT project_id, start_date, end_date, status FROM project_metadata")
-
+    """Load project timeline/status from projects table (project_metadata was removed in M21)."""
+    rows = conn.execute(
+        "SELECT project_id, first_commit_at, last_commit_at, status FROM projects"
+    ).fetchall()
     return {
         row[0]: {
             "start_date": row[1],
             "end_date": row[2],
             "status": row[3],
         }
-        for row in cursor.fetchall()
+        for row in rows
     }
+
+def upsert_project(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    name: str | None = None,
+    source: str = "zip",
+    github_url: str | None = None,
+    github_branch: str | None = None,
+    has_git: bool = False,
+    type: str | None = None,
+    status: str = "ongoing",
+    first_commit_at: str | None = None,
+    last_commit_at: str | None = None,
+) -> None:
+    """Insert or update a project row. name defaults to project_id if not given."""
+    effective_name = name or project_id
+    conn.execute(
+        """
+        INSERT INTO projects (project_id, name, source, github_url, github_branch, has_git,
+                              type, status, first_commit_at, last_commit_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            name            = COALESCE(excluded.name, name),
+            source          = CASE WHEN excluded.source != 'zip' THEN excluded.source ELSE source END,
+            github_url      = COALESCE(excluded.github_url, github_url),
+            github_branch   = COALESCE(excluded.github_branch, github_branch),
+            has_git         = MAX(excluded.has_git, has_git),
+            type            = COALESCE(excluded.type, type),
+            status          = excluded.status,
+            first_commit_at = COALESCE(excluded.first_commit_at, first_commit_at),
+            last_commit_at  = COALESCE(excluded.last_commit_at, last_commit_at),
+            updated_at      = CURRENT_TIMESTAMP
+        """,
+        (project_id, effective_name, source, github_url, github_branch, int(has_git),
+         type, status, first_commit_at, last_commit_at),
+    )
+    conn.commit()
+
+
+def get_project(conn: sqlite3.Connection, project_id: str) -> dict | None:
+    """Return a single project row as a dict, or None if not found."""
+    row = conn.execute(
+        """
+        SELECT id, project_id, name, source, github_url, github_branch, has_git, type,
+               status, first_commit_at, last_commit_at, created_at, updated_at
+        FROM projects WHERE project_id = ?
+        """,
+        (project_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0], "project_id": row[1], "name": row[2],
+        "source": row[3], "github_url": row[4], "github_branch": row[5],
+        "has_git": bool(row[6]), "type": row[7], "status": row[8],
+        "first_commit_at": row[9], "last_commit_at": row[10],
+        "created_at": row[11], "updated_at": row[12],
+    }
+
+
+def update_project_commit_range(
+    conn: sqlite3.Connection,
+    project_id: str,
+    first_commit_at: str | None,
+    last_commit_at: str | None,
+) -> None:
+    """Update first/last commit timestamps, keeping the earlier/later value."""
+    conn.execute(
+        """
+        UPDATE projects SET
+            first_commit_at = CASE
+                WHEN first_commit_at IS NULL THEN ?
+                WHEN ? IS NOT NULL AND ? < first_commit_at THEN ?
+                ELSE first_commit_at END,
+            last_commit_at = CASE
+                WHEN last_commit_at IS NULL THEN ?
+                WHEN ? IS NOT NULL AND ? > last_commit_at THEN ?
+                ELSE last_commit_at END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = ?
+        """,
+        (first_commit_at, first_commit_at, first_commit_at, first_commit_at,
+         last_commit_at, last_commit_at, last_commit_at, last_commit_at,
+         project_id),
+    )
+    conn.commit()
+
 
 def fetch_contributor_rankings(
     conn: sqlite3.Connection,
@@ -2658,11 +2677,44 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return len(payload)
 
+# -------------------------------
+# GitHub Authentication Storage
+# -------------------------------
+
+def save_github_token(token: str):
+    """Store GitHub access token."""
+    with open_db() as conn:
+        conn.execute("DELETE FROM github_auth")
+        conn.execute(
+            "INSERT INTO github_auth (access_token) VALUES (?)",
+            (token,)
+        )
+        conn.commit()
+
+
+def get_github_token():
+    """Return stored GitHub token if it exists."""
+    with open_db() as conn:
+        row = conn.execute(
+            "SELECT access_token FROM github_auth LIMIT 1"
+        ).fetchone()
+
+        if row:
+            return row[0]
+
+    return None
+
+
+def clear_github_token():
+    """Logout GitHub user."""
+    with open_db() as conn:
+        conn.execute("DELETE FROM github_auth")
+        conn.commit()
 
 __all__ = [
     "open_db",
     "close_db",
-    "DB_DIR",
+    "BASE_DIR",
     # snapshots
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
@@ -2677,14 +2729,16 @@ __all__ = [
     "fetch_latest_contributor_stats",
     "update_contributor_score",
     "fetch_contributor_rankings",
-    # users
+    # users / contributors
+    "get_user",
     "upsert_user",
-    "get_user_profile",
     "update_user_profile",
+    "upsert_contributor",
+    "get_contributor_profile",
     "upsert_default_resume_modules",
-    "link_user_to_project",
-    "fetch_user_project_activity_periods",
-    "upsert_users_from_contributors",
+    "link_contributor_to_project",
+    "fetch_project_contributor_activity_periods",
+    "bulk_upsert_contributors",
     # evidence
     "store_project_evidence",
     "fetch_project_evidence",

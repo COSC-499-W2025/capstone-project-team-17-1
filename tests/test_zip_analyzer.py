@@ -27,6 +27,13 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.CURRENT_USER
+        self._original_files_root = file_store.DEFAULT_FILES_ROOT
+        storage.close_db()
+        storage.BASE_DIR = self.tmp_path
+        storage.CURRENT_USER = None
+        file_store.DEFAULT_FILES_ROOT = self.tmp_path / "files"
         config_dir = self.tmp_path / "config"
         config_path = config_dir / "user_config.json"
         self._patchers = [
@@ -38,6 +45,9 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
+        self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
+        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _make_archive(
         self,
@@ -246,63 +256,63 @@ class BuildAuthorEmailMapTestCase(unittest.TestCase):
             "commit:abc123|Alice Example|alice@example.com|1700000000|Add feature",
             "commit:def456|Bob Smith|bob@example.com|1700000001|Fix bug",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result["Alice Example"], "alice@example.com")
-        self.assertEqual(result["Bob Smith"], "bob@example.com")
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map["Alice Example"], "alice@example.com")
+        self.assertEqual(email_map["Bob Smith"], "bob@example.com")
 
     def test_skips_users_noreply_github_com(self):
         lines = [
             "commit:abc|Alice|12345+alice@users.noreply.github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_noreply_github_com(self):
         lines = [
             "commit:abc|Alice|alice@noreply.github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_bare_noreply_address(self):
         lines = [
             "commit:abc|Alice|noreply@github.com|1700000000|msg",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("Alice", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("Alice", email_map)
 
     def test_skips_bot_authors(self):
         lines = [
             "commit:abc|dependabot[bot]|dependabot@github.com|1700000000|bump",
         ]
-        result = _build_author_email_map(lines)
-        self.assertNotIn("dependabot[bot]", result)
+        email_map, _ = _build_author_email_map(lines)
+        self.assertNotIn("dependabot[bot]", email_map)
 
     def test_ignores_non_commit_lines(self):
         lines = [
             "Alice Example|alice@example.com|some random line",
             "0000 1111 Alice <alice@example.com> 1700000000 +0000\tcommit",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map, {})
 
     def test_first_occurrence_wins(self):
         lines = [
             "commit:aaa|Alice|first@example.com|1700000000|First",
             "commit:bbb|Alice|second@example.com|1700000001|Second",
         ]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result["Alice"], "first@example.com")
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map["Alice"], "first@example.com")
 
     def test_empty_input(self):
-        result = _build_author_email_map([])
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map([])
+        self.assertEqual(email_map, {})
 
     def test_missing_email_field(self):
         # Line has only 2 pipe-separated fields after "commit:"
         lines = ["commit:abc|AliceOnly"]
-        result = _build_author_email_map(lines)
-        self.assertEqual(result, {})
+        email_map, _ = _build_author_email_map(lines)
+        self.assertEqual(email_map, {})
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +335,13 @@ class ZipContributorStorageTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.CURRENT_USER
+        self._original_files_root = file_store.DEFAULT_FILES_ROOT
+        storage.close_db()
+        storage.BASE_DIR = self.tmp_path
+        storage.CURRENT_USER = None
+        file_store.DEFAULT_FILES_ROOT = self.tmp_path / "files"
         config_dir = self.tmp_path / "config"
         config_path = config_dir / "user_config.json"
         self._patchers = [
@@ -336,6 +353,9 @@ class ZipContributorStorageTestCase(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
+        self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
+        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _make_archive(self, git_log_content: str, name: str = "project.zip") -> Path:
         archive_path = self.tmp_path / name
@@ -368,12 +388,12 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj1")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM users ORDER BY username").fetchall()
+        rows = conn.execute("SELECT github_username FROM contributors ORDER BY github_username").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
 
-    def test_contributors_linked_in_user_projects_table(self):
+    def test_contributors_linked_in_project_contributors_table(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("Bob Smith", "bob@example.com", 1700000100)
@@ -382,26 +402,36 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         rows = conn.execute(
-            "SELECT contributor_name FROM user_projects WHERE project_id = ? ORDER BY contributor_name",
+            """
+            SELECT c.github_username
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            ORDER BY c.github_username
+            """,
             ("proj2",),
         ).fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertIn("Bob Smith", names)
 
-    def test_contributor_stats_written_with_zip_source(self):
+    def test_contributor_stats_written(self):
         git_log = _reflog_line("Alice Example", "alice@example.com", 1700000000)
         self._run_analyze(self._make_archive(git_log), "proj3")
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT source, commits, score FROM contributor_stats WHERE project_id = ? AND contributor = ?",
+            """
+            SELECT pc.commits, pc.score
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ? AND c.github_username = ?
+            """,
             ("proj3", "Alice Example"),
         ).fetchone()
         self.assertIsNotNone(row)
-        self.assertEqual(row[0], "zip")
-        self.assertGreaterEqual(row[1], 1)   # at least 1 commit
-        self.assertGreaterEqual(row[2], 0.0)  # score >= 0
+        self.assertGreaterEqual(row[0], 1)   # at least 1 commit
+        self.assertGreaterEqual(row[1], 0.0)  # score >= 0
 
     def test_bot_contributors_excluded_from_users_table(self):
         git_log = (
@@ -411,12 +441,12 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._run_analyze(self._make_archive(git_log), "proj4")
 
         conn = storage.open_db(self.tmp_path / "db")
-        rows = conn.execute("SELECT username FROM users").fetchall()
+        rows = conn.execute("SELECT github_username FROM contributors").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
         self.assertNotIn("dependabot[bot]", names)
 
-    def test_bot_contributors_excluded_from_user_projects_table(self):
+    def test_bot_contributors_excluded_from_project_contributors_table(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("github-actions[bot]", "actions@github.com", 1700000100)
@@ -425,12 +455,18 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         rows = conn.execute(
-            "SELECT contributor_name FROM user_projects WHERE project_id = ?", ("proj5",)
+            """
+            SELECT c.github_username
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            """,
+            ("proj5",),
         ).fetchall()
         names = [r[0] for r in rows]
         self.assertNotIn("github-actions[bot]", names)
 
-    def test_bot_contributors_excluded_from_contributor_stats(self):
+    def test_bot_contributors_excluded_from_project_contributors_stats(self):
         git_log = (
             _reflog_line("Alice Example", "alice@example.com", 1700000000)
             + _reflog_line("renovate[bot]", "renovate@whitesource.com", 1700000100)
@@ -439,13 +475,17 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT id FROM contributor_stats WHERE project_id = ? AND contributor = ?",
+            """
+            SELECT pc.id FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE pc.project_id = ? AND c.github_username = ?
+            """,
             ("proj6", "renovate[bot]"),
         ).fetchone()
         self.assertIsNone(row)
 
     def test_email_stored_via_commit_format(self):
-        """When git_log uses commit:HASH|name|email format, email is stored in users."""
+        """When git_log uses commit:HASH|name|email format, email is stored in contributors."""
         git_log = (
             "commit:abc123|Alice Example|alice@example.com|1700000000|Add feature\n"
             "commit:def456|Alice Example|alice@example.com|1700000100|Fix bug\n"
@@ -454,7 +494,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
 
         conn = storage.open_db(self.tmp_path / "db")
         row = conn.execute(
-            "SELECT email FROM users WHERE username = ?", ("Alice Example",)
+            "SELECT email FROM contributors WHERE github_username = ?", ("Alice Example",)
         ).fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row[0], "alice@example.com")
@@ -472,9 +512,19 @@ class ExtractContributorsFromZipTestCase(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
         self.files_root = self.tmp_path / "files"
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.CURRENT_USER
+        self._original_files_root = file_store.DEFAULT_FILES_ROOT
+        storage.close_db()
+        storage.BASE_DIR = self.tmp_path
+        storage.CURRENT_USER = None
+        file_store.DEFAULT_FILES_ROOT = self.files_root
         self.conn = storage.open_db(self.tmp_path / "db")
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
+        self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
+        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _store_zip_with_git_log(self, git_log_content: str) -> str:
         """Create a zip file with a git_log.txt and store it via file_store."""

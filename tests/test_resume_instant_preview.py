@@ -4,6 +4,7 @@ import types
 import re
 from pathlib import Path
 from unittest.mock import patch
+from capstone import consent as consent_module
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -12,6 +13,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+if not hasattr(consent_module, "ensure_or_prompt_consent"):
+    consent_module.ensure_or_prompt_consent = lambda *args, **kwargs: "granted_existing"
+if not hasattr(consent_module, "clear_external_permission"):
+    consent_module.clear_external_permission = lambda *args, **kwargs: None
+if not hasattr(consent_module, "request_external_service_permission"):
+    consent_module.request_external_service_permission = lambda *args, **kwargs: True
 
 # Avoid importing the real capstone.cli (pulls UI/LLM deps).
 dummy_cli = types.ModuleType("capstone.cli")
@@ -149,7 +157,7 @@ def test_build_resume_preview_filters_disabled_sections_and_items():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
         patch.object(
             app,
@@ -186,7 +194,7 @@ def test_build_resume_preview_normalizes_legacy_education_experience_titles():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
     ):
         payload = app._build_resume_preview_from_modular_resume(
@@ -237,7 +245,7 @@ def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
 
 def test_sync_generated_resume_modules_includes_project_activity_period_dates():
     with (
-        patch.object(app, "fetch_user_project_activity_periods", return_value={
+        patch.object(app, "fetch_project_contributor_activity_periods", return_value={
             "demo-project": {
                 "first_commit_at": "2025-01-10",
                 "last_commit_at": "2025-01-20",

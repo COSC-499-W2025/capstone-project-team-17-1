@@ -9,8 +9,6 @@ from capstone.api.routes.portfolio_showcase import (
     latest as showcase_latest,
     evidence_latest as showcase_evidence_latest,
     list_ as showcase_portfolios_list,
-    get_portfolio_showcase as showcase_get_portfolio_showcase,
-    get_portfolio_showcase_query as showcase_get_portfolio_showcase_query,
 )
 
 router = APIRouter()
@@ -26,14 +24,6 @@ def legacy_user_projects(user: str, request: Request):
 @router.get("/portfolio/summary")
 def legacy_portfolio_summary(user: str, request: Request, limit: int = 3):
     return showcase_portfolio_summary(user=user, request=request, limit=limit)
-
-@router.get("/portfolio/showcase")
-def legacy_portfolio_showcase_query(request: Request, projectId: str, user: str | None = None):
-    return showcase_get_portfolio_showcase_query(request=request, projectId=projectId, user=user)
-
-@router.get("/portfolio/{id}")
-def legacy_portfolio_showcase(id: str, request: Request, user: str | None = None):
-    return showcase_get_portfolio_showcase(id=id, request=request, user=user)
 
 @router.get("/portfolios/latest")
 def legacy_portfolios_latest(

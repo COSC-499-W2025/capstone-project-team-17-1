@@ -12,8 +12,10 @@ from capstone.job_matching import (
     build_jd_profile,
     rank_projects_for_job,
     matches_to_json,
+    generate_tailored_project
 )
 from capstone.storage import open_db, close_db
+from capstone.activity_log import log_event
 
 router = APIRouter(prefix="/job-matching", tags=["job-matching"])
 
@@ -35,7 +37,17 @@ def match_single_project(payload: JobMatchRequest) -> Dict[str, Any]:
             project_id=payload.project_id,
             db_dir=None,
         )
+
+        log_event(
+            "SUCCESS",
+            f"Job match completed · Project: {payload.project_id}"
+        )
+
     except Exception as e:
+        log_event(
+            "ERROR",
+            f"Job match failed · Project: {payload.project_id} · {str(e)}"
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     snippet = build_resume_snippet(result)
@@ -83,5 +95,33 @@ def rank_projects(
     matches = rank_projects_for_job(jd_profile, project_snapshots)
 
     matches = matches[:top_k]
+    
+    results = []
+    
+    for match in matches:
+        snapshot = next(
+            (s for s in project_snapshots if s.get("project_id") == match.project_id),
+            None
+        )
+        
+        description = generate_tailored_project(snapshot, match) if snapshot else ""
 
-    return matches_to_json(matches)
+        results.append({
+            "project_id": match.project_id,
+            "score": match.score,
+            "required_coverage": match.required_coverage,
+            "preferred_coverage": match.preferred_coverage,
+            "keyword_overlap": match.keyword_overlap,
+            "recency_factor": match.recency_factor,
+            "matched_required_skills": match.matched_required,
+            "matched_preferred_skills": match.matched_preferred,
+            "matched_keywords": match.matched_keywords,
+            "tailored_description": description
+        })
+
+    log_event(
+        "INFO",
+        f"Job ranking executed · Candidates: {len(project_snapshots)} · Returned: {len(results)}"
+    )
+
+    return {"matches": results}

@@ -4,14 +4,54 @@
   "description": "",
   "main": "src/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "test": "node --test test/**/*.test.mjs",
+    "start": "electron . --no-sandbox",
+    "dist": "electron-builder"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^40.6.1"
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "dotenv": "^16.4.5",
+    "react-chartjs-2": "^5.3.1"
+  },
+  "build": {
+  "appId": "com.capstone.team17",
+  "productName": "Loom",
+  "win": {
+    "icon": "assets/icon.ico",
+    "target": "nsis"
+  },
+  "mac": {
+    "icon": "assets/icon.icns"
+  },
+  "linux": {
+    "icon": "assets/icon.png"
+  },
+  "forceCodeSigning": false,
+  "files": [
+    "src/**/*",
+    "package.json",
+    "assets/**/*",
+    "preload.js"
+  ],
+  "extraResources": [
+    {
+      "from": "../src/capstone/dist/",
+      "to": "backend",
+      "filter": ["**/*"]
+    }
+  ],
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": true
   }
+}
 }

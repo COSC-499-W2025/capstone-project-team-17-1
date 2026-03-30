@@ -23,7 +23,6 @@ from capstone.consent import grant_consent
 from capstone.insight_store import InsightStore
 from capstone.metrics_extractor import chronological_proj, metrics_api
 from capstone.project_ranking import rank_projects_from_snapshots
-from capstone.resume_retrieval import build_resume_preview, ensure_resume_schema, insert_resume_entry, query_resume_entries
 from capstone.storage import close_db, export_snapshots_to_json, fetch_latest_snapshots, open_db, store_analysis_snapshot
 from capstone.top_project_summaries import AutoWriter, EvidenceItem, create_summary_template, export_markdown
 from capstone.top_project_summaries import export_readme_snippet
@@ -283,50 +282,6 @@ def _print_top_project_summary(snapshot_map: dict, rankings: list) -> None:
     readme_path = ROOT / "analysis_output" / "top_project_README.md"
     readme_path.write_text(readme_snippet, encoding="utf-8")
     print(f"Top project README snippet exported to: {readme_path}")
-
-# for preview 
-def _portfolio_preview(conn: sqlite3.Connection, top_project_id: str) -> None:
-    ensure_resume_schema(conn)
-    insert_resume_entry(
-        conn,
-        section="projects",
-        title="Backend Observability Rollout",
-        summary="Scaled API telemetry and dashboards across environments",
-        body="Implemented distributed tracing and dashboards covering p95 latency, error budgets, and release health.",
-        projects=[top_project_id],
-        skills=["observability", "python", "fastapi", "grafana"],
-    )
-    insert_resume_entry(
-        conn,
-        section="experience",
-        title="Data Platform Engineer",
-        summary="Delivered SQL-first experimentation platform with governance baked in",
-        body="Built ingestion pipelines, schema migrations, and alerting standards used by analytics squads.",
-        projects=[top_project_id],
-        skills=["sql", "data modeling", "migrations"],
-    )
-    result = query_resume_entries(conn, sections=["projects", "experience"], keywords=["platform"])
-    preview = build_resume_preview(result, conn=conn)
-    _section("Portfolio / Resume Retrieval")
-    print(json.dumps(preview, indent=2, default=str))
-    paged = query_resume_entries(conn, sections=["projects"], limit=1, offset=1)
-    print("\nPaged resume query (limit=1, offset=1):")
-    print([e.title for e in paged.entries])
-    print("Sorting: default updated_at desc; Auth: local-only (no network)")
-    # exports
-    markdown_path = ROOT / "analysis_output" / "resume.md"
-    json_path = ROOT / "analysis_output" / "resume.json"
-    pdf_path = ROOT / "analysis_output" / "resume.pdf"
-    from capstone.resume_retrieval import export_resume
-    export_resume(paged.entries, fmt="markdown", destination=markdown_path)
-    export_resume(paged.entries, fmt="json", destination=json_path)
-    export_resume(paged.entries, fmt="pdf", destination=pdf_path)
-    print(f"Resume exports written to: {markdown_path}, {json_path}, {pdf_path}")
-    # sorted view
-    sorted_entries = query_resume_entries(conn, sections=["projects"], keywords=None, limit=5, offset=0)
-    sorted_titles = [e.title for e in sorted_entries.entries]
-    print("Sorted by updated_at desc (default):", sorted_titles)
-
 
 def _mock_rest_endpoint() -> None:
     _section("Mock REST Endpoint (Portfolio/Resume)")
@@ -674,8 +629,6 @@ def run_demo() -> None:
         snapshot_map = _print_rankings(conn)
         rankings = rank_projects_from_snapshots(snapshot_map)
         _print_top_project_summary(snapshot_map, rankings)
-        if rankings:
-            _portfolio_preview(conn, rankings[0].project_id)
         _simulate_external_permission()
         _relational_crud_demo(conn)
         _mock_rest_endpoint()

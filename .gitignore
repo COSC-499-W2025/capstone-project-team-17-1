@@ -1,3 +1,5 @@
+.claude/
+.omc/
 node_modules/
 dist/
 out/
@@ -17,10 +19,12 @@ __pycache__/
 src/capstone_analyzer.egg-info/
 log/consent_decisions.jsonl
 /.venv
+.codex/
 config/user_config.json
 # databases
 demo_db/*
 data/files
+data/
 PATH_HERE
 .venv/
 env/
@@ -28,13 +32,13 @@ pycache/
 *.pyc
 node_modules/
 frontend/node_modules/
-
+data/capstone.db
 dist/
 build/
-
+src/capstone/capstone_backend.spec
 .env
 .env.local
-
+src/capstone/api/routes/auth_sessions.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -51,3 +55,5 @@ Thumbs.db
 uploads/
 data/*.db
 data/capstone.db
+
+.claude/
