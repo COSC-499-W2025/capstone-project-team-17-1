@@ -30,7 +30,16 @@ def ensure_indexes(conn: sqlite3.Connection) -> None:
         "ON portfolio_images(project_id, sort_order, created_at)"
     )
     conn.commit()
-    
+
+
+def _ensure_portfolio_customization_columns(conn: sqlite3.Connection) -> None:
+    """Migrate portfolio_customizations for new optional columns."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(portfolio_customizations)").fetchall()}
+    if "case_study_abstract" not in cols:
+        conn.execute("ALTER TABLE portfolio_customizations ADD COLUMN case_study_abstract TEXT")
+    conn.commit()
+
+
 def ensure_portfolio_tables(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -60,6 +69,8 @@ def ensure_portfolio_tables(conn: sqlite3.Connection) -> None:
     )
 
     conn.commit()
+    _ensure_portfolio_customization_columns(conn)
+
 
 def _validate_sort(sort_field: str, sort_dir: str) -> Tuple[str, str]:
     sf = sort_field if sort_field in {"created_at", "classification"} else "created_at"
@@ -146,7 +157,8 @@ def get_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> Optional[S
 def get_portfolio_customization(conn: sqlite3.Connection, project_id: str) -> Dict[str, Any]:
     row = conn.execute(
         """
-        SELECT project_id, template_id, key_role, evidence_of_success, portfolio_blurb, updated_at
+        SELECT project_id, template_id, key_role, evidence_of_success, portfolio_blurb,
+               case_study_abstract, updated_at
         FROM portfolio_customizations
         WHERE project_id = ?
         """,
@@ -160,6 +172,7 @@ def get_portfolio_customization(conn: sqlite3.Connection, project_id: str) -> Di
             "key_role": "",
             "evidence_of_success": "",
             "portfolio_blurb": "",
+            "case_study_abstract": "",
             "updated_at": None,
         }
 
@@ -169,7 +182,8 @@ def get_portfolio_customization(conn: sqlite3.Connection, project_id: str) -> Di
         "key_role": row[2] or "",
         "evidence_of_success": row[3] or "",
         "portfolio_blurb": row[4] or "",
-        "updated_at": row[5],
+        "case_study_abstract": row[5] or "",
+        "updated_at": row[6],
     }
 
 
@@ -181,6 +195,7 @@ def upsert_portfolio_customization(
     key_role: str,
     evidence_of_success: str,
     portfolio_blurb: str,
+    case_study_abstract: str = "",
 ) -> Dict[str, Any]:
     template_id = (template_id or "classic").strip().lower()
     if template_id not in ALLOWED_PORTFOLIO_TEMPLATES:
@@ -194,14 +209,16 @@ def upsert_portfolio_customization(
             key_role,
             evidence_of_success,
             portfolio_blurb,
+            case_study_abstract,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(project_id) DO UPDATE SET
             template_id = excluded.template_id,
             key_role = excluded.key_role,
             evidence_of_success = excluded.evidence_of_success,
             portfolio_blurb = excluded.portfolio_blurb,
+            case_study_abstract = excluded.case_study_abstract,
             updated_at = CURRENT_TIMESTAMP
         """,
         (
@@ -210,6 +227,7 @@ def upsert_portfolio_customization(
             key_role or "",
             evidence_of_success or "",
             portfolio_blurb or "",
+            case_study_abstract or "",
         ),
     )
     conn.commit()

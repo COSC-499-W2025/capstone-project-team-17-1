@@ -281,6 +281,10 @@ function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
 
   const templateId = String(portfolioEntry?.template_id || portfolioEntry?.templateId || "classic").trim();
 
+  const caseStudyAbstract = String(
+    portfolioEntry?.case_study_abstract || portfolioEntry?.caseStudyAbstract || ""
+  ).trim();
+
   const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
   const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
 
@@ -289,6 +293,7 @@ function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
     summary,
     keyRole,
     evidence,
+    caseStudyAbstract,
     templateId,
     images,
     coverImage,

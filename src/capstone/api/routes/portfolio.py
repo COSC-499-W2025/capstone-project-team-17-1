@@ -121,6 +121,7 @@ class EditPortfolioRequest(BaseModel):
     key_role: Optional[str] = None
     evidence_of_success: Optional[str] = None
     portfolio_blurb: Optional[str] = None
+    case_study_abstract: Optional[str] = None
 
 
 class ReorderPortfolioImagesRequest(BaseModel):
@@ -377,8 +378,59 @@ def _build_portfolio_blurb(project_id: str, snapshot: dict[str, Any], inferred_r
     return (
         f"{title} is a {role_phrase} project focused on delivering a working solution for its primary purpose."
     )
-    
-    
+
+
+def _skill_confidence_to_level(conf: float) -> str:
+    if conf >= 0.22:
+        return "strong expertise"
+    if conf >= 0.12:
+        return "solid proficiency"
+    return "developing proficiency"
+
+
+def _format_skills_with_expertise(snapshot: dict[str, Any]) -> str:
+    raw = snapshot.get("skills")
+    if isinstance(raw, list):
+        parts: list[str] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            name = _pick_first_str(item, ["skill", "name", "label"])
+            if not name:
+                continue
+            try:
+                conf = float(item.get("confidence") or 0.0)
+            except (TypeError, ValueError):
+                conf = 0.0
+            parts.append(f"{name} ({_skill_confidence_to_level(conf)})")
+        if parts:
+            return ", ".join(parts[:6])
+
+    names = _extract_skill_names(raw)
+    if names:
+        return ", ".join(names[:6]) + " (expertise levels inferred from repository usage)"
+
+    return ""
+
+
+def _build_case_study_abstract(project_id: str, snapshot: dict[str, Any]) -> str:
+    title = _extract_title(project_id, snapshot)
+    frameworks = _as_list(snapshot.get("frameworks"))
+    technologies = _extract_technologies(snapshot)
+    tech_parts = _dedupe_strings([*frameworks, *technologies])[:8]
+    tech_text = ", ".join(tech_parts) if tech_parts else "technologies appropriate to the project domain"
+
+    skills_text = _format_skills_with_expertise(snapshot)
+    if not skills_text:
+        skills_text = "core technical competencies surfaced through the codebase"
+
+    closing = (
+        "The project contributes to skill development by facilitating the application of theoretical "
+        "knowledge in practical scenarios, thereby improving both technical proficiency and analytical thinking."
+    )
+    return f"{title} is designed using {tech_text} and showcases {skills_text}. {closing}"
+
+
 def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
     summary = ""
     highlights = _extract_highlights(snapshot)
@@ -406,11 +458,13 @@ def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[
         role_text = inferred_role
         
     summary = _build_portfolio_blurb(project_id, snapshot, inferred_role)
+    case_study_abstract = _build_case_study_abstract(project_id, snapshot)
 
     return {
         "key_role": role_text,
         "evidence_of_success": evidence_text,
-        "portfolio_blurb": summary
+        "portfolio_blurb": summary,
+        "case_study_abstract": case_study_abstract,
     }
     
 
@@ -788,6 +842,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
             payload.key_role,
             payload.evidence_of_success,
             payload.portfolio_blurb,
+            payload.case_study_abstract,
             payload.summary
         )
     )
@@ -818,6 +873,11 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
                         payload.portfolio_blurb
                         if payload.portfolio_blurb is not None
                         else (payload.summary if payload.summary is not None else current.get("portfolio_blurb", ""))
+                    ),
+                    case_study_abstract=(
+                        payload.case_study_abstract
+                        if payload.case_study_abstract is not None
+                        else current.get("case_study_abstract", "")
                     ),
                 )
             except ValueError as exc:
@@ -1071,20 +1131,24 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
         else {
             "key_role": "",
             "evidence_of_success": "",
-            "portfolio_blurb": ""
+            "portfolio_blurb": "",
+            "case_study_abstract": "",
         }
     )
     
     overrides = {
         "key_role": str(customization.get("key_role") or ""),
         "evidence_of_success": str(customization.get("evidence_of_success") or ""),
-        "portfolio_blurb": str(customization.get("portfolio_blurb") or "")
+        "portfolio_blurb": str(customization.get("portfolio_blurb") or ""),
+        "case_study_abstract": str(customization.get("case_study_abstract") or ""),
     }
     
     resolved = {
         "key_role": overrides["key_role"] or analysis_defaults["key_role"],
         "evidence_of_success": overrides["evidence_of_success"] or analysis_defaults["evidence_of_success"],
-        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"]
+        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"],
+        "case_study_abstract": overrides["case_study_abstract"]
+        or analysis_defaults.get("case_study_abstract", ""),
     }
 
     payload = {

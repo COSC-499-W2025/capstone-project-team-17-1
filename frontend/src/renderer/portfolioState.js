@@ -83,6 +83,8 @@ function normalizeProjectOverrides(value) {
       evidence: typeof override.evidence === "string" ? override.evidence : "",
       portfolioBlurb:
         typeof override.portfolioBlurb === "string" ? override.portfolioBlurb : "",
+      caseStudyAbstract:
+        typeof override.caseStudyAbstract === "string" ? override.caseStudyAbstract : "",
       templateId: typeof override.templateId === "string" ? override.templateId : "classic",
       images: Array.isArray(override.images) ? override.images : [],
       analysisDefaults:
@@ -100,11 +102,16 @@ function normalizeProjectOverrides(value) {
                 typeof override.analysisDefaults.portfolioBlurb === "string"
                   ? override.analysisDefaults.portfolioBlurb
                   : "",
+              caseStudyAbstract:
+                typeof override.analysisDefaults.caseStudyAbstract === "string"
+                  ? override.analysisDefaults.caseStudyAbstract
+                  : "",
             }
           : {
               keyRole: "",
               evidence: "",
               portfolioBlurb: "",
+              caseStudyAbstract: "",
             },
     };
   });

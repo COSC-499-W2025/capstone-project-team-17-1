@@ -83,6 +83,10 @@ function buildProjectThemeDetails(project, override = {}) {
       <div class="portfolio-theme-layout portfolio-theme-case-study">
         ${coverMarkup}
         <div class="portfolio-theme-block">
+          <span class="portfolio-theme-label">Abstract</span>
+          <p>${escapeHtml(override.caseStudyAbstract || "")}</p>
+        </div>
+        <div class="portfolio-theme-block">
           <span class="portfolio-theme-label">Overview</span>
           <p>${escapeHtml(override.portfolioBlurb || "")}</p>
         </div>
@@ -93,10 +97,6 @@ function buildProjectThemeDetails(project, override = {}) {
         <div class="portfolio-theme-block">
           <span class="portfolio-theme-label">Evidence of success</span>
           <p>${escapeHtml(override.evidence || "")}</p>
-        </div>
-        <div class="portfolio-theme-block">
-          <span class="portfolio-theme-label">Discussion</span>
-          <p>This layout is meant to read more like a formal project writeup or case study.</p>
         </div>
       </div>
     `;
@@ -257,13 +257,17 @@ async function hydrateCustomizationFromBackend(projects) {
       portfolioBlurb: String(
         resolved.portfolio_blurb || defaults.portfolio_blurb || data.summary || ""
       ),
+      caseStudyAbstract: String(
+        resolved.case_study_abstract || defaults.case_study_abstract || ""
+      ),
       templateId: String(data.template_id || "classic"),
       images: sortPortfolioImagesCoverFirst(data.images),
       analysisDefaults: {
         keyRole: String(defaults.key_role || ""),
         evidence: String(defaults.evidence_of_success || ""),
-        portfolioBlurb: String(defaults.portfolio_blurb || "")
-      }
+        portfolioBlurb: String(defaults.portfolio_blurb || ""),
+        caseStudyAbstract: String(defaults.case_study_abstract || ""),
+      },
     };
   });
 
@@ -332,13 +336,15 @@ function normalizeCustomization(customization) {
         keyRole: String(override.keyRole || ""),
         evidence: String(override.evidence || ""),
         portfolioBlurb: String(override.portfolioBlurb || ""),
+        caseStudyAbstract: String(override.caseStudyAbstract || ""),
         templateId: String(override.templateId || "classic"),
         images: Array.isArray(override.images) ? override.images : [],
         analysisDefaults: {
           keyRole: String(override.analysisDefaults?.keyRole || ""),
           evidence: String(override.analysisDefaults?.evidence || ""),
-          portfolioBlurb: String(override.analysisDefaults?.portfolioBlurb || "")
-        }
+          portfolioBlurb: String(override.analysisDefaults?.portfolioBlurb || ""),
+          caseStudyAbstract: String(override.analysisDefaults?.caseStudyAbstract || ""),
+        },
       };
     });
 
@@ -688,9 +694,15 @@ function renderProjectEditors(projects, customization) {
       if (!hiddenInput) return;
 
       hiddenInput.value = templateId;
+      editor.setAttribute("data-active-template", templateId);
 
       const nextCustomization = loadPortfolioCustomization();
       const currentOverride = nextCustomization.projectOverrides?.[projectId] || {};
+      const abstractInput = editor.querySelector('[data-field="caseStudyAbstract"]');
+      if (templateId === "case_study" && abstractInput && !String(abstractInput.value || "").trim()) {
+        const suggested = String(currentOverride.analysisDefaults?.caseStudyAbstract || "").trim();
+        if (suggested) abstractInput.value = suggested;
+      }
 
       nextCustomization.projectOverrides = {
         ...(nextCustomization.projectOverrides || {}),
@@ -738,6 +750,9 @@ function renderProjectEditors(projects, customization) {
             portfolioBlurb: String(
               latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
             ),
+            caseStudyAbstract: String(
+              latest?.resolved?.case_study_abstract || current.caseStudyAbstract || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
@@ -747,6 +762,11 @@ function renderProjectEditors(projects, customization) {
               ),
               portfolioBlurb: String(
                 latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+              caseStudyAbstract: String(
+                latest?.analysis_defaults?.case_study_abstract ||
+                  current.analysisDefaults?.caseStudyAbstract ||
+                  ""
               ),
             },
           },
@@ -788,6 +808,9 @@ function renderProjectEditors(projects, customization) {
             portfolioBlurb: String(
               latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
             ),
+            caseStudyAbstract: String(
+              latest?.resolved?.case_study_abstract || current.caseStudyAbstract || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
@@ -797,6 +820,11 @@ function renderProjectEditors(projects, customization) {
               ),
               portfolioBlurb: String(
                 latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+              caseStudyAbstract: String(
+                latest?.analysis_defaults?.case_study_abstract ||
+                  current.analysisDefaults?.caseStudyAbstract ||
+                  ""
               ),
             },
           },
@@ -836,6 +864,9 @@ function renderProjectEditors(projects, customization) {
             portfolioBlurb: String(
               latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
             ),
+            caseStudyAbstract: String(
+              latest?.resolved?.case_study_abstract || current.caseStudyAbstract || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
             images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
@@ -845,6 +876,11 @@ function renderProjectEditors(projects, customization) {
               ),
               portfolioBlurb: String(
                 latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+              caseStudyAbstract: String(
+                latest?.analysis_defaults?.case_study_abstract ||
+                  current.analysisDefaults?.caseStudyAbstract ||
+                  ""
               ),
             },
           },
@@ -992,6 +1028,11 @@ function collectCustomization(projects) {
       existingOverride.portfolioBlurb ??
       "";
 
+    const caseStudyAbstract =
+      editor?.querySelector('[data-field="caseStudyAbstract"]')?.value?.trim() ??
+      existingOverride.caseStudyAbstract ??
+      "";
+
     const templateId =
       editor?.querySelector('[data-field="templateId"]')?.value?.trim() ??
       existingOverride.templateId ??
@@ -1001,13 +1042,15 @@ function collectCustomization(projects) {
       keyRole,
       evidence,
       portfolioBlurb,
+      caseStudyAbstract,
       templateId,
       images: Array.isArray(existingOverride.images) ? existingOverride.images : [],
       analysisDefaults: {
         keyRole: String(existingOverride.analysisDefaults?.keyRole || ""),
         evidence: String(existingOverride.analysisDefaults?.evidence || ""),
-        portfolioBlurb: String(existingOverride.analysisDefaults?.portfolioBlurb || "")
-      }
+        portfolioBlurb: String(existingOverride.analysisDefaults?.portfolioBlurb || ""),
+        caseStudyAbstract: String(existingOverride.analysisDefaults?.caseStudyAbstract || ""),
+      },
     };
   });
 
@@ -1042,7 +1085,8 @@ async function persistProjectOverrides(projects, customization) {
       template_id: override.templateId || "classic",
       key_role: override.keyRole || null,
       evidence_of_success: override.evidence || null,
-      portfolio_blurb: override.portfolioBlurb || null
+      portfolio_blurb: override.portfolioBlurb || null,
+      case_study_abstract: override.caseStudyAbstract || null,
     });
 
     await saveProjectFeaturedState(project.project_id, {
@@ -1063,6 +1107,7 @@ async function saveProjectById(projectId) {
   const keyRole = editor.querySelector('[data-field="keyRole"]')?.value?.trim() || "";
   const evidence = editor.querySelector('[data-field="evidence"]')?.value?.trim() || "";
   const portfolioBlurb = editor.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
+  const caseStudyAbstract = editor.querySelector('[data-field="caseStudyAbstract"]')?.value?.trim() || "";
   const templateId = editor.querySelector('[data-field="templateId"]')?.value?.trim() || "classic";
   const current = loadPortfolioCustomization();
   const featuredCheckbox = editor.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
@@ -1070,7 +1115,14 @@ async function saveProjectById(projectId) {
     ? !!featuredCheckbox.checked
     : (current.featuredProjectIds || []).map(String).includes(String(projectId));
 
-  const snapshot = JSON.stringify({ keyRole, evidence, portfolioBlurb, templateId, isFeatured });
+  const snapshot = JSON.stringify({
+    keyRole,
+    evidence,
+    portfolioBlurb,
+    caseStudyAbstract,
+    templateId,
+    isFeatured,
+  });
   if (editor.dataset.savedSnapshot === snapshot) return "no-changes";
   const featuredIds = current?.featuredProjectIds || [];
   const rank = featuredIds.indexOf(projectId);
@@ -1079,7 +1131,8 @@ async function saveProjectById(projectId) {
     template_id: templateId,
     key_role: keyRole || null,
     evidence_of_success: evidence || null,
-    portfolio_blurb: portfolioBlurb || null
+    portfolio_blurb: portfolioBlurb || null,
+    case_study_abstract: caseStudyAbstract || null,
   });
 
   await saveProjectFeaturedState(projectId, {
@@ -1095,7 +1148,8 @@ async function saveProjectById(projectId) {
       keyRole,
       evidence,
       portfolioBlurb,
-      templateId
+      caseStudyAbstract,
+      templateId,
     },
   };
 
@@ -1190,17 +1244,30 @@ function buildLivePreviewProjectCardHtml(project, override, { isFeatured = false
       ? (galleryMarkup || `<p class="live-preview-empty">Add images for the gallery carousel.</p>`)
       : coverImageMarkup;
 
+  const abstractMarkup =
+    templateId === "case_study"
+      ? String(override.caseStudyAbstract || "").trim()
+        ? `<p><strong>Abstract:</strong> ${escapeHtml(String(override.caseStudyAbstract).trim())}</p>`
+        : `<p class="live-preview-empty"><strong>Abstract:</strong> Not filled in yet.</p>`
+      : "";
+
+  const summaryMarkup =
+    templateId === "case_study"
+      ? String(override.portfolioBlurb || "").trim()
+        ? `<p><strong>Overview:</strong> ${escapeHtml(String(override.portfolioBlurb).trim())}</p>`
+        : `<p class="live-preview-empty"><strong>Overview:</strong> Not filled in yet.</p>`
+      : override.portfolioBlurb
+        ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
+        : `<p class="live-preview-empty">No portfolio blurb yet.</p>`;
+
   return `
     <div class="live-preview-project-card live-preview-template-${escapeHtml(templateId)}">
       <h4>${escapeHtml(project.project_id)}</h4>
       ${badges}
       ${metaMarkup}
       ${mediaMarkup}
-      ${
-        override.portfolioBlurb
-          ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
-          : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
-      }
+      ${abstractMarkup}
+      ${summaryMarkup}
       ${
         override.keyRole
           ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
@@ -1236,6 +1303,7 @@ function buildWorkspaceEditorFormHtml(project, override, isFeatured, selectedTem
     keyRole: override.keyRole || "",
     evidence: override.evidence || "",
     portfolioBlurb: override.portfolioBlurb || "",
+    caseStudyAbstract: override.caseStudyAbstract || "",
     templateId: selectedTemplate,
     isFeatured,
   });
@@ -1244,6 +1312,7 @@ function buildWorkspaceEditorFormHtml(project, override, isFeatured, selectedTem
     <div
       class="portfolio-workspace-editor-root"
       data-project-editor-id="${escapeHtml(project.project_id)}"
+      data-active-template="${escapeHtml(selectedTemplate)}"
       data-saved-snapshot="${escapeHtml(initialSnapshot)}"
     >
       <div class="portfolio-template-picker">
@@ -1296,12 +1365,21 @@ function buildWorkspaceEditorFormHtml(project, override, isFeatured, selectedTem
             placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
           >${escapeHtml(override.evidence || "")}</textarea>
         </label>
+        <label class="form-full-row portfolio-case-study-only">
+          <span>Abstract</span>
+          <textarea
+            data-field="caseStudyAbstract"
+            rows="4"
+            placeholder="Case-study opening: project name, stack, skills with expertise, and the skill-development closing (auto-filled from analysis when you use Case Study)."
+          >${escapeHtml(override.caseStudyAbstract || "")}</textarea>
+        </label>
         <label class="form-full-row">
-          <span>Portfolio Summary</span>
+          <span class="portfolio-blurb-label-classic">Portfolio summary</span>
+          <span class="portfolio-blurb-label-case-study">Overview</span>
           <textarea
             data-field="portfolioBlurb"
             rows="3"
-            placeholder="Short description that should appear in the portfolio showcase."
+            placeholder="Short description for the portfolio showcase. In Case Study layout this appears as the Overview section."
           >${escapeHtml(override.portfolioBlurb || "")}</textarea>
         </label>
       </div>
@@ -1415,6 +1493,10 @@ function updatePortfolioWorkspacePreview(draftCustomization) {
     evidence: editor?.querySelector('[data-field="evidence"]')?.value?.trim() ?? rawOverride.evidence ?? "",
     portfolioBlurb:
       editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() ?? rawOverride.portfolioBlurb ?? "",
+    caseStudyAbstract:
+      editor?.querySelector('[data-field="caseStudyAbstract"]')?.value?.trim() ??
+      rawOverride.caseStudyAbstract ??
+      "",
     templateId:
       editor?.querySelector('[data-field="templateId"]')?.value?.trim() ?? rawOverride.templateId ?? "classic",
     images: Array.isArray(rawOverride.images) ? rawOverride.images : [],
@@ -1449,6 +1531,7 @@ function renderLivePreview(projects, draftCustomization) {
       const override = draftCustomization.projectOverrides?.[project.project_id] || {};
       const hasDraftContent = Boolean(
         String(override.portfolioBlurb || "").trim() ||
+        String(override.caseStudyAbstract || "").trim() ||
         String(override.keyRole || "").trim() ||
         String(override.evidence || "").trim() ||
         String(override.templateId || "").trim() ||
@@ -1797,6 +1880,7 @@ export function initPortfolioEditor() {
             keyRole: defaults.keyRole || "",
             evidence: defaults.evidence || "",
             portfolioBlurb: defaults.portfolioBlurb || "",
+            caseStudyAbstract: defaults.caseStudyAbstract || "",
           },
         };
 
