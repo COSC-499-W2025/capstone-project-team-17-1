@@ -717,3 +717,53 @@ This week, the team focused on improving the frontend experience and polishing t
 [Feature/customization autosave (#302)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/302) added an autosave mechanism to portfolio customization. Changes made by users are automatically saved, reducing the risk of losing edits and improving the editing experience.
 
 Overall, this week’s work strengthened the Portfolio & Resume system and improved frontend stability. These updates move the project closer to completing the Milestone 3 interface and preparing the system for final integration and polishing.
+
+## WEEK 11+12 TEAM LOG (Term2)
+(Mar 16 - Mar 29, 2026)
+
+### Recap of Milestone Goal - Week 11+12
+The goal of this milestone is to build a service-oriented system that supports a human-in-the-loop workflow, allowing users to select, customize, and correct extracted information through API-based interactions rather than relying on fully automated extraction alone.
+
+### Burnup chart - Week 11+12
+<img width="1062" height="576" alt="Screenshot 2026-03-29 at 7 51 27 PM" src="https://github.com/user-attachments/assets/3d575cfd-06bb-4c31-bb25-68bf7c275c83" />
+
+### Completed Tasks - Week 11+12
+<img width="1144" height="779" alt="Screenshot 2026-03-29 at 7 52 13 PM" src="https://github.com/user-attachments/assets/4d83455d-83ac-476e-a881-ee26b7200ee8" />
+<img width="1123" height="261" alt="Screenshot 2026-03-29 at 7 52 27 PM" src="https://github.com/user-attachments/assets/6b9faad9-57bc-4157-a6ce-2bad61d7a095" />
+<img width="1134" height="74" alt="Screenshot 2026-03-29 at 7 52 36 PM" src="https://github.com/user-attachments/assets/2fe024a5-da77-4423-8c74-66dce109cc68" />
+<img width="1160" height="202" alt="Screenshot 2026-03-29 at 7 52 45 PM" src="https://github.com/user-attachments/assets/76b566c6-1996-4eca-b662-dcbc6bf86939" />
+
+
+### In Progress Tasks - Week 11+12
+<img width="987" height="137" alt="Screenshot 2026-03-29 at 7 53 02 PM" src="https://github.com/user-attachments/assets/eb72ed13-01b9-44aa-8a5d-e08b28c707d2" />
+
+### Test Report - Week 11+12
+This week, the team focused on stabilizing the dashboard after merges and polishing frontend features for Milestone 3. The work mainly addressed merge conflicts, UI inconsistencies, and improvements to portfolio, résumé, and AI-related features to ensure a smoother and more reliable user experience.
+
+[fixed minor bug for the frontend light mode (#341)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/341) resolved light-mode contrast issues, improving readability and ensuring consistent styling across components.
+
+[Implemented portfolio themes and revised project portfolio outputs (#340)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/340) enhanced portfolio customization and refined how project outputs are displayed, making the interface more flexible and visually consistent.
+
+[Fix/server sync (#334)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/334) fixed synchronization issues between frontend and backend, improving data consistency and preventing mismatches.
+
+[Add cinematic dashboard UI and enhanced activity log (#332)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/332) upgraded the dashboard with improved visuals, animations, and a more interactive activity log experience.
+
+[Add consent gate (#331)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/331) introduced a consent mechanism for AI features, ensuring proper privacy handling and controlled access.
+
+[Bug/fix minor bugs (#328)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/328) and [Bug/fix UI bugs (#311)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/311) addressed multiple frontend issues, improving overall stability and usability.
+
+[Feature/ask sienna (#321)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/321) implemented the AI assistant feature, enabling a more interactive and project-aware user experience.
+
+[Refactoring and improvements to the resume feature (#320)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/320) improved résumé generation and editing workflows, making outputs more consistent and reliable.
+
+[Improve portfolio heatmap, skill progression, and project evolution resume consistency (#318)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/318) enhanced data visualization and ensured consistency across portfolio and résumé views.
+
+[Align dashboard modes, resume exports, and portfolio/tutorial UX (#317)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/317) unified behavior across different modes and improved overall UX flow.
+
+[Feature/polish setting tab (#312)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/312) refined the settings interface for better usability and consistency.
+
+[Refactoring the frontend architecture and renderer JS classes (#309)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/309) improved code structure and maintainability of the frontend.
+
+[Improve portfolio heatmap, onboarding, and consent flows (#307)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/307) enhanced onboarding experience and improved heatmap and consent-related interactions.
+
+Overall, this week’s work focused on resolving merge inconsistencies, improving frontend stability, and polishing core features, resulting in a more cohesive and production-ready Milestone 3 system.
