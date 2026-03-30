@@ -304,6 +304,53 @@
           <div class="portfolio-grid">
             <div class="card portfolio-editor-card portfolio-section" data-portfolio-section="project-details" data-portfolio-label="Project Portfolio Details" data-portfolio-category="customization">
               <h2 class="card-title">Project Portfolio Details</h2>
+              <div id="portfolio-editor-workspace" class="portfolio-editor-workspace hidden" aria-hidden="true">
+                <div class="portfolio-editor-workspace-header">
+                  <div>
+                    <span class="portfolio-workspace-label">Editing project</span>
+                    <h3 id="portfolio-workspace-active-title" class="portfolio-workspace-title"></h3>
+                  </div>
+                  <button type="button" class="secondary-btn portfolio-workspace-close" id="portfolio-workspace-close-btn">Close</button>
+                </div>
+                <div class="portfolio-editor-workspace-split">
+                  <div class="portfolio-workspace-pane portfolio-workspace-pane-edit">
+                    <div class="portfolio-workspace-pane-title">Details</div>
+                    <div class="portfolio-workspace-pane-edit-body">
+                      <div id="portfolio-workspace-editor-pane" class="portfolio-workspace-editor-scroll"></div>
+                      <div
+                        id="portfolio-workspace-editor-footer"
+                        class="portfolio-workspace-editor-footer hidden"
+                        aria-hidden="true"
+                      >
+                        <span
+                          id="portfolio-workspace-save-status"
+                          class="customization-project-save-status"
+                        ></span>
+                        <div class="portfolio-workspace-editor-footer-actions">
+                          <button
+                            type="button"
+                            class="secondary-btn portfolio-reset-btn"
+                            data-reset-analysis-defaults=""
+                          >
+                            Reset to default analysis
+                          </button>
+                          <button
+                            type="button"
+                            class="secondary-btn customization-project-save-btn"
+                            data-project-save=""
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="portfolio-workspace-pane portfolio-workspace-pane-preview">
+                    <div class="portfolio-workspace-pane-title">Live preview</div>
+                    <div id="portfolio-workspace-preview-content" class="portfolio-workspace-preview-scroll"></div>
+                  </div>
+                </div>
+              </div>
               <div id="portfolio-project-editor-container" class="customization-project-editor-list"></div>
             </div>
 

@@ -1,12 +1,11 @@
 import { fetchProjects } from "./projects.js";
-import { authFetch, isPrivateMode } from "./auth.js";
+import { authFetch, hydratePortfolioAuthImages, isPrivateMode } from "./auth.js";
 import { loadPortfolio } from "./portfolio.js";
 import {
   loadPortfolioCustomization,
   savePortfolioCustomization,
 } from "./portfolioState.js";
 
-const API_BASE = "http://127.0.0.1:8002";
 const AUTOSAVE_DELAY_MS = 1200;
 
 let previewProjectsCache = [];
@@ -17,6 +16,17 @@ let isDirty = false;
 let isSaving = false;
 let lastSavedSnapshot = "";
 let activePortfolioProjectId = null;
+const livePreviewGalleryState = new Map();
+
+function sortPortfolioImagesCoverFirst(images) {
+  const list = Array.isArray(images) ? images.filter(Boolean) : [];
+  return [...list].sort((a, b) => {
+    const aCover = a?.is_cover ? 1 : 0;
+    const bCover = b?.is_cover ? 1 : 0;
+    if (aCover !== bCover) return bCover - aCover;
+    return Number(a?.sort_order || 0) - Number(b?.sort_order || 0);
+  });
+}
 
 
 function escapeHtml(value) {
@@ -38,7 +48,7 @@ function buildProjectThemeDetails(project, override = {}) {
     ? `
       <img
         class="portfolio-theme-cover-image"
-        src="${escapeHtml(getPortfolioImageUrl(project.project_id, coverImage.id))}"
+        data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, coverImage.id))}"
         alt="${escapeHtml(project.project_id)} cover image"
       />
     `
@@ -55,7 +65,7 @@ function buildProjectThemeDetails(project, override = {}) {
               (image) => `
                 <div class="portfolio-theme-gallery-item">
                   <img
-                    src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
+                    data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, image.id))}"
                     alt="${escapeHtml(image.caption || "Project image")}"
                   />
                   <p>${escapeHtml(image.caption || override.portfolioBlurb || "")}</p>
@@ -198,8 +208,13 @@ async function setPortfolioCoverImage(projectId, imageId) {
   return true;
 }
 
-function getPortfolioImageUrl(projectId, imageId) {
-  return `${API_BASE}/portfolio/${encodeURIComponent(projectId)}/images/${encodeURIComponent(imageId)}/file`;
+function getPortfolioImageAuthPath(projectId, imageId) {
+  return `/portfolio/${encodeURIComponent(projectId)}/images/${encodeURIComponent(imageId)}/file`;
+}
+
+function hydratePortfolioEditorImages() {
+  hydratePortfolioAuthImages(getPreviewContainer());
+  hydratePortfolioAuthImages(document.getElementById("portfolio-editor-workspace"));
 }
 
 async function hydrateCustomizationFromBackend(projects) {
@@ -243,7 +258,7 @@ async function hydrateCustomizationFromBackend(projects) {
         resolved.portfolio_blurb || defaults.portfolio_blurb || data.summary || ""
       ),
       templateId: String(data.template_id || "classic"),
-      images: Array.isArray(data.images) ? data.images : [],
+      images: sortPortfolioImagesCoverFirst(data.images),
       analysisDefaults: {
         keyRole: String(defaults.key_role || ""),
         evidence: String(defaults.evidence_of_success || ""),
@@ -489,16 +504,19 @@ function renderFeaturedProjects(projects, customization) {
 
 function renderProjectEditors(projects, customization) {
   const container = document.getElementById("portfolio-project-editor-container");
+  const workspaceShell = document.getElementById("portfolio-editor-workspace");
   const featuredIds = (customization.featuredProjectIds || []).map(String);
   if (!container) return;
 
   if (!projects.length) {
-    container.innerHTML =
-      `<p class="muted-text">No projects available for customization yet.</p>`;
+    activePortfolioProjectId = null;
+    workspaceShell?.classList.add("hidden");
+    if (workspaceShell) workspaceShell.setAttribute("aria-hidden", "true");
+    container.innerHTML = `<p class="muted-text">No projects available for customization yet.</p>`;
+    syncWorkspaceEditorFooter(null);
     return;
   }
 
-  // Mirror the starred ordering in the editor list 
   const featuredOrder = customization.featuredProjectIds || [];
   const orderedProjects = [...projects].sort((a, b) => {
     const aIndex = featuredOrder.indexOf(String(a.project_id));
@@ -512,30 +530,22 @@ function renderProjectEditors(projects, customization) {
     return String(a.project_id).localeCompare(String(b.project_id));
   });
 
-  container.innerHTML = orderedProjects
+  const projectListHtml = orderedProjects
     .map((project) => {
       const override = customization.projectOverrides?.[project.project_id] || {};
       const isFeatured = featuredIds.includes(String(project.project_id));
       const isActive = activePortfolioProjectId === project.project_id;
       const selectedTemplate = String(override.templateId || "classic");
 
-      const initialSnapshot = JSON.stringify({
-        keyRole: override.keyRole || "",
-        evidence: override.evidence || "",
-        portfolioBlurb: override.portfolioBlurb || "",
-        templateId: selectedTemplate,
-        isFeatured,
-      });
-
       return `
-        <div 
-          class="customization-project-editor ${isActive ? "active" : "collapsed"}" 
-          data-project-editor-id="${escapeHtml(project.project_id)}" 
-          data-saved-snapshot="${escapeHtml(initialSnapshot)}"
+        <div
+          class="customization-project-editor collapsed ${isActive ? "active" : ""}"
+          data-project-editor-row="${escapeHtml(project.project_id)}"
         >
-          <div 
-            class="customization-project-editor-header" 
-            data-open-project-card="${escapeHtml(project.project_id)}">
+          <div
+            class="customization-project-editor-header"
+            data-open-project-card="${escapeHtml(project.project_id)}"
+          >
             <div>
               <h3>${escapeHtml(project.project_id)}</h3>
               <p class="muted-text">
@@ -558,259 +568,103 @@ function renderProjectEditors(projects, customization) {
               >★</button>
             </div>
           </div>
-          ${
-            !isActive
-              ? `
-                <div class="portfolio-card-collapsed-preview">
-                  <p>${escapeHtml(override.portfolioBlurb || "Click to open project portfolio details.")}</p>
-                </div>
-              `
-              : `
-              <div class="portfolio-card-expanded-content">
-                <div class="portfolio-template-picker">
-                  <button
-                    type="button"
-                    class="portfolio-template-card${selectedTemplate === "classic" ? " active" : ""}"
-                    data-template-choice="classic"
-                    data-project-template="${escapeHtml(project.project_id)}"
-                  >
-                    <div class="portfolio-template-title">Classic</div>
-                    <div class="portfolio-template-copy">Simple hero image and clean project summary.</div>
-                  </button>
-                  
-                  <button
-                    type="button"
-                    class="portfolio-template-card${selectedTemplate === "case_study" ? " active" : ""}"
-                    data-template-choice="case_study"
-                    data-project-template="${escapeHtml(project.project_id)}"
-                  >
-                    <div class="portfolio-template-title">Case Study</div>
-                    <div class="portfolio-template-copy">Problem, role, build work, and result layout.</div>
-                  </button>
-                  
-                  <button
-                    type="button"
-                    class="portfolio-template-card${selectedTemplate === "gallery" ? " active" : ""}"
-                    data-template-choice="gallery"
-                    data-project-template="${escapeHtml(project.project_id)}"
-                  >
-                    <div class="portfolio-template-title">Gallery</div>
-                    <div class="portfolio-template-copy">More visual layout focused on screenshots.</div>
-                  </button>
-                </div>
+          <div class="portfolio-card-collapsed-preview">
+            <p>${escapeHtml(override.portfolioBlurb || "Click to open the editor and live preview.")}</p>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 
-                <input
-                  type="hidden"
-                  data-field="templateId"
-                  value="${escapeHtml(selectedTemplate)}"
-                />
+  const workspaceOpen = Boolean(activePortfolioProjectId);
+  if (workspaceOpen) {
+    container.classList.add("hidden");
+    container.setAttribute("aria-hidden", "true");
+    container.innerHTML = "";
+  } else {
+    container.classList.remove("hidden");
+    container.setAttribute("aria-hidden", "false");
+    container.innerHTML = projectListHtml;
+  }
 
-                <div class="form-grid">
-                  <label>
-                    <span>Key role</span>
-                    <input
-                      type="text"
-                      data-field="keyRole"
-                      value="${escapeHtml(override.keyRole || "")}"
-                      placeholder="Example: Frontend integration lead"
-                    />
-                  </label>
+  renderPortfolioWorkspacePanel(customization, orderedProjects);
 
-                  <label class="form-full-row">
-                    <span>Evidence of success</span>
-                    <textarea
-                      data-field="evidence"
-                      rows="3"
-                      placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
-                    >${escapeHtml(override.evidence || "")}</textarea>
-                  </label>
+  const workspacePane = document.getElementById("portfolio-workspace-editor-pane");
 
-                  <label class="form-full-row">
-                    <span>Portfolio Summary</span>
-                    <textarea
-                      data-field="portfolioBlurb"
-                      rows="3"
-                      placeholder="Short description that should appear in the portfolio showcase."
-                    >${escapeHtml(override.portfolioBlurb || "")}</textarea>
-                  </label>
-                </div>
+  if (!workspaceOpen) {
+    container.querySelectorAll("[data-project-star]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-                <div class="portfolio-upload-block">
-                  <label class="portfolio-upload-dropzone">
-                    <span class="portfolio-upload-trigger">Upload images</span>
-                    <div class="portfolio-upload-help">PNG, JPG, WEBP, or GIF screenshots for this project.</div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      data-project-image-upload="${escapeHtml(project.project_id)}"
-                    />
-                  </label>
+        const projectId = String(button.dataset.projectStar || "");
+        if (!projectId) return;
 
-                  <div class="portfolio-image-grid">
-                    ${(Array.isArray(override.images) ? override.images : []).map((image) => `
-                      <div class="portfolio-image-card" data-portfolio-image-id="${escapeHtml(image.id)}">
-                        <div class="portfolio-image-preview-wrap">
-                          <img
-                            class="portfolio-image-preview"
-                            src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
-                            alt="${escapeHtml(image.caption || "Portfolio image")}"
-                          />
-                          ${image.is_cover ? `<span class="portfolio-image-cover-badge">Cover</span>` : ""}
-                        </div>
-                        <div class="portfolio-image-meta">
-                          <div class="portfolio-image-caption">${escapeHtml(image.caption || "Project image")}</div>
-                          <div class="portfolio-image-actions">
-                            <button
-                              type="button"
-                              class="portfolio-image-btn"
-                              data-set-cover-image="${escapeHtml(image.id)}"
-                              data-project-id="${escapeHtml(project.project_id)}"
-                            >
-                              ${image.is_cover ? "Cover Image" : "Set Cover"}
-                            </button>
-                            <button
-                              type="button"
-                              class="portfolio-image-btn danger"
-                              data-delete-image="${escapeHtml(image.id)}"
-                              data-project-id="${escapeHtml(project.project_id)}"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    `).join("")}
-                  </div>
-                </div>
+        const current = loadPortfolioCustomization();
+        const featured = [...(current.featuredProjectIds || []).map(String)];
 
-                <div class="portfolio-card-theme-preview">
-                  ${buildProjectThemeDetails(project, override)}
-                </div>
-
-                <div class="customization-project-editor-actions">
-                  <span class="customization-project-save-status"></span>
-
-                  <button
-                      type="button"
-                      class="secondary-btn portfolio-reset-btn"
-                      data-reset-analysis-defaults="${escapeHtml(project.project_id)}"
-                  >
-                      Reset to default analysis
-                  </button>
-
-                  <button
-                    type="button"
-                    class="secondary-btn customization-project-save-btn"
-                    data-project-save="${escapeHtml(project.project_id)}"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            `
+        const existingIndex = featured.indexOf(projectId);
+        if (existingIndex >= 0) {
+          featured.splice(existingIndex, 1);
+        } else {
+          featured.unshift(projectId);
         }
-      </div>
-    `;
-  })
-  .join("");
 
-  container.querySelectorAll("[data-project-star]").forEach((button) => {
-    button.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+        const nextFeatured = featured.slice(0, 3);
 
-      const projectId = String(button.dataset.projectStar || "");
-      if (!projectId) return;
+        const nextCustomization = {
+          ...current,
+          featuredProjectIds: nextFeatured,
+        };
 
-      const current = loadPortfolioCustomization();
-      const featured = [...((current.featuredProjectIds || []).map(String))];
+        savePortfolioCustomization(nextCustomization);
 
-      const existingIndex = featured.indexOf(projectId);
-      if (existingIndex >= 0) {
-        featured.splice(existingIndex, 1);
-      } else {
-        featured.unshift(projectId);
-      }
+        renderFeaturedProjects(previewProjectsCache, nextCustomization);
+        renderProjectEditors(previewProjectsCache, nextCustomization);
+        renderFeaturedOrderList(previewProjectsCache, nextCustomization);
+        updateLivePreview();
+        scheduleAutosave();
 
-      const nextFeatured = featured.slice(0, 3);
+        try {
+          await Promise.all(
+            previewProjectsCache.map((project) => {
+              const pid = String(project.project_id);
+              const rank = nextFeatured.indexOf(pid);
 
-      const nextCustomization = {
-        ...current,
-        featuredProjectIds: nextFeatured,
-      };
-
-      savePortfolioCustomization(nextCustomization);
-
-      renderFeaturedProjects(previewProjectsCache, nextCustomization);
-      renderProjectEditors(previewProjectsCache, nextCustomization);
-      renderFeaturedOrderList(previewProjectsCache, nextCustomization);
-      updateLivePreview();
-      scheduleAutosave();
-
-      try {
-        await Promise.all(
-          previewProjectsCache.map((project) => {
-            const pid = String(project.project_id);
-            const rank = nextFeatured.indexOf(pid);
-
-            return saveProjectFeaturedState(pid, {
-              selected: rank >= 0,
-              rank,
-            });
-          })
-        );
-      } catch (error) {
-        console.error("Failed to persist featured project order:", error);
-        setStatus("Failed to save featured project order.", "error");
-      }
+              return saveProjectFeaturedState(pid, {
+                selected: rank >= 0,
+                rank,
+              });
+            })
+          );
+        } catch (error) {
+          console.error("Failed to persist featured project order:", error);
+          setStatus("Failed to save featured project order.", "error");
+        }
+      });
     });
-  });
 
-  container.querySelectorAll("[data-reset-analysis-defaults]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const projectId = button.dataset.resetAnalysisDefaults;
-      const customization = loadPortfolioCustomization();
-      const currentOverride = customization.projectOverrides?.[projectId] || {};
-      const defaults = currentOverride.analysisDefaults || {};
+    container.querySelectorAll("[data-open-project-card]").forEach((header) => {
+      header.addEventListener("click", (event) => {
+        if (event.target.closest("[data-project-star]")) {
+          return;
+        }
 
-      customization.projectOverrides = {
-        ...(customization.projectOverrides || {}),
-        [projectId]: {
-          ...currentOverride,
-          keyRole: defaults.keyRole || "",
-          evidence: defaults.evidence || "",
-          portfolioBlurb: defaults.portfolioBlurb || "",
-        },
-      };
-
-      savePortfolioCustomization(customization);
-      renderProjectEditors(previewProjectsCache, customization);
-      updateLivePreview();
-      scheduleAutosave();
-      setStatus("Reset to analysis defaults.", "info");
+        savePortfolioCustomization(collectDraftCustomization());
+        const projectId = header.dataset.openProjectCard;
+        activePortfolioProjectId =
+          activePortfolioProjectId === projectId ? null : projectId;
+        renderProjectEditors(previewProjectsCache, loadPortfolioCustomization());
+        if (activePortfolioProjectId) {
+          document.getElementById("portfolio-editor-workspace")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      });
     });
-  });
 
-  container.querySelectorAll("[data-open-project-card]").forEach((header) => {
-  header.addEventListener("click", (event) => {
-    if (event.target.closest("[data-project-star]")) {
-      return;
-    }
-
-    const projectId = header.dataset.openProjectCard;
-    activePortfolioProjectId =
-      activePortfolioProjectId === projectId ? null : projectId;
-
-    const customization = loadPortfolioCustomization();
-    renderProjectEditors(previewProjectsCache, customization);
-  });
-});
-
-    const checkboxes = container.querySelectorAll("[data-project-selected]");
-    const saveButtons = container.querySelectorAll("[data-project-save]");
-
-    checkboxes.forEach((cb) => {
+    container.querySelectorAll("[data-project-selected]").forEach((cb) => {
       cb.addEventListener("change", () => {
         const checked = container.querySelectorAll("[data-project-selected]:checked");
         if (checked.length > 3) {
@@ -821,38 +675,13 @@ function renderProjectEditors(projects, customization) {
         }
       });
     });
+  }
 
-    saveButtons.forEach((button) => {
-      const projectId = button.dataset.projectSave;
-      button.addEventListener("click", async () => {
-        const statusSpan = button.parentElement?.querySelector(".customization-project-save-status");
-        const showLocal = (msg, kind) => {
-          if (!statusSpan) return;
-          statusSpan.textContent = msg;
-          statusSpan.dataset.kind = kind;
-        };
-
-        showLocal("Saving...", "info");
-        try {
-          const result = await saveProjectById(projectId);
-          if (result === "no-changes") {
-            showLocal("No changes to save", "info");
-          } else {
-            showLocal("Saved", "success");
-          }
-          setTimeout(() => showLocal("", ""), 2500);
-        } catch (_) {
-          showLocal("Failed to save", "error");
-        }
-      });
-    });
-
-    const templateButtons = container.querySelectorAll("[data-project-template]");
-    templateButtons.forEach((button) => {
-      button.addEventListener("click", () => {
+  workspacePane?.querySelectorAll("[data-project-template]").forEach((button) => {
+    button.addEventListener("click", () => {
       const projectId = button.dataset.projectTemplate;
       const templateId = button.dataset.templateChoice;
-      const editor = container.querySelector(
+      const editor = document.querySelector(
         `[data-project-editor-id="${CSS.escape(projectId)}"]`
       );
       const hiddenInput = editor?.querySelector('[data-field="templateId"]');
@@ -860,26 +689,30 @@ function renderProjectEditors(projects, customization) {
 
       hiddenInput.value = templateId;
 
-      const customization = loadPortfolioCustomization();
-      const currentOverride = customization.projectOverrides?.[projectId] || {};
+      const nextCustomization = loadPortfolioCustomization();
+      const currentOverride = nextCustomization.projectOverrides?.[projectId] || {};
 
-      customization.projectOverrides = {
-        ...(customization.projectOverrides || {}),
+      nextCustomization.projectOverrides = {
+        ...(nextCustomization.projectOverrides || {}),
         [projectId]: {
           ...currentOverride,
-          templateId
-        }
+          templateId,
+        },
       };
 
-      savePortfolioCustomization(customization);
-      renderProjectEditors(previewProjectsCache, customization);
+      savePortfolioCustomization(nextCustomization);
+      workspacePane?.querySelectorAll(".portfolio-template-card").forEach((el) => el.classList.remove("active"));
+      button.classList.add("active");
+      const pill = document.querySelector(
+        `[data-project-editor-row="${CSS.escape(projectId)}"] .portfolio-template-pill`
+      );
+      if (pill) pill.textContent = templateId.replaceAll("_", " ");
       updateLivePreview();
       scheduleAutosave();
     });
   });
 
-  const imageUploadInputs = container.querySelectorAll("[data-project-image-upload]");
-  imageUploadInputs.forEach((input) => {
+  workspacePane?.querySelectorAll("[data-project-image-upload]").forEach((input) => {
     input.addEventListener("change", async (event) => {
       const projectId = input.dataset.projectImageUpload;
       const files = Array.from(event.target.files || []);
@@ -893,31 +726,37 @@ function renderProjectEditors(projects, customization) {
         }
 
         const latest = await fetchProjectPortfolioEntry(projectId);
-        const customization = loadPortfolioCustomization();
-        const current = customization.projectOverrides?.[projectId] || {};
+        const nextCustomization = loadPortfolioCustomization();
+        const current = nextCustomization.projectOverrides?.[projectId] || {};
 
-        customization.projectOverrides = {
-          ...(customization.projectOverrides || {}),
+        nextCustomization.projectOverrides = {
+          ...(nextCustomization.projectOverrides || {}),
           [projectId]: {
             ...current,
             keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
             evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            portfolioBlurb: String(
+              latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
-            images: Array.isArray(latest?.images) ? latest.images : [],
+            images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
               keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
-              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
-              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
-            }
+              evidence: String(
+                latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""
+              ),
+              portfolioBlurb: String(
+                latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+            },
           },
         };
 
-        savePortfolioCustomization(customization);
-        lastSavedSnapshot = snapshotCustomization(customization);
+        savePortfolioCustomization(nextCustomization);
+        lastSavedSnapshot = snapshotCustomization(nextCustomization);
         isDirty = false;
         updateSaveButtonState();
-        renderProjectEditors(previewProjectsCache, customization);
+        renderProjectEditors(previewProjectsCache, nextCustomization);
         updateLivePreview();
         setStatus("Images uploaded.", "success");
       } catch (error) {
@@ -929,7 +768,7 @@ function renderProjectEditors(projects, customization) {
     });
   });
 
-  container.querySelectorAll("[data-set-cover-image]").forEach((button) => {
+  workspacePane?.querySelectorAll("[data-set-cover-image]").forEach((button) => {
     button.addEventListener("click", async () => {
       const projectId = button.dataset.projectId;
       const imageId = button.dataset.setCoverImage;
@@ -937,31 +776,37 @@ function renderProjectEditors(projects, customization) {
       try {
         await setPortfolioCoverImage(projectId, imageId);
         const latest = await fetchProjectPortfolioEntry(projectId);
-        const customization = loadPortfolioCustomization();
-        const current = customization.projectOverrides?.[projectId] || {};
+        const nextCustomization = loadPortfolioCustomization();
+        const current = nextCustomization.projectOverrides?.[projectId] || {};
 
-        customization.projectOverrides = {
-          ...(customization.projectOverrides || {}),
+        nextCustomization.projectOverrides = {
+          ...(nextCustomization.projectOverrides || {}),
           [projectId]: {
             ...current,
             keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
             evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            portfolioBlurb: String(
+              latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
-            images: Array.isArray(latest?.images) ? latest.images : [],
+            images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
               keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
-              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
-              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
-            }
+              evidence: String(
+                latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""
+              ),
+              portfolioBlurb: String(
+                latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+            },
           },
         };
 
-        savePortfolioCustomization(customization);
-        lastSavedSnapshot = snapshotCustomization(customization);
+        savePortfolioCustomization(nextCustomization);
+        lastSavedSnapshot = snapshotCustomization(nextCustomization);
         isDirty = false;
         updateSaveButtonState();
-        renderProjectEditors(previewProjectsCache, customization);
+        renderProjectEditors(previewProjectsCache, nextCustomization);
         updateLivePreview();
         setStatus("Cover image updated.", "success");
       } catch (error) {
@@ -971,7 +816,7 @@ function renderProjectEditors(projects, customization) {
     });
   });
 
-  container.querySelectorAll("[data-delete-image]").forEach((button) => {
+  workspacePane?.querySelectorAll("[data-delete-image]").forEach((button) => {
     button.addEventListener("click", async () => {
       const projectId = button.dataset.projectId;
       const imageId = button.dataset.deleteImage;
@@ -979,31 +824,37 @@ function renderProjectEditors(projects, customization) {
       try {
         await deletePortfolioImage(projectId, imageId);
         const latest = await fetchProjectPortfolioEntry(projectId);
-        const customization = loadPortfolioCustomization();
-        const current = customization.projectOverrides?.[projectId] || {};
+        const nextCustomization = loadPortfolioCustomization();
+        const current = nextCustomization.projectOverrides?.[projectId] || {};
 
-        customization.projectOverrides = {
-          ...(customization.projectOverrides || {}),
+        nextCustomization.projectOverrides = {
+          ...(nextCustomization.projectOverrides || {}),
           [projectId]: {
             ...current,
             keyRole: String(latest?.resolved?.key_role || current.keyRole || ""),
             evidence: String(latest?.resolved?.evidence_of_success || current.evidence || ""),
-            portfolioBlurb: String(latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""),
+            portfolioBlurb: String(
+              latest?.resolved?.portfolio_blurb || latest?.summary || current.portfolioBlurb || ""
+            ),
             templateId: String(latest?.template_id || current.templateId || "classic"),
-            images: Array.isArray(latest?.images) ? latest.images : [],
+            images: sortPortfolioImagesCoverFirst(latest?.images),
             analysisDefaults: {
               keyRole: String(latest?.analysis_defaults?.key_role || current.analysisDefaults?.keyRole || ""),
-              evidence: String(latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""),
-              portfolioBlurb: String(latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || "")
-            }
+              evidence: String(
+                latest?.analysis_defaults?.evidence_of_success || current.analysisDefaults?.evidence || ""
+              ),
+              portfolioBlurb: String(
+                latest?.analysis_defaults?.portfolio_blurb || current.analysisDefaults?.portfolioBlurb || ""
+              ),
+            },
           },
         };
 
-        savePortfolioCustomization(customization);
-        lastSavedSnapshot = snapshotCustomization(customization);
+        savePortfolioCustomization(nextCustomization);
+        lastSavedSnapshot = snapshotCustomization(nextCustomization);
         isDirty = false;
         updateSaveButtonState();
-        renderProjectEditors(previewProjectsCache, customization);
+        renderProjectEditors(previewProjectsCache, nextCustomization);
         updateLivePreview();
         setStatus("Image removed.", "success");
       } catch (error) {
@@ -1012,6 +863,8 @@ function renderProjectEditors(projects, customization) {
       }
     });
   });
+
+  updateLivePreview();
 }
 
 function getSelectedProjectIdsFromInputs(projects) {
@@ -1089,14 +942,21 @@ function collectCustomization(projects) {
 
   const sectionVisibility = current?.sectionVisibility || {};
 
-  const selectedIds = projects
-    .filter((project) => {
-      const checked = document.querySelector(
-        `[data-project-selected="${CSS.escape(project.project_id)}"]`
-      );
-      return !!checked?.checked;
-    })
-    .map((project) => project.project_id);
+  const validProjectIds = new Set(projects.map((p) => String(p.project_id)));
+  /* Project picker rows are removed from the DOM while the workspace is open */
+  const selectedIds = activePortfolioProjectId
+    ? (current?.featuredProjectIds || [])
+        .map((id) => String(id))
+        .filter((id) => validProjectIds.has(id))
+        .slice(0, 3)
+    : projects
+        .filter((project) => {
+          const checked = document.querySelector(
+            `[data-project-selected="${CSS.escape(project.project_id)}"]`
+          );
+          return !!checked?.checked;
+        })
+        .map((project) => project.project_id);
 
   if (selectedIds.length > 3) {
     setStatus("You can only select up to 3 featured projects. The top 3 were used.", "warning");
@@ -1204,12 +1064,14 @@ async function saveProjectById(projectId) {
   const evidence = editor.querySelector('[data-field="evidence"]')?.value?.trim() || "";
   const portfolioBlurb = editor.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() || "";
   const templateId = editor.querySelector('[data-field="templateId"]')?.value?.trim() || "classic";
-  const isFeatured = !!editor.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`)?.checked;
+  const current = loadPortfolioCustomization();
+  const featuredCheckbox = editor.querySelector(`[data-project-selected="${CSS.escape(projectId)}"]`);
+  const isFeatured = featuredCheckbox
+    ? !!featuredCheckbox.checked
+    : (current.featuredProjectIds || []).map(String).includes(String(projectId));
 
   const snapshot = JSON.stringify({ keyRole, evidence, portfolioBlurb, templateId, isFeatured });
   if (editor.dataset.savedSnapshot === snapshot) return "no-changes";
-
-  const current = loadPortfolioCustomization();
   const featuredIds = current?.featuredProjectIds || [];
   const rank = featuredIds.indexOf(projectId);
 
@@ -1246,6 +1108,322 @@ async function saveProjectById(projectId) {
   editor.dataset.savedSnapshot = snapshot;
 
   await loadPortfolio();
+}
+
+function buildLivePreviewProjectCardHtml(project, override, { isFeatured = false, showMeta = false } = {}) {
+  const templateId = String(override.templateId || "classic");
+  const templateLabel = templateId.replaceAll("_", " ");
+  const images = sortPortfolioImagesCoverFirst(override.images);
+  const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
+
+  const coverImageMarkup = coverImage?.id
+    ? `
+      <img
+        class="live-preview-hero-image"
+        data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, coverImage.id))}"
+        alt="${escapeHtml(project.project_id)} cover image"
+      />
+    `
+    : "";
+
+  const badges = `
+    <div class="live-preview-badge-row">
+      ${isFeatured ? `<span class="live-preview-badge">Starred</span>` : ""}
+      <span class="live-preview-badge">${escapeHtml(templateLabel)}</span>
+    </div>
+  `;
+
+  const metaMarkup = showMeta
+    ? `
+      <div class="live-preview-meta">
+        ${project.total_files || 0} files • ${project.total_skills || 0} skills
+      </div>
+    `
+    : "";
+
+  const galleryMarkup = (() => {
+    if (templateId !== "gallery" || !images.length) return "";
+    const n = images.length;
+    let idx = Number(livePreviewGalleryState.get(project.project_id));
+    if (!Number.isFinite(idx)) idx = 0;
+    idx = ((idx % n) + n) % n;
+    const current = images[idx];
+    return `
+      <div
+        class="portfolio-gallery-carousel live-preview-gallery-carousel"
+        data-live-carousel-root="${escapeHtml(project.project_id)}"
+        data-live-carousel-length="${n}"
+      >
+        <button
+          type="button"
+          class="gallery-nav gallery-nav-prev"
+          data-live-carousel-prev="${escapeHtml(project.project_id)}"
+          aria-label="Previous image"
+        >‹</button>
+        <div class="gallery-carousel-viewport">
+          <img
+            class="gallery-carousel-image"
+            data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, current.id))}"
+            alt="${escapeHtml(current.caption || "Project image")}"
+          />
+          ${current.caption ? `<p class="gallery-carousel-caption">${escapeHtml(String(current.caption))}</p>` : ""}
+        </div>
+        <button
+          type="button"
+          class="gallery-nav gallery-nav-next"
+          data-live-carousel-next="${escapeHtml(project.project_id)}"
+          aria-label="Next image"
+        >›</button>
+        <div class="gallery-dots" role="tablist">
+          ${images
+            .map((_, i) => {
+              const active = i === idx;
+              return `<button type="button" role="tab" class="gallery-dot${active ? " active" : ""}" data-live-carousel-dot="${escapeHtml(project.project_id)}" data-live-slide-index="${i}" aria-label="Slide ${i + 1}" aria-selected="${active ? "true" : "false"}"></button>`;
+            })
+            .join("")}
+        </div>
+      </div>
+    `;
+  })();
+  const mediaMarkup =
+    templateId === "gallery"
+      ? (galleryMarkup || `<p class="live-preview-empty">Add images for the gallery carousel.</p>`)
+      : coverImageMarkup;
+
+  return `
+    <div class="live-preview-project-card live-preview-template-${escapeHtml(templateId)}">
+      <h4>${escapeHtml(project.project_id)}</h4>
+      ${badges}
+      ${metaMarkup}
+      ${mediaMarkup}
+      ${
+        override.portfolioBlurb
+          ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
+          : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
+      }
+      ${
+        override.keyRole
+          ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
+          : ""
+      }
+      ${
+        override.evidence
+          ? `<p><strong>Evidence:</strong> ${escapeHtml(override.evidence)}</p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function syncWorkspaceEditorFooter(projectId) {
+  const footer = document.getElementById("portfolio-workspace-editor-footer");
+  if (!footer) return;
+  if (!projectId) {
+    footer.classList.add("hidden");
+    footer.setAttribute("aria-hidden", "true");
+    return;
+  }
+  footer.classList.remove("hidden");
+  footer.setAttribute("aria-hidden", "false");
+  const resetBtn = footer.querySelector("[data-reset-analysis-defaults]");
+  const saveBtn = footer.querySelector("[data-project-save]");
+  resetBtn?.setAttribute("data-reset-analysis-defaults", projectId);
+  saveBtn?.setAttribute("data-project-save", projectId);
+}
+
+function buildWorkspaceEditorFormHtml(project, override, isFeatured, selectedTemplate) {
+  const initialSnapshot = JSON.stringify({
+    keyRole: override.keyRole || "",
+    evidence: override.evidence || "",
+    portfolioBlurb: override.portfolioBlurb || "",
+    templateId: selectedTemplate,
+    isFeatured,
+  });
+
+  return `
+    <div
+      class="portfolio-workspace-editor-root"
+      data-project-editor-id="${escapeHtml(project.project_id)}"
+      data-saved-snapshot="${escapeHtml(initialSnapshot)}"
+    >
+      <div class="portfolio-template-picker">
+        <button
+          type="button"
+          class="portfolio-template-card${selectedTemplate === "classic" ? " active" : ""}"
+          data-template-choice="classic"
+          data-project-template="${escapeHtml(project.project_id)}"
+        >
+          <div class="portfolio-template-title">Classic</div>
+          <div class="portfolio-template-copy">Simple hero image and clean project summary.</div>
+        </button>
+        <button
+          type="button"
+          class="portfolio-template-card${selectedTemplate === "case_study" ? " active" : ""}"
+          data-template-choice="case_study"
+          data-project-template="${escapeHtml(project.project_id)}"
+        >
+          <div class="portfolio-template-title">Case Study</div>
+          <div class="portfolio-template-copy">Problem, role, build work, and result layout.</div>
+        </button>
+        <button
+          type="button"
+          class="portfolio-template-card${selectedTemplate === "gallery" ? " active" : ""}"
+          data-template-choice="gallery"
+          data-project-template="${escapeHtml(project.project_id)}"
+        >
+          <div class="portfolio-template-title">Gallery</div>
+          <div class="portfolio-template-copy">More visual layout focused on screenshots.</div>
+        </button>
+      </div>
+
+      <input type="hidden" data-field="templateId" value="${escapeHtml(selectedTemplate)}" />
+
+      <div class="form-grid">
+        <label>
+          <span>Key role</span>
+          <input
+            type="text"
+            data-field="keyRole"
+            value="${escapeHtml(override.keyRole || "")}"
+            placeholder="Example: Frontend integration lead"
+          />
+        </label>
+        <label class="form-full-row">
+          <span>Evidence of success</span>
+          <textarea
+            data-field="evidence"
+            rows="3"
+            placeholder="Example: Built the portfolio UI, integrated the summary endpoints, and improved milestone demo readiness."
+          >${escapeHtml(override.evidence || "")}</textarea>
+        </label>
+        <label class="form-full-row">
+          <span>Portfolio Summary</span>
+          <textarea
+            data-field="portfolioBlurb"
+            rows="3"
+            placeholder="Short description that should appear in the portfolio showcase."
+          >${escapeHtml(override.portfolioBlurb || "")}</textarea>
+        </label>
+      </div>
+
+      <div class="portfolio-upload-block">
+        <label class="portfolio-upload-dropzone">
+          <span class="portfolio-upload-trigger">Upload images</span>
+          <div class="portfolio-upload-help">PNG, JPG, WEBP, or GIF screenshots for this project.</div>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            data-project-image-upload="${escapeHtml(project.project_id)}"
+          />
+        </label>
+        <div class="portfolio-image-grid">
+          ${sortPortfolioImagesCoverFirst(override.images)
+            .map(
+              (image) => `
+            <div class="portfolio-image-card" data-portfolio-image-id="${escapeHtml(image.id)}">
+              <div class="portfolio-image-preview-wrap">
+                <img
+                  class="portfolio-image-preview"
+                  data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, image.id))}"
+                  alt="${escapeHtml(image.caption || "Portfolio image")}"
+                />
+                ${image.is_cover ? `<span class="portfolio-image-cover-badge">Cover</span>` : ""}
+              </div>
+              <div class="portfolio-image-meta">
+                <div class="portfolio-image-caption">${escapeHtml(image.caption || "Project image")}</div>
+                <div class="portfolio-image-actions">
+                  <button
+                    type="button"
+                    class="portfolio-image-btn"
+                    data-set-cover-image="${escapeHtml(image.id)}"
+                    data-project-id="${escapeHtml(project.project_id)}"
+                  >
+                    ${image.is_cover ? "Cover Image" : "Set Cover"}
+                  </button>
+                  <button
+                    type="button"
+                    class="portfolio-image-btn danger"
+                    data-delete-image="${escapeHtml(image.id)}"
+                    data-project-id="${escapeHtml(project.project_id)}"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPortfolioWorkspacePanel(customization, orderedProjects) {
+  const shell = document.getElementById("portfolio-editor-workspace");
+  const editorPane = document.getElementById("portfolio-workspace-editor-pane");
+  const titleEl = document.getElementById("portfolio-workspace-active-title");
+  if (!shell || !editorPane) return;
+
+  if (!activePortfolioProjectId) {
+    shell.classList.add("hidden");
+    shell.setAttribute("aria-hidden", "true");
+    editorPane.innerHTML = "";
+    syncWorkspaceEditorFooter(null);
+    return;
+  }
+
+  const project = orderedProjects.find((p) => p.project_id === activePortfolioProjectId);
+  if (!project) {
+    activePortfolioProjectId = null;
+    shell.classList.add("hidden");
+    shell.setAttribute("aria-hidden", "true");
+    editorPane.innerHTML = "";
+    syncWorkspaceEditorFooter(null);
+    return;
+  }
+
+  const override = customization.projectOverrides?.[project.project_id] || {};
+  const isFeatured = (customization.featuredProjectIds || []).map(String).includes(String(project.project_id));
+  const selectedTemplate = String(override.templateId || "classic");
+  if (titleEl) titleEl.textContent = project.project_id;
+
+  editorPane.innerHTML = buildWorkspaceEditorFormHtml(project, override, isFeatured, selectedTemplate);
+
+  shell.classList.remove("hidden");
+  shell.setAttribute("aria-hidden", "false");
+  syncWorkspaceEditorFooter(project.project_id);
+}
+
+function updatePortfolioWorkspacePreview(draftCustomization) {
+  const shell = document.getElementById("portfolio-editor-workspace");
+  const host = document.getElementById("portfolio-workspace-preview-content");
+  if (!shell || shell.classList.contains("hidden") || !activePortfolioProjectId || !host) return;
+
+  const project = previewProjectsCache.find((p) => p.project_id === activePortfolioProjectId);
+  if (!project) return;
+
+  const rawOverride = draftCustomization.projectOverrides?.[activePortfolioProjectId] || {};
+  const editor = document.querySelector(
+    `[data-project-editor-id="${CSS.escape(activePortfolioProjectId)}"]`
+  );
+  const override = {
+    ...rawOverride,
+    keyRole: editor?.querySelector('[data-field="keyRole"]')?.value?.trim() ?? rawOverride.keyRole ?? "",
+    evidence: editor?.querySelector('[data-field="evidence"]')?.value?.trim() ?? rawOverride.evidence ?? "",
+    portfolioBlurb:
+      editor?.querySelector('[data-field="portfolioBlurb"]')?.value?.trim() ?? rawOverride.portfolioBlurb ?? "",
+    templateId:
+      editor?.querySelector('[data-field="templateId"]')?.value?.trim() ?? rawOverride.templateId ?? "classic",
+    images: Array.isArray(rawOverride.images) ? rawOverride.images : [],
+  };
+
+  host.innerHTML = buildLivePreviewProjectCardHtml(project, override, {
+    isFeatured: (draftCustomization.featuredProjectIds || []).map(String).includes(String(activePortfolioProjectId)),
+    showMeta: true,
+  });
 }
 
 function renderLivePreview(projects, draftCustomization) {
@@ -1291,132 +1469,52 @@ function renderLivePreview(projects, draftCustomization) {
       return String(a.project.project_id).localeCompare(String(b.project.project_id));
     });
 
-  const renderPreviewCard = ({ project, override, isFeatured = false, showMeta = false }) => {
-  const templateId = String(override.templateId || "classic");
-  const templateLabel = templateId.replaceAll("_", " ");
-  const images = Array.isArray(override.images) ? override.images : [];
-  const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
-
-  const coverImageMarkup = coverImage?.id
-    ? `
-      <img
-        class="live-preview-hero-image"
-        src="${escapeHtml(getPortfolioImageUrl(project.project_id, coverImage.id))}"
-        alt="${escapeHtml(project.project_id)} cover image"
-      />
-    `
-    : "";
-
-  const badges = `
-    <div class="live-preview-badge-row">
-      ${isFeatured ? `<span class="live-preview-badge">Starred</span>` : ""}
-      <span class="live-preview-badge">${escapeHtml(templateLabel)}</span>
-    </div>
-  `;
-
-  const metaMarkup = showMeta
-    ? `
-      <div class="live-preview-meta">
-        ${project.total_files || 0} files • ${project.total_skills || 0} skills
-      </div>
-    `
-    : "";
-
-  const galleryMarkup =
-    templateId === "gallery" && images.length > 1
-      ? `
-        <div class="live-preview-gallery-grid">
-          ${images
-            .slice(0, 6)
-            .map(
-              (image) => `
-                <img
-                  src="${escapeHtml(getPortfolioImageUrl(project.project_id, image.id))}"
-                  alt="${escapeHtml(image.caption || "Project image")}"
-                />
-              `
-            )
-            .join("")}
-        </div>
-      `
-      : "";
-
-  return `
-    <div class="live-preview-project-card live-preview-template-${escapeHtml(templateId)}">
-      <h4>${escapeHtml(project.project_id)}</h4>
-      ${badges}
-      ${metaMarkup}
-      ${coverImageMarkup}
-      ${
-        override.portfolioBlurb
-          ? `<p>${escapeHtml(override.portfolioBlurb)}</p>`
-          : `<p class="live-preview-empty">No portfolio blurb yet.</p>`
-      }
-      ${
-        override.keyRole
-          ? `<p><strong>Key role:</strong> ${escapeHtml(override.keyRole)}</p>`
-          : ""
-      }
-      ${
-        override.evidence
-          ? `<p><strong>Evidence:</strong> ${escapeHtml(override.evidence)}</p>`
-          : ""
-      }
-      ${galleryMarkup}
-    </div>
-  `;
-};
-
-  // Keep drafts separate from starred showcase 
+  // Keep drafts separate from starred showcase
   container.innerHTML = `
     <div id="live-preview-drafts-section" class="live-preview-section">
       <h3>Project Detail Drafts</h3>
       ${
         draftProjects.length
           ? draftProjects
-              .map(({ project, override, isFeatured }) => 
-                renderPreviewCard({
-                  project,
-                  override,
+              .map(({ project, override, isFeatured }) =>
+                buildLivePreviewProjectCardHtml(project, override, {
                   isFeatured,
-                  showMeta: false
+                  showMeta: false,
                 })
               )
               .join("")
-            : `<p class="live-preview-empty">Edit a project in Project Portfolio Details to preview its draft here.</p>`
-          }
-        </div>
+          : `<p class="live-preview-empty">Edit a project in Project Portfolio Details to preview its draft here.</p>`
+      }
+    </div>
 
-        <div
-          id="live-preview-starred-section"
-          class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}"
-        >
-          <h3>My Starred Projects</h3>
-          ${
-            featuredProjects.length
-              ? featuredProjects
-                  .map((project) => {
-                    const override =
-                      draftCustomization.projectOverrides?.[project.project_id] || {};
-
-                    return renderPreviewCard({
-                      project,
-                      override,
-                      isFeatured: true,
-                      showMeta: true,
-                    });
-                  })
-                  .join("")
-              : `<p class="live-preview-empty">No featured projects selected.</p>`
-          }
-        </div>
-      `;
+    <div
+      id="live-preview-starred-section"
+      class="live-preview-section ${sectionVisibility["top-projects"] ? "" : "hidden"}"
+    >
+      <h3>My Starred Projects</h3>
+      ${
+        featuredProjects.length
+          ? featuredProjects
+              .map((project) => {
+                const override = draftCustomization.projectOverrides?.[project.project_id] || {};
+                return buildLivePreviewProjectCardHtml(project, override, {
+                  isFeatured: true,
+                  showMeta: true,
+                });
+              })
+              .join("")
+          : `<p class="live-preview-empty">No featured projects selected.</p>`
+      }
+    </div>
+  `;
 }
 
 function updateLivePreview() {
   const draftCustomization = collectDraftCustomization();
   renderLivePreview(previewProjectsCache, draftCustomization);
+  updatePortfolioWorkspacePreview(draftCustomization);
   markDirtyState(draftCustomization);
+  hydratePortfolioEditorImages();
 }
 
 function scheduleAutosave() {
@@ -1594,6 +1692,7 @@ async function renderPortfolioCustomizationPage() {
     renderProjectEditors(projects, customization);
     renderFeaturedOrderList(projects, customization);
     renderLivePreview(projects, customization);
+    hydratePortfolioEditorImages();
 
     updateSaveButtonState();
 
@@ -1612,6 +1711,7 @@ async function renderPortfolioCustomizationPage() {
 export function initPortfolioEditor() {
   const tab = document.querySelector('[data-tab="portfolio"]');
   const editorContainer = document.getElementById("portfolio-project-editor-container");
+  const workspaceShell = document.getElementById("portfolio-editor-workspace");
   const featuredContainer = document.getElementById("portfolio-featured-projects-container");
   const orderContainer = getFeaturedOrderContainer();
 
@@ -1636,6 +1736,109 @@ export function initPortfolioEditor() {
     editorContainer?.addEventListener("change", (event) => {
       updateLivePreview();
       scheduleAutosave();
+    });
+
+    workspaceShell?.addEventListener("input", () => {
+      updateLivePreview();
+      scheduleAutosave();
+    });
+
+    workspaceShell?.addEventListener("change", () => {
+      updateLivePreview();
+      scheduleAutosave();
+    });
+
+    workspaceShell?.addEventListener("click", async (event) => {
+      const prevBtn = event.target.closest("[data-live-carousel-prev]");
+      const nextBtn = event.target.closest("[data-live-carousel-next]");
+      const dotBtn = event.target.closest("[data-live-carousel-dot]");
+      if (prevBtn || nextBtn || dotBtn) {
+        const projectId = String(
+          prevBtn?.dataset.liveCarouselPrev ||
+          nextBtn?.dataset.liveCarouselNext ||
+          dotBtn?.dataset.liveCarouselDot ||
+          ""
+        ).trim();
+        if (!projectId) return;
+
+        const root =
+          prevBtn?.closest("[data-live-carousel-root]") ||
+          nextBtn?.closest("[data-live-carousel-root]") ||
+          dotBtn?.closest("[data-live-carousel-root]");
+        const len = Number(root?.dataset.liveCarouselLength || 0);
+        if (!Number.isFinite(len) || len < 1) return;
+
+        let idx = Number(livePreviewGalleryState.get(projectId));
+        if (!Number.isFinite(idx)) idx = 0;
+        if (prevBtn) idx = (idx - 1 + len) % len;
+        else if (nextBtn) idx = (idx + 1) % len;
+        else {
+          const raw = Number(dotBtn.dataset.slideIndex);
+          idx = Number.isFinite(raw) ? ((raw % len) + len) % len : 0;
+        }
+
+        livePreviewGalleryState.set(projectId, idx);
+        updateLivePreview();
+        return;
+      }
+
+      const resetBtn = event.target.closest("[data-reset-analysis-defaults]");
+      if (resetBtn && workspaceShell.contains(resetBtn)) {
+        const projectId = resetBtn.getAttribute("data-reset-analysis-defaults");
+        if (!projectId) return;
+        const nextCustomization = loadPortfolioCustomization();
+        const currentOverride = nextCustomization.projectOverrides?.[projectId] || {};
+        const defaults = currentOverride.analysisDefaults || {};
+
+        nextCustomization.projectOverrides = {
+          ...(nextCustomization.projectOverrides || {}),
+          [projectId]: {
+            ...currentOverride,
+            keyRole: defaults.keyRole || "",
+            evidence: defaults.evidence || "",
+            portfolioBlurb: defaults.portfolioBlurb || "",
+          },
+        };
+
+        savePortfolioCustomization(nextCustomization);
+        renderProjectEditors(previewProjectsCache, nextCustomization);
+        scheduleAutosave();
+        setStatus("Reset to analysis defaults.", "info");
+        return;
+      }
+
+      const saveBtn = event.target.closest("[data-project-save]");
+      if (saveBtn && workspaceShell.contains(saveBtn)) {
+        const projectId = saveBtn.getAttribute("data-project-save");
+        if (!projectId) return;
+        const statusSpan =
+          document.getElementById("portfolio-workspace-save-status") ||
+          saveBtn.parentElement?.querySelector(".customization-project-save-status");
+        const showLocal = (msg, kind) => {
+          if (!statusSpan) return;
+          statusSpan.textContent = msg;
+          statusSpan.dataset.kind = kind;
+        };
+
+        showLocal("Saving...", "info");
+        try {
+          const result = await saveProjectById(projectId);
+          if (result === "no-changes") {
+            showLocal("No changes to save", "info");
+          } else {
+            showLocal("Saved", "success");
+          }
+          setTimeout(() => showLocal("", ""), 2500);
+        } catch (_) {
+          showLocal("Failed to save", "error");
+        }
+      }
+    });
+
+    document.getElementById("portfolio-workspace-close-btn")?.addEventListener("click", () => {
+      savePortfolioCustomization(collectDraftCustomization());
+      activePortfolioProjectId = null;
+      renderProjectEditors(previewProjectsCache, loadPortfolioCustomization());
     });
 
     featuredContainer?.addEventListener("change", async (event) => {
@@ -1672,13 +1875,18 @@ export function initPortfolioEditor() {
     });
 
     window.addEventListener("portfolio:focus-project-editor", (event) => {
-    const projectId = event.detail?.projectId;
-    if (!projectId) return;
+      const projectId = event.detail?.projectId;
+      if (!projectId) return;
 
-    activePortfolioProjectId = projectId;
-    const customization = loadPortfolioCustomization();
-    renderProjectEditors(previewProjectsCache, customization);
-  });
+      savePortfolioCustomization(collectDraftCustomization());
+      activePortfolioProjectId = projectId;
+      const customization = loadPortfolioCustomization();
+      renderProjectEditors(previewProjectsCache, customization);
+      document.getElementById("portfolio-editor-workspace")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
 
   renderPortfolioCustomizationPage();
   }

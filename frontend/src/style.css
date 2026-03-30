@@ -2705,6 +2705,21 @@ transition: all 0.2s ease;
   border-radius: 12px;
 }
 
+.live-preview-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.live-preview-gallery-grid img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
 .portfolio-timeline-card {
   grid-column: 1 / -1;
 }
@@ -5997,6 +6012,186 @@ body.light .export-modal-footer {
   grid-column: 1 / -1;
 }
 
+/* Let the split workspace show full live preview without clipping rounded corners / text */
+.card.portfolio-editor-card {
+  overflow: visible;
+}
+
+/* Focus mode: split editor + preview is the card; hide duplicate section heading */
+.portfolio-editor-card:has(#portfolio-editor-workspace:not(.hidden)) > .card-title {
+  display: none;
+}
+
+/* Split editor + live preview: left pane scrolls; preview grows with content (no inner scrollbar) */
+.portfolio-editor-workspace {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+  min-height: min(75vh, calc(100vh - 120px));
+  height: auto;
+  overflow: visible;
+}
+
+.portfolio-editor-workspace:not(.hidden) {
+  display: flex;
+}
+
+.portfolio-editor-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.portfolio-workspace-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.portfolio-workspace-title {
+  margin: 6px 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.portfolio-workspace-close {
+  flex-shrink: 0;
+}
+
+.portfolio-editor-workspace-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: start;
+  overflow: visible;
+}
+
+.portfolio-workspace-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Definite height so flex children (editor scroll) get space; auto height collapses flex:1 to 0 */
+.portfolio-workspace-pane-edit {
+  height: min(75vh, calc(100vh - 180px));
+  max-height: min(75vh, calc(100vh - 180px));
+}
+
+.portfolio-workspace-pane-preview {
+  overflow: visible;
+  max-height: none;
+}
+
+.portfolio-workspace-pane-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.72;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.portfolio-workspace-pane-edit-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.portfolio-workspace-editor-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.portfolio-workspace-editor-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.portfolio-workspace-editor-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+/* Preview: no inner scrollbar; page scrolls instead */
+.portfolio-workspace-preview-scroll {
+  flex: 0 0 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.portfolio-workspace-preview-scroll .live-preview-project-card {
+  margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.portfolio-workspace-preview-scroll .live-preview-project-card p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .portfolio-editor-workspace-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .portfolio-editor-workspace {
+    min-height: min(70vh, calc(100vh - 100px));
+    max-height: none;
+    overflow: visible;
+  }
+
+  .portfolio-workspace-pane-edit {
+    height: min(55vh, 420px);
+    max-height: min(55vh, 420px);
+  }
+
+  .portfolio-workspace-preview-scroll {
+    overflow: visible;
+  }
+}
 
 .customization-toggle-list,
 .customization-project-picker {
@@ -6215,6 +6410,7 @@ body.light .export-modal-footer {
   border-radius: 16px;
   padding: 14px 16px;
   margin-top: 10px;
+  overflow: visible;
 }
 
 .live-preview-project-card h4 {
@@ -6243,6 +6439,90 @@ body.light .export-modal-footer {
 
 .live-preview-empty {
   opacity: 0.75;
+}
+
+/* Workspace live preview gallery carousel */
+.live-preview-gallery-carousel {
+  width: 100%;
+  max-width: min(100%, 320px);
+  margin: 8px auto 0;
+  box-sizing: border-box;
+}
+
+.live-preview-gallery-carousel.portfolio-gallery-carousel {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: center;
+  width: 100%;
+  max-width: min(100%, 320px);
+  margin-left: auto;
+  margin-right: auto;
+  gap: 8px 10px;
+}
+
+.live-preview-gallery-carousel .gallery-nav-prev {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.live-preview-gallery-carousel .gallery-carousel-viewport {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.live-preview-gallery-carousel .gallery-nav-next {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.live-preview-gallery-carousel .gallery-dots {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.live-preview-gallery-carousel .gallery-carousel-image {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: min(200px, 26vh);
+  object-fit: contain;
+  display: block;
+}
+
+.live-preview-gallery-carousel .gallery-nav {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  border: 1px solid rgba(158, 207, 255, 0.34);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+  color: #eaf6ff;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 20px rgba(4, 12, 30, 0.3);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.live-preview-gallery-carousel .gallery-nav:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(77, 166, 255, 0.36), rgba(77, 166, 255, 0.2));
+  border-color: rgba(158, 207, 255, 0.55);
 }
 
 /* ============================================================
