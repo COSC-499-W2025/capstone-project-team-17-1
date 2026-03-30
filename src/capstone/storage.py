@@ -425,9 +425,8 @@ def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
     """Return True when the live DB schema matches _initialize_schema output.
 
     Rules:
-    - Expected table missing from live DB: OK — CREATE TABLE IF NOT EXISTS will add it.
-    - Extra legacy tables in live DB: OK — ignored.
-    - Shared table with ANY column difference (extra or missing): RESET needed.
+    - Expected and actual table sets must match exactly.
+    - For every table, the column sets must match exactly.
     """
     ref = sqlite3.connect(":memory:")
     try:
@@ -442,7 +441,14 @@ def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
                 "SELECT name FROM sqlite_master WHERE type='table'"
             )
         } - _SQLITE_INTERNAL
-        for table in expected_tables & actual_tables:
+        if expected_tables != actual_tables:
+            logger.info(
+                "Schema mismatch in tables: expected_only=%s actual_only=%s",
+                sorted(expected_tables - actual_tables),
+                sorted(actual_tables - expected_tables),
+            )
+            return False
+        for table in expected_tables:
             expected_cols = {
                 row[1]
                 for row in ref.execute(f"PRAGMA table_info('{table}')")
@@ -571,8 +577,8 @@ def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
 
     if db_key not in _SCHEMA_READY:
         try:
-            _initialize_schema(conn)
             _run_migrations(conn)
+            _initialize_schema(conn)
             _SCHEMA_READY.add(db_key)
         except sqlite3.OperationalError as exc:
             message = str(exc).lower()

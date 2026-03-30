@@ -97,6 +97,49 @@ class GitHubTokenTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Schema reset
+# ---------------------------------------------------------------------------
+
+class SchemaResetTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.tmp = Path(self._tmpdir.name)
+        self.addCleanup(self._tmpdir.cleanup)
+        self.addCleanup(storage.close_db)
+        self.addCleanup(_restore_base_dir)
+        storage.BASE_DIR = self.tmp
+        storage.CURRENT_USER = "ivy"
+        storage._SCHEMA_READY.clear()
+        self.addCleanup(setattr, storage, "CURRENT_USER", None)
+
+    def test_open_db_resets_when_table_set_differs_from_expected(self) -> None:
+        db_path = storage.get_database_path()
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE legacy_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        live = storage.open_db()
+        self.addCleanup(live.close)
+
+        tables = {
+            row[0]
+            for row in live.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        self.assertIn("user", tables)
+        self.assertIn("contributors", tables)
+        self.assertNotIn("legacy_users", tables)
+
+
+# ---------------------------------------------------------------------------
 # Project overrides
 # ---------------------------------------------------------------------------
 
