@@ -573,6 +573,141 @@ def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional
     return None, None
 
 
+def _normalize_heatmap_granularity(raw: Optional[str]) -> str:
+    value = str(raw or "").strip().lower()
+    if value in ("year", "month", "day"):
+        return value
+    return "day"
+
+
+def _heatmap_row_project_id(row: Any) -> str:
+    if isinstance(row, dict) and row.get("project_id") is not None:
+        return str(row.get("project_id")).strip()
+    project_id, _ = _extract_row_project_and_snapshot(row)
+    return str(project_id).strip() if project_id else ""
+
+
+def _collect_heatmap_project_ids(rows: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for row in rows:
+        pid = _heatmap_row_project_id(row)
+        if pid and pid not in seen:
+            seen.add(pid)
+            ordered.append(pid)
+    return sorted(ordered)
+
+
+def _extract_daily_counts_from_heatmap_row(row: Any) -> dict[str, int]:
+    snapshot: Optional[dict[str, Any]] = None
+    zip_path: Optional[str] = None
+
+    if isinstance(row, dict):
+        raw_snap = row.get("snapshot")
+        if isinstance(raw_snap, dict):
+            snapshot = raw_snap
+        zp = row.get("zip_path")
+        if isinstance(zp, str) and zp.strip():
+            zip_path = zp.strip()
+
+    if snapshot is None:
+        _, snap = _extract_row_project_and_snapshot(row)
+        if isinstance(snap, dict):
+            snapshot = snap
+
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
+    file_summary = snapshot.get("file_summary") if isinstance(snapshot.get("file_summary"), dict) else {}
+    daily_raw = file_summary.get("daily_timeline")
+    if isinstance(daily_raw, dict) and daily_raw:
+        daily_counts: dict[str, int] = {}
+        for period_key, raw_count in daily_raw.items():
+            day_key = str(period_key).strip()
+            if len(day_key) == 10 and day_key[4] == "-" and day_key[7] == "-":
+                daily_counts[day_key] = daily_counts.get(day_key, 0) + max(0, _safe_int(raw_count))
+        if daily_counts:
+            return dict(sorted(daily_counts.items()))
+
+    monthly_raw = file_summary.get("monthly_timeline")
+    if isinstance(monthly_raw, dict) and monthly_raw:
+        expanded = _expand_monthly_timeline_to_daily(monthly_raw)
+        if expanded:
+            return expanded
+
+    if zip_path:
+        from_zip = _build_daily_activity_from_zip_path(zip_path)
+        if from_zip:
+            return from_zip
+
+    return {}
+
+
+def _merge_daily_counts_for_rows(rows: list[Any]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for row in rows:
+        for day_key, count in _extract_daily_counts_from_heatmap_row(row).items():
+            merged[day_key] = merged.get(day_key, 0) + max(0, _safe_int(count))
+    return dict(sorted(merged.items()))
+
+
+def _daily_to_period_totals(daily: dict[str, int], granularity: str) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for day_key, count in daily.items():
+        if granularity == "day":
+            period = day_key
+        elif granularity == "month":
+            period = day_key[:7] if len(day_key) >= 7 else day_key
+        else:
+            period = day_key[:4] if len(day_key) >= 4 else day_key
+        totals[period] = totals.get(period, 0) + max(0, _safe_int(count))
+    return totals
+
+
+def _build_heatmap_response(
+    rows: list[Any],
+    granularity: str,
+    selected_project_id: str,
+) -> dict[str, Any]:
+    project_ids = _collect_heatmap_project_ids(rows)
+    selected = str(selected_project_id or "").strip()
+
+    if selected:
+        filtered = [row for row in rows if _heatmap_row_project_id(row) == selected]
+    else:
+        filtered = list(rows)
+
+    daily = _merge_daily_counts_for_rows(filtered)
+    period_totals = _daily_to_period_totals(daily, granularity)
+    sorted_periods = sorted(period_totals.keys())
+
+    max_count = max(period_totals.values(), default=0)
+    cells: list[dict[str, Any]] = []
+    for period in sorted_periods:
+        count = max(0, _safe_int(period_totals.get(period, 0)))
+        intensity = (count / max_count) if max_count > 0 else 0.0
+        cells.append(
+            {
+                "period": period,
+                "count": count,
+                "intensity": float(round(intensity, 6)),
+            }
+        )
+
+    unique_in_view = {_heatmap_row_project_id(r) for r in filtered}
+    unique_in_view.discard("")
+    project_count = len(unique_in_view)
+
+    return {
+        "cells": cells,
+        "maxCount": max_count,
+        "projectCount": project_count,
+        "projects": project_ids,
+        "granularity": granularity,
+        "selectedProjectId": selected,
+    }
+
+
 @router.post("/generate")
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
