@@ -481,9 +481,10 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         section_keys = [s["key"] for s in (data.get("sections") or [])]
         self.assertTrue(len(section_keys) > 0)
 
-    def test_generate_without_auth_uses_guest_bucket(self):
+    def test_generate_without_auth_returns_default_local_resume(self):
         r = self.client.post("/resumes/auto-generate", json={})
         self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()["data"]["user_id"], 1)
 
     def test_generate_includes_skills_from_snapshot(self):
         self._seed_project_for_user("gen-proj-2")

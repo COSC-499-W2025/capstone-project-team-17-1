@@ -532,6 +532,29 @@ body.light .theme-toggle::before {
   100% { background-position: -200% 0; }
 }
 
+/* Skeleton: lines/shimmer are tuned for dark cards; override for light surfaces */
+body.light .skeleton-card.card {
+  background: linear-gradient(145deg, #e8ecf4, #f2f5fb);
+  border-color: var(--border);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+body.light .skeleton-line {
+  background: rgba(19, 41, 75, 0.11);
+}
+
+body.light .skeleton-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.72) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
 .tab-panel {
   flex: 1;
   min-height: 0;
@@ -1033,7 +1056,7 @@ svg {
 .skills-title {
   font-size: 20px;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 #most-used-skills {
@@ -1111,6 +1134,106 @@ svg {
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+}
+
+.skills-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.skills-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.skills-view-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.skills-view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skills-view-btn.active {
+  background: rgba(77, 166, 255, 0.18);
+  border-color: rgba(77, 166, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(77, 166, 255, 0.12) inset;
+}
+
+.skills-pie-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 16px;
+  align-items: center;
+  min-height: 220px;
+}
+
+.skills-pie-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+}
+
+.skills-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.skills-pie-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.skills-pie-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skills-pie-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.skills-pie-legend-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+
+.skills-pie-legend-meta {
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+#most-used-skills canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* =========================================================
@@ -1464,6 +1587,23 @@ body.light .activity-line.level-success {
   font-size: 12px;
 }
 
+.auth-remember-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: #dbeafe;
+  cursor: pointer;
+  user-select: none;
+}
+
+.auth-remember-row input {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 /* Login / consent detail modals: light surfaces in light mode (keep dark defaults above) */
 body.light .auth-modal {
   background: var(--overlay-scrim);
@@ -1483,6 +1623,10 @@ body.light .auth-dialog h3 {
 body.light .auth-dialog p {
   color: var(--text-secondary);
   opacity: 1;
+}
+
+body.light .auth-remember-row {
+  color: var(--text-secondary);
 }
 
 body.light .auth-close {
@@ -2546,9 +2690,118 @@ transition: all 0.2s ease;
   backdrop-filter: blur(12px);
 }
 
-.portfolio-hero-card {
-  grid-column: 1 / -1;
+/* =========================================================
+   PORTFOLIO CARD POPUP
+========================================================= */
+
+.customization-project-editor {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.customization-project-editor.active {
+  border-color: rgba(77, 166, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(77, 166, 255, 0.12);
+}
+
+.customization-project-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.portfolio-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portfolio-card-collapsed-preview {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.portfolio-card-expanded-content {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.portfolio-card-theme-preview {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.portfolio-theme-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.portfolio-theme-cover-image {
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  object-fit: cover;
+  display: block;
+  border-radius: 14px;
+}
+
+.portfolio-theme-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.portfolio-theme-block {
+  display: grid;
+  gap: 6px;
+}
+
+.portfolio-theme-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-theme-gallery-item img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+}
+
+.portfolio-theme-gallery-item p {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+
+
+/* =========================================================
+   LIVE PREVIEW PORTFOLIO
+========================================================= */
+
+.live-preview-project-card {
+  width: 100%;
   overflow: hidden;
+}
+
+.live-preview-hero-image {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
 }
 
 .portfolio-timeline-card {
@@ -5968,6 +6221,23 @@ body.light .export-modal-footer {
   margin-top: 16px;
 }
 
+
+.portfolio-reset-btn {
+  border-color: rgbs(255, 107, 107, 0.3);
+  color: #ff9b9b;
+}
+
+.portfolio-reset-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.portfolio-reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .customization-project-save-status {
   font-size: 13px;
   opacity: 0.9;
@@ -6072,6 +6342,162 @@ body.light .export-modal-footer {
 
 .live-preview-empty {
   opacity: 0.75;
+}
+
+/* ============================================================
+   Portfolio Template Customization
+   ============================================================ */
+
+.portfolio-template-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.portfolio-template-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 14px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.portfolio-template-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(158, 207, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.portfolio-template-card.active {
+  border-color: rgba(77, 166, 255, 0.55);
+  background: rgba(30, 144, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(77, 166, 255, 0.18);
+}
+
+.portfolio-template-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.portfolio-template-copy {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.45;
+}
+
+.portfolio-upload-block {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.portfolio-upload-dropzone {
+  border: 1px dashed rgba(158, 207, 255, 0.24);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 18px;
+  text-align: center;
+}
+
+.portfolio-upload-dropzone input[type="file"] {
+  display: none;
+}
+
+.portfolio-upload-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4da6ff, #00ff88);
+  color: #0b1120;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.portfolio-upload-help {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.portfolio-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portfolio-image-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.portfolio-image-preview-wrap {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.portfolio-image-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.portfolio-image-cover-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.26);
+  color: #a7f3d0;
+}
+
+.portfolio-image-meta {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portfolio-image-caption {
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.86;
+}
+
+.portfolio-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.portfolio-image-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portfolio-image-btn.danger {
+  border-color: rgba(255, 107, 107, 0.24);
+  color: #ff9b9b;
 }
 
 /* featured order  */
@@ -6307,10 +6733,82 @@ body.light .export-modal-footer {
   line-height: 1.5;
 }
 
+.settings-session-card {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-remember-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-remember-label input {
+  width: auto;
+  margin: 0;
+}
+
+body.light .settings-session-card {
+  border-bottom-color: var(--border-subtle);
+}
+
 .settings-login-prompt {
   margin: 0;
   font-size: 14px;
   opacity: 0.65;
+}
+
+.settings-account-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-github-token-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-github-show-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  opacity: 0.72;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-github-show-toggle input {
+  cursor: pointer;
+}
+
+.settings-github-token-actions {
+  flex-wrap: wrap;
+}
+
+.settings-github-token-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.5;
+}
+
+.settings-inline-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+}
+
+.settings-inline-link:hover {
+  opacity: 1;
 }
 
 /* Form grid used inside settings cards */
@@ -7168,6 +7666,31 @@ body.light .pv-sienna-input-row input {
   border-color: var(--border-subtle);
 }
 
+body.light .pv-sienna-msg.user {
+  background: #dbeafe;
+  border: 1px solid #bcd6f5;
+  color: #0f2f57;
+}
+
+body.light .pv-sienna-header {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-subtle);
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-sienna-close {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-sienna-close:hover {
+  color: var(--text-primary);
+}
+
+body.light .pv-sienna-input-row {
+  border-top-color: var(--border-subtle);
+}
+
 body.light .sienna-conversation-card,
 body.light .sienna-toolbar.card {
   background: var(--surface-1);
@@ -7359,6 +7882,14 @@ body.light .resume-list-card.re-selected {
   background: #eaf2fd;
 }
 
+body.light .resume-expand-chevron {
+  color: var(--text-secondary);
+}
+
+body.light .resume-list-expand-inner {
+  border-top-color: var(--border);
+}
+
 /* New Resume modal primary action should be neutral in light mode */
 body.light #resume-generate-btn {
   background: var(--card-inner-bg);
@@ -7482,6 +8013,116 @@ body.light .pv-analysis-section,
 body.light .pv-stat-card {
   background: var(--card-inner-bg);
   border: 1px solid var(--border);
+}
+
+/* Project viewer — Analysis & Collaboration: readable text on light cards */
+body.light .pv-analysis-section h3 {
+  color: var(--text-primary);
+}
+
+body.light .pv-stat-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-name,
+body.light .pv-skill-name {
+  color: var(--text-primary);
+}
+
+body.light .pv-lang-pct,
+body.light .pv-skill-pct {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-lang-bar-bg,
+body.light .pv-skill-bar-bg,
+body.light .pv-period-bar {
+  background: rgba(19, 41, 75, 0.08);
+}
+
+body.light .pv-tag {
+  background: rgba(43, 119, 214, 0.12);
+  color: #1f4f8a;
+  border-color: rgba(43, 119, 214, 0.25);
+}
+
+body.light .pv-tag-bot {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: rgba(180, 83, 9, 0.35);
+  color: #9a3412;
+}
+
+body.light .pv-collab-row {
+  background: rgba(19, 41, 75, 0.04);
+}
+
+body.light .pv-collab-label {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-value {
+  color: #1f4f8a;
+}
+
+body.light .pv-timeline-year {
+  color: var(--text-primary);
+}
+
+body.light .pv-no-data {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-collab-title {
+  color: var(--text-primary);
+}
+
+body.light .pv-collab-notice {
+  background: rgba(234, 179, 8, 0.18);
+  border-color: rgba(180, 130, 0, 0.35);
+  color: #7c5200;
+}
+
+body.light .pv-period-labels {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .pv-ranking-header {
+  color: var(--text-secondary);
+  opacity: 1;
+  border-bottom-color: var(--border);
+}
+
+body.light .pv-ranking-row {
+  background: rgba(19, 41, 75, 0.03);
+}
+
+body.light .pv-ranking-row:hover {
+  background: rgba(43, 119, 214, 0.1);
+}
+
+body.light .pv-rank-col {
+  color: #1f4f8a;
+}
+
+body.light .pv-rank-first {
+  background: rgba(43, 119, 214, 0.1);
+  border-color: rgba(43, 119, 214, 0.28);
+}
+
+body.light .pv-analysis-loading,
+body.light .pv-analysis-error {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+body.light .pv-analysis-hint {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 body.light .health-project,

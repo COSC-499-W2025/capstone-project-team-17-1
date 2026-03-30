@@ -1,13 +1,10 @@
-import sqlite3
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from capstone.api.server import create_app
 from capstone import storage
 from capstone.api.routes import auth as auth_routes
 from capstone.api.server import create_app, get_app_for_tests
-from capstone import storage
 
 
 def _client(tmp_path) -> TestClient:
@@ -26,13 +23,17 @@ def _isolated_client(tmp_path) -> TestClient:
 
 
 def test_auth_bootstrap_register_login_logout_flow(tmp_path):
+    def fake_request_auth(method, path, payload):
+        if (method, path) == ("POST", "/auth/register"):
+            return {"user": {"username": "alice", "email": "alice@example.com"}}
+        if (method, path) == ("POST", "/auth/login"):
+            return {"user": {"username": "alice", "email": "alice@example.com"}}
+        raise AssertionError(f"unexpected auth call: {(method, path, payload)}")
+
     with patch.object(
         auth_routes,
-        "_post_to_auth",
-        side_effect=[
-            {"user": {"username": "alice", "email": "alice@example.com"}},
-            {"user": {"username": "alice", "email": "alice@example.com"}},
-        ],
+        "_request_auth",
+        side_effect=fake_request_auth,
     ):
         client = _client(tmp_path)
 
@@ -72,28 +73,31 @@ def test_auth_bootstrap_register_login_logout_flow(tmp_path):
 
 
 def test_auth_profile_update_and_password_change_persist_to_db(tmp_path):
-    post_effects = [
-        {"user": {"username": "bob", "email": None}},
-        auth_routes.HTTPException(status_code=401, detail="invalid credentials"),
-        {"detail": "password updated successfully"},
-        {"user": {"username": "bob", "email": "bob@example.com"}},
-    ]
-    put_response = {
-        "user": {
-            "username": "bob",
-            "email": "bob@example.com",
-            "full_name": "Bob Stone",
-            "phone_number": "+1-555-000-1111",
-            "city": "Seattle",
-            "state_region": "WA",
-            "github_url": "https://github.com/bob",
-            "portfolio_url": "https://bob.dev",
-        }
-    }
+    def fake_request_auth(method, path, payload):
+        if (method, path) == ("POST", "/auth/register"):
+            return {"user": {"username": "bob", "email": None}}
+        if (method, path) == ("PUT", "/auth/me"):
+            return {
+                "user": {
+                    "username": "bob",
+                    "email": "bob@example.com",
+                    "full_name": "Bob Stone",
+                    "phone_number": "+1-555-000-1111",
+                    "city": "Seattle",
+                    "state_region": "WA",
+                    "github_url": "https://github.com/bob",
+                    "portfolio_url": "https://bob.dev",
+                }
+            }
+        if (method, path) == ("POST", "/auth/password"):
+            if payload.get("current_password") == "wrong":
+                raise auth_routes.HTTPException(status_code=401, detail="invalid credentials")
+            return {"detail": "password updated successfully"}
+        if (method, path) == ("POST", "/auth/login"):
+            return {"user": {"username": "bob", "email": "bob@example.com"}}
+        raise AssertionError(f"unexpected auth call: {(method, path, payload)}")
 
-    with patch.object(auth_routes, "_post_to_auth", side_effect=post_effects), patch.object(
-        auth_routes, "_put_to_auth", return_value=put_response
-    ):
+    with patch.object(auth_routes, "_request_auth", side_effect=fake_request_auth):
         client = _client(tmp_path)
         reg = client.post("/auth/register", json={"username": "bob", "password": "oldpass1"})
         assert reg.status_code == 200
@@ -151,12 +155,6 @@ def test_auth_me_requires_token(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _register_and_token(client, username="alice", password="pass1234"):
-    r = client.post("/auth/register", json={"username": username, "password": password})
-    assert r.status_code == 200
-    return r.json()["token"]
-
-
 def test_education_get_requires_auth(tmp_path):
     client = _isolated_client(tmp_path)
     storage.close_db()
@@ -169,35 +167,48 @@ def test_education_put_requires_auth(tmp_path):
     assert client.put("/auth/me/education", json=[]).status_code == 401
 
 
-
 def test_education_get_and_put_endpoints_return_correct_shape(tmp_path):
     """Smoke-test that get/replace_user_education return the expected field shape.
     Full persistence and ordering is covered in test_storage_users.py.
     """
-    from pathlib import Path as _Path
-    from capstone import storage as _st
+    client = _isolated_client(tmp_path)
+    storage.close_db()
 
-    conn = _st.open_db()
-    try:
-        # user_education.user_id FK → user(id); the singleton user row (id=1) is
-        # inserted by _initialize_schema, so we always operate with user_id=1.
-        _st.replace_user_education(conn, 1, [])
+    def fake_request_auth(method, path, payload):
+        if (method, path) == ("POST", "/auth/register"):
+            return {"user": {"username": "alice", "email": None}}
+        raise AssertionError(f"unexpected auth call: {(method, path, payload)}")
 
-        _st.replace_user_education(conn, 1, [{
-            "university": "UBCO",
-            "degree": "BSc Computer Science",
-            "start_date": "2022",
-            "end_date": "Present",
-            "city": "Kelowna",
-            "state": "BC",
-        }])
-        result = _st.get_user_education(conn, 1)
-        assert len(result) == 1
-        assert set(result[0].keys()) >= {"id", "university", "degree", "start_date", "end_date", "city", "state"}
-        assert result[0]["university"] == "UBCO"
-        assert result[0]["city"] == "Kelowna"
+    with patch.object(auth_routes, "_request_auth", side_effect=fake_request_auth):
+        token = client.post(
+            "/auth/register",
+            json={"username": "alice", "password": "pass1234"},
+        ).json()["token"]
 
-        # Cleanup
-        _st.replace_user_education(conn, 1, [])
-    finally:
-        _st.close_db()
+    headers = {"Authorization": f"Bearer {token}"}
+    put_resp = client.put(
+        "/auth/me/education",
+        headers=headers,
+        json={
+            "education": [{
+                "university": "UBCO",
+                "degree": "BSc Computer Science",
+                "start_date": "2022",
+                "end_date": "Present",
+                "city": "Kelowna",
+                "state": "BC",
+            }]
+        }
+    )
+    assert put_resp.status_code == 200, put_resp.text
+    result = put_resp.json()["data"]
+    assert len(result) == 1
+    assert set(result[0].keys()) >= {"id", "university", "degree", "start_date", "end_date", "city", "state"}
+    assert result[0]["university"] == "UBCO"
+    assert result[0]["city"] == "Kelowna"
+
+    get_resp = client.get("/auth/me/education", headers=headers)
+    assert get_resp.status_code == 200
+    fetched = get_resp.json()["data"]
+    assert len(fetched) == 1
+    assert fetched[0]["university"] == "UBCO"

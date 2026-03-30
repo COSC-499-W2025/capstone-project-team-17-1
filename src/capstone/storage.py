@@ -13,18 +13,17 @@ This module centralizes:
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import json
 import sqlite3
 import uuid
 from pathlib import Path
 from typing import Iterable, Optional
-import json
 from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
 import os
-from pathlib import Path
 import sys
 
 logger = get_logger(__name__)
@@ -62,6 +61,11 @@ def _load_dotenv():
 _load_dotenv()
 
 
+def resolve_storage_user_key(user_id: str | None) -> str | None:
+    """Return user_id stripped if it represents a real user, else None."""
+    token = (user_id or "").strip()
+    return token or None
+
 def get_base_data_dir():
 
     local_appdata = os.getenv("LOCALAPPDATA")
@@ -77,6 +81,9 @@ BASE_DIR = get_base_data_dir()
 _DB_HANDLE: Optional[sqlite3.Connection] = None
 _DB_PATH: Optional[Path] = None
 CURRENT_USER = None
+_REQUEST_STORAGE_USER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "storage_current_user", default=None
+)
 _SCHEMA_READY: set[str] = set()
 
 def _is_noreply_email(email: str | None) -> bool:
@@ -403,23 +410,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
 _SQLITE_INTERNAL = {"sqlite_sequence", "sqlite_stat1", "sqlite_stat2", "sqlite_stat3", "sqlite_stat4"}
 
 
-def _sqlite_affinity(type_str: str) -> str:
-    """Return the SQLite type affinity for a declared column type.
-
-    Follows the SQLite affinity rules so that equivalent types (e.g. JSON and
-    TEXT, or INT and INTEGER) compare equal during schema checks.
-    """
-    t = type_str.upper()
-    if "INT" in t:
-        return "INTEGER"
-    if any(x in t for x in ("CHAR", "CLOB", "TEXT", "JSON")):
-        return "TEXT"
-    if t == "" or "BLOB" in t:
-        return "BLOB"
-    if any(x in t for x in ("REAL", "FLOA", "DOUB")):
-        return "REAL"
-    return "NUMERIC"
-
 
 def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
     """Return True when the live DB schema matches _initialize_schema output.
@@ -527,7 +517,36 @@ def fetch_error_results(conn):
 
 def set_current_user(user_id: str | None):
     global CURRENT_USER
-    CURRENT_USER = user_id
+    resolved = resolve_storage_user_key(user_id)
+    CURRENT_USER = resolved
+    _REQUEST_STORAGE_USER.set(resolved)
+
+
+def bind_request_user(user_id: str | None) -> contextvars.Token:
+    """
+    Bind request-local storage user context and mirror it globally for legacy code.
+    Returns a context token so middleware can reset after the request completes.
+    """
+    resolved = resolve_storage_user_key(user_id)
+    token = _REQUEST_STORAGE_USER.set(resolved)
+    global CURRENT_USER
+    CURRENT_USER = resolved
+    return token
+
+
+def reset_request_user(token: contextvars.Token) -> None:
+    try:
+        _REQUEST_STORAGE_USER.reset(token)
+    except Exception:
+        # Defensive fallback to guest context if reset token is invalid.
+        _REQUEST_STORAGE_USER.set(None)
+
+
+def get_current_user() -> str | None:
+    scoped_user = _REQUEST_STORAGE_USER.get()
+    if scoped_user is not None:
+        return resolve_storage_user_key(scoped_user)
+    return resolve_storage_user_key(CURRENT_USER)
 
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
@@ -542,9 +561,15 @@ def get_database_path(user=_UNSET) -> Path:
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
-    effective_user = CURRENT_USER if user is _UNSET else user
-    if effective_user:
-        path = BASE_DIR / "data" / "users" / _user_dir(effective_user)
+    if user is _UNSET:
+        storage_user_key = get_current_user()
+    elif user is None:
+        storage_user_key = None
+    else:
+        storage_user_key = resolve_storage_user_key(user)
+
+    if storage_user_key:
+        path = BASE_DIR / "data" / "users" / _user_dir(storage_user_key)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
@@ -595,7 +620,14 @@ def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
 
     return conn
 
-def close_db() -> None:
+def close_db(conn: sqlite3.Connection | None = None) -> None:
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:  # pragma: no cover
+            logger.warning("Failed to close DB connection", exc_info=True)
+        return
+
     """Close the shared database handle if it exists."""
     global _DB_HANDLE, _DB_PATH
     if _DB_HANDLE is not None:

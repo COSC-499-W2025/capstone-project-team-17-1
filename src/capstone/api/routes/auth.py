@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 import secrets
-import sqlite3
 from typing import Optional
 
 import requests
@@ -41,43 +39,6 @@ def _save_sessions() -> None:
     try:
         with open(_SESSION_FILE, "w", encoding="utf-8") as f:
             json.dump(_SESSIONS, f, indent=2)
-    except Exception:
-        pass
-
-
-def _migrate_guest_data_into_user_db_if_needed(username: str) -> None:
-    guest_db = storage.BASE_DIR / "data" / "guest" / "capstone.db"
-    if not guest_db.exists():
-        return
-
-    user_db = storage.get_database_path(username)
-
-    user_db.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        user_conn = sqlite3.connect(user_db)
-        row = user_conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_analysis'"
-        ).fetchone()
-        has_project_table = bool(row and row[0])
-        existing_projects = 0
-        if has_project_table:
-            existing_projects = user_conn.execute("SELECT COUNT(*) FROM project_analysis").fetchone()[0]
-        user_conn.close()
-    except Exception:
-        existing_projects = 0
-
-    if existing_projects:
-        return
-
-    try:
-        source = sqlite3.connect(guest_db)
-        target = sqlite3.connect(user_db)
-        source.backup(target)
-        target.execute("DELETE FROM privacy_consent")
-        target.commit()
-        target.close()
-        source.close()
     except Exception:
         pass
 
@@ -142,13 +103,7 @@ def configure(db_dir: Optional[str] = None):
 
 
 def _get_auth_base_url() -> str:
-    base = _AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev"
-    if not base:
-        raise HTTPException(
-            status_code=500,
-            detail="CAPSTONE_AUTH_WORKER_URL is not configured",
-        )
-    return base.rstrip("/")
+    return (_AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev").rstrip("/")
 
 
 def _new_token() -> str:
@@ -170,32 +125,10 @@ def _require_session(request: Request) -> dict:
     return _SESSIONS[token]
 
 
-def _post_to_auth(path: str, payload: dict) -> dict:
+def _request_auth(method: str, path: str, payload: dict) -> dict:
     url = f"{_get_auth_base_url()}{path}"
-
     try:
-        response = requests.post(url, json=payload, timeout=15)
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"auth service unavailable: {exc}")
-
-    try:
-        data = response.json()
-    except ValueError:
-        raise HTTPException(status_code=502, detail="auth service returned invalid JSON")
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=data.get("error") or data.get("detail") or "auth request failed",
-        )
-
-    return data
-
-def _put_to_auth(path: str, payload: dict) -> dict:
-    url = f"{_get_auth_base_url()}{path}"
-
-    try:
-        response = requests.put(url, json=payload, timeout=15)
+        response = requests.request(method, url, json=payload, timeout=15)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"auth service unavailable: {exc}")
 
@@ -228,6 +161,11 @@ def get_authenticated_username(request: Request) -> Optional[str]:
     username = (user or {}).get("username")
     return str(username).strip() if username else None
 
+
+def get_authenticated_storage_user_key(request: Request) -> Optional[str]:
+    username = get_authenticated_username(request)
+    return storage.resolve_storage_user_key(username)
+
 @router.get("/bootstrap")
 def bootstrap(request: Request):
     token = _extract_bearer(request)
@@ -247,7 +185,7 @@ def register(payload: RegisterRequest):
     if len(payload.password) < 6:
         raise HTTPException(status_code=400, detail="password must be at least 6 characters")
 
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/register",
         {
             "username": payload.username.strip(),
@@ -267,13 +205,17 @@ def register(payload: RegisterRequest):
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
-    storage.CURRENT_USER = user["username"]
-    _migrate_guest_data_into_user_db_if_needed(user["username"])
+    storage.set_current_user(user["username"])
     _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
     _save_sessions()
+    print(
+        f"[auth/register] username={user.get('username')!r} "
+        f"local_db={str(storage.get_database_path())!r}",
+        flush=True,
+    )
 
     return {
         "token": token,
@@ -283,7 +225,7 @@ def register(payload: RegisterRequest):
 
 @router.post("/login")
 def login(payload: LoginRequest):
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/login",
         {
             "username": payload.username.strip(),
@@ -295,13 +237,17 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    storage.CURRENT_USER = user["username"]
-    _migrate_guest_data_into_user_db_if_needed(user["username"])
+    storage.set_current_user(user["username"])
     _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
     _save_sessions()
+    print(
+        f"[auth/login] username={user.get('username')!r} "
+        f"local_db={str(storage.get_database_path())!r}",
+        flush=True,
+    )
 
     return {
         "token": token,
@@ -313,7 +259,7 @@ def me(request: Request):
     session = _require_session(request)
     user = session["user"]
     # Always restore CURRENT_USER from the session — critical after server restart
-    storage.CURRENT_USER = user["username"]
+    storage.set_current_user(user["username"])
     from capstone.portfolio_retrieval import _db_session
     from capstone.api.routes.resumes import _get_current_user_contributor_id
     with _db_session(None) as conn:
@@ -324,7 +270,7 @@ def me(request: Request):
 def update_me(payload: UpdateProfileRequest, request: Request):
     user = _session_user(request)
 
-    data = _put_to_auth(
+    data = _request_auth("PUT",
         "/auth/me",
         {
             "username": user["username"],
@@ -342,7 +288,7 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
-    storage.CURRENT_USER = updated_user["username"]
+    storage.set_current_user(updated_user["username"])
     _sync_profile_to_local_db(updated_user)
 
     token = _extract_bearer(request)
@@ -392,7 +338,7 @@ def change_password(payload: ChangePasswordRequest, request: Request):
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="new password must be at least 6 characters")
 
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/password",
         {
             "username": user["username"],
@@ -410,9 +356,15 @@ def change_password(payload: ChangePasswordRequest, request: Request):
 @router.post("/logout")
 def logout(request: Request):
     token = _extract_bearer(request)
+    before_user = storage.get_current_user()
     if token:
         _SESSIONS.pop(token, None)
         _save_sessions()
 
-    storage.CURRENT_USER = None
+    storage.set_current_user(None)
+    print(
+        f"[auth/logout] previous_user={before_user!r} mode='guest' "
+        f"local_db={str(storage.get_database_path())!r}",
+        flush=True,
+    )
     return {"ok": True}

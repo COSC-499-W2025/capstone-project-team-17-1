@@ -139,10 +139,9 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             resume_id = storage.upsert_default_resume_modules(
                 conn,
-                user_id=user_id,
+                user_id=1,
                 header={
                     "full_name": "Alice",
                     "email": "alice@example.com",
@@ -229,10 +228,9 @@ def test_upsert_default_resume_modules_updates_existing_draft_title():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             first_id = storage.upsert_default_resume_modules(
                 conn,
-                user_id=user_id,
+                user_id=1,
                 header={
                     "full_name": "Alice Doe",
                     "email": "alice@example.com",
@@ -247,7 +245,7 @@ def test_upsert_default_resume_modules_updates_existing_draft_title():
             )
             second_id = storage.upsert_default_resume_modules(
                 conn,
-                user_id=user_id,
+                user_id=1,
                 header={
                     "full_name": "Alice Doe",
                     "email": "alice@example.com",
@@ -273,10 +271,9 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
         db_dir = Path(tmpdir)
         with _open_isolated_db(db_dir) as conn:
 
-            user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             first_id = storage.upsert_default_resume_modules(
                 conn,
-                user_id=user_id,
+                user_id=1,
                 header={
                     "full_name": "Alice Doe",
                     "email": "alice@example.com",
@@ -292,7 +289,7 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
             )
             second_id = storage.upsert_default_resume_modules(
                 conn,
-                user_id=user_id,
+                user_id=1,
                 header={
                     "full_name": "Alice Doe",
                     "email": "alice@example.com",
@@ -310,7 +307,7 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
             assert first_id != second_id
             count = conn.execute(
                 "SELECT COUNT(*) FROM resumes WHERE user_id = ? AND status = 'draft'",
-                (user_id,),
+                (1,),
             ).fetchone()[0]
             assert int(count) == 2
 
@@ -389,27 +386,23 @@ def test_store_contributor_stats_updates_latest_user_id():
 # ---------------------------------------------------------------------------
 
 
-def _edu_conn_and_uid(username: str, email: str):
-    """Open DB, upsert user, clear their education, return (conn, uid)."""
-    conn = storage.open_db()
-    uid = storage.upsert_contributor(conn, username, email=email)
-    storage.replace_user_education(conn, uid, [])  # ensure clean slate
-    return conn, uid
+@contextmanager
+def _edu_conn():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            storage.replace_user_education(conn, 1, [])
+            yield conn
 
 
 def test_get_user_education_returns_empty_after_clear():
-    conn, uid = _edu_conn_and_uid("edu_test_empty_user", "edu_empty@test.com")
-    try:
-        assert storage.get_user_education(conn, uid) == []
-    finally:
-        storage.replace_user_education(conn, uid, [])
-        storage.close_db()
+    with _edu_conn() as conn:
+        assert storage.get_user_education(conn, 1) == []
 
 
 def test_replace_and_get_user_education_round_trip():
-    conn, uid = _edu_conn_and_uid("edu_test_rt_user", "edu_rt@test.com")
-    try:
-        storage.replace_user_education(conn, uid, [{
+    with _edu_conn() as conn:
+        storage.replace_user_education(conn, 1, [{
             "university": "UBCO",
             "degree": "BSc Computer Science",
             "start_date": "2022",
@@ -417,7 +410,7 @@ def test_replace_and_get_user_education_round_trip():
             "city": "Kelowna",
             "state": "BC",
         }])
-        result = storage.get_user_education(conn, uid)
+        result = storage.get_user_education(conn, 1)
 
         assert len(result) == 1
         assert result[0]["university"] == "UBCO"
@@ -426,75 +419,56 @@ def test_replace_and_get_user_education_round_trip():
         assert result[0]["end_date"] == "Present"
         assert result[0]["city"] == "Kelowna"
         assert result[0]["state"] == "BC"
-    finally:
-        storage.replace_user_education(conn, uid, [])
-        storage.close_db()
 
 
 def test_replace_user_education_replaces_previous_entries():
-    conn, uid = _edu_conn_and_uid("edu_test_rpl_user", "edu_rpl@test.com")
-    try:
-        storage.replace_user_education(conn, uid, [{"university": "OldU", "degree": "BA Arts"}])
-        storage.replace_user_education(conn, uid, [{"university": "NewU", "degree": "MSc CS"}])
+    with _edu_conn() as conn:
+        storage.replace_user_education(conn, 1, [{"university": "OldU", "degree": "BA Arts"}])
+        storage.replace_user_education(conn, 1, [{"university": "NewU", "degree": "MSc CS"}])
 
-        result = storage.get_user_education(conn, uid)
+        result = storage.get_user_education(conn, 1)
         assert len(result) == 1
         assert result[0]["university"] == "NewU"
-    finally:
-        storage.replace_user_education(conn, uid, [])
-        storage.close_db()
 
 
 def test_replace_user_education_multiple_entries_preserves_order():
-    conn, uid = _edu_conn_and_uid("edu_test_ord_user", "edu_ord@test.com")
-    try:
-        storage.replace_user_education(conn, uid, [
+    with _edu_conn() as conn:
+        storage.replace_user_education(conn, 1, [
             {"university": "First", "degree": "BSc"},
             {"university": "Second", "degree": "MSc"},
         ])
-        result = storage.get_user_education(conn, uid)
+        result = storage.get_user_education(conn, 1)
 
         assert len(result) == 2
         assert result[0]["university"] == "First"
         assert result[1]["university"] == "Second"
-    finally:
-        storage.replace_user_education(conn, uid, [])
-        storage.close_db()
 
 
 def test_replace_user_education_empty_list_clears_entries():
-    conn, uid = _edu_conn_and_uid("edu_test_clr_user", "edu_clr@test.com")
-    try:
-        storage.replace_user_education(conn, uid, [{"university": "SomeU", "degree": "BSc"}])
-        storage.replace_user_education(conn, uid, [])
-        assert storage.get_user_education(conn, uid) == []
-    finally:
-        storage.close_db()
+    with _edu_conn() as conn:
+        storage.replace_user_education(conn, 1, [{"university": "SomeU", "degree": "BSc"}])
+        storage.replace_user_education(conn, 1, [])
+        assert storage.get_user_education(conn, 1) == []
 
 
 def test_replace_user_education_partial_fields_stored_as_none():
-    conn, uid = _edu_conn_and_uid("edu_test_partial_user", "edu_partial@test.com")
-    try:
-        storage.replace_user_education(conn, uid, [{"university": "UBC"}])
-        result = storage.get_user_education(conn, uid)
+    with _edu_conn() as conn:
+        storage.replace_user_education(conn, 1, [{"university": "UBC"}])
+        result = storage.get_user_education(conn, 1)
 
         assert result[0]["university"] == "UBC"
         assert result[0]["degree"] is None
         assert result[0]["city"] is None
         assert result[0]["state"] is None
-    finally:
-        storage.replace_user_education(conn, uid, [])
-        storage.close_db()
 
 
 def test_user_education_table_has_required_columns():
-    conn = storage.open_db()
-    try:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(user_education)").fetchall()}
-        for col in ("id", "user_id", "university", "degree", "start_date", "end_date", "city", "state", "sort_order"):
-            assert col in columns, f"Missing column: {col}"
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(user_education)").fetchall()}
+            for col in ("id", "user_id", "university", "degree", "start_date", "end_date", "city", "state", "sort_order"):
+                assert col in columns, f"Missing column: {col}"
 
 
 # ---------------------------------------------------------------------------
@@ -512,120 +486,110 @@ _HEADER = {
 
 
 def test_upsert_default_resume_modules_populates_summary_section():
-    conn = storage.open_db()
-    try:
-        uid = storage.upsert_contributor(conn, "resume_summary_test_user", email="rs_test@example.com")
-        resume_id = storage.upsert_default_resume_modules(
-            conn,
-            user_id=uid,
-            header=_HEADER,
-            core_skills=["Python"],
-            projects=[],
-            summary="Computer Science senior at UBCO. Skilled in Python.",
-            create_new=True,
-        )
-        sec = conn.execute(
-            "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
-            (resume_id,),
-        ).fetchone()
-        assert sec, "Summary section not created"
-        item = conn.execute(
-            "SELECT content FROM resume_items WHERE section_id = ?",
-            (sec[0],),
-        ).fetchone()
-        assert item and "UBCO" in item[0]
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            resume_id = storage.upsert_default_resume_modules(
+                conn,
+                user_id=1,
+                header=_HEADER,
+                core_skills=["Python"],
+                projects=[],
+                summary="Computer Science senior at UBCO. Skilled in Python.",
+                create_new=True,
+            )
+            sec = conn.execute(
+                "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
+                (resume_id,),
+            ).fetchone()
+            assert sec, "Summary section not created"
+            item = conn.execute(
+                "SELECT content FROM resume_items WHERE section_id = ?",
+                (sec[0],),
+            ).fetchone()
+            assert item and "UBCO" in item[0]
 
 
 def test_upsert_default_resume_modules_no_summary_uses_empty_template():
-    conn = storage.open_db()
-    try:
-        uid = storage.upsert_contributor(conn, "resume_nosummary_test_user", email="rn_test@example.com")
-        resume_id = storage.upsert_default_resume_modules(
-            conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
-            summary=None, create_new=True,
-        )
-        sec = conn.execute(
-            "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
-            (resume_id,),
-        ).fetchone()
-        item = conn.execute(
-            "SELECT title, content FROM resume_items WHERE section_id = ?",
-            (sec[0],),
-        ).fetchone()
-        assert item is not None
-        assert item[0] == "Summary"
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            resume_id = storage.upsert_default_resume_modules(
+                conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
+                summary=None, create_new=True,
+            )
+            sec = conn.execute(
+                "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
+                (resume_id,),
+            ).fetchone()
+            item = conn.execute(
+                "SELECT title, content FROM resume_items WHERE section_id = ?",
+                (sec[0],),
+            ).fetchone()
+            assert item is not None
+            assert item[0] == "Summary"
 
 
 def test_upsert_default_resume_modules_populates_education_section():
-    conn = storage.open_db()
-    try:
-        uid = storage.upsert_contributor(conn, "resume_edu_test_user", email="re_test@example.com")
-        edu = [{"university": "UBCO", "degree": "BSc CS", "start_date": "2022",
-                "end_date": "Present", "city": "Kelowna", "state": "BC"}]
-        resume_id = storage.upsert_default_resume_modules(
-            conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
-            education=edu, create_new=True,
-        )
-        sec = conn.execute(
-            "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'education'",
-            (resume_id,),
-        ).fetchone()
-        item = conn.execute(
-            "SELECT title, subtitle, location FROM resume_items WHERE section_id = ?",
-            (sec[0],),
-        ).fetchone()
-        assert item[0] == "UBCO"
-        assert item[1] == "BSc CS"
-        assert "Kelowna" in item[2] and "BC" in item[2]
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            edu = [{"university": "UBCO", "degree": "BSc CS", "start_date": "2022",
+                    "end_date": "Present", "city": "Kelowna", "state": "BC"}]
+            resume_id = storage.upsert_default_resume_modules(
+                conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
+                education=edu, create_new=True,
+            )
+            sec = conn.execute(
+                "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'education'",
+                (resume_id,),
+            ).fetchone()
+            item = conn.execute(
+                "SELECT title, subtitle, location FROM resume_items WHERE section_id = ?",
+                (sec[0],),
+            ).fetchone()
+            assert item[0] == "UBCO"
+            assert item[1] == "BSc CS"
+            assert "Kelowna" in item[2] and "BC" in item[2]
 
 
 def test_upsert_default_resume_modules_education_location_city_state():
-    conn = storage.open_db()
-    try:
-        uid = storage.upsert_contributor(conn, "resume_loc_test_user", email="rl_test@example.com")
-        edu = [{"university": "UBC", "degree": "BSc", "city": "Vancouver", "state": "BC"}]
-        resume_id = storage.upsert_default_resume_modules(
-            conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
-            education=edu, create_new=True,
-        )
-        sec = conn.execute(
-            "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'education'",
-            (resume_id,),
-        ).fetchone()
-        item = conn.execute(
-            "SELECT location FROM resume_items WHERE section_id = ?", (sec[0],)
-        ).fetchone()
-        assert item[0] == "Vancouver, BC"
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            edu = [{"university": "UBC", "degree": "BSc", "city": "Vancouver", "state": "BC"}]
+            resume_id = storage.upsert_default_resume_modules(
+                conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
+                education=edu, create_new=True,
+            )
+            sec = conn.execute(
+                "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'education'",
+                (resume_id,),
+            ).fetchone()
+            item = conn.execute(
+                "SELECT location FROM resume_items WHERE section_id = ?", (sec[0],)
+            ).fetchone()
+            assert item[0] == "Vancouver, BC"
 
 
 def test_upsert_default_resume_modules_refreshes_summary_on_regenerate():
-    conn = storage.open_db()
-    try:
-        uid = storage.upsert_contributor(conn, "resume_refresh_test_user", email="rr_test@example.com")
-        resume_id = storage.upsert_default_resume_modules(
-            conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
-            summary="First summary.", create_new=True,
-        )
-        # Regenerate: re-uses same draft resume (create_new=False)
-        storage.upsert_default_resume_modules(
-            conn, user_id=uid, header=_HEADER, core_skills=[], projects=[],
-            summary="Updated summary.", create_new=False,
-        )
-        sec = conn.execute(
-            "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
-            (resume_id,),
-        ).fetchone()
-        item = conn.execute(
-            "SELECT content FROM resume_items WHERE section_id = ?", (sec[0],)
-        ).fetchone()
-        assert item[0] == "Updated summary."
-    finally:
-        storage.close_db()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_dir = Path(tmpdir)
+        with _open_isolated_db(db_dir) as conn:
+            resume_id = storage.upsert_default_resume_modules(
+                conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
+                summary="First summary.", create_new=True,
+            )
+            # Regenerate: re-uses same draft resume (create_new=False)
+            storage.upsert_default_resume_modules(
+                conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
+                summary="Updated summary.", create_new=False,
+            )
+            sec = conn.execute(
+                "SELECT id FROM resume_sections WHERE resume_id = ? AND key = 'summary'",
+                (resume_id,),
+            ).fetchone()
+            item = conn.execute(
+                "SELECT content FROM resume_items WHERE section_id = ?", (sec[0],)
+            ).fetchone()
+            assert item[0] == "Updated summary."

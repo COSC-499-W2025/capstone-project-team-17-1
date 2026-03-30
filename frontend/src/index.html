@@ -264,7 +264,7 @@
               </div>
             </div>
             <div id="resume-list-container" class="resume-list-container">
-              <p class="muted-text">Select a contributor above to see their resumes.</p>
+              <p class="muted-text">Loading...</p>
             </div>
           </div>
 
@@ -492,7 +492,7 @@
             <!-- Account Tab -->
             <div id="settings-tab-account" class="settings-tab-panel">
               <h2 class="settings-section-title">Account</h2>
-              <div id="settings-profile" class="settings-card">
+              <div id="settings-profile" class="settings-account-cards">
                 <p class="settings-login-prompt">Login to view and edit your profile.</p>
               </div>
             </div>
@@ -539,6 +539,10 @@
       <input id="auth-username" type="text" placeholder="Username" />
       <input id="auth-email" class="hidden" type="email" placeholder="Email (optional)" />
       <input id="auth-password" type="password" placeholder="Password" />
+      <label class="auth-remember-row" for="auth-remember-me">
+        <input id="auth-remember-me" type="checkbox" />
+        <span>Remember me on this device</span>
+      </label>
       <div id="auth-error" class="auth-error"></div>
       <div class="auth-actions">
         <button id="auth-submit" class="auth-primary">Login</button>

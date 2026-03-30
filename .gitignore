@@ -19,6 +19,7 @@ __pycache__/
 src/capstone_analyzer.egg-info/
 log/consent_decisions.jsonl
 /.venv
+.codex/
 config/user_config.json
 # databases
 demo_db/*

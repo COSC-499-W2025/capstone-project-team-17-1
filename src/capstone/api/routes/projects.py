@@ -53,11 +53,10 @@ def _restore_user_from_request(request: Request | None) -> None:
     if request is None:
         return
     try:
-        from capstone.api.routes.auth import get_authenticated_username
+        from capstone.api.routes.auth import get_authenticated_storage_user_key
 
-        username = get_authenticated_username(request)
-        if username:
-            storage_module.CURRENT_USER = username
+        storage_user_key = get_authenticated_storage_user_key(request)
+        storage_module.set_current_user(storage_user_key)
     except Exception:
         pass
 
@@ -319,24 +318,36 @@ async def upload_project(
         tmp_path = Path(tmp.name)
 
     conn = storage.open_db()
-    auto_detected = False
-    if not project_id:
-        project_id = _auto_detect_project_id(conn, tmp_path, filename)
-        auto_detected = bool(project_id)
-    if not project_id:
-        project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
-
-    existing = conn.execute(
-        "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
-        (project_id,),
-    ).fetchone()
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Project ID '{project_id}' already exists."
-        )
     try:
+        active_user = storage_module.get_current_user()
+        mode = "user" if active_user else "guest"
+        db_path = str(storage.get_database_path())
+        auto_detected = False
+        if not project_id:
+            project_id = _auto_detect_project_id(conn, tmp_path, filename)
+            auto_detected = bool(project_id)
+        if not project_id:
+            project_id = _generate_project_id_from_zip(conn, tmp_path, filename)
+
+        existing = conn.execute(
+            "SELECT 1 FROM uploads WHERE upload_id = ? LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        print(
+            "[projects/upload-duplicate-check] "
+            f"mode={mode!r} "
+            f"current_user={active_user!r} "
+            f"db_path={db_path!r} "
+            f"project_id={project_id!r} "
+            f"exists={bool(existing)!r}",
+            flush=True,
+        )
+
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project ID '{project_id}' already exists."
+            )
         stored = file_store.ensure_file(
             conn,
             tmp_path,
@@ -384,15 +395,16 @@ async def upload_project(
         message = "Upload stored and matched to existing project automatically."
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
-    if storage_module.CURRENT_USER:
+    active_user = storage_module.get_current_user()
+    if active_user:
         try:
             upload_project_zip(
-                storage_module.CURRENT_USER,
+                active_user,
                 project_id,
                 Path(stored["path"]),
                 filename,
             )
-            upload_database(storage_module.CURRENT_USER)
+            upload_database(active_user)
         except Exception:
             log_event("WARNING", f"Cloud sync failed after upload · Project: {project_id}")
     return {
@@ -515,10 +527,11 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                         "skills": summary.get("skills", []),
                     }
                 )
-                if storage_module.CURRENT_USER:
+                active_user = storage_module.get_current_user()
+                if active_user:
                     try:
                         upload_project_zip(
-                            storage_module.CURRENT_USER,
+                            active_user,
                             project_id,
                             Path(stored["path"]),
                             sub_filename,
@@ -537,9 +550,10 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
         except Exception:
             pass
 
-        if storage_module.CURRENT_USER:
+        active_user = storage_module.get_current_user()
+        if active_user:
             try:
-                upload_database(storage_module.CURRENT_USER)
+                upload_database(active_user)
             except Exception:
                 pass
 
@@ -629,11 +643,12 @@ def get_project(id: str, request: Request):
     }
 
 @router.delete("/{id}")
-def delete_project(id: str):
+def delete_project(id: str, request: Request):
     """
     Deletes a project and its associated stored file (ZIP upload) or
     GitHub-imported entry (no local blob).
     """
+    _restore_user_from_request(request)
     conn = storage.open_db()
 
     # --- ZIP-upload path: project lives in uploads + files tables ---
@@ -700,10 +715,11 @@ def delete_project(id: str):
             pass
 
     # Best-effort cloud cleanup
-    if storage_module.CURRENT_USER:
+    active_user = storage_module.get_current_user()
+    if active_user:
         try:
             delete_project_zip(
-                storage_module.CURRENT_USER,
+                active_user,
                 id,
                 original_name or "project.zip",
             )
@@ -711,7 +727,7 @@ def delete_project(id: str):
             pass
 
         try:
-            upload_database(storage_module.CURRENT_USER)
+            upload_database(active_user)
         except Exception:
             pass
 

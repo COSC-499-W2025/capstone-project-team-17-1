@@ -1,4 +1,4 @@
-import { authFetch, openSettingsAndPromptLogin } from "./auth.js";
+import { authFetch, openSettingsAndPromptLogin, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 import { switchPage } from "./navigation.js";
 
 const API_BASE = "http://127.0.0.1:8002";
@@ -81,6 +81,7 @@ async function runErrorAnalysis(container) {
 }
 
 export async function loadErrorAnalysis() {
+  const epoch = captureAuthDataEpoch();
   const container = document.getElementById("error-analysis-container");
   if (!container) return;
 
@@ -93,6 +94,8 @@ export async function loadErrorAnalysis() {
   try {
     const res = await authFetch("/errors");
     const data = await res.json();
+
+    if (!authDomWriteAllowed(epoch)) return;
 
     container.innerHTML = "";
 
@@ -236,11 +239,13 @@ if (data.status === "ok") {
     `;
 
   } catch (err) {
-    container.innerHTML = `
+    if (authDomWriteAllowed(epoch)) {
+      container.innerHTML = `
       <div class="error-empty-state">
         Failed to load error analysis.
       </div>
     `;
+    }
     console.error("Error loading analysis:", err);
   }
 }

@@ -10,22 +10,32 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Request, Response
+from fastapi import APIRouter, Body, HTTPException, Request, Response, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from capstone.activity_log import log_event
 from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
-from capstone.portfolio_retrieval import _db_session
+from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_portfolio_entry, get_portfolio_entries
 from capstone.storage import _UNSET as _DB_UNSET
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
-from capstone.storage import (
-    fetch_latest_snapshot,
-    fetch_latest_snapshots,
-    fetch_latest_snapshots_with_zip,
-    fetch_project_snapshot_history,
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip, fetch_project_snapshot_history
+from capstone.project_role import infer_project_role_from_snapshot
+from capstone.top_project_summaries import gather_evidence
+from capstone.api.portfolio_helpers import (
+    ensure_indexes,
+    ensure_portfolio_tables,
+    get_portfolio_customization,
+    list_portfolio_images,
+    save_portfolio_image,
+    delete_portfolio_image,
+    set_cover_portfolio_image,
+    reorder_portfolio_images,
+    upsert_portfolio_customization,
+    get_latest_snapshot as helper_get_latest_snapshot,
 )
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -60,8 +70,7 @@ def _check_auth(request: Request) -> None:
 
 def _bind_current_user_from_session(request: Request) -> None:
     username = get_authenticated_username(request)
-    if username:
-        storage_module.CURRENT_USER = username
+    storage_module.set_current_user(username)
 
 
 def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:
@@ -102,6 +111,15 @@ class EditPortfolioRequest(BaseModel):
     owner: Optional[str] = None
     projects: Optional[list[PortfolioProject]] = None
     summary: Optional[str] = None
+
+    template_id: Optional[str] = None
+    key_role: Optional[str] = None
+    evidence_of_success: Optional[str] = None
+    portfolio_blurb: Optional[str] = None
+
+
+class ReorderPortfolioImagesRequest(BaseModel):
+    image_ids: list[str]
 
 
 class PortfolioResponse(BaseModel):
@@ -157,6 +175,13 @@ def _safe_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+    
+
+def _resolve_images_base_dir(request: Request) -> Path:
+    db_dir = _resolve_db_dir(request)
+    if db_dir:
+        return Path(db_dir)
+    return Path("data")
 
 
 def _extract_skill_names(value: Any) -> list[str]:
@@ -223,6 +248,167 @@ def _extract_title(project_id: str, snapshot: dict[str, Any]) -> str:
     return title or project_id
 
 
+def _stringify_evidence_value(value: Any) -> str:
+    if isinstance(value, dict):
+        label = str(value.get("label") or "").strip()
+        raw = value.get("value")
+        if isinstance(raw, dict):
+            raw = ", ".join(
+                str(v).strip()
+                for v in raw.values()
+                if str(v).strip()
+            )
+        elif isinstance(raw, list):
+            raw = ", ". join(str(v).strip() for v in raw if str(v).strip())
+        text = str(raw or "").strip()
+        return text or label
+    return str(value or "").strip()
+
+def _format_portfolio_evidence_line(label: str, value: str) -> str:
+    label = str(label or "").strip()
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if not label:
+        return value
+    return f"{label}: {value}"
+
+
+def _collect_portfolio_evidence_lines(snapshot: dict[str, Any], limit: int = 4) -> list[str]:
+    lines: list[str] = []
+
+    # pull structured evidence first if it exists in snapshot
+    extracted = _extract_evidence(snapshot)
+    extracted_items = extracted.get("items", []) if isinstance(extracted, dict) else []
+
+    for item in extracted_items:
+        if not isinstance(item, dict):
+            text = str(item).strip()
+        else:
+            text = _format_portfolio_evidence_line(
+                item.get("label", ""),
+                _stringify_evidence_value(item),
+            )
+        if text and text not in lines:
+            lines.append(text)
+
+    # fill with general evidence generated from snapshot metrics
+    generated = gather_evidence(snapshot)
+    for evidence in generated:
+        detail = str(getattr(evidence, "detail", "") or "").strip()
+        if detail and detail not in lines:
+            lines.append(detail)
+
+    # default if still empty
+    if not lines:
+        file_summary = snapshot.get("file_summary") or {}
+        file_count = 0
+        active_days = 0
+        if isinstance(file_summary, dict):
+            file_count = _safe_int(file_summary.get("file_count"))
+            active_days = _safe_int(file_summary.get("active_days"))
+
+        if file_count:
+            lines.append(f"{file_count} files analyzed")
+        if active_days:
+            lines.append(f"Active development across {active_days} tracked days")
+
+    return lines[:limit]
+
+def _build_portfolio_blurb(project_id: str, snapshot: dict[str, Any], inferred_role: str) -> str:
+    title = _extract_title(project_id, snapshot)
+    technologies = _extract_technologies(snapshot)
+    frameworks = _as_list(snapshot.get("frameworks"))
+    collaboration = snapshot.get("collaboration", {}) or {}
+    classification = str(collaboration.get("classification") or "").strip().lower()
+
+    raw_summary = _extract_summary(snapshot)
+    existing = _extract_summary(snapshot)
+    
+    if existing:
+        lowered = existing.lower()
+        generic_markers = [
+            "uses ",
+            "showcases applied software development work",
+            "deliver core project functionality",
+        ]
+        if not any(marker in lowered for marker in generic_markers):
+            return existing
+
+    stack = _dedupe_strings([*technologies, *frameworks])[:4]
+    stack_text = ", ".join(stack)
+
+    role_phrase = inferred_role.lower() if inferred_role else "software development"
+
+    if classification == "individual":
+        if stack_text:
+            return (
+                f"{title} is an individual {role_phrase} project built with {stack_text}. "
+                f"It focuses on delivering the core functionality and main use case of the application."
+            )
+        return (
+            f"{title} is an individual {role_phrase} project focused on building a complete working solution "
+            f"for its main purpose."
+        )
+                
+    if classification == "collaborative":
+        if stack_text:
+            return (
+                f"{title} is a collaborative {role_phrase} project built with {stack_text}. "
+                f"It is designed to deliver the main product workflow and overall user experience."
+            )
+        return (
+            f"{title} is a collaborative {role_phrase} project focused on delivering the main functionality "
+            f"and shared project goals."
+        )
+
+    # fallback for unknown/missing collaboration data
+    if stack_text:
+        return (
+            f"{title} is a {role_phrase} project built with {stack_text}. "
+            f"It is intended to deliver the main functionality and core project experience."
+        )
+
+    return (
+        f"{title} is a {role_phrase} project focused on delivering a working solution for its primary purpose."
+    )
+    
+    
+def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
+    summary = ""
+    highlights = _extract_highlights(snapshot)
+
+    evidence_lines = _collect_portfolio_evidence_lines(snapshot, limit=4)
+    
+    if not evidence_lines and highlights:
+        evidence_lines = highlights[:2]
+        
+    evidence_text = " • ".join(evidence_lines).strip()
+
+    collaboration = snapshot.get("collaboration", {}) or {}
+    classification = str(collaboration.get("classification") or "").strip().lower()
+    primary = str(collaboration.get("primary_contributor") or "").strip()
+    
+    inferred_role = str(snapshot.get("project_role") or "").strip()
+    if not inferred_role:
+        inferred_role = infer_project_role_from_snapshot(snapshot)
+
+    if classification == "individual":
+        role_text = inferred_role
+    elif primary:
+        role_text = f"{inferred_role}"
+    else:
+        role_text = inferred_role
+        
+    summary = _build_portfolio_blurb(project_id, snapshot, inferred_role)
+
+    return {
+        "key_role": role_text,
+        "evidence_of_success": evidence_text,
+        "portfolio_blurb": summary
+    }
+    
+
 def _project_from_snapshot(project_id: str, snapshot: dict[str, Any]) -> PortfolioProject:
     return PortfolioProject(
         project_id=project_id,
@@ -253,147 +439,6 @@ def _default_portfolio_summary() -> dict[str, Any]:
         "projects": [],
         "highlights": [],
     }
-
-
-def _snapshot_file_count(snapshot: dict[str, Any]) -> int:
-    file_summary = snapshot.get("file_summary")
-    if isinstance(file_summary, dict):
-        return _safe_int(file_summary.get("file_count"))
-    return _safe_int(snapshot.get("file_count"))
-
-
-def _snapshot_active_days(snapshot: dict[str, Any]) -> int:
-    file_summary = snapshot.get("file_summary")
-    if isinstance(file_summary, dict):
-        return _safe_int(file_summary.get("active_days"))
-    return 0
-
-
-def _snapshot_skill_names(snapshot: dict[str, Any]) -> list[str]:
-    return _extract_skill_names(snapshot.get("skills")) or _extract_technologies(snapshot)
-
-
-def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    ordered = list(reversed(history))
-    milestones: list[dict[str, Any]] = []
-    previous_skills: set[str] = set()
-    previous_file_count = 0
-    previous_active_days = 0
-
-    for index, item in enumerate(ordered):
-        snapshot = item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {}
-        created_at = str(item.get("created_at") or "").strip()
-        summary = _extract_summary(snapshot) or ""
-        file_count = _snapshot_file_count(snapshot)
-        active_days = _snapshot_active_days(snapshot)
-        skills = _snapshot_skill_names(snapshot)
-        skill_set = {skill.lower(): skill for skill in skills}
-        new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
-        file_delta = file_count - previous_file_count if index > 0 else file_count
-        skill_delta = len(skills) - len(previous_skills) if index > 0 else len(skills)
-        active_days_delta = active_days - previous_active_days if index > 0 else active_days
-
-        if index == 0:
-            milestone_type = "Baseline"
-        elif index == len(ordered) - 1:
-            milestone_type = "Current State"
-        elif file_delta >= 5 or skill_delta >= 2:
-            milestone_type = "Expansion"
-        elif active_days_delta > 0 or new_skills:
-            milestone_type = "Refinement"
-        else:
-            milestone_type = f"Iteration {index + 1}"
-
-        change_summary_parts: list[str] = []
-        if file_delta > 0:
-            change_summary_parts.append(f"Added {file_delta} file{'s' if file_delta != 1 else ''}")
-        elif file_delta < 0:
-            change_summary_parts.append(f"Reduced file scope by {abs(file_delta)}")
-
-        if skill_delta > 0:
-            change_summary_parts.append(f"Expanded into {skill_delta} more skill signal{'s' if skill_delta != 1 else ''}")
-        elif skill_delta < 0:
-            change_summary_parts.append(f"Focused down by {abs(skill_delta)} skill signal{'s' if skill_delta != 1 else ''}")
-
-        if active_days_delta > 0:
-            change_summary_parts.append(f"Increased active span by {active_days_delta} day{'s' if active_days_delta != 1 else ''}")
-
-        if new_skills:
-            change_summary_parts.append(f"Introduced {', '.join(new_skills[:3])}")
-
-        if not change_summary_parts:
-            change_summary_parts.append("Maintained the implementation baseline")
-
-        milestones.append(
-            {
-                "label": milestone_type,
-                "timestamp": created_at,
-                "summary": summary,
-                "changeSummary": ". ".join(change_summary_parts) + ".",
-                "metrics": {
-                    "files": file_count,
-                    "skills": len(skills),
-                    "active_days": active_days,
-                },
-                "delta": {
-                    "files": file_delta,
-                    "skills": skill_delta,
-                    "active_days": active_days_delta,
-                },
-                "new_skills": new_skills,
-                "highlights": _extract_highlights(snapshot)[:3],
-            }
-        )
-
-        previous_skills = set(skill_set.keys())
-        previous_file_count = file_count
-        previous_active_days = active_days
-
-    return milestones
-
-
-def _load_export_projects(portfolio_id: str, db_dir: str) -> list[PortfolioProject]:
-    with _db_session(db_dir) as c:
-        if portfolio_id == "latest":
-            rows = fetch_latest_snapshots(c) or []
-            projects: list[PortfolioProject] = []
-
-            for row in rows:
-                project_id = row.get("project_id")
-                snapshot = row.get("snapshot")
-                if project_id and isinstance(snapshot, dict):
-                    projects.append(_project_from_snapshot(str(project_id), snapshot))
-
-            return projects
-
-        snapshot = fetch_latest_snapshot(c, portfolio_id)
-        if not snapshot or not isinstance(snapshot, dict):
-            return []
-
-        return [_project_from_snapshot(portfolio_id, snapshot)]
-
-def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional[dict[str, Any]]]:
-    """
-    Normalize rows returned by fetch_latest_snapshots().
-
-    Supports:
-    - dict-like rows with keys: project_id, snapshot
-    - tuple/list rows like: (project_id, snapshot, ...)
-    """
-    project_id: Optional[str] = None
-    snapshot: Optional[dict[str, Any]] = None
-
-    if isinstance(row, dict):
-        raw_project_id = row.get("project_id")
-        raw_snapshot = row.get("snapshot")
-
-        if raw_project_id is not None:
-            project_id = str(raw_project_id)
-
-        if isinstance(raw_snapshot, dict):
-            snapshot = raw_snapshot
-
-    return project_id, snapshot
 
 
 def _build_file_summary_from_zip_path(zip_path: str | None) -> dict[str, Any]:
@@ -493,6 +538,103 @@ def _expand_monthly_timeline_to_daily(monthly_timeline: dict[str, Any]) -> dict[
             daily_counts[day_key] = day_count
 
     return daily_counts
+
+
+def _snapshot_file_count(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("file_count"))
+    return _safe_int(snapshot.get("file_count"))
+
+
+def _snapshot_active_days(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("active_days"))
+    return 0
+
+
+def _snapshot_skill_names(snapshot: dict[str, Any]) -> list[str]:
+    return _extract_skill_names(snapshot.get("skills")) or _extract_technologies(snapshot)
+
+
+def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = list(reversed(history))
+    milestones: list[dict[str, Any]] = []
+    previous_skills: set[str] = set()
+    previous_file_count = 0
+    previous_active_days = 0
+
+    for index, item in enumerate(ordered):
+        snapshot = item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {}
+        created_at = str(item.get("created_at") or "").strip()
+        summary = _extract_summary(snapshot) or ""
+        file_count = _snapshot_file_count(snapshot)
+        active_days = _snapshot_active_days(snapshot)
+        skills = _snapshot_skill_names(snapshot)
+        skill_set = {skill.lower(): skill for skill in skills}
+        new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
+        file_delta = file_count - previous_file_count if index > 0 else file_count
+        skill_delta = len(skills) - len(previous_skills) if index > 0 else len(skills)
+        active_days_delta = active_days - previous_active_days if index > 0 else active_days
+
+        if index == 0:
+            milestone_type = "Baseline"
+        elif index == len(ordered) - 1:
+            milestone_type = "Current State"
+        elif file_delta >= 5 or skill_delta >= 2:
+            milestone_type = "Expansion"
+        elif active_days_delta > 0 or new_skills:
+            milestone_type = "Refinement"
+        else:
+            milestone_type = f"Iteration {index + 1}"
+
+        change_summary_parts: list[str] = []
+        if file_delta > 0:
+            change_summary_parts.append(f"Added {file_delta} file{'s' if file_delta != 1 else ''}")
+        elif file_delta < 0:
+            change_summary_parts.append(f"Reduced file scope by {abs(file_delta)}")
+
+        if skill_delta > 0:
+            change_summary_parts.append(f"Expanded into {skill_delta} more skill signal{'s' if skill_delta != 1 else ''}")
+        elif skill_delta < 0:
+            change_summary_parts.append(f"Focused down by {abs(skill_delta)} skill signal{'s' if skill_delta != 1 else ''}")
+
+        if active_days_delta > 0:
+            change_summary_parts.append(f"Increased active span by {active_days_delta} day{'s' if active_days_delta != 1 else ''}")
+
+        if new_skills:
+            change_summary_parts.append(f"Introduced {', '.join(new_skills[:3])}")
+
+        if not change_summary_parts:
+            change_summary_parts.append("Maintained the implementation baseline")
+
+        milestones.append(
+            {
+                "label": milestone_type,
+                "timestamp": created_at,
+                "summary": summary,
+                "changeSummary": ". ".join(change_summary_parts) + ".",
+                "metrics": {
+                    "files": file_count,
+                    "skills": len(skills),
+                    "active_days": active_days,
+                },
+                "delta": {
+                    "files": file_delta,
+                    "skills": skill_delta,
+                    "active_days": active_days_delta,
+                },
+                "new_skills": new_skills,
+                "highlights": _extract_highlights(snapshot)[:3],
+            }
+        )
+
+        previous_skills = set(skill_set.keys())
+        previous_file_count = file_count
+        previous_active_days = active_days
+
+    return milestones
 
 
 def _normalize_heatmap_granularity(value: Any) -> str:
@@ -610,6 +752,23 @@ def _build_heatmap_response(
         "projects": project_ids,
     }
 
+
+def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional[dict[str, Any]]]:
+    project_id: Optional[str] = None
+    snapshot: Optional[dict[str, Any]] = None
+
+    if isinstance(row, dict):
+        raw_project_id = row.get("project_id")
+        raw_snapshot = row.get("snapshot")
+
+        if raw_project_id is not None:
+            project_id = str(raw_project_id)
+
+        if isinstance(raw_snapshot, dict):
+            snapshot = raw_snapshot
+
+        return project_id, snapshot
+
     if isinstance(row, (tuple, list)):
         if len(row) >= 1 and row[0] is not None:
             project_id = str(row[0])
@@ -620,6 +779,7 @@ def _build_heatmap_response(
         return project_id, snapshot
 
     return None, None
+
 
 @router.post("/generate")
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
@@ -685,29 +845,72 @@ async def edit_portfolio_showcase(request: Request, payload: dict[str, Any] = Bo
 @router.post("/{id}/edit")
 def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
+    _bind_current_user_from_session(request)
 
     if id == "showcase":
         raise HTTPException(status_code=400, detail="Use /portfolio/showcase/edit with projectId and summary")
-
-    if payload.summary is not None and not payload.projects:
-        summary = str(payload.summary).strip()
-        if not summary:
-            raise HTTPException(status_code=400, detail="summary is required")
-        return {"data": {"projectId": id, "summary": summary}, "error": None}
-
+    
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    
+    customization_requested = any(
+        value is not None
+        for value in (
+            payload.template_id,
+            payload.key_role,
+            payload.evidence_of_success,
+            payload.portfolio_blurb,
+            payload.summary
+        )
+    )
+    
+    if customization_requested and payload.projects is None:
+        with _db_session(db_dir) as conn:
+            ensure_portfolio_tables(conn)
+            ensure_indexes(conn)
+            
+            snapshot = helper_get_latest_snapshot(conn, id)
+            if not snapshot:
+                raise HTTPException(status_code=404, detail="Project not found")
+            
+            current = get_portfolio_customization(conn, id) or {}
+            
+            try:
+                customization = upsert_portfolio_customization(
+                    conn,
+                    id,
+                    template_id=(payload.template_id or current.get("template_id") or "classic"),
+                    key_role=(payload.key_role if payload.key_role is not None else current.get("key_role", "")),
+                    evidence_of_success=(
+                        payload.evidence_of_success
+                        if payload.evidence_of_success is not None
+                        else current.get("evidence_of_success", "")
+                    ),
+                    portfolio_blurb=(
+                        payload.portfolio_blurb
+                        if payload.portfolio_blurb is not None
+                        else (payload.summary if payload.summary is not None else current.get("portfolio_blurb", ""))
+                    ),
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                
+        return {"data": customization, "error": None}
+    
     if payload.summary is None and payload.projects is None and payload.owner is None:
         raise HTTPException(status_code=400, detail="No changes provided")
-
+        
     projects = payload.projects or []
     portfolio = build_portfolio(
         portfolio_id=id,
         owner=payload.owner,
-        projects=projects,
+        projects=projects
     )
-
+    
     log_event("INFO", f"Portfolio edited · Portfolio ID: {id}")
     return {"portfolio": portfolio.model_dump(), "error": None}
-
+  
 
 @router.get("/latest/summary")
 def latest_portfolio_summary(request: Request) -> dict[str, Any]:
@@ -864,16 +1067,23 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         return {"content": content}
 
     if format == ExportFormat.pdf:
-        projects = _load_export_projects(id, db_dir)
-        entries = [
-            {
-                "project_id": p.project_id,
-                "name": p.title,
-                "summary": p.summary or ("Highlights: " + "; ".join(p.highlights) if p.highlights else ""),
-                "source": "latest_snapshot",
-            }
-            for p in projects
-        ]
+        with _db_session(db_dir) as conn:
+            ensure_portfolio_tables(conn)
+            ensure_indexes(conn)
+            
+            if id == "latest":
+                rows = fetch_latest_snapshots(conn) or []
+                project_ids: list[str] = []
+                
+                for row in rows:
+                    project_id, snapshot = _extract_row_project_and_snapshot(row)
+                    if project_id and isinstance(snapshot, dict):
+                        project_ids.append(project_id)
+                
+                entries=get_portfolio_entries(conn, project_ids)
+            else:
+                entry = get_portfolio_entry(conn, id)
+                entries = [entry] if entry else []
 
         if not entries:
             entries = [
@@ -882,6 +1092,8 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
                     "name": id,
                     "summary": "No snapshot data available.",
                     "source": "placeholder",
+                    "template_id": "classic",
+                    "images": []
                 }
             ]
 
@@ -905,3 +1117,213 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         )
 
     raise HTTPException(status_code=400, detail="Unsupported format")
+
+@router.get("/{id}")
+def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+        
+        snapshot = helper_get_latest_snapshot(conn, id)
+        customization = get_portfolio_customization(conn, id) or {}
+        images = list_portfolio_images(conn, id)
+
+    if not snapshot and not customization:
+        raise HTTPException(status_code=404, detail="Project portfolio not found")
+    
+    analysis_defaults = (
+        _build_analysis_defaults(id, snapshot)
+        if isinstance(snapshot, dict)
+        else {
+            "key_role": "",
+            "evidence_of_success": "",
+            "portfolio_blurb": ""
+        }
+    )
+    
+    overrides = {
+        "key_role": str(customization.get("key_role") or ""),
+        "evidence_of_success": str(customization.get("evidence_of_success") or ""),
+        "portfolio_blurb": str(customization.get("portfolio_blurb") or "")
+    }
+    
+    resolved = {
+        "key_role": overrides["key_role"] or analysis_defaults["key_role"],
+        "evidence_of_success": overrides["evidence_of_success"] or analysis_defaults["evidence_of_success"],
+        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"]
+    }
+
+    payload = {
+        "project_id": id,
+        "template_id": str(customization.get("template_id") or "classic"),
+        "analysis_defaults": analysis_defaults,
+        "overrides": overrides,
+        "resolved": resolved,
+        "images": images
+    }
+    
+    if isinstance(snapshot, dict):
+        payload["title"] = _extract_title(id, snapshot)
+        payload["summary"] = _extract_summary(snapshot)
+        
+    return {"data": payload, "error": None}
+
+
+@router.get("/{id}/images")
+def read_portfolio_images(id: str, request: Request) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+        return {"data": {"images": list_portfolio_images(conn, id)}, "error": None}
+
+
+@router.post("/{id}/images")
+async def upload_portfolio_image(
+    id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    caption: str = Form(""),
+    is_cover: bool = Form(False),
+) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    file_bytes = await file.read()
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+
+        snapshot = helper_get_latest_snapshot(conn, id)
+        if not snapshot:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        try:
+            image = save_portfolio_image(
+                conn,
+                project_id=id,
+                filename=file.filename or "upload.png",
+                file_bytes=file_bytes,
+                images_base_dir=_resolve_images_base_dir(request),
+                caption=caption,
+                make_cover=is_cover,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"data": image, "error": None}
+
+
+@router.delete("/{id}/images/{image_id}")
+def remove_portfolio_image(id: str, image_id: str, request: Request) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+
+        deleted = delete_portfolio_image(conn, project_id=id, image_id=image_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+    return {"data": {"ok": True}, "error": None}
+
+
+@router.post("/{id}/images/{image_id}/cover")
+def choose_cover_portfolio_image(id: str, image_id: str, request: Request) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+
+        updated = set_cover_portfolio_image(conn, project_id=id, image_id=image_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+    return {"data": {"ok": True}, "error": None}
+
+
+@router.post("/{id}/images/reorder")
+def reorder_project_portfolio_images(
+    id: str,
+    payload: ReorderPortfolioImagesRequest,
+    request: Request,
+) -> dict[str, Any]:
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+
+        try:
+            images = reorder_portfolio_images(conn, project_id=id, image_ids=payload.image_ids)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"data": {"images": images}, "error": None}
+
+
+@router.get("/{id}/images/{image_id}/file")
+def get_portfolio_image_file(id: str, image_id: str, request: Request):
+    _check_auth(request)
+    _bind_current_user_from_session(request)
+
+    db_dir = _resolve_db_dir(request)
+    if not db_dir:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    with _db_session(db_dir) as conn:
+        ensure_portfolio_tables(conn)
+        ensure_indexes(conn)
+
+        row = conn.execute(
+            """
+            SELECT image_path
+            FROM portfolio_images
+            WHERE id = ? AND project_id = ?
+            """,
+            (image_id, id),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    image_path = Path(row[0])
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file missing")
+
+    return FileResponse(image_path)

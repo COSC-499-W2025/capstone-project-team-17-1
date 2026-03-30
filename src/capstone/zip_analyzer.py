@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from time import perf_counter
@@ -29,6 +29,7 @@ from .skills import SkillObservation, build_skill_timeline, compute_skill_scores
 from .storage import open_db, close_db, store_analysis_snapshot, upsert_contributor, link_contributor_to_project, store_contributor_stats
 import sqlite3
 from . import file_store
+from .project_role import infer_project_role_from_snapshot
 
 
 logger = get_logger(__name__)
@@ -41,6 +42,17 @@ class InvalidArchiveError(ValueError):
         super().__init__(detail)
         self.payload = {"error": "InvalidInput", "detail": detail}
 
+def _serialize_collaboration(collaboration) -> dict[str, object]:
+    if is_dataclass(collaboration):
+        return asdict(collaboration)
+    if isinstance(collaboration, dict):
+        return collaboration
+
+    return {
+        "classification": getattr(collaboration, "classification", "unknown"),
+        "contributors": getattr(collaboration, "contributors", {}),
+        "primary_contributor": getattr(collaboration, "primary_contributor", None),
+    }
 
 class ZipAnalyzer:
     """Analyse zip archives to produce JSONL metadata and summaries."""
@@ -354,6 +366,13 @@ class ZipAnalyzer:
         for framework in frameworks:
             skill_observations.append(SkillObservation(skill=framework, weight=1.0, category="framework"))
         skills = [score.__dict__ for score in compute_skill_scores(skill_observations, min_confidence=0.05)]
+        role_snapshot = {
+            "languages": dict(language_counter),
+            "frameworks": sorted(frameworks),
+            "skills": skills,
+            "collaboration": _serialize_collaboration(collaboration),
+        }
+        project_role = infer_project_role_from_snapshot(role_snapshot)
         skill_timeline = build_skill_timeline(skill_events)
         top_skills_by_year = _compute_top_skills_by_year(skill_timeline, top_n=5)
 
@@ -380,7 +399,27 @@ class ZipAnalyzer:
                 "skills": list(skill_timeline.values()),
             },
             "top_skills_by_year": top_skills_by_year,
+            "project_role": project_role
         }
+        
+        summary["project_role"] = infer_project_role_from_snapshot(summary)
+        
+        summary["project_evidence"] = [
+            {"label": "Files analyzed", "value": metric_summary.file_count},
+            {"label": "Active days", "value": metric_summary.active_days},
+        ]
+
+        if frameworks:
+            summary["project_evidence"].append({
+                "label": "Framework coverage",
+                "value": ", ".join(sorted(frameworks)),
+            })
+
+        if language_counter:
+            summary["project_evidence"].append({
+                "label": "Languages detected",
+                "value": ", ".join(sorted(language_counter.keys())),
+            })
 
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         with summary_path.open("w", encoding="utf-8") as fh:

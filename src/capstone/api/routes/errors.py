@@ -27,13 +27,13 @@ def _restore_user_from_request(request: Request) -> None:
     used even after a server restart (where the global CURRENT_USER is None).
     """
     try:
-        from capstone.api.routes.auth import get_authenticated_username
-        username = get_authenticated_username(request)
-        if username:
-            _storage.CURRENT_USER = username
-            print(f"[errors] Restored CURRENT_USER = {username!r} from Bearer token", flush=True)
+        from capstone.api.routes.auth import get_authenticated_storage_user_key
+        storage_user_key = get_authenticated_storage_user_key(request)
+        _storage.set_current_user(storage_user_key)
+        if storage_user_key:
+            print(f"[errors] Restored CURRENT_USER = {storage_user_key!r} from Bearer token", flush=True)
         else:
-            print(f"[errors] No Bearer token — CURRENT_USER stays as {_storage.CURRENT_USER!r}", flush=True)
+            print("[errors] No Bearer token — CURRENT_USER = None (guest)", flush=True)
     except Exception as exc:
         print(f"[errors] Could not restore user from token: {exc}", flush=True)
 
@@ -48,7 +48,7 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
         _restore_user_from_request(request)
 
         db_path = _storage.get_database_path()
-        print(f"[errors/analyze] CURRENT_USER = {_storage.CURRENT_USER!r}", flush=True)
+        print(f"[errors/analyze] CURRENT_USER = {_storage.get_current_user()!r}", flush=True)
         print(f"[errors/analyze] DB path       = {db_path}", flush=True)
         print(f"[errors/analyze] DB exists?    = {db_path.exists()}", flush=True)
 
