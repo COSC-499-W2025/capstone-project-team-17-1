@@ -5,7 +5,7 @@ The system supports three workflows: CLI analysis, interactive menu usage, and F
 
 ## README Navigation
 
-- [Quickstart](#quickstart)
+- [Quickstart(involve Windows instruction--open loom)](#quickstart)
 - [Installation Guide for Future Development Team](#installation-guide-for-future-development-team)
 - [MAC instruction--open loom](#mac-instruction--open-loom)
 - [Usage](#usage)
