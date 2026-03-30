@@ -1567,3 +1567,89 @@ This week significantly expanded the capabilities of the application by turning 
 
 A key challenge this week was integrating multiple data sources and ensuring that contributor activity was mapped correctly between Git commits and GitHub accounts. Solving this required both backend logic changes and frontend visualization updates. By the end of the week, the dashboard evolved from a simple project viewer into a much more powerful development analytics environment that allows users to inspect code, analyze collaboration patterns, and explore repository activity directly from the platform.
 
+---
+
+## Week 11–12 Personal Log [Mar 16 – Mar 29, 2026]
+
+This week focused on introducing an AI-powered copilot into the application, improving overall UI consistency, and fixing critical backend synchronization issues. The main contribution was designing and implementing the Ask Sienna tab, which acts as an intelligent assistant within the Loom platform. In addition, I worked on fixing light mode inconsistencies across the application, resolving a major server-sync issue that prevented users from accessing their data after login, and collaborating with my team to plan and produce the final video demo. These improvements significantly enhanced both the usability and reliability of the application.
+
+### PR Hyperlink
+
+[PR #341](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/341)
+[PR #334](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/334)
+[PR #328](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/328)
+[PR #321](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/321)
+
+**Peer Eval**  
+> <img width="1067" height="621" alt="image" src="https://github.com/user-attachments/assets/bfa17492-d7c0-43c3-97ab-ad8182d62cd8" />
+>
+> _Figure 0. peer evaluation._
+>
+
+---
+
+### Designing and Implementing Ask Sienna (AI Copilot)
+
+The main feature implemented this week was the Ask Sienna tab, which introduces an AI copilot directly into the application. The goal of this feature was to provide users with real-time assistance for both their projects and the platform itself.
+
+To achieve this, I designed and integrated a full chat-based interface within the application.
+
+* Implemented a dedicated **Ask Sienna tab** in the navigation.
+* Built a chat interface supporting message history, user input, and responses.
+* Designed the AI interaction flow to support both **project insights** and **application guidance**.
+* Enabled the assistant to help users understand their projects and provide suggestions.
+* Integrated the feature into the existing frontend structure to match the overall dashboard design.
+
+This feature adds an intelligent layer to the platform, allowing users to **interact with their data and receive guidance directly within the application.**
+
+---
+
+### Fixing Light Mode and UI Consistency
+
+Another key focus this week was improving the light mode functionality, which previously had multiple inconsistencies and visual issues across different components.
+
+To resolve this, I worked on refining the styling and ensuring consistency across the entire application.
+
+* Fixed broken or inconsistent styles in light mode.
+* Updated UI components to properly support both dark and light themes.
+* Ensured visual consistency across dashboard, projects, and analytics views.
+* Improved overall readability and user experience in light mode.
+
+These improvements ensure that the application maintains a **professional and polished appearance across different themes.**
+
+---
+
+### Resolving Server-Sync Issues
+
+A major issue encountered this week was a server synchronization bug that prevented users from seeing their projects and saved analysis after logging in. This significantly impacted core functionality.
+
+To fix this, I investigated and resolved issues related to authentication, data loading, and frontend rendering.
+
+* Fixed synchronization issues between backend and frontend after login.
+* Ensured that user-specific data is properly loaded and displayed.
+* Resolved cases where the application required manual refresh to update state.
+* Restored full access to projects and analysis immediately after login.
+
+This fix was critical, as it restored the platform’s ability to **reliably display user data and maintain session consistency.**
+
+---
+
+### Video Demo Collaboration
+
+In addition to development work, I collaborated with my team to create the final project demo video. The focus was on clearly presenting the platform’s features and demonstrating the functionality we implemented.
+
+* Helped plan the structure and flow of the demo.
+* Identified key features to highlight during the walkthrough.
+* Assisted in recording and coordinating presentation segments.
+* Ensured the demo effectively showcases the platform’s capabilities.
+
+This ensured that the final presentation clearly communicates the value and functionality of the application.
+
+---
+
+### Reflection
+
+This week was focused on both feature expansion and system stability. The introduction of the Ask Sienna AI copilot significantly enhances the user experience by providing an interactive and intelligent assistant within the platform. At the same time, fixing the light mode inconsistencies improved the visual quality of the application, while resolving the server-sync issue restored critical functionality for user data access.
+
+A key challenge this week was debugging the synchronization issue, as it involved multiple layers including authentication, backend data handling, and frontend rendering. Ensuring that all components worked together correctly required careful testing and iteration. Overall, the work completed this week improved both the usability and reliability of the platform, making it more robust and user-friendly.
+
