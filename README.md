@@ -108,7 +108,7 @@ This section is the recommended setup path for the next team working on the repo
 | Frontend tests | [`frontend/test/`](frontend/test) |
 | Demo and regression ZIPs | [`test_data/`](test_data) |
 | Setup scripts | [`scripts/`](scripts) |
-| Frontend peer testing startup (macOS) | [MAC instruction--open loom](#mac-instruction--open-loom) |
+| Frontend startup (macOS) | [MAC instruction--open loom](#mac-instruction--open-loom) |
 | Known limitations and workarounds | [Known Bugs](#known-bugs) |
 
 ### 1. Clone and create a Python environment
@@ -190,7 +190,7 @@ cd ..
 
 ### Overview
 
-Use this flow for peer testing on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
+Use this flow on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
 
 Before starting this section, complete the shared setup in [Installation Guide for Future Development Team](#installation-guide-for-future-development-team). The steps below are the recommended macOS launch flow for opening Loom in development mode.
 
@@ -209,7 +209,7 @@ Use this option when testing the packaged desktop app experience on macOS.
 
 ### Option B: run Loom in development mode
 
-Use this option when you want to run the Electron app directly from the repository during development or peer testing.
+Use this option when you want to run the Electron app directly from the repository during development.
 
 ### Prerequisites
 
