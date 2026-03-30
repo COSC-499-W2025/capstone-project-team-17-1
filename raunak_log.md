@@ -1621,6 +1621,7 @@ The app already had dashboard, projects, resume, portfolio, and job match views.
   - `frontend`
 - The chatbot currently runs in **demo mode**, which makes it useful for testing and demos without live API billing
 
+Merged PRS:
 
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/315
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/332
