@@ -67,10 +67,18 @@ pip install -r requirements-dev.txt
 #    macOS / Linux:
 bash scripts/setup.sh
 #    Windows (PowerShell, run as Administrator):
-#    .\scripts\setup.ps1
+.\scripts\setup.ps1
 
-# 6) Quick verification
-capstone --help
+# 6) Run Backend
+#    macOS:
+python -m capstone.run_server
+#    Windows:
+capstone api --host 127.0.0.1 --port 8003 --db-dir data
+
+# 7) Run Frontend
+#    macOS /  Windows:
+cd frontend
+npm start
 ```
 
 Requirements:
