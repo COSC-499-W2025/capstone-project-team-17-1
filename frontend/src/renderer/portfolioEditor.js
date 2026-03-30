@@ -38,6 +38,16 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function formatTemplateDisplayName(templateId) {
+  return String(templateId ?? "classic")
+    .trim()
+    .replaceAll("_", " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 // helper to support different portfolio theme layouts
 function buildProjectThemeDetails(project, override = {}) {
   const templateId = String(override.templateId || "classic");
@@ -542,6 +552,19 @@ function renderProjectEditors(projects, customization) {
       const isFeatured = featuredIds.includes(String(project.project_id));
       const isActive = activePortfolioProjectId === project.project_id;
       const selectedTemplate = String(override.templateId || "classic");
+      const images = sortPortfolioImagesCoverFirst(override.images);
+      const cover = images.find((img) => img?.is_cover) || images[0] || null;
+      const collapsedPreview = cover?.id
+        ? `<div class="portfolio-card-collapsed-preview portfolio-card-collapsed-cover" aria-hidden="true">
+            <img
+              class="portfolio-card-cover-thumb"
+              data-portfolio-auth-src="${escapeHtml(getPortfolioImageAuthPath(project.project_id, cover.id))}"
+              alt=""
+            />
+          </div>`
+        : `<div class="portfolio-card-collapsed-preview portfolio-card-collapsed-cover portfolio-card-cover-placeholder">
+            <span class="muted-text">No cover image — open editor to upload.</span>
+          </div>`;
 
       return `
         <div
@@ -559,7 +582,7 @@ function renderProjectEditors(projects, customization) {
               </p>
             </div>
             <div class="portfolio-card-header-actions">
-              <span class="portfolio-template-pill">${escapeHtml(selectedTemplate.replaceAll("_", " "))}</span>
+              <span class="portfolio-template-pill">${escapeHtml(formatTemplateDisplayName(selectedTemplate))}</span>
               <input
                 type="checkbox"
                 data-project-selected="${escapeHtml(project.project_id)}"
@@ -574,9 +597,7 @@ function renderProjectEditors(projects, customization) {
               >★</button>
             </div>
           </div>
-          <div class="portfolio-card-collapsed-preview">
-            <p>${escapeHtml(override.portfolioBlurb || "Click to open the editor and live preview.")}</p>
-          </div>
+          ${collapsedPreview}
         </div>
       `;
     })
@@ -591,6 +612,7 @@ function renderProjectEditors(projects, customization) {
     container.classList.remove("hidden");
     container.setAttribute("aria-hidden", "false");
     container.innerHTML = projectListHtml;
+    hydratePortfolioAuthImages(container);
   }
 
   renderPortfolioWorkspacePanel(customization, orderedProjects);
@@ -613,10 +635,11 @@ function renderProjectEditors(projects, customization) {
         if (existingIndex >= 0) {
           featured.splice(existingIndex, 1);
         } else {
-          featured.unshift(projectId);
+          featured.push(projectId);
         }
 
-        const nextFeatured = featured.slice(0, 3);
+        /* Keep last 3 in starring order — new stars join the end; oldest drops past the limit */
+        const nextFeatured = featured.slice(-3);
 
         const nextCustomization = {
           ...current,
@@ -914,8 +937,7 @@ function getSelectedProjectIdsFromInputs(projects) {
       );
       return !!(editorCheckbox?.checked || pickerCheckbox?.checked);
     })
-    .map((project) => project.project_id)
-    .slice(0, 3);
+    .map((project) => String(project.project_id));
 }
 
 function getFeaturedOrderFromDom() {
@@ -935,7 +957,7 @@ function renderFeaturedOrderList(projects, customization) {
   const mergedOrder = [
     ...orderedIdsFromState,
     ...selectedIds.filter((id) => !orderedIdsFromState.includes(id)),
-  ].slice(0, 3);
+  ].slice(-3);
 
   if (!mergedOrder.length) {
     container.innerHTML = `
@@ -984,25 +1006,21 @@ function collectCustomization(projects) {
     ? (current?.featuredProjectIds || [])
         .map((id) => String(id))
         .filter((id) => validProjectIds.has(id))
-        .slice(0, 3)
-    : projects
-        .filter((project) => {
-          const checked = document.querySelector(
-            `[data-project-selected="${CSS.escape(project.project_id)}"]`
-          );
-          return !!checked?.checked;
-        })
-        .map((project) => project.project_id);
+        .slice(-3)
+    : getSelectedProjectIdsFromInputs(projects);
 
   if (selectedIds.length > 3) {
-    setStatus("You can only select up to 3 featured projects. The top 3 were used.", "warning");
+    setStatus(
+      "You can only feature up to 3 projects; the earliest selection was dropped as you added more.",
+      "warning"
+    );
   }
 
   const orderedIds = getFeaturedOrderFromDom().filter((id) => selectedIds.includes(id));
   const featuredProjectIds = [
     ...orderedIds,
     ...selectedIds.filter((id) => !orderedIds.includes(id)),
-  ].slice(0, 3);
+  ].slice(-3);
 
   const projectOverrides = {};
 
@@ -1166,7 +1184,7 @@ async function saveProjectById(projectId) {
 
 function buildLivePreviewProjectCardHtml(project, override, { isFeatured = false, showMeta = false } = {}) {
   const templateId = String(override.templateId || "classic");
-  const templateLabel = templateId.replaceAll("_", " ");
+  const templateLabel = formatTemplateDisplayName(templateId);
   const images = sortPortfolioImagesCoverFirst(override.images);
   const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
 

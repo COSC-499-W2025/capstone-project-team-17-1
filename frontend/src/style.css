@@ -1142,7 +1142,7 @@ svg {
 ========================================================= */
 
 #activity-log-card {
-  min-height: min(400px, 42vh);
+  min-height: 0;
 }
 
 .activity-container {
@@ -2626,6 +2626,36 @@ transition: all 0.2s ease;
   color: rgba(255, 255, 255, 0.82);
 }
 
+.portfolio-card-collapsed-preview.portfolio-card-collapsed-cover {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  max-height: 200px;
+  min-height: 100px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.portfolio-card-cover-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+.portfolio-card-collapsed-cover.portfolio-card-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 14px;
+  text-align: center;
+  min-height: 100px;
+}
+
 .portfolio-card-expanded-content {
   display: grid;
   gap: 16px;
@@ -2759,6 +2789,12 @@ transition: all 0.2s ease;
   background: rgba(9, 18, 36, 0.68);
   color: rgba(240, 247, 255, 0.96);
   padding: 10px 12px;
+}
+
+.heatmap-select option,
+.heatmap-select optgroup {
+  background-color: #ffffff;
+  color: #13294b;
 }
 
 .heatmap-summary {
@@ -4898,12 +4934,12 @@ transition: all 0.2s ease;
   background: none;
   border: none;
   padding: 0;
-  width: 28px;
-  height: 28px;
+  width: 43px;
+  height: 43px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
+  font-size: calc(1.05rem + 15px);
   color: rgba(255,255,255,0.15);
   cursor: pointer;
   flex-shrink: 0;
@@ -7500,6 +7536,13 @@ body.light .settings-session-card {
   box-shadow: 0 0 0 3px rgba(255, 120, 120, 0.18);
 }
 
+/* Dropdown lists often render with a light surface even on dark pages — force readable option text */
+.sienna-project-select option,
+.sienna-project-select optgroup {
+  background-color: #ffffff;
+  color: #13294b;
+}
+
 .sienna-project-hint {
   font-size: 12px;
   line-height: 1.4;
@@ -8570,6 +8613,203 @@ body.light .skills-view-btn.active {
   color: #1f4f8a;
 }
 
+body.light .skills-pie-legend-row {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
+}
+
+body.light .skills-pie-legend-meta {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+/* Portfolio: stat/skill pills, expertise labels, rank badge */
+body.light .stack-pill,
+body.light .skills-pill {
+  background: rgba(43, 119, 214, 0.2);
+  color: #0a3269;
+  border: 1px solid rgba(27, 79, 139, 0.38);
+  font-weight: 600;
+}
+
+body.light .skills-expertise-label {
+  color: #154a8c;
+}
+
+body.light .top-project-rank {
+  background: rgba(43, 119, 214, 0.22);
+  color: #0a3269;
+}
+
+body.light .project-story-label {
+  color: #154a8c;
+  opacity: 1;
+}
+
+body.light .timeline-empty {
+  color: var(--text-secondary);
+}
+
+body.light .timeline-meta-pill {
+  background: rgba(43, 119, 214, 0.14);
+  border-color: rgba(27, 79, 139, 0.32);
+  color: #0a3269;
+}
+
+body.light .timeline-skill-pill {
+  background: linear-gradient(180deg, rgba(43, 119, 214, 0.22), rgba(43, 119, 214, 0.12));
+  border-color: rgba(27, 79, 139, 0.28);
+  color: #0a3269;
+}
+
+body.light .timeline-skill-meta {
+  color: var(--text-secondary);
+}
+
+body.light .timeline-time-label {
+  color: var(--text-primary);
+}
+
+body.light .timeline-project-label {
+  background: rgba(43, 119, 214, 0.16);
+  border-color: rgba(27, 79, 139, 0.32);
+  color: #0a3269;
+}
+
+body.light .timeline-year::after {
+  background: linear-gradient(180deg, rgba(43, 119, 214, 0.35), rgba(19, 41, 75, 0.08));
+}
+
+body.light .timeline-track {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
+}
+
+body.light .timeline-skill-name {
+  color: var(--text-primary);
+}
+
+/* Activity heatmap (light mode) */
+body.light .heatmap-filter span {
+  color: var(--text-secondary);
+}
+
+body.light .heatmap-legend-label,
+body.light .heatmap-month-label,
+body.light .heatmap-weekday-labels,
+body.light .heatmap-aggregated-column-label,
+body.light .heatmap-aggregated-row-label,
+body.light .heatmap-aggregated-label {
+  color: var(--text-secondary);
+}
+
+body.light .heatmap-toolbar {
+  padding: 14px 16px;
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.06);
+}
+
+body.light .heatmap-summary {
+  padding: 14px 16px;
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+body.light .heatmap-calendar {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.06);
+}
+
+body.light .heatmap-square,
+body.light .heatmap-legend-cell {
+  border-color: rgba(19, 41, 75, 0.14);
+}
+
+body.light .heatmap-square.bucket-0,
+body.light .heatmap-legend-cell.bucket-0 {
+  background: rgba(19, 41, 75, 0.1);
+}
+
+body.light .hero-stat-chip {
+  background: rgba(43, 119, 214, 0.14);
+  border: 1px solid rgba(27, 79, 139, 0.24);
+  color: #0a3269;
+  font-weight: 600;
+}
+
+/* Live preview panels: inner boxes on portfolio page */
+body.light .live-preview-section {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.06);
+}
+
+body.light .live-preview-section h3 {
+  color: var(--text-primary);
+}
+
+body.light .live-preview-project-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(24, 45, 78, 0.06);
+}
+
+body.light .live-preview-badge {
+  background: rgba(22, 101, 52, 0.16);
+  border: 1px solid rgba(22, 101, 52, 0.38);
+  color: #14532d;
+}
+
+body.light .live-preview-meta {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .live-preview-empty {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .live-preview-gallery-carousel .gallery-carousel-viewport {
+  border: 1px solid var(--border);
+  background: rgba(19, 41, 75, 0.05);
+}
+
+/* Portfolio live gallery: arrow buttons + dots + caption */
+body.light .live-preview-gallery-carousel .gallery-nav {
+  border: 1px solid rgba(27, 79, 139, 0.42);
+  background: linear-gradient(180deg, #f4f8ff, #e3ecf9);
+  color: #0a3269;
+  box-shadow:
+    0 4px 14px rgba(24, 45, 78, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+body.light .live-preview-gallery-carousel .gallery-nav:hover {
+  background: linear-gradient(180deg, #dde9f8, #cddff5);
+  border-color: rgba(43, 119, 214, 0.55);
+  color: #072a56;
+}
+
+body.light .live-preview-gallery-carousel .gallery-carousel-caption {
+  color: var(--text-secondary);
+}
+
+body.light .live-preview-gallery-carousel .gallery-dot {
+  background: rgba(19, 41, 75, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(19, 41, 75, 0.2);
+}
+
+body.light .live-preview-gallery-carousel .gallery-dot:hover {
+  background: rgba(19, 41, 75, 0.45);
+}
+
 /* Final critical light-mode readability fixes */
 body.light .sienna-composer,
 body.light .sienna-input-shell,
@@ -8632,8 +8872,77 @@ body.light .heatmap-select {
   border: 1px solid var(--input-border);
 }
 
+body.light .form-grid input,
+body.light .form-grid textarea {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border);
+}
+
+body.light .form-grid label span {
+  color: var(--text-secondary);
+}
+
+/* Job Match + customization: form area matches Recent Projects inner cards */
+body.light #portfolio-job-target-container .form-grid {
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
+}
+
+body.light .customization-job-match-score {
+  color: #1d6fc9;
+}
+
+body.light .customization-featured-order-block {
+  border-top-color: var(--border);
+}
+
+body.light .customization-featured-order-rank {
+  background: rgba(43, 119, 214, 0.14);
+  color: var(--text-primary);
+}
+
+body.light .customization-featured-order-item:hover {
+  border-color: rgba(43, 119, 214, 0.28);
+  background: #eef3fb;
+}
+
+body.light .customization-featured-order-item.drag-over {
+  border-color: rgba(43, 119, 214, 0.4);
+  background: #e8f0fc;
+}
+
+/* Dashboard — skill rows use same tinted panels as Recent Projects */
+body.light .skill-row-modern {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
+}
+
+body.light .skill-bar-modern {
+  background: rgba(19, 41, 75, 0.08);
+}
+
+body.light .skill-left-modern {
+  color: var(--text-primary);
+}
+
+body.light .skill-right-modern {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .skill-percentage-modern {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
 #recent-activity {
-  min-height: 260px !important;
   display: block !important;
   overflow-y: auto !important;
   opacity: 1 !important;
@@ -9188,8 +9497,9 @@ body.light #recent-activity {
 
 body.light #recent-activity .activity-line {
   color: var(--text-primary);
-  background: var(--surface-muted);
-  border: 1px solid var(--border-subtle);
+  background: var(--card-inner);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(24, 45, 78, 0.08);
 }
 
 body.light #recent-activity .activity-timestamp {

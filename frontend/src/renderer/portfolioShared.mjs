@@ -635,7 +635,7 @@ function buildTopProjectsMarkup({
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
               <span class="stack-pill">${project.total_files} Files</span>
               <span class="stack-pill">${project.total_skills} Skills</span>
-              <span class="stack-pill">${escapeHtml(display.templateId.replaceAll("_", " "))}</span>
+              <span class="stack-pill">${escapeHtml(toTitleCase(String(display.templateId || "classic").replaceAll("_", " ")))}</span>
               ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
             </div>
           </div>
