@@ -21,7 +21,7 @@ from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_portfolio_entry, get_portfolio_entries
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip, fetch_project_snapshot_history
 from capstone.project_role import infer_project_role_from_snapshot
 from capstone.top_project_summaries import gather_evidence
 from capstone.api.portfolio_helpers import (
