@@ -116,6 +116,7 @@ class EditPortfolioRequest(BaseModel):
     key_role: Optional[str] = None
     evidence_of_success: Optional[str] = None
     portfolio_blurb: Optional[str] = None
+    case_study_abstract: Optional[str] = None
 
 
 class ReorderPortfolioImagesRequest(BaseModel):
@@ -372,8 +373,59 @@ def _build_portfolio_blurb(project_id: str, snapshot: dict[str, Any], inferred_r
     return (
         f"{title} is a {role_phrase} project focused on delivering a working solution for its primary purpose."
     )
-    
-    
+
+
+def _skill_confidence_to_level(conf: float) -> str:
+    if conf >= 0.22:
+        return "strong expertise"
+    if conf >= 0.12:
+        return "solid proficiency"
+    return "developing proficiency"
+
+
+def _format_skills_with_expertise(snapshot: dict[str, Any]) -> str:
+    raw = snapshot.get("skills")
+    if isinstance(raw, list):
+        parts: list[str] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            name = _pick_first_str(item, ["skill", "name", "label"])
+            if not name:
+                continue
+            try:
+                conf = float(item.get("confidence") or 0.0)
+            except (TypeError, ValueError):
+                conf = 0.0
+            parts.append(f"{name} ({_skill_confidence_to_level(conf)})")
+        if parts:
+            return ", ".join(parts[:6])
+
+    names = _extract_skill_names(raw)
+    if names:
+        return ", ".join(names[:6]) + " (expertise levels inferred from repository usage)"
+
+    return ""
+
+
+def _build_case_study_abstract(project_id: str, snapshot: dict[str, Any]) -> str:
+    title = _extract_title(project_id, snapshot)
+    frameworks = _as_list(snapshot.get("frameworks"))
+    technologies = _extract_technologies(snapshot)
+    tech_parts = _dedupe_strings([*frameworks, *technologies])[:8]
+    tech_text = ", ".join(tech_parts) if tech_parts else "technologies appropriate to the project domain"
+
+    skills_text = _format_skills_with_expertise(snapshot)
+    if not skills_text:
+        skills_text = "core technical competencies surfaced through the codebase"
+
+    closing = (
+        "The project contributes to skill development by facilitating the application of theoretical "
+        "knowledge in practical scenarios, thereby improving both technical proficiency and analytical thinking."
+    )
+    return f"{title} is designed using {tech_text} and showcases {skills_text}. {closing}"
+
+
 def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[str, str]:
     summary = ""
     highlights = _extract_highlights(snapshot)
@@ -401,11 +453,13 @@ def _build_analysis_defaults(project_id: str, snapshot: dict[str, Any]) -> dict[
         role_text = inferred_role
         
     summary = _build_portfolio_blurb(project_id, snapshot, inferred_role)
+    case_study_abstract = _build_case_study_abstract(project_id, snapshot)
 
     return {
         "key_role": role_text,
         "evidence_of_success": evidence_text,
-        "portfolio_blurb": summary
+        "portfolio_blurb": summary,
+        "case_study_abstract": case_study_abstract,
     }
     
 
@@ -781,6 +835,141 @@ def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional
     return None, None
 
 
+def _normalize_heatmap_granularity(raw: Optional[str]) -> str:
+    value = str(raw or "").strip().lower()
+    if value in ("year", "month", "day"):
+        return value
+    return "day"
+
+
+def _heatmap_row_project_id(row: Any) -> str:
+    if isinstance(row, dict) and row.get("project_id") is not None:
+        return str(row.get("project_id")).strip()
+    project_id, _ = _extract_row_project_and_snapshot(row)
+    return str(project_id).strip() if project_id else ""
+
+
+def _collect_heatmap_project_ids(rows: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for row in rows:
+        pid = _heatmap_row_project_id(row)
+        if pid and pid not in seen:
+            seen.add(pid)
+            ordered.append(pid)
+    return sorted(ordered)
+
+
+def _extract_daily_counts_from_heatmap_row(row: Any) -> dict[str, int]:
+    snapshot: Optional[dict[str, Any]] = None
+    zip_path: Optional[str] = None
+
+    if isinstance(row, dict):
+        raw_snap = row.get("snapshot")
+        if isinstance(raw_snap, dict):
+            snapshot = raw_snap
+        zp = row.get("zip_path")
+        if isinstance(zp, str) and zp.strip():
+            zip_path = zp.strip()
+
+    if snapshot is None:
+        _, snap = _extract_row_project_and_snapshot(row)
+        if isinstance(snap, dict):
+            snapshot = snap
+
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
+    file_summary = snapshot.get("file_summary") if isinstance(snapshot.get("file_summary"), dict) else {}
+    daily_raw = file_summary.get("daily_timeline")
+    if isinstance(daily_raw, dict) and daily_raw:
+        daily_counts: dict[str, int] = {}
+        for period_key, raw_count in daily_raw.items():
+            day_key = str(period_key).strip()
+            if len(day_key) == 10 and day_key[4] == "-" and day_key[7] == "-":
+                daily_counts[day_key] = daily_counts.get(day_key, 0) + max(0, _safe_int(raw_count))
+        if daily_counts:
+            return dict(sorted(daily_counts.items()))
+
+    monthly_raw = file_summary.get("monthly_timeline")
+    if isinstance(monthly_raw, dict) and monthly_raw:
+        expanded = _expand_monthly_timeline_to_daily(monthly_raw)
+        if expanded:
+            return expanded
+
+    if zip_path:
+        from_zip = _build_daily_activity_from_zip_path(zip_path)
+        if from_zip:
+            return from_zip
+
+    return {}
+
+
+def _merge_daily_counts_for_rows(rows: list[Any]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for row in rows:
+        for day_key, count in _extract_daily_counts_from_heatmap_row(row).items():
+            merged[day_key] = merged.get(day_key, 0) + max(0, _safe_int(count))
+    return dict(sorted(merged.items()))
+
+
+def _daily_to_period_totals(daily: dict[str, int], granularity: str) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for day_key, count in daily.items():
+        if granularity == "day":
+            period = day_key
+        elif granularity == "month":
+            period = day_key[:7] if len(day_key) >= 7 else day_key
+        else:
+            period = day_key[:4] if len(day_key) >= 4 else day_key
+        totals[period] = totals.get(period, 0) + max(0, _safe_int(count))
+    return totals
+
+
+def _build_heatmap_response(
+    rows: list[Any],
+    granularity: str,
+    selected_project_id: str,
+) -> dict[str, Any]:
+    project_ids = _collect_heatmap_project_ids(rows)
+    selected = str(selected_project_id or "").strip()
+
+    if selected:
+        filtered = [row for row in rows if _heatmap_row_project_id(row) == selected]
+    else:
+        filtered = list(rows)
+
+    daily = _merge_daily_counts_for_rows(filtered)
+    period_totals = _daily_to_period_totals(daily, granularity)
+    sorted_periods = sorted(period_totals.keys())
+
+    max_count = max(period_totals.values(), default=0)
+    cells: list[dict[str, Any]] = []
+    for period in sorted_periods:
+        count = max(0, _safe_int(period_totals.get(period, 0)))
+        intensity = (count / max_count) if max_count > 0 else 0.0
+        cells.append(
+            {
+                "period": period,
+                "count": count,
+                "intensity": float(round(intensity, 6)),
+            }
+        )
+
+    unique_in_view = {_heatmap_row_project_id(r) for r in filtered}
+    unique_in_view.discard("")
+    project_count = len(unique_in_view)
+
+    return {
+        "cells": cells,
+        "maxCount": max_count,
+        "projectCount": project_count,
+        "projects": project_ids,
+        "granularity": granularity,
+        "selectedProjectId": selected,
+    }
+
+
 @router.post("/generate")
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
@@ -861,6 +1050,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
             payload.key_role,
             payload.evidence_of_success,
             payload.portfolio_blurb,
+            payload.case_study_abstract,
             payload.summary
         )
     )
@@ -891,6 +1081,11 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
                         payload.portfolio_blurb
                         if payload.portfolio_blurb is not None
                         else (payload.summary if payload.summary is not None else current.get("portfolio_blurb", ""))
+                    ),
+                    case_study_abstract=(
+                        payload.case_study_abstract
+                        if payload.case_study_abstract is not None
+                        else current.get("case_study_abstract", "")
                     ),
                 )
             except ValueError as exc:
@@ -1144,20 +1339,24 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
         else {
             "key_role": "",
             "evidence_of_success": "",
-            "portfolio_blurb": ""
+            "portfolio_blurb": "",
+            "case_study_abstract": "",
         }
     )
     
     overrides = {
         "key_role": str(customization.get("key_role") or ""),
         "evidence_of_success": str(customization.get("evidence_of_success") or ""),
-        "portfolio_blurb": str(customization.get("portfolio_blurb") or "")
+        "portfolio_blurb": str(customization.get("portfolio_blurb") or ""),
+        "case_study_abstract": str(customization.get("case_study_abstract") or ""),
     }
     
     resolved = {
         "key_role": overrides["key_role"] or analysis_defaults["key_role"],
         "evidence_of_success": overrides["evidence_of_success"] or analysis_defaults["evidence_of_success"],
-        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"]
+        "portfolio_blurb": overrides["portfolio_blurb"] or analysis_defaults["portfolio_blurb"],
+        "case_study_abstract": overrides["case_study_abstract"]
+        or analysis_defaults.get("case_study_abstract", ""),
     }
 
     payload = {

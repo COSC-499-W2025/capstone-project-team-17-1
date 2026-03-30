@@ -1,5 +1,5 @@
 import { fetchProjects } from "./projects.js";
-import { authFetch, getCurrentUser } from "./auth.js";
+import { authFetch, getCurrentUser, hydratePortfolioAuthImages } from "./auth.js";
 import {
   getProjectOverride,
   loadPortfolioCustomization,
@@ -10,8 +10,6 @@ import {
   buildTopProjectsMarkup,
   sortProjectsByRankedIds 
 } from "./portfolioShared.mjs";
-
-const API_BASE = "http://127.0.0.1:8002";
 
 const SECTION_SELECTOR_MAP = {
   "top-projects": ".portfolio-projects-card",
@@ -227,7 +225,7 @@ function wirePortfolioProjectCardClicks() {
         );
 
         document
-          .getElementById("portfolio-project-editor-container")
+          .getElementById("portfolio-editor-workspace")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
@@ -346,8 +344,8 @@ async function fetchPortfolioEntryMap(projects) {
   return buildPortfolioEntryMap(entries);
 }
 
-function getPortfolioImageUrl(projectId, imageId) {
-  return `${API_BASE}/portfolio/${encodeURIComponent(projectId)}/images/${encodeURIComponent(imageId)}/file`;
+function getPortfolioImageAuthPath(projectId, imageId) {
+  return `/portfolio/${encodeURIComponent(projectId)}/images/${encodeURIComponent(imageId)}/file`;
 }
 
 function buildProfile(summaryData) {
@@ -1094,8 +1092,9 @@ function renderTopProjects(projects, summaryData, rankedTopProjectIds = [], port
     isPrivateMode: false,
     getProjectThumbnailUrl: () => "",
     portfolioEntryMap,
-    getPortfolioImageUrl,
+    getPortfolioImageAuthPath,
   });
+  hydratePortfolioAuthImages(container);
 }
 
 function renderPortfolioStats(projects, summaryData, timeline = []) {

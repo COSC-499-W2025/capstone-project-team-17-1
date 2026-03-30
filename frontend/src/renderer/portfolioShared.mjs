@@ -281,6 +281,10 @@ function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
 
   const templateId = String(portfolioEntry?.template_id || portfolioEntry?.templateId || "classic").trim();
 
+  const caseStudyAbstract = String(
+    portfolioEntry?.case_study_abstract || portfolioEntry?.caseStudyAbstract || ""
+  ).trim();
+
   const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
   const coverImage = images.find((img) => img?.is_cover) || images[0] || null;
 
@@ -289,25 +293,27 @@ function getPortfolioProjectDisplay(project, details, portfolioEntry = {}) {
     summary,
     keyRole,
     evidence,
+    caseStudyAbstract,
     templateId,
     images,
     coverImage,
   };
 }
 
-function getProjectCardImageSrc(projectId, portfolioEntry, getPortfolioImageUrl, getProjectThumbnailUrl) {
+function getProjectCardImageMedia(projectId, portfolioEntry, getPortfolioImageAuthPath, getProjectThumbnailUrl) {
   const images = Array.isArray(portfolioEntry?.images) ? portfolioEntry.images : [];
   const cover = images.find((img) => img?.is_cover) || images[0];
 
-  if (cover?.id && typeof getPortfolioImageUrl === "function") {
-    return getPortfolioImageUrl(projectId, cover.id);
+  if (cover?.id && typeof getPortfolioImageAuthPath === "function") {
+    return { kind: "portfolio", path: getPortfolioImageAuthPath(projectId, cover.id) };
   }
 
   if (typeof getProjectThumbnailUrl === "function") {
-    return getProjectThumbnailUrl(projectId);
+    const url = getProjectThumbnailUrl(projectId);
+    if (url) return { kind: "thumbnail", url };
   }
 
-  return "";
+  return null;
 }
 
 function buildPortfolioEntryMap(entries) {
@@ -464,7 +470,14 @@ function buildTimelineEntries(timeline) {
   });
 }
 
-function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProjectThumbnailUrl, portfolioEntryMap, getPortfolioImageUrl }) {
+function buildTopProjectsMarkup({
+  projects,
+  summaryData,
+  isPrivateMode,
+  getProjectThumbnailUrl,
+  portfolioEntryMap,
+  getPortfolioImageAuthPath,
+}) {
   if (!projects.length) {
     return `
       <div class="empty-state">
@@ -489,18 +502,19 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
       const contributionSummary = buildContributionSummary(project, details, portfolioEntry);
       const impactSummary = buildImpactSummary(project, details, portfolioEntry);
 
-      const imageSrc = getProjectCardImageSrc(
+      const imageMedia = getProjectCardImageMedia(
         project.project_id,
         portfolioEntry,
-        getPortfolioImageUrl,
+        getPortfolioImageAuthPath,
         getProjectThumbnailUrl
       );
 
-      const mediaMarkup = imageSrc
-        ? `
+      const mediaMarkup =
+        imageMedia?.kind === "portfolio"
+          ? `
           <img
             class="top-project-thumbnail"
-            src="${escapeHtml(imageSrc)}"
+            data-portfolio-auth-src="${escapeHtml(imageMedia.path)}"
             alt="${escapeHtml(display.title)} thumbnail"
             loading="lazy"
             onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
@@ -513,7 +527,24 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
             </div>
           </div>
         `
-        : `
+          : imageMedia?.kind === "thumbnail"
+            ? `
+          <img
+            class="top-project-thumbnail"
+            src="${escapeHtml(imageMedia.url)}"
+            alt="${escapeHtml(display.title)} thumbnail"
+            loading="lazy"
+            onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+          />
+          <div class="top-project-thumbnail-fallback hidden" aria-hidden="true">
+            <div class="thumbnail-placeholder-art">
+              <span class="thumbnail-placeholder-sun"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-back"></span>
+              <span class="thumbnail-placeholder-mountain thumbnail-placeholder-mountain-front"></span>
+            </div>
+          </div>
+        `
+            : `
           <div class="top-project-thumbnail-fallback" aria-hidden="true">
             <div class="thumbnail-placeholder-art">
               <span class="thumbnail-placeholder-sun"></span>
@@ -604,7 +635,7 @@ function buildTopProjectsMarkup({ projects, summaryData, isPrivateMode, getProje
               <span class="stack-pill">${project.is_github ? "GitHub Import" : "ZIP Upload"}</span>
               <span class="stack-pill">${project.total_files} Files</span>
               <span class="stack-pill">${project.total_skills} Skills</span>
-              <span class="stack-pill">${escapeHtml(display.templateId.replaceAll("_", " "))}</span>
+              <span class="stack-pill">${escapeHtml(toTitleCase(String(display.templateId || "classic").replaceAll("_", " ")))}</span>
               ${technologies.map((tech) => `<span class="stack-pill">${escapeHtml(tech)}</span>`).join("")}
             </div>
           </div>
