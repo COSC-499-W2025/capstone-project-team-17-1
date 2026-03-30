@@ -143,6 +143,12 @@ def _render_case_study_template(item: dict, images: List[dict]) -> List[str]:
     if cover:
         lines.append(_image_markdown(cover))
 
+    abstract = _text(item.get("case_study_abstract") or item.get("caseStudyAbstract"))
+    if abstract:
+        lines.append("### Abstract")
+        lines.append(abstract)
+        lines.append("")
+
     if blurb:
         lines.append("### Overview")
         lines.append(blurb)

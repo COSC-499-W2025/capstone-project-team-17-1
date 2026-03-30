@@ -98,6 +98,9 @@ def test_build_analysis_defaults_uses_project_role_and_generated_content(monkeyp
     assert "Metric: 100 files analyzed" in defaults["evidence_of_success"]
     assert "Capstone" in defaults["portfolio_blurb"]
     assert defaults["portfolio_blurb"]
+    assert "Capstone" in defaults["case_study_abstract"]
+    assert "designed using" in defaults["case_study_abstract"].lower()
+    assert "skill development" in defaults["case_study_abstract"].lower()
 
 
 def test_read_portfolio_entry_prefers_overrides_but_exposes_analysis_defaults(monkeypatch, fake_request):

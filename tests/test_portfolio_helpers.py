@@ -57,6 +57,7 @@ def test_get_portfolio_customization_returns_defaults_when_missing(conn):
     assert customization["key_role"] == ""
     assert customization["evidence_of_success"] == ""
     assert customization["portfolio_blurb"] == ""
+    assert customization["case_study_abstract"] == ""
 
 
 def test_upsert_portfolio_customization_round_trips(conn):
@@ -76,6 +77,20 @@ def test_upsert_portfolio_customization_round_trips(conn):
     assert fetched["key_role"] == "Backend Developer"
     assert fetched["evidence_of_success"] == "Built and tested API routes"
     assert fetched["portfolio_blurb"] == "A backend heavy project for portfolio testing."
+
+
+def test_upsert_portfolio_customization_stores_case_study_abstract(conn):
+    upsert_portfolio_customization(
+        conn,
+        "demo-project",
+        template_id="case_study",
+        key_role="Backend Developer",
+        evidence_of_success="Built API routes",
+        portfolio_blurb="Custom overview.",
+        case_study_abstract="Custom abstract for the case study layout.",
+    )
+    fetched = get_portfolio_customization(conn, "demo-project")
+    assert fetched["case_study_abstract"] == "Custom abstract for the case study layout."
 
 
 def test_portfolio_image_save_cover_list_and_delete(conn, tmp_path):

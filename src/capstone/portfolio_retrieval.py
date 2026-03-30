@@ -179,6 +179,7 @@ def get_portfolio_entry(conn: sqlite3.Connection, project_id: str) -> Optional[D
         "key_role": customization.get("key_role") or "",
         "evidence_of_success": customization.get("evidence_of_success") or "",
         "portfolio_blurb": customization.get("portfolio_blurb") or "",
+        "case_study_abstract": customization.get("case_study_abstract") or "",
         "snapshot": snapshot,
         "evidence": _extract_evidence(snapshot),
         "images": images,

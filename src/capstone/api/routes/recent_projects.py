@@ -174,7 +174,15 @@ ORDER BY pa.created_at DESC
 
         # Filter out placeholder / broken recent-project entries that only have a bare
         # ID snapshot and no corresponding uploaded project in the current workspace.
-        if normalized_project_id not in upload_ids and not has_file_summary and not has_skills:
+        # Only enforce upload_id membership when the uploads table actually has rows;
+        # otherwise "not in upload_ids" is true for every project and we would hide all
+        # snapshots that lack file_summary/skills (common for GitHub imports or older DBs).
+        if (
+            upload_ids
+            and normalized_project_id not in upload_ids
+            and not has_file_summary
+            and not has_skills
+        ):
             log_event(
                 "WARNING",
                 f"Skipping incomplete project snapshot in recent projects · Project: {normalized_project_id or snapshot_project_id or 'unknown'}",
@@ -234,13 +242,23 @@ ORDER BY pa.created_at DESC
                     if has_content:
                         merged.setdefault(pid, p)
             return list(merged.values())
-        return cloud_fallback
+        # Do not return cloud-only stubs here when local uploads exist: those rows are
+        # what DELETE /projects/{id} removes. Returning cloud first hid uploads and made
+        # the last local project undeletable (404) or out of sync with the card id.
 
     if not projects and uploads_fallback:
         log_event(
             "WARNING",
             "Recent projects fallback activated: project_analysis empty/incomplete, serving uploads-based list",
         )
+        if storage_user_key and cloud_fallback:
+            seen = {str(u.get("project_id")) for u in uploads_fallback if u.get("project_id")}
+            extra = [
+                row
+                for row in cloud_fallback
+                if str(row.get("project_id") or "") not in seen
+            ]
+            return uploads_fallback + extra
         return uploads_fallback
 
     if not projects and cloud_fallback:

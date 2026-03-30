@@ -260,6 +260,50 @@ export async function authFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
+const _portfolioImageBlobUrls = new WeakMap();
+
+/**
+ * Loads portfolio image bytes with auth and assigns blob URLs to <img data-portfolio-auth-src="/portfolio/.../file">.
+ * Plain img src cannot send Authorization headers, so portfolio file routes must be hydrated this way.
+ */
+export async function hydratePortfolioAuthImages(root = document) {
+  if (!root?.querySelectorAll) return;
+  const imgs = root.querySelectorAll("img[data-portfolio-auth-src]");
+  await Promise.all(
+    [...imgs].map(async (img) => {
+      const rel = img.getAttribute("data-portfolio-auth-src");
+      if (!rel) return;
+      const prev = _portfolioImageBlobUrls.get(img);
+      if (prev) {
+        try {
+          URL.revokeObjectURL(prev);
+        } catch (_) {
+          /* ignore */
+        }
+        _portfolioImageBlobUrls.delete(img);
+      }
+      try {
+        const res = await authFetch(rel);
+        if (!res.ok) {
+          img.style.display = "none";
+          img.nextElementSibling?.classList?.remove("hidden");
+          img.removeAttribute("data-portfolio-auth-src");
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        _portfolioImageBlobUrls.set(img, url);
+        img.src = url;
+        img.removeAttribute("data-portfolio-auth-src");
+      } catch (_) {
+        img.style.display = "none";
+        img.nextElementSibling?.classList?.remove("hidden");
+        img.removeAttribute("data-portfolio-auth-src");
+      }
+    })
+  );
+}
+
 export function hasAuthToken() {
   return Boolean(getAuthToken());
 }
