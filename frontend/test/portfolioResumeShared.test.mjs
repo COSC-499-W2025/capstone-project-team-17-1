@@ -157,6 +157,19 @@ test("buildSkillsTimelineMarkup renders timeline nodes with timestamps, project 
   assert.match(markup, /2 snapshots/);
 });
 
+test('buildSkillsTimelineMarkup filters placeholder "0" skills from timeline output', () => {
+  const markup = buildSkillsTimelineMarkup([
+    {
+      timestamp: "2026-03-10T13:14:15Z",
+      project_id: "proj-a",
+      skills: [{ skill: "0", weight: 2 }, { skill: "python", weight: 1 }],
+    },
+  ]);
+
+  assert.match(markup, /Python/);
+  assert.doesNotMatch(markup, />0</);
+});
+
 test("buildSkillsTimelineMarkup hides fully empty timeline rows", () => {
   const markup = buildSkillsTimelineMarkup([
     {

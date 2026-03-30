@@ -30,6 +30,11 @@ async function fetchSkillsTimeline() {
   return Array.isArray(payload.timeline) ? payload.timeline : [];
 }
 
+function isDisplayableTimelineSkill(skill) {
+  const rawName = String(skill?.name || skill?.skill || "").trim().toLowerCase();
+  return Boolean(rawName) && rawName !== "0";
+}
+
 function renderResumeSummary(profile, projects) {
   const container = document.getElementById("resume-summary-container");
   if (!container) return;
@@ -166,7 +171,7 @@ function renderSkillsTimeline(timeline) {
   if (!container) return;
 
   const visibleTimeline = timeline.filter((entry) => {
-    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const skills = Array.isArray(entry?.skills) ? entry.skills.filter(isDisplayableTimelineSkill) : [];
     const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
       ? entry.project_metrics
       : {};
@@ -187,7 +192,7 @@ function renderSkillsTimeline(timeline) {
 
   container.innerHTML = visibleTimeline
     .map((entry) => {
-      const skills = Array.isArray(entry.skills) ? entry.skills : [];
+      const skills = Array.isArray(entry.skills) ? entry.skills.filter(isDisplayableTimelineSkill) : [];
 
       return `
         <div class="timeline-year-row">
