@@ -3,6 +3,22 @@
 Capstone Analyzer is a local-first software analysis tool for processing project archives and generating portfolio/resume-oriented insights.  
 The system supports three workflows: CLI analysis, interactive menu usage, and FastAPI HTTP endpoints.
 
+## README Navigation
+
+- [Quickstart(involve Windows instruction--open loom)](#quickstart)
+- [Installation Guide for Future Development Team](#installation-guide-for-future-development-team)
+- [MAC instruction--open loom](#mac-instruction--open-loom)
+- [Usage](#usage)
+- [API Route Map (Table)](#api-route-map-table)
+- [Test Report](#test-report)
+- [Known Bugs](#known-bugs)
+- [Test Data ZIPs](#test-data-zips)
+- [Work Breakdown Structure](#work-breakdown-structure)
+- [DFD Level 0](#dfd-level-0)
+- [DFD Level 1](#dfd-level-1)
+- [system_architecture_design](#system_architecture_design)
+- [Team Contract](#team-contract)
+
 ## Tips
 For any ZIP upload, make sure to run the following command in the project’s root directory before compressing it:
 ```
@@ -51,10 +67,18 @@ pip install -r requirements-dev.txt
 #    macOS / Linux:
 bash scripts/setup.sh
 #    Windows (PowerShell, run as Administrator):
-#    .\scripts\setup.ps1
+.\scripts\setup.ps1
 
-# 6) Quick verification
-capstone --help
+# 6) Run Backend
+#    macOS:
+python -m capstone.run_server
+#    Windows:
+capstone api --host 127.0.0.1 --port 8003 --db-dir data
+
+# 7) Run Frontend
+#    macOS /  Windows:
+cd frontend
+npm start
 ```
 
 Requirements:
@@ -64,6 +88,179 @@ Requirements:
 - tkinter (required by the file picker in CLI interactive flows)
   - Ubuntu/Debian: `sudo apt-get install python3-tk`
   - macOS/Windows: usually included with standard Python installers
+
+## Installation Guide for Future Development Team
+
+This section is the recommended setup path for the next team working on the repository.
+
+### Deliverables Navigation
+
+| Deliverable / Review Topic | Where to start |
+|---|---|
+| Installation guide for future developers | [Installation Guide for Future Development Team](#installation-guide-for-future-development-team) |
+| Backend source code | [`src/capstone/`](src/capstone) |
+| CLI entry point | [`src/capstone/cli.py`](src/capstone/cli.py) |
+| Interactive app entry point | [`main.py`](main.py) |
+| FastAPI server | [`src/capstone/api/server.py`](src/capstone/api/server.py) |
+| API reference | [`docs/api.md`](docs/api.md) |
+| Electron frontend | [`frontend/`](frontend) |
+| Python backend tests | [`tests/`](tests) |
+| Frontend tests | [`frontend/test/`](frontend/test) |
+| Demo and regression ZIPs | [`test_data/`](test_data) |
+| Setup scripts | [`scripts/`](scripts) |
+| Frontend startup (macOS) | [MAC instruction--open loom](#mac-instruction--open-loom) |
+| Known limitations and workarounds | [Known Bugs](#known-bugs) |
+
+### 1. Clone and create a Python environment
+
+```bash
+git clone https://github.com/COSC-499-W2025/capstone-project-team-17-1.git
+cd capstone-project-team-17-1
+python -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### 2. Install backend dependencies
+
+```bash
+pip install -e .
+pip install -r requirements-dev.txt
+```
+
+Why both commands are used:
+- `pip install -e .` installs the package in editable mode for development.
+- `requirements-dev.txt` adds test, API, and optional integration dependencies used across the repo.
+
+### 3. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+The Electron frontend test suite is under `frontend/test/`, and `npm install` is required before running packaged frontend workflows.
+
+### 4. Install system-level tools when needed
+
+- LaTeX is required for PDF resume export.
+- Run `bash scripts/setup.sh` on macOS/Linux.
+- Run `.\scripts\setup.ps1` on Windows PowerShell as Administrator.
+- `tkinter` is required for some interactive CLI file-picking flows.
+
+### 5. Verify the environment
+
+Backend:
+
+```bash
+capstone --help
+python -m pytest tests/test_config.py -q
+```
+
+Frontend:
+
+```bash
+cd frontend
+node --test test/**/*.test.mjs
+cd ..
+```
+
+### 6. Start the main workflows
+
+- CLI: `capstone analyze /path/to/project.zip`
+- Interactive menu: `python main.py`
+- API server: `capstone api --host 127.0.0.1 --port 8002 --db-dir data`
+
+### 7. Environment notes for future teams
+
+- The Python package target is [`src/capstone/`](src/capstone).
+- Main backend entry points are [`main.py`](main.py) and the CLI entry defined from [`src/capstone/cli.py`](src/capstone/cli.py).
+- The Electron app lives in [`frontend/`](frontend).
+- API route details are documented in [`docs/api.md`](docs/api.md).
+- Sample archives for demos and regression checks live in [`test_data/`](test_data).
+- The current test suite assumes local filesystem access for generated app data and logs.
+
+## MAC instruction--open loom
+
+### Overview
+
+Use this flow on macOS when validating the Electron frontend against the local backend. The goal is to confirm that login, project upload, visualization, and persisted backend-backed data all work from the actual desktop app flow.
+
+Before starting this section, complete the shared setup in [Installation Guide for Future Development Team](#installation-guide-for-future-development-team). The steps below are the recommended macOS launch flow for opening Loom in development mode.
+
+### Option A: install the packaged macOS app locally
+
+If you want to install Loom as a local macOS application instead of running it from `npm start`, use the packaged macOS disk image:
+
+- Apple Silicon macOS installer: [`frontend/dist/Loom-1.0.0-arm64.dmg`](frontend/dist/Loom-1.0.0-arm64.dmg)
+
+Recommended install flow on macOS:
+- Open the `.dmg` file.
+- Drag `Loom.app` into the `Applications` folder.
+- Launch `Loom.app` from Applications.
+
+Use this option when testing the packaged desktop app experience on macOS.
+
+### Option B: run Loom in development mode
+
+Use this option when you want to run the Electron app directly from the repository during development.
+
+### Prerequisites
+
+- The Python virtual environment has already been created.
+- Backend dependencies have already been installed with `pip install -r requirements-dev.txt` and `pip install -e .`.
+- Frontend dependencies have already been installed with `cd frontend && npm install`.
+
+### Terminal 1: start the backend
+
+```bash
+cd /path/to/capstone-project-team-17-1
+source .venv/bin/activate
+python -m capstone.run_server
+```
+
+The frontend expects the backend on port `8002`.
+
+Optional for packaged-app testing only:
+
+```bash
+PYINSTALLER_CONFIG_DIR=/tmp/pyinstaller \
+.venv/bin/python -m PyInstaller src/capstone/capstone_backend.spec --clean
+```
+
+You do not need this rebuild step for normal development mode with `npm start`.
+
+### Terminal 2: start the frontend
+
+```bash
+cd /path/to/capstone-project-team-17-1
+cd frontend
+npm start
+```
+
+### Verify the backend connection
+
+Open:
+
+```text
+http://127.0.0.1:8002/health
+```
+
+If it returns a healthy response, the backend and frontend should be able to connect.
+
+### Suggested peer-testing checks
+
+- Confirm the app launches without a frontend-backend connection error.
+- Test account login and verify the authenticated view loads correctly.
+- Upload a project and confirm it appears in the project list.
+- Open project views and verify charts, summaries, or visualizations render.
+- Restart the app/backend and confirm expected data persists through the hosted/local backend state.
 
 ## Usage
 
@@ -150,16 +347,16 @@ Input shortcuts in interactive mode:
 ### Run API Backend
 
 ```bash
-# Start FastAPI on port 8003
-capstone api --host 127.0.0.1 --port 8003 --db-dir data
+# Start FastAPI on port 8002
+capstone api --host 127.0.0.1 --port 8002 --db-dir data
 ```
 
-Base URL: `http://127.0.0.1:8003`
+Base URL: `http://127.0.0.1:8002`
 
 API docs:
-- Swagger UI: `http://127.0.0.1:8003/docs`
-- OpenAPI JSON: `http://127.0.0.1:8003/openapi.json`
-- Route debug (mounted routers + import errors): `http://127.0.0.1:8003/__debug/routers`
+- Swagger UI: `http://127.0.0.1:8002/docs`
+- OpenAPI JSON: `http://127.0.0.1:8002/openapi.json`
+- Route debug (mounted routers + import errors): `http://127.0.0.1:8002/__debug/routers`
 
 ## API Route Map (Table)
 
@@ -169,25 +366,39 @@ API docs:
 |---|---|---|---|
 | GET | `/` | API status | Implemented |
 | GET | `/health` | Health check | Implemented |
+| GET | `/api/health` | Alternate health check | Implemented |
+| GET | `/system/system-metrics` | System metrics snapshot | Implemented |
+| GET | `/__debug/routers` | Route/debug mount inspection | Implemented |
 
 ### Consent
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| POST | `/privacy-consent` | Save privacy consent | Implemented |
 | GET | `/privacy-consent` | Get privacy consent | Implemented |
+| POST | `/privacy-consent/local` | Save local consent | Implemented |
+| POST | `/privacy-consent/external` | Save external/AI consent | Implemented |
 
 ### Projects
 
 | Method | Path | Description | Status |
 |---|---|---|---|
 | POST | `/projects/upload` | Upload zip and store project snapshot | Implemented |
+| POST | `/projects/upload-bundle` | Upload a multi-project zip bundle | Implemented |
 | GET | `/projects` | List projects | Implemented |
 | GET | `/projects/{id}` | Get project details | Implemented |
 | DELETE | `/projects/{id}` | Delete project | Implemented |
+| POST | `/projects/{id}/thumbnail` | Upload project thumbnail | Implemented |
+| GET | `/projects/{id}/thumbnail` | Get project thumbnail | Implemented |
 | GET | `/projects/{id}/uploads` | List project uploads | Implemented |
 | PATCH | `/projects/{id}` | Update project overrides | Implemented |
+| POST | `/projects/{id}/edit` | Legacy alias for project edit | Implemented |
 | GET | `/projects/{id}/overrides` | Get project overrides | Implemented |
+| POST | `/projects/{project_id}/generate-resume` | Generate a resume from one project | Implemented |
+| GET | `/projects/{project_id}/tree` | Get project file tree | Implemented |
+| GET | `/projects/{project_id}/file` | Read a project file | Implemented |
+| POST | `/projects/update-file` | Update a project file | Implemented |
+| GET | `/projects/{project_id}/analysis` | Get project analysis view | Implemented |
+| GET | `/projects/collaboration/{project_id}` | Get collaboration-focused project data | Implemented |
 
 ### Skills
 
@@ -195,41 +406,118 @@ API docs:
 |---|---|---|---|
 | GET | `/projects/{project_id}/skills` | Get detected skills for project | Implemented |
 | GET | `/skills` | Aggregate skills across projects | Implemented |
+| GET | `/skills/timeline` | Get skills timeline data | Implemented |
 
-### Resume
+### Resumes
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| GET | `/resume` | List/search resume entries | Implemented |
-| POST | `/resume` | Create resume entry | Implemented |
-| GET | `/resume/{id}` | Get resume entry | Implemented |
-| PATCH | `/resume/{id}` | Update resume entry | Implemented |
-| DELETE | `/resume/{id}` | Delete resume entry | Implemented |
-| POST | `/resume/generate` | Generate resume (`json|markdown|pdf`) | Implemented |
-| POST | `/resume/render-pdf` | Render resume payload as PDF | Implemented |
-| GET | `/resume-projects` | List/get resume wording by project | Implemented |
-| POST | `/resume-projects` | Upsert project resume wording | Implemented |
-| POST | `/resume-projects/generate` | Auto-generate resume wording | Implemented |
+| GET | `/resumes` | List resumes | Implemented |
+| POST | `/resumes` | Create a resume | Implemented |
+| POST | `/resumes/generate` | Auto-generate a resume | Implemented |
+| POST | `/resumes/render-pdf` | Render resume payload as PDF | Implemented |
+| GET | `/resumes/{resume_id}` | Get a resume | Implemented |
+| PATCH | `/resumes/{resume_id}` | Update resume metadata | Implemented |
+| DELETE | `/resumes/{resume_id}` | Delete a resume | Implemented |
+| GET | `/resumes/{resume_id}/export` | Export a resume (`json|markdown|pdf`) | Implemented |
+| GET | `/resumes/{resume_id}/sections` | List resume sections | Implemented |
+| POST | `/resumes/{resume_id}/sections` | Create a resume section | Implemented |
+| POST | `/resumes/{resume_id}/sections/reorder` | Reorder resume sections | Implemented |
+| PATCH | `/resumes/{resume_id}/sections/{section_id}` | Update a resume section | Implemented |
+| DELETE | `/resumes/{resume_id}/sections/{section_id}` | Delete a resume section | Implemented |
+| GET | `/resumes/{resume_id}/sections/{section_id}/items` | List section items | Implemented |
+| POST | `/resumes/{resume_id}/sections/{section_id}/items` | Create a section item | Implemented |
+| POST | `/resumes/{resume_id}/sections/{section_id}/items/reorder` | Reorder section items | Implemented |
+| PATCH | `/resumes/{resume_id}/sections/{section_id}/items/{item_id}` | Update a section item | Implemented |
+| DELETE | `/resumes/{resume_id}/sections/{section_id}/items/{item_id}` | Delete a section item | Implemented |
 
 ### Portfolio / Showcase
 
 | Method | Path | Description | Status |
 |---|---|---|---|
-| GET | `/portfolio/{id}` | Get portfolio/showcase summary | Implemented |
 | POST | `/portfolio/generate` | Generate portfolio summaries | Implemented |
+| POST | `/portfolio/showcase/edit` | Edit showcase summary by project id | Implemented |
 | POST | `/portfolio/{id}/edit` | Edit portfolio summary | Implemented |
+| GET | `/portfolio/latest/summary` | Get one-page portfolio summary | Implemented |
+| GET | `/portfolio/activity-heatmap` | Get portfolio activity heatmap data | Implemented |
+| GET | `/portfolio/project-evolution` | Get project evolution/showcase data | Implemented |
+| GET | `/portfolio/{id}/export` | Export portfolio data | Implemented |
 | GET | `/showcase/*` | Showcase-prefixed aliases | Implemented |
 | GET | `/portfolios/*`, `/users/*` | Legacy compatibility aliases | Implemented |
 
+### Auth
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/auth/bootstrap` | Get auth bootstrap/session state | Implemented |
+| POST | `/auth/register` | Register a user | Implemented |
+| POST | `/auth/login` | Log in a user | Implemented |
+| GET | `/auth/me` | Get current authenticated user | Implemented |
+| PUT | `/auth/me` | Update current user profile | Implemented |
+| GET | `/auth/me/education` | Get current user education entries | Implemented |
+| PUT | `/auth/me/education` | Update current user education entries | Implemented |
+| POST | `/auth/password` | Change password | Implemented |
+| POST | `/auth/logout` | Log out current session | Implemented |
+
+### GitHub / External Import
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/github/repos` | List authenticated GitHub repositories | Implemented |
+| POST | `/github/import` | Import a GitHub repository as a project | Implemented |
+| POST | `/github/pull` | Refresh/pull GitHub project data | Implemented |
+| GET | `/github/auth-status` | Check GitHub auth status | Implemented |
+| POST | `/github/login` | Save GitHub token/login state | Implemented |
+| GET | `/github/branches` | List repository branches | Implemented |
+
+### Dashboard / Analytics / Activity
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/dashboard/recent-projects` | Get recent projects for dashboard | Implemented |
+| GET | `/activity` | Get activity log entries | Implemented |
+| GET | `/analytics/project-health` | Get project health analytics | Implemented |
+| GET | `/errors` | List stored error analyses | Implemented |
+| POST | `/errors/analyze` | Run error analysis | Implemented |
+
+### Sienna / AI
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/sienna/projects` | List projects available to Sienna | Implemented |
+| POST | `/sienna/chat` | Chat with Sienna | Implemented |
+| POST | `/sienna/voice` | Generate/return Sienna voice output | Implemented |
+
+### Job Matching
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| POST | `/job-matching/match` | Match one project to a job description | Implemented |
+| POST | `/job-matching/rank` | Rank projects against a job description | Implemented |
+
+### Cloud
+
+| Method | Path | Description | Status |
+|---|---|---|---|
+| GET | `/cloud/test` | Cloud connectivity test | Implemented |
+| GET | `/cloud/test-upload` | Cloud upload test | Implemented |
+| GET | `/cloud/db` | Inspect cloud DB state | Implemented |
+| POST | `/cloud/db/upload` | Upload DB to cloud storage | Implemented |
+| POST | `/cloud/db/download` | Download DB from cloud storage | Implemented |
+| POST | `/cloud/projects/download-all` | Download all project archives | Implemented |
+| POST | `/cloud/project/upload` | Upload a project archive to cloud storage | Implemented |
+| POST | `/cloud/project/download` | Download a project archive from cloud storage | Implemented |
+
 Note:
-- Full endpoint details, payload shapes, and extra aliases are documented in `docs/api.md`.
+- Full endpoint details, payload shapes, and aliases are documented in [`docs/api.md`](docs/api.md).
+- This table summarizes the main routes currently mounted by [`src/capstone/api/server.py`](src/capstone/api/server.py).
 
 ## Example Requests
 
 Upload a project zip:
 
 ```bash
-curl -X POST "http://127.0.0.1:8003/projects/upload" \
+curl -X POST "http://127.0.0.1:8002/projects/upload" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@/path/to/project.zip;type=application/zip"
@@ -238,41 +526,93 @@ curl -X POST "http://127.0.0.1:8003/projects/upload" \
 List projects:
 
 ```bash
-curl "http://127.0.0.1:8003/projects"
+curl "http://127.0.0.1:8002/projects"
 ```
 
 Get project skills:
 
 ```bash
-curl "http://127.0.0.1:8003/projects/<project_id>/skills"
+curl "http://127.0.0.1:8002/projects/<project_id>/skills"
 ```
 
-Generate resume JSON:
+Generate a resume:
 
 ```bash
-curl -X POST "http://127.0.0.1:8003/resume/generate" \
+curl -X POST "http://127.0.0.1:8002/resumes/generate" \
   -H "Content-Type: application/json" \
-  -d '{"format":"json","limit":20}'
+  -d '{"user_id":1}'
 ```
 
-## Testing
+## Test Report
 
-Backend/API:
+### Test Commands Used
 
-```bash
-python -m pytest
-```
+| Area | Command | Purpose |
+|---|---|---|
+| Python backend | `python -m pytest` | Full backend suite execution |
+| Python backend | `python -m pytest --collect-only -q` | Discover what tests are currently collectible |
+| Frontend | `cd frontend && node --test test/**/*.test.mjs` | Run renderer/helper tests with Node's built-in test runner |
 
-Alternative unittest run:
+### Test Status by Suite
 
-```bash
-python -m unittest discover -s tests -p "test_*.py" -v
-```
+| Suite | Files | Status in current environment | Notes |
+|---|---|---|---|
+| Frontend unit/runtime tests | [`frontend/test/`](frontend/test) | Passing | `38/38` tests passed |
+| Python backend verified subset | [`tests/test_code_bundle.py`](tests/test_code_bundle.py), [`tests/test_config.py`](tests/test_config.py), [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py), [`tests/test_llm_client.py`](tests/test_llm_client.py), [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py), [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py), [`tests/test_safe_delete.py`](tests/test_safe_delete.py), [`tests/test_clean.py`](tests/test_clean.py), [`tests/test_pipeline.py`](tests/test_pipeline.py), [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) | Passing | `41` tests passed across these files in the current environment |
+| Python backend full collection | [`tests/`](tests) | Collects successfully | `497` tests were collected with `python -m pytest --collect-only -q` |
 
-Testing notes:
-- API endpoints are tested with FastAPI TestClient through HTTP-style requests.
-- Prefer `python -m pytest` to avoid interpreter/environment mismatch.
-- Coverage focuses on API route behavior (status codes/payloads), core analysis/storage logic, and CLI-related integration paths.
+### Test Files Verified to Work
+
+| Area | Verified file |
+|---|---|
+| Python | [`tests/test_code_bundle.py`](tests/test_code_bundle.py) |
+| Python | [`tests/test_config.py`](tests/test_config.py) |
+| Python | [`tests/test_deep_review_prompt.py`](tests/test_deep_review_prompt.py) |
+| Python | [`tests/test_llm_client.py`](tests/test_llm_client.py) |
+| Python | [`tests/test_metrics_extractor.py`](tests/test_metrics_extractor.py) |
+| Python | [`tests/test_resume_pdf_builder.py`](tests/test_resume_pdf_builder.py) |
+| Python | [`tests/test_safe_delete.py`](tests/test_safe_delete.py) |
+| Python | [`tests/test_clean.py`](tests/test_clean.py) |
+| Python | [`tests/test_pipeline.py`](tests/test_pipeline.py) |
+| Python | [`tests/test_summarize_top_projects.py`](tests/test_summarize_top_projects.py) |
+| Frontend | [`frontend/test/authShared.test.mjs`](frontend/test/authShared.test.mjs) |
+| Frontend | [`frontend/test/consentShared.test.mjs`](frontend/test/consentShared.test.mjs) |
+| Frontend | [`frontend/test/displayPreferencesShared.test.mjs`](frontend/test/displayPreferencesShared.test.mjs) |
+| Frontend | [`frontend/test/onboardingShared.test.mjs`](frontend/test/onboardingShared.test.mjs) |
+| Frontend | [`frontend/test/portfolioHeatmapRuntime.test.mjs`](frontend/test/portfolioHeatmapRuntime.test.mjs) |
+| Frontend | [`frontend/test/portfolioResumeShared.test.mjs`](frontend/test/portfolioResumeShared.test.mjs) |
+| Frontend | [`frontend/test/portfolioSkillLevels.test.mjs`](frontend/test/portfolioSkillLevels.test.mjs) |
+| Frontend | [`frontend/test/portfolioState.test.mjs`](frontend/test/portfolioState.test.mjs) |
+| Frontend | [`frontend/test/speechInput.test.mjs`](frontend/test/speechInput.test.mjs) |
+
+### Test Collection Status
+
+The previous logging-path collection issue has been fixed by falling back to a writable local or temporary log directory when the default Loom log path is not writable.
+
+| Status | Scope | Result |
+|---|---|---|
+| Collection | Full Python suite | `497` tests collected successfully |
+| Execution | Verified Python subset | `41` tests passed |
+| Execution | Frontend Node suite | `38/38` tests passed |
+
+### Test Strategies Used
+
+| Strategy | How it is used in this repo |
+|---|---|
+| Unit testing | Pure Python modules such as config handling, prompt generation, code bundling, metrics extraction, and PDF helper logic are exercised in isolation |
+| API integration testing | FastAPI routes are tested through HTTP-style request/response assertions with `TestClient` |
+| CLI regression testing | Selected tests invoke CLI entry points and validate observable behavior rather than internal implementation details |
+| Filesystem and persistence testing | Storage and safe-delete flows use temporary directories/databases to validate state changes |
+| Frontend runtime logic testing | Node's built-in test runner validates renderer-side helpers, consent gating, onboarding logic, state selection, and speech-input fallbacks |
+| Failure-path testing | Several tests explicitly cover missing API keys, unavailable browser APIs, empty inputs, and fallback logic |
+
+### Current Test Result Summary
+
+| Metric | Result |
+|---|---|
+| Frontend Node test suite | `38/38` passed |
+| Python subset verified in this environment | `41` tests passed |
+| Python full-suite collection | `497` tests collected successfully |
 
 ## Additional Notes
 
@@ -286,10 +626,23 @@ Testing notes:
 ## Test Data ZIPs
 
 The repo includes sample ZIPs for demos and validation under `test_data/`:
-- `test_data/test-data-code-collab-earlier.zip`
-- `test_data/test-data-code-collab-later.zip`
-- `test_data/test-data-multi-projects.zip`
-- Source bundle for regeneration: `test_data/multi_project_bundle/`
+- [`test_data/test-data-code-collab-earlier.zip`](test_data/test-data-code-collab-earlier.zip)
+- [`test_data/test-data-code-collab-later.zip`](test_data/test-data-code-collab-later.zip)
+- [`test_data/test-data-multi-projects.zip`](test_data/test-data-multi-projects.zip)
+- Source bundle for regeneration: [`test_data/multi_project_bundle/`](test_data/multi_project_bundle)
+
+## Known Bugs
+
+| Bug | Trigger | Impact | Workaround |
+|---|---|---|---|
+| PDF export is not self-contained | Calling resume/portfolio PDF generation without a local TeX engine; see [`src/capstone/resume_pdf_builder.py`](src/capstone/resume_pdf_builder.py) and [`src/capstone/portfolio_pdf_builder.py`](src/capstone/portfolio_pdf_builder.py) | PDF generation fails at runtime | Install `tectonic`, `xelatex`, `lualatex`, or `pdflatex`, or avoid PDF export in environments without LaTeX |
+| Logging now depends on fallback paths in restricted environments | Running the app or tests where the default `~/Loom/log/` path is not writable | Logs are redirected to a writable fallback directory instead of the default Loom directory | Set `CAPSTONE_LOG_DIR` explicitly if you need logs in a specific location |
+| Interactive CLI file-picking depends on `tkinter` | Running interactive flows on systems where `tkinter` is not installed or not available to the Python build | File picker based workflows do not work as expected | Install `python3-tk` on Linux or use a Python distribution that bundles `tkinter` |
+| System metrics behavior is platform-sensitive | Using Windows-oriented monitoring assets such as [`src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe`](src/capstone/tools/system_metrics/LibreHardwareMonitor/LibreHardwareMonitor.exe) on non-Windows systems | Hardware monitoring features may be unavailable or inconsistent across macOS/Linux | Treat metrics features as Windows-first unless cross-platform support is explicitly added and tested |
+| First-time load delays for new users | Initial use of features such as GitHub import, dashboard loading, resume export, or project analysis | Features may take up to a few minutes to fully load, giving the impression the app is unresponsive | Wait for initial processing to complete; performance improves after first load due to cached data |
+| Project descriptions not updating | Viewing project details after analysis or changes where UI state does not refresh properly | Project descriptions may appear outdated or incorrect | Use the “Reset to Analysis” button to reload and apply the correct generated descriptions |
+| GitHub import authentication issues | Using a GitHub token without required permissions (`repo`, `workflow`, `project`) | GitHub repositories may fail to import or return incomplete data | Ensure the GitHub personal access token includes `repo`, `workflow`, and `project` scopes |
+| UI changes not reflecting immediately | Making updates within the app that do not trigger a full UI re-render | Changes may not appear even though they were applied successfully | Use the refresh button in the top right to reload the interface and reflect updates |
 
 # Work Breakdown Structure
 # Milestone #1
@@ -553,30 +906,58 @@ The system must be able to ... :
   - 30.1 Generate résumé-ready textual project descriptions
   - 30.2 Display only résumé-selected projects and wording
 
+## Milestone #3
+
+## 31.0 Produce a One-Page Résumé
+  - 31.1 Include education and awards information
+  - 31.2 Present skills categorized by expertise level
+  - 31.3 Highlight projects with evidence of user contribution and impact
+
+## 32.0 Deliver a Web Portfolio
+  - 32.1 Display a skills timeline that demonstrates learning progression and increased expertise/depth
+  - 32.2 Display a heatmap of project activities showing productivity over time
+  - 32.3 Showcase the top 3 projects and illustrate process/evolution of changes
+
+## 33.0 Support Private Dashboard Customization
+  - 33.1 Provide a private mode for the dashboard
+  - 33.2 Allow the user to interactively customize specific dashboard components before going live
+  - 33.3 Allow the user to customize specific visualizations before going live
+
+## 34.0 Support Public Dashboard Viewing
+  - 34.1 Provide a public mode for the dashboard
+  - 34.2 Restrict dashboard changes in public mode to search controls
+  - 34.3 Restrict dashboard changes in public mode to filter controls
+
+# DFD Level 0
+<img width="1110" height="658" alt="Screenshot 2026-03-28 at 5 10 56 PM" src="https://github.com/user-attachments/assets/8c76963e-fec6-4e9f-bfaa-69034abd803d" />
+
+The Level 0 diagram presents the overall context of the Capstone Analyzer System and its interactions with external entities. The system acts as a central hub that connects users, GitHub, an AI analysis service, an authentication service, and cloud storage.
+
+Users submit requests such as repository uploads, analysis, and portfolio or resume generation. The system retrieves repository data and metadata from GitHub, sends project context to the AI analysis service to generate insights, and handles user authentication through the auth service. All project data and generated results are stored and retrieved from cloud storage. The system then returns analysis results, authentication status, and generated outputs back to the user.
+
 # DFD Level 1
-https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/dfd.md
-<img width="1134" height="569" alt="image" src="https://github.com/user-attachments/assets/4c2d9c6b-ff7a-452c-85e7-b1f4403be251" />
-<br/>
+<img width="1292" height="568" alt="Screenshot 2026-03-28 at 6 23 59 PM" src="https://github.com/user-attachments/assets/d1a7d132-635a-4afc-992f-4b0685bc5373" />
 
+The Level 1 diagram decomposes the Capstone Analyzer System into its core functional components and illustrates the internal data flow between them.
 
-The Level 1 DFD outlines how user-selected sources are processed to extract, analyze, and visualize digital artifacts.The process begins when a User selects sources, triggering the upload module to scan and detect files. These are processed by identifying file types, eliminating corrupt files, and extracting information. During this stage, the system will record an error log for any unreadable or corrupted files in the logs database for troubleshooting.
+The process begins with Ingest Project Sources, where project data is collected either from user-uploaded archives or external repositories such as GitHub. The retrieved files are stored in the File/Artifact Store and passed to the Analyze Project Artifacts module. This module processes artifact contents to extract structured information such as project snapshots, detected skills, metrics, and contributor data, which are then stored in the Project Database. During this stage, system-generated errors, warnings, and activity logs are recorded in the Activity/Error Logs.
 
-Processed files are categorized and metrics are derived. These metrics are saved in the database and then passed to the visualization module to create dashboard/portfolio reports for the user.
+Based on the analyzed data, the Generate Portfolio and Resume module produces portfolio summaries and resume outputs in formats such as PDF or JSON. These outputs are derived from stored project metadata and summaries in the database.
 
-Additionally, users are able to search, filter, and save generated portfolios in the database. This allows them to retrieve/export for external use whenever they desire. All actions are tracked through logs. The data flow concludes with the final outputs returned to the user, completeing a clear and transparent user-controlled cycle.
-
+Finally, the Present Dashboard and Reports module retrieves processed data, metrics, and logs to generate dashboards, visualizations, and reports for the user. The user can interact with the system through requests such as project uploads, generation requests, and filtered views, and receives outputs including portfolios, resumes, and analytical dashboards.
 
 # system_architecture_design
-https://github.com/COSC-499-W2025/capstone-project-team-17-1/blob/docs-finalization/docs/design/system_architecture_design.md
-<img width="1617" height="1074" alt="image" src="https://github.com/user-attachments/assets/38a4aacd-d73c-4b7a-a808-a95611492823" /><br/>
+<img width="1001" height="669" alt="Screenshot 2026-03-28 at 6 14 56 PM" src="https://github.com/user-attachments/assets/727b2bc8-01c5-4ece-9cb0-37af9efb7c94" />
 
+The system is designed as a local-first application that analyzes a user’s own project artifacts to help them understand, track, and present their work history. It targets students and early professionals who want to generate structured insights, timelines, and portfolio-ready summaries without exposing their data externally. All core processing and storage occur locally by default, with optional external services gated behind explicit user consent.
 
-The document proposes a local first app that mines a user’s own files to help them understand and showcase their work history. It targets students and early professionals who want clear timelines, trends, and portfolio style summaries without sending data off the device. In scope are scanning chosen folders, classifying common file types, deduplicating with strong hashes, storing results in a local data store, and presenting dashboards plus simple exports. Users control what is scanned, can pause or resume, and see transparent previews and progress with errors surfaced. Typical use cases include presentations, reviews, resumes, and quick retrospectives.
+Functionally, the system begins with user-controlled data ingestion, allowing users to import projects via ZIP uploads or GitHub repositories. An artifact identification and parsing pipeline processes the input, handling unsupported, corrupted, or duplicate files through validation and hashing. Files are then classified by type (e.g., code, documents) and routed into analysis pipelines.
 
-Functionally, the system lets a user pick sources, crawls and classifies artifacts, builds searchable indexes and filters by time, type, project, and path, and produces insights like activity timelines and type distributions. Non functional goals stress fast setup, efficient and resumable scans, responsiveness, accessibility, and strong privacy and security. Data stays local with least privilege, encrypted storage using the operating system keystore, a localhost only API with per session tokens, secure deletion, and redaction of sensitive patterns in cached snippets. Maintainability expectations include straightforward developer setup, high automated test coverage, pinned dependencies, signed releases, and clear documentation.
+The system performs multi-stage analysis. Code artifacts undergo structural analysis to identify programming languages, frameworks, contributors, keywords, and activity patterns such as commit frequency. Non-code artifacts (e.g., documents) are processed through content analysis to extract skills, topics, and summaries. When external processing is permitted, an alternative pipeline enables anonymization followed by AI-assisted insight generation. All extracted features and summaries are passed to a metrics calculation module, which computes higher-level indicators such as activity timelines, contribution patterns, and key skills.
 
-For an initial milestone, the team should ship source selection, common type detection, hashing into SQLite with indexes, a live progress bar with pause and resume, basic dashboards for timeline and type distribution, search and filters, delete from index, a minimal local API, and CSV or JSON export with a preview. Success looks like accurate classification for most common types, a medium scan that completes within minutes on a typical laptop, common interactions that respond within a couple of seconds, and users reporting that the visualizations improve their understanding of their work. Key risks are privacy leaks, interruptions, and performance slowdowns, addressed by on device processing with redaction, checkpoint and resume, and resource caps with a light scan mode.
+Processed data is stored in a local SQLite database, with separate handling for activity logs and errors to ensure transparency and debuggability. The system supports portfolio and resume generation, producing structured outputs (PDF/JSON) based on stored project summaries and metrics. A dashboard and reporting module enables interactive exploration through filters (e.g., time, project, file type), visualizations, and summaries.
 
+Non-functional requirements emphasize privacy, performance, and usability. Data remains local by default with least-privilege access, secure storage, and optional anonymization before any external interaction. The system supports incremental and resumable processing, responsive dashboards, and clear user feedback including progress indicators and surfaced errors. Maintainability is supported through modular architecture, testability, and clear data flow separation across ingestion, analysis, storage, and presentation layers.
 ## Team Contract
 https://docs.google.com/document/d/1Lw_CeWKMtIAGRbn4z4xmESP87En25rSU8GsUcTXPijQ/edit?usp=sharing
 ## Vision and Goals
