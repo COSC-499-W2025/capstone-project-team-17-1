@@ -1579,6 +1579,8 @@ This week focused on introducing an AI-powered copilot into the application, imp
 [PR #334](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/334)
 [PR #328](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/328)
 [PR #321](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/321)
+[PR #349](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/349)
+
 
 **Peer Eval**  
 > <img width="1067" height="621" alt="image" src="https://github.com/user-attachments/assets/bfa17492-d7c0-43c3-97ab-ad8182d62cd8" />
