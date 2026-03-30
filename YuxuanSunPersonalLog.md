@@ -12,6 +12,7 @@
 - [Milestone 2 - Week 9 [Mar 2 – Mar 8, 2026]](#week-9-m2)
 - [Milestone 3 - Week 10 [Mar 9 – Mar 15, 2026]](#week-10-m2)
 - [Milestone 3 - Week 10 [Mar 16 – Mar 22, 2026]](#week-11-m3)
+- [Milestone 3 - Week 11 [Mar 23 – Mar 29, 2026]](#week-12-m3)
 - 
 - [Week 3 [Sep 15 – Sep 21, 2025]](#week-3)
 - [Week 4 [Sep 22 – Sep 28, 2025]](#week-4)
@@ -258,6 +259,20 @@ This week, I worked on refactoring and polishing the frontend across the Resume,
 Since next week is the end of Milestone 3, I will focus on final project optimization, as well as checking for and fixing remaining bugs.
 
 <img width="1399" height="819" alt="0639d1719b2a88677f52008c3bee8a04" src="https://github.com/user-attachments/assets/385c4bf8-72f1-40ed-b155-54f5c3574428" />
+
+[Back](#table-of-contents)
+
+
+## Week 12 (M3)
+[Mar 23 – Mar 29, 2026]
+This week, I focused on improving the resume pipeline, contributor analytics, and profile management features. I implemented automatic resume summary generation based on users’ education, skills, and project contributions, and fixed several issues in contributor analytics, especially for GitHub-imported projects, including duplicate contributor handling and more accurate contribution percentage calculations. I also normalized how languages and skills are displayed across outputs, improved the resume editor UI, and fixed rendering issues in PDF export. Additionally, I added support for editable education entries in the profile page with full database integration, enabled multi-select interactions for resume cards, and introduced a subtle animation to highlight newly generated resumes. [Refactoring and improvements to the resume feature
+ (#320)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/320)
+
+Beyond feature work, I carried out a major database refactoring. The original database schema was designed before we introduced the login system, which led to inconsistencies and technical debt after authentication was added. I redesigned the schema to better align with the current system, removed outdated tables and legacy function references, and eliminated many temporary patches. The database is now much cleaner, more consistent, and easier to maintain, which aligns with our maintainability goals described in the system architecture and requirements. [Refactoring the database structure, including updating and cleaning up all related references (#356)](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/356)
+
+Looking ahead, although Milestone 3 has been completed, I plan to continue focusing on refactoring. My goal for next week is to further clean up both backend and frontend code, reduce redundancy, and improve overall code structure so the project becomes more maintainable and polished.
+
+<img width="1401" height="825" alt="image" src="https://github.com/user-attachments/assets/a7e12e2f-5a07-41c1-88c9-b5fb434de801" />
 
 [Back](#table-of-contents)
 

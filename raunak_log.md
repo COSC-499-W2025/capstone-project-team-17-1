@@ -19,6 +19,7 @@
 - [Term 2 Week 8 Personal Log](#term-2-week-8-personal-log)
 - [Term 2 Week 9 Personal Log](#term-2-week-9-personal-log)
 - [Term 2 Week 10 Personal Log](#term-2-week-10-personal-log)
+- [Term 2 Week 12 Personal Log](#term-2-week-12-personal-log)
 
 ---
 
@@ -1461,3 +1462,173 @@ https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/301
 https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/302
 
 <img width="1077" height="628" alt="screenshot" src="https://github.com/user-attachments/assets/541a3254-2cb2-446f-8a95-ff2955cda6fa" />
+
+
+### TERM 2 WEEK 12 PERSONAL LOG
+## Pull Request
+**PR #348 — Add bar, pie, donut, and radar views to most used skills widget**
+
+## Branch
+`feature/dashboard-skils-c3a121f` → `develop`
+
+## Summary
+This sprint, I contributed a frontend dashboard enhancement by expanding the **Most Used Skills** widget to support multiple visualization modes. I implemented **bar, pie, donut, and radar chart views**, and updated the widget’s **layout, styling, and controls** so users can switch smoothly between chart types.
+
+## What I Did
+- Added **4 chart view options** to the Most Used Skills widget:
+  - Bar chart
+  - Pie chart
+  - Donut chart
+  - Radar chart
+- Updated the **UI styling and layout** to support the new visualization controls
+- Improved the widget so the chart mode switching feels more interactive and user-friendly
+- Opened a pull request, documented the feature clearly, and completed the GitHub review workflow
+- Got the PR **reviewed and merged into `develop`**
+
+## Testing
+- Manually tested the dashboard in the **Electron app**
+- Switched between **bar, pie, donut, and radar** modes to confirm the widget rendered and updated correctly
+- Performed a self-review before merging
+
+## Outcome
+- PR successfully **merged**
+- Contribution added a more flexible and visually rich dashboard experience
+- Helped improve the usability and presentation quality of the portfolio analytics interface
+
+# GitHub Work Log — Develop Integration / Test PR
+
+## Branch
+`feature/dashboard-skills-clean` → `develop-v2`
+
+## Purpose
+This PR was mainly used as a **test/integration step** to check whether the dashboard skills changes and related files were working properly on the develop branch. The goal was to verify that the updated files could be merged, rendered, and interacted with correctly in the shared codebase.
+
+## What I Did
+- Tested whether the dashboard skills files worked correctly when brought into the develop branch
+- Verified the **Most Used Skills** widget updates in the integrated branch
+- Checked multiple visualization-related changes for compatibility
+- Reviewed widget interaction flow and dashboard animation behavior
+- Used this PR to identify branch compatibility issues before finalizing the feature work
+
+## Testing
+- Verified the dashboard rendered the updated skills widget views
+- Manually checked widget interactions and animation behavior
+- Used the PR as a practical merge/integration test for develop
+- Noted merge conflicts with the base branch for follow-up resolution
+
+## Outcome
+- Confirmed that the files could be tested in the develop branch environment
+- Helped surface integration issues early
+- Supported the final cleanup and safer merging of the dashboard skills work
+
+## Notes
+This was not just a feature addition PR — it also served as a **branch compatibility and integration check** to make sure the updated dashboard skills files behaved properly on `develop-v2`.
+
+
+# GitHub Work Log — Cinematic Dashboard UI + Activity Log Fix
+## Branch
+`fix/dashboard-activity-log` → `develop`
+## Summary
+In this pull request, I worked on improving both the **functionality** and **visual quality** of the dashboard. The main issue was that the **Activity Log was not rendering properly**, even though the backend endpoints were returning valid data. I fixed the rendering problem so backend activity data displayed correctly in the dashboard, and I also enhanced the UI to make the dashboard feel more polished and interactive.
+
+## What I Did
+- Fixed the **Activity Log rendering issue** on the dashboard
+- Improved the handling and display of **backend activity data**
+- Added an enhanced **Activity Log UI** with:
+  - live badge
+  - level filters
+- Improved the overall dashboard presentation with:
+  - more polished card styling
+  - stronger widget effects
+  - better visual interactions
+  - a more cinematic dashboard feel
+
+## Why This Mattered
+The dashboard looked incomplete because the activity data was not appearing correctly even when the backend was working. This PR helped make the dashboard both:
+- **functionally correct**
+- **visually stronger**
+
+## Testing
+- Verified that the Activity Log now loads and displays backend data correctly
+- Checked that the updated dashboard UI rendered properly
+- Reviewed the live activity section and filter behavior manually
+- Confirmed that the frontend changes worked within the existing Electron/renderer setup
+
+## Outcome
+- PR successfully merged into `develop`
+- Fixed a visible dashboard issue
+- Improved the overall frontend user experience
+- Made the dashboard more complete, interactive, and polished
+
+## Notes
+- Type of change:
+  - **Bug fix**
+  - **New feature**
+- Labels:
+  - `enhancement`
+  - `frontend`
+- No new backend dependencies were required
+
+
+# GitHub Work Log — Chat Tab and Demo Chatbot Integration
+
+## Branch
+`feature/ai-chatbot` → `develop`
+
+## Summary
+In this pull request, I added a new **Chat** feature to the Electron app and connected a working **demo chatbot flow** for the Loom dashboard. The goal was to expand the platform with an interactive chatbot experience that fits the existing dashboard and could later be upgraded into a real LLM-backed assistant.
+
+## What I Did
+- Added a new **Chat tab** to the top navigation
+- Created a dedicated **Chat page** in `index.html`
+- Added chat UI styling to match the existing **dark dashboard theme**
+- Built `chat.js` to handle:
+  - chat history rendering
+  - send button behavior
+  - Enter-to-send
+  - quick prompt buttons
+  - clear chat
+  - localStorage persistence
+- Exposed a safe Electron bridge in `preload.js` using `window.loomAI.chat(...)`
+- Added an `ipcMain.handle("ai:chat", ...)` handler in `main.js`
+- Implemented **demo-mode chatbot replies** in the main process so the feature works without paid API access
+- Connected chat initialization inside `renderer.js`
+
+## Why This Mattered
+The app already had dashboard, projects, resume, portfolio, and job match views. This PR extended the app by adding an interactive chatbot experience, making the platform feel more complete and giving the team a usable AI-style feature for development, demos, and UI review.
+
+## Testing
+- Verified the Chat tab appeared correctly in the Electron app
+- Tested sending messages through the demo chatbot flow
+- Checked chat history rendering and input interactions
+- Confirmed Enter-to-send, quick prompts, and clear chat behavior
+- Verified localStorage persistence worked as expected
+- Confirmed the chatbot worked in demo mode without requiring paid API access
+
+## Outcome
+- PR successfully merged into `develop`
+- Added a functional chatbot interface to the app
+- Improved the app’s interactivity and demo readiness
+- Created a foundation for future real AI assistant integration
+
+## Notes
+- Type of change:
+  - **New feature**
+  - **Frontend enhancement**
+- Labels:
+  - `develop`
+  - `enhancement`
+  - `frontend`
+- The chatbot currently runs in **demo mode**, which makes it useful for testing and demos without live API billing
+
+Merged PRS:
+
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/315
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/332
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/346
+https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/348
+
+
+<img width="1470" height="956" alt="Screenshot 2026-03-29 at 10 42 19 PM" src="https://github.com/user-attachments/assets/dca66ed2-f754-4258-9a0b-006a70912472" />
+
+

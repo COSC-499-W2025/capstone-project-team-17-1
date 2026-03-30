@@ -9,6 +9,7 @@
 - [T2 Week 8 Personal Log](#T2-week-8-personal-log)
 - [T2 Week 9 Personal Log](#T2-week-9-personal-log)
 - [T2 Week 10 Personal Log](#T2-week-10-personal-log)
+- [T2 Week 12 Personal Log](#T2-week-12-personal-log)
 
 - [Week 3 Personal Log](#week-3-personal-log)
 - [Week 4 Personal Log](#week-4-personal-log)
@@ -389,3 +390,32 @@ This week also involved reviewing several pull requests related to portfolio fun
 Additionally:
 Moving forward, I will continue improving the integration between backend analysis features and the Electron dashboard. This will include refining how portfolio insights and project rankings are presented to users and improving the overall usability of the portfolio customization interface. I will also continue debugging integration issues and assisting with frontend development to ensure the remaining backend features are surfaced clearly within the application UI.
 
+## T2 Week 12 Personal Log
+
+- (Mar 16 - Mar 29, 2026)<br />
+
+<img width="968" height="569" alt="image" src="https://github.com/user-attachments/assets/1a28ad5f-fea1-4d84-84e1-ae76c3e0014d" />
+
+Weekly Recap:</br>
+This week focused on two major areas: improving the Portfolio customization workflow and polishing light mode across the Electron app. On the portfolio side, the goal was to transform the editor from a mostly manual experience into an analysis-driven system that automatically pulls meaningful data from project snapshots while still allowing user customization. On the UI side, the objective was to ensure light mode is clean, readable, and consistent across dashboards, portfolio views, and Ask Sienna. This included aligning panels, fixing contrast issues, improving layout balance (especially dashboard widgets), and ensuring native controls behave correctly under Electron. Together, these changes support the broader workflow of project analysis, portfolio generation, and job matching by making both the data pipeline and user experience more reliable and accessible.
+
+Coding Tasks:</br>
+On the backend, I implemented major updates to the portfolio ([PR #340](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/340)) routes so each project now returns analysis defaults, user overrides, resolved values, and associated image data. This included generating key role, evidence of success, and portfolio summaries from the latest project snapshots, then merging those with saved user customizations. I also added project role inference logic based on detected technologies and frameworks, and improved evidence generation so it reflects richer project insights rather than simple metrics like file count.
+
+On the frontend, I updated the Portfolio editor to hydrate from backend-resolved data instead of relying solely on manual input. I implemented support for image uploads, cover image selection, deletion, and rendering in both the editor and live preview. I added reset-to-default functionality so users can restore analysis-generated content, and improved starred/featured project behavior for better persistence and usability. I also refined button styling and editing controls to make project cards feel more polished.
+
+In parallel, I completed a cross-cutting light mode pass across the dashboard and portfolio ([PR #352](https://github.com/COSC-499-W2025/capstone-project-team-17-1/pull/352)). This included updating theme tokens, adding body.light overrides, and ensuring inner panels use consistent card styles with proper borders and shadows. I fixed layout inconsistencies such as oversized Activity Log cards by removing rigid min-height rules, and aligned dashboard widgets visually. I also extended light mode styling to portfolio components like skill pills, timeline elements, heatmaps, and preview panels so they render clearly on lighter backgrounds.
+
+Testing or Debugging Tasks:</br>
+A significant portion of the week was spent debugging portfolio data flow and state management. I traced issues where key fields like role, evidence, and summary were not populating despite backend logic being present, and resolved this by fixing snapshot retrieval so routes receive correctly parsed data.
+
+I also resolved multiple autosave and state issues, including cases where autosave caused page reloads that wiped user input. I adjusted the save flow so silent autosaves no longer disrupt the UI. Additional fixes included correcting false “unsaved” states for image uploads and project edits, and ensuring project-level saves properly update stored data.
+
+Another major debugging effort involved fixing GitHub import failures caused by recent backend changes. I identified the issue in the archive analysis pipeline and resolved it by correcting collaboration serialization in the zip analyzer, restoring proper import functionality.
+
+On the UI side, I verified light mode behavior across all major views, including dashboard widgets, portfolio sections, heatmaps, live previews, and job match panels. Testing focused on contrast, layout consistency, and usability rather than backend logic.
+
+Reviewing or Collaboration Tasks:</br>
+This week required careful coordination between backend and frontend systems. I reviewed interactions across portfolio routes, helper functions, state management, editor logic, and rendering layers to ensure consistency after introducing analysis-driven data. I verified that backend outputs aligned with frontend expectations and that user edits were correctly reflected across editor, preview, and persisted data.
+
+I also prepared a PR summary outlining portfolio enhancements, UI improvements, bug fixes, and system updates. Additionally, I implemented backend unit tests covering portfolio helpers, snapshot retrieval, customization persistence, image handling, and route logic. These tests help ensure the new functionality is stable and maintainable moving forward.
