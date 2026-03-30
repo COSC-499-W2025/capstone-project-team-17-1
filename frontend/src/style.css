@@ -122,7 +122,8 @@ body.light {
   --background: var(--bg-light);
   --card-bg: #ffffff;
   --card-inner-bg: #f4f7fc;
-  --button-primary: linear-gradient(90deg, #2b77d6, #2ea983);
+  /* Solid primary in light mode (avoid saturated teal gradient from dark UI) */
+  --button-primary: #2563eb;
   --button-primary-text: #ffffff;
   --button-secondary: #eef3fb;
   --button-secondary-text: #1b3760;
@@ -6757,6 +6758,50 @@ body.light .settings-session-card {
   border-bottom-color: var(--border-subtle);
 }
 
+/* Profile & settings forms: dark theme used #dbeafe on inputs — unreadable on white */
+body.light .settings-input {
+  background: var(--input-bg);
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+  border-color: var(--input-border);
+}
+
+body.light .settings-input::placeholder {
+  color: rgba(17, 24, 39, 0.48);
+}
+
+body.light .settings-input:focus {
+  border-color: rgba(37, 99, 235, 0.55);
+}
+
+body.light .settings-form-value {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+/* Consent settings: Grant = neutral; Revoke (danger) = high contrast */
+body.light .consent-action-btn:not(.danger) {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light .consent-action-btn:not(.danger):hover {
+  background: #e6eef9;
+  filter: none;
+}
+
+body.light .consent-action-btn.danger {
+  background: #fecaca;
+  color: #7f1d1d;
+  border: 1px solid #dc2626;
+}
+
+body.light .consent-action-btn.danger:hover {
+  background: #f87171;
+  color: #450a0a;
+}
+
 .settings-login-prompt {
   margin: 0;
   font-size: 14px;
@@ -7614,10 +7659,100 @@ body.light .branch-modal-box {
   background: var(--surface-elevated);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-elevated);
+  color: var(--text-primary);
+}
+
+body.light .branch-modal-box h3 {
+  color: var(--text-primary);
+}
+
+body.light #branch-select {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border);
+}
+
+body.light #branch-select option {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+body.light #branch-cancel {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light #branch-confirm {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+  border: 1px solid transparent;
+}
+
+body.light .upload-overlay .progress-window {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-elevated);
+}
+
+body.light .progress-title,
+body.light .progress-text,
+body.light .progress-percent {
+  color: var(--text-primary);
+}
+
+body.light .progress-text {
+  opacity: 0.88;
+}
+
+body.light .progress-percent {
+  opacity: 0.92;
+}
+
+body.light .progress-bar {
+  background: rgba(19, 41, 75, 0.14);
+}
+
+body.light .consent-banner {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-primary);
+}
+
+body.light .consent-banner-copy strong {
+  color: var(--text-primary);
+}
+
+body.light .consent-banner-copy p {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+body.light .consent-banner .consent-secondary-btn {
+  background: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--border);
+}
+
+body.light .consent-banner .consent-secondary-btn:hover {
+  background: #e6eef9;
+  filter: none;
 }
 
 body.light .upload-header button {
   color: var(--text-primary);
+}
+
+body.light #upload-modal input:not([type="file"]),
+body.light #upload-modal textarea {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+body.light #upload-modal input::placeholder,
+body.light #upload-modal textarea::placeholder {
+  color: rgba(15, 23, 42, 0.5);
 }
 
 body.light .upload-tab {
@@ -7774,6 +7909,30 @@ body.light .settings-action-btn:hover {
   background: #e6eef9;
 }
 
+/* Upload modal: active tab = light chip (not white-on-gradient “dark” CTA) */
+body.light .upload-tab.active {
+  background: #dbeafe;
+  color: #0f172a;
+  border: 1px solid #3b82f6;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  filter: none;
+}
+
+body.light .upload-tab.active:hover {
+  background: #bfdbfe;
+  filter: none;
+}
+
+body.light .file-upload-btn {
+  background: var(--button-primary);
+  color: var(--button-primary-text);
+}
+
+body.light .file-upload-btn:hover {
+  filter: brightness(0.96);
+  opacity: 1;
+}
+
 /* Neutral button system for non-CTA actions in light mode */
 body.light .btn-secondary,
 body.light #logout-btn,
@@ -7823,12 +7982,17 @@ body.light #logout-btn {
   border-radius: 999px;
 }
 
-/* Keep only major CTA actions gradient in light mode */
-body.light #upload-project-btn,
-body.light .consent-primary-btn {
+/* Accept / header CTAs: solid primary */
+body.light .consent-primary-btn,
+body.light #submit-upload {
   background: var(--button-primary);
   color: var(--button-primary-text);
   border: 1px solid transparent;
+}
+
+body.light .consent-primary-btn:hover,
+body.light #submit-upload:hover {
+  filter: brightness(0.94);
 }
 
 /* Projects tab upload should be neutral in light mode */
