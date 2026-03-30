@@ -157,7 +157,7 @@ def test_build_resume_preview_filters_disabled_sections_and_items():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
         patch.object(
             app,
@@ -194,7 +194,7 @@ def test_build_resume_preview_normalizes_legacy_education_experience_titles():
     conn = _MiniConn(item_rows_by_section)
 
     with (
-        patch.object(app, "get_user_profile", return_value={"full_name": "Alice"}),
+        patch.object(app, "get_user", return_value={"full_name": "Alice"}),
         patch.object(app, "_list_resume_sections", return_value=sections),
     ):
         payload = app._build_resume_preview_from_modular_resume(
@@ -245,7 +245,7 @@ def test_sync_generated_resume_modules_uses_full_name_timestamp_title():
 
 def test_sync_generated_resume_modules_includes_project_activity_period_dates():
     with (
-        patch.object(app, "fetch_user_project_activity_periods", return_value={
+        patch.object(app, "fetch_project_contributor_activity_periods", return_value={
             "demo-project": {
                 "first_commit_at": "2025-01-10",
                 "last_commit_at": "2025-01-20",

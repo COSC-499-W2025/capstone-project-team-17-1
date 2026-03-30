@@ -19,6 +19,7 @@ def _insert_row(conn, project_id: str, created_at: str, snapshot_obj, classifica
     else:
         snapshot_payload = json.dumps(snapshot_obj)
 
+    storage.upsert_project(conn, project_id)
     conn.execute(
         """
         INSERT INTO project_analysis (project_id, classification, primary_contributor, snapshot, created_at)

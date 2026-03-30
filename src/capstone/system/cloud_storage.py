@@ -76,15 +76,7 @@ def list_objects(bucket: str, prefix: str):
 # ------------------------------------------------
 
 def get_local_db_path(user_id: str) -> Path:
-    canonical_user = storage.resolve_storage_user_key(user_id)
-    if canonical_user is None:
-        raise ValueError("guest mode must not resolve a cloud-backed local user DB")
-    previous_user = storage.get_current_user()
-    try:
-        storage.set_current_user(canonical_user)
-        return storage.get_database_path()
-    finally:
-        storage.set_current_user(previous_user)
+    return storage.get_database_path(user_id)
 
 
 def get_cloud_db_key(user_id: str) -> str:

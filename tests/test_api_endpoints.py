@@ -16,7 +16,6 @@ import pytest
 fastapi = pytest.importorskip("fastapi")
 from capstone.api.server import create_app
 from capstone.api.portfolio_helpers import ensure_indexes
-from capstone.resume_retrieval import ensure_resume_schema
 from capstone import storage
 from fastapi.testclient import TestClient
 
@@ -78,7 +77,6 @@ class ApiEndpointTests(unittest.TestCase):
         self.con = sqlite3.connect(db_path)
         self.con.executescript(SCHEMA)
         ensure_indexes(self.con)
-        ensure_resume_schema(self.con)
         seed_project(self.con, "demo")
 
         try:
@@ -117,14 +115,6 @@ class ApiEndpointTests(unittest.TestCase):
         r = client.get("/portfolios/evidence?projectId=demo", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIn("evidence", r.json().get("data", {}))
-
-        r = client.get("/portfolio/demo", headers=headers)
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("summary", r.json().get("data", {}))
-
-        r = client.get("/portfolio/demo?user=alice", headers=headers)
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json().get("data", {}).get("user_role"), "primary_contributor")
 
         r = client.post("/portfolio/generate", json={"projectIds": ["demo"]}, headers=headers)
         self.assertEqual(r.status_code, 200)

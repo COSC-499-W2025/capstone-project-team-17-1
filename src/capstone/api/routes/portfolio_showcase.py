@@ -55,11 +55,23 @@ def list_users(request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute("""
-            SELECT DISTINCT u.id, u.username, u.email
-            FROM users u
-            INNER JOIN user_projects up ON u.id = up.user_id
-            INNER JOIN project_analysis pa ON up.project_id = pa.project_id
-            ORDER BY LOWER(u.username)
+            SELECT DISTINCT u.id, u.github_username, u.email
+            FROM contributors u
+            INNER JOIN project_contributors pc ON u.id = pc.contributor_id
+            INNER JOIN project_analysis pa ON pc.project_id = pa.project_id
+            WHERE NOT (
+                u.email IS NULL
+                AND EXISTS (
+                    SELECT 1 FROM contributors u2
+                    INNER JOIN project_contributors pc2 ON u2.id = pc2.contributor_id
+                    WHERE u2.email IS NOT NULL
+                      AND u2.id != u.id
+                      AND pc2.project_id IN (
+                          SELECT project_id FROM project_contributors WHERE contributor_id = u.id
+                      )
+                )
+            )
+            ORDER BY LOWER(u.github_username)
         """).fetchall()
     users = [
         {"id": r[0], "username": r[1]}
@@ -74,7 +86,13 @@ def list_user_projects(user: str, request: Request):
     _check_auth(request)
     with _db_session(_require_db()) as c:
         rows = c.execute(
-            "SELECT DISTINCT project_id FROM contributor_stats WHERE contributor = ? ORDER BY project_id",
+            """
+            SELECT DISTINCT pc.project_id
+            FROM project_contributors pc
+            JOIN contributors c ON c.id = pc.contributor_id
+            WHERE c.github_username = ?
+            ORDER BY pc.project_id
+            """,
             (user,),
         ).fetchall()
     projects = [r[0] for r in rows if r and r[0]]
@@ -104,28 +122,18 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
     if user:
         with _db_session(_require_db()) as c:
             row = c.execute(
-                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
+                """
+                SELECT 1 FROM project_contributors pc
+                JOIN contributors c ON c.id = pc.contributor_id
+                WHERE pc.project_id = ? AND c.github_username = ? LIMIT 1
+                """,
                 (projectId, user),
             ).fetchone()
         if row:
             user_role = "primary_contributor"
 
-    if view == "resume":
-        with _db_session(_require_db()) as c:
-            ensure_resume_schema(c)
-            item = get_resume_project_description(c, projectId)
-        if not item:
-            log_event("ERROR", f"No resume found · Project: {projectId}")
-            raise HTTPException(status_code=404, detail="No resume project found")
-        
-        log_event("INFO", f"Resume accessed · Project: {projectId}")
-        return {
-            "data": item.to_dict(),
-            "meta": {"projectId": projectId, "view": "resume", "user": user, "userRole": user_role},
-            "error": None,
-        }
-
     with _db_session(_require_db()) as c:
+        ensure_portfolio_tables(c)
         ensure_indexes(c)
         data = get_latest_snapshot(c, projectId)
     if data is None:
@@ -140,6 +148,7 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
 def evidence_latest(request: Request, projectId: str):
     _check_auth(request)
     with _db_session(_require_db()) as c:
+        ensure_portfolio_tables(c)
         ensure_indexes(c)
         snap = get_latest_snapshot(c, projectId)
     if snap is None:
@@ -153,6 +162,7 @@ def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, s
     _check_auth(request)
     sort_field, _, sort_dir = sort.partition(":")
     with _db_session(_require_db()) as c:
+        ensure_portfolio_tables(c)
         ensure_indexes(c)
         items, total = list_snapshots(
             c,
@@ -176,27 +186,29 @@ def get_portfolio_showcase_query(request: Request, projectId: str, user: Optiona
 @router.get("/portfolio/{id}")
 def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None):
     _check_auth(request)
-    
+
     user_role = None
     if user:
         with _db_session(_require_db()) as c:
             row = c.execute(
-                "SELECT 1 FROM contributor_stats WHERE project_id = ? AND contributor = ? LIMIT 1",
+                """SELECT 1 FROM project_contributors pc
+                   JOIN contributors con ON con.id = pc.contributor_id
+                   WHERE pc.project_id = ? AND LOWER(con.github_username) = LOWER(?) LIMIT 1""",
                 (id, user),
             ).fetchone()
         if row:
             user_role = "primary_contributor"
-            
+
     with _db_session(_require_db()) as c:
         ensure_portfolio_tables(c)
         ensure_indexes(c)
         entry = get_portfolio_entry(c, id)
-        
+
     if entry:
         if user_role:
             entry["user_role"] = user_role
         return {"data": entry, "error": None}
-    
+
     with _db_session(_require_db()) as c:
         ensure_resume_schema(c)
         item = get_resume_project_description(c, id, variant_name="portfolio_showcase")
@@ -205,13 +217,13 @@ def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None
             if user_role:
                 payload["user_role"] = user_role
             return {"data": payload, "error": None}
-        
+
         snap = get_latest_snapshot(c, id)
-    
+
     if not snap:
         log_event("ERROR", f"Snapshot not found · Project: {id}")
         raise HTTPException(status_code=404, detail="No snapshots found")
-    
+
     summary = build_resume_project_summary(id, snap)
     payload = {"project_id": id, "summary": summary}
     if user_role:

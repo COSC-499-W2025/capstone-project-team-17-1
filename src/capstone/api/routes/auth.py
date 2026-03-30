@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import secrets
 from typing import Optional
 
@@ -44,9 +43,29 @@ def _save_sessions() -> None:
         pass
 
 
-def _storage_user_key_for_user(user: dict | None) -> str | None:
-    username = ((user or {}).get("username") or "").strip()
-    return storage.resolve_storage_user_key(username)
+def _sync_profile_to_local_db(auth_user: dict) -> None:
+    """Write the Cloudflare auth profile into the local singleton user table (id=1)."""
+    username = (auth_user.get("username") or "").strip()
+    if not username:
+        return
+    github_url = (auth_user.get("github_url") or "").strip() or None
+    github_handle = github_url.rstrip("/").split("/")[-1].strip() if github_url else None
+    try:
+        conn = storage.open_db()
+        storage.upsert_user(
+            conn,
+            username,
+            github_username=github_handle,
+            github_url=github_url,
+            full_name=(auth_user.get("full_name") or "").strip() or None,
+            phone_number=(auth_user.get("phone_number") or "").strip() or None,
+            city=(auth_user.get("city") or "").strip() or None,
+            state_region=(auth_user.get("state_region") or "").strip() or None,
+            portfolio_url=(auth_user.get("portfolio_url") or "").strip() or None,
+        )
+        storage.close_db()
+    except Exception:
+        pass
 
 
 class RegisterRequest(BaseModel):
@@ -83,52 +102,8 @@ def configure(db_dir: Optional[str] = None):
     _load_sessions()
 
 
-def _resolve_contributor_id(auth_user: dict) -> Optional[int]:
-    """After login, find the matching git contributor in the local users table.
-    Tries github handle first, then falls back to auth username.
-    Creates a placeholder record if no match found so the user can generate resumes.
-    """
-    from capstone.portfolio_retrieval import _db_session
-
-    github_url = (auth_user.get("github_url") or "").strip()
-    github_handle = github_url.rstrip("/").split("/")[-1].lower() if github_url else ""
-    auth_username = (auth_user.get("username") or "").strip()
-
-    candidates = [h for h in [github_handle, auth_username.lower()] if h]
-    if not candidates:
-        return None
-
-    try:
-        with _db_session(None) as conn:
-            for handle in candidates:
-                row = conn.execute(
-                    "SELECT id FROM users WHERE LOWER(username) = ?", (handle,)
-                ).fetchone()
-                if row:
-                    return row[0]
-
-            # No match — create a placeholder so the user can start generating resumes
-            email = (auth_user.get("email") or "").strip()
-            identity = github_handle or auth_username
-            conn.execute(
-                "INSERT OR IGNORE INTO users (username, email) VALUES (?, ?)",
-                (identity, email),
-            )
-            row = conn.execute(
-                "SELECT id FROM users WHERE LOWER(username) = ?", (identity.lower(),)
-            ).fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
-
 def _get_auth_base_url() -> str:
-    base = _AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev"
-    if not base:
-        raise HTTPException(
-            status_code=500,
-            detail="CAPSTONE_AUTH_WORKER_URL is not configured",
-        )
-    return base.rstrip("/")
+    return (_AUTH_BASE_URL or "https://loom-auth.amirparsaaminian1383.workers.dev").rstrip("/")
 
 
 def _new_token() -> str:
@@ -150,32 +125,10 @@ def _require_session(request: Request) -> dict:
     return _SESSIONS[token]
 
 
-def _post_to_auth(path: str, payload: dict) -> dict:
+def _request_auth(method: str, path: str, payload: dict) -> dict:
     url = f"{_get_auth_base_url()}{path}"
-
     try:
-        response = requests.post(url, json=payload, timeout=15)
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"auth service unavailable: {exc}")
-
-    try:
-        data = response.json()
-    except ValueError:
-        raise HTTPException(status_code=502, detail="auth service returned invalid JSON")
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=data.get("error") or data.get("detail") or "auth request failed",
-        )
-
-    return data
-
-def _put_to_auth(path: str, payload: dict) -> dict:
-    url = f"{_get_auth_base_url()}{path}"
-
-    try:
-        response = requests.put(url, json=payload, timeout=15)
+        response = requests.request(method, url, json=payload, timeout=15)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"auth service unavailable: {exc}")
 
@@ -210,17 +163,8 @@ def get_authenticated_username(request: Request) -> Optional[str]:
 
 
 def get_authenticated_storage_user_key(request: Request) -> Optional[str]:
-    token = _extract_bearer(request)
-    session = _SESSIONS.get(token) if token else None
-    if not session:
-        return None
-    user = session.get("user")
-    cached = session.get("storage_user_key")
-    resolved = storage.resolve_storage_user_key(cached or (user or {}).get("username"))
-    if resolved and session.get("storage_user_key") != resolved:
-        session["storage_user_key"] = resolved
-        _save_sessions()
-    return resolved
+    username = get_authenticated_username(request)
+    return storage.resolve_storage_user_key(username)
 
 @router.get("/bootstrap")
 def bootstrap(request: Request):
@@ -241,7 +185,7 @@ def register(payload: RegisterRequest):
     if len(payload.password) < 6:
         raise HTTPException(status_code=400, detail="password must be at least 6 characters")
 
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/register",
         {
             "username": payload.username.strip(),
@@ -258,19 +202,17 @@ def register(payload: RegisterRequest):
             "email": payload.email,
             "github_url": payload.github_url,
         }
-    # Ensure github_url is in user dict for contributor resolution
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
-    contributor_id = _resolve_contributor_id(user)
+    storage.set_current_user(user["username"])
+    _sync_profile_to_local_db(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id, "storage_user_key": storage_user_key}
+    _SESSIONS[token] = {"user": user}
     _save_sessions()
     print(
-        f"[auth/register] username={user.get('username')!r} user_id={storage_user_key!r} "
+        f"[auth/register] username={user.get('username')!r} "
         f"local_db={str(storage.get_database_path())!r}",
         flush=True,
     )
@@ -283,7 +225,7 @@ def register(payload: RegisterRequest):
 
 @router.post("/login")
 def login(payload: LoginRequest):
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/login",
         {
             "username": payload.username.strip(),
@@ -295,15 +237,14 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
-    contributor_id = _resolve_contributor_id(user)
+    storage.set_current_user(user["username"])
+    _sync_profile_to_local_db(user)
 
     token = _new_token()
-    _SESSIONS[token] = {"user": user, "contributor_id": contributor_id, "storage_user_key": storage_user_key}
+    _SESSIONS[token] = {"user": user}
     _save_sessions()
     print(
-        f"[auth/login] username={user.get('username')!r} user_id={storage_user_key!r} "
+        f"[auth/login] username={user.get('username')!r} "
         f"local_db={str(storage.get_database_path())!r}",
         flush=True,
     )
@@ -318,29 +259,18 @@ def me(request: Request):
     session = _require_session(request)
     user = session["user"]
     # Always restore CURRENT_USER from the session — critical after server restart
-    storage_user_key = _storage_user_key_for_user(user)
-    storage.set_current_user(storage_user_key)
-    # Re-resolve contributor_id if missing (sessions persisted before this change)
-    if "contributor_id" not in session:
-        contributor_id = _resolve_contributor_id(user)
-        session["contributor_id"] = contributor_id
-        _save_sessions()
-    if "storage_user_key" not in session:
-        session["storage_user_key"] = storage_user_key
-        _save_sessions()
-    print(
-        f"[auth/me] username={user.get('username')!r} user_id={storage_user_key!r} "
-        f"mode={'user' if storage_user_key else 'guest'} "
-        f"local_db={str(storage.get_database_path())!r}",
-        flush=True,
-    )
-    return {"user": user}
+    storage.set_current_user(user["username"])
+    from capstone.portfolio_retrieval import _db_session
+    from capstone.api.routes.resumes import _get_current_user_contributor_id
+    with _db_session(None) as conn:
+        contributor_id = _get_current_user_contributor_id(conn)
+    return {"user": user, "contributor_id": contributor_id}
 
 @router.put("/me")
 def update_me(payload: UpdateProfileRequest, request: Request):
     user = _session_user(request)
 
-    data = _put_to_auth(
+    data = _request_auth("PUT",
         "/auth/me",
         {
             "username": user["username"],
@@ -358,15 +288,12 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
-    storage_user_key = _storage_user_key_for_user(updated_user)
-    storage.set_current_user(storage_user_key)
-    contributor_id = _resolve_contributor_id(updated_user)
+    storage.set_current_user(updated_user["username"])
+    _sync_profile_to_local_db(updated_user)
 
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
         _SESSIONS[token]["user"] = updated_user
-        _SESSIONS[token]["contributor_id"] = contributor_id
-        _SESSIONS[token]["storage_user_key"] = storage_user_key
         _save_sessions()
 
     return {
@@ -377,22 +304,16 @@ def update_me(payload: UpdateProfileRequest, request: Request):
 
 @router.get("/me/education")
 def get_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        return {"data": [], "error": None}
+    _require_session(request)
     from capstone.portfolio_retrieval import _db_session
     with _db_session(None) as conn:
-        entries = storage.get_user_education(conn, contributor_id)
+        entries = storage.get_user_education(conn, 1)
     return {"data": entries, "error": None}
 
 
 @router.put("/me/education")
 async def update_my_education(request: Request):
-    session = _require_session(request)
-    contributor_id = session.get("contributor_id")
-    if not contributor_id:
-        raise HTTPException(status_code=400, detail="contributor_id not resolved — re-login required")
+    _require_session(request)
     try:
         payload = await request.json()
     except Exception:
@@ -405,8 +326,8 @@ async def update_my_education(request: Request):
             raise HTTPException(status_code=400, detail="each entry requires a university field")
     from capstone.portfolio_retrieval import _db_session
     with _db_session(None) as conn:
-        storage.replace_user_education(conn, contributor_id, entries)
-        result = storage.get_user_education(conn, contributor_id)
+        storage.replace_user_education(conn, 1, entries)
+        result = storage.get_user_education(conn, 1)
     return {"data": result, "error": None}
 
 
@@ -417,7 +338,7 @@ def change_password(payload: ChangePasswordRequest, request: Request):
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="new password must be at least 6 characters")
 
-    data = _post_to_auth(
+    data = _request_auth("POST",
         "/auth/password",
         {
             "username": user["username"],

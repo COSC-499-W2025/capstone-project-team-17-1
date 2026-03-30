@@ -112,30 +112,28 @@ def get_recent_projects():
     with _db_session(None) as db:
         rows = db.execute("""
 SELECT
-    pa.project_id,
-    pa.created_at,
+    p.project_id,
+    COALESCE(pa.created_at, p.created_at) AS created_at,
     pa.snapshot,
     pa.classification,
     pa.primary_contributor,
     CASE
-        WHEN gp.project_id IS NOT NULL THEN 1
+        WHEN p.source = 'github' THEN 1
         ELSE 0
     END AS is_github,
     COALESCE(uc.cnt, 0) AS contributor_count
-FROM project_analysis pa
-LEFT JOIN github_projects gp
-    ON pa.project_id = gp.project_id
+FROM projects p
+LEFT JOIN project_analysis pa
+    ON pa.project_id = p.project_id
+    AND pa.rowid = (
+        SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
+    )
 LEFT JOIN (
-    SELECT project_id, COUNT(DISTINCT user_id) AS cnt
-    FROM user_projects
+    SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
+    FROM project_contributors
     GROUP BY project_id
-) uc ON pa.project_id = uc.project_id
-WHERE pa.rowid IN (
-    SELECT MAX(rowid)
-    FROM project_analysis
-    GROUP BY project_id
-)
-ORDER BY pa.created_at DESC
+) uc ON p.project_id = uc.project_id
+ORDER BY COALESCE(pa.created_at, p.created_at) DESC
 """).fetchall()
 
         upload_ids = _load_upload_ids(db)
@@ -151,6 +149,10 @@ ORDER BY pa.created_at DESC
         primary_contributor = row[4]
         is_github = bool(row[5])
         contributor_count = int(row[6])
+
+        if snapshot_raw is None:
+            # Project exists but has no analysis yet — skip
+            continue
 
         try:
             snapshot = json.loads(snapshot_raw)

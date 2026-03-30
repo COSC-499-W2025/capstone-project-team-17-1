@@ -19,6 +19,7 @@ from capstone.language_detection import classify_activity
 from capstone.metrics import FileMetric, compute_metrics
 from capstone.portfolio_pdf_builder import build_portfolio_pdf_with_pandoc
 from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_portfolio_entry, get_portfolio_entries
+from capstone.storage import _UNSET as _DB_UNSET
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
 from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip, fetch_project_snapshot_history
@@ -72,8 +73,8 @@ def _bind_current_user_from_session(request: Request) -> None:
     storage_module.set_current_user(username)
 
 
-def _load_heatmap_rows(db_dir: str) -> list[dict[str, Any]]:
-    with _db_session(db_dir) as c:
+def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:
+    with _db_session(db_dir, user=user) as c:
         return fetch_latest_snapshots_with_zip(c) or []
 
 
@@ -81,13 +82,7 @@ def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
     rows = _load_heatmap_rows(db_dir)
     if rows:
         return rows
-
-    previous_user = storage_module.get_current_user()
-    try:
-        storage_module.set_current_user(None)
-        return _load_heatmap_rows(db_dir)
-    finally:
-        storage_module.set_current_user(previous_user)
+    return _load_heatmap_rows(db_dir, user=None)
 
 
 class PortfolioProject(BaseModel):
@@ -597,6 +592,219 @@ def _expand_monthly_timeline_to_daily(monthly_timeline: dict[str, Any]) -> dict[
             daily_counts[day_key] = day_count
 
     return daily_counts
+
+
+def _snapshot_file_count(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("file_count"))
+    return _safe_int(snapshot.get("file_count"))
+
+
+def _snapshot_active_days(snapshot: dict[str, Any]) -> int:
+    file_summary = snapshot.get("file_summary")
+    if isinstance(file_summary, dict):
+        return _safe_int(file_summary.get("active_days"))
+    return 0
+
+
+def _snapshot_skill_names(snapshot: dict[str, Any]) -> list[str]:
+    return _extract_skill_names(snapshot.get("skills")) or _extract_technologies(snapshot)
+
+
+def _build_project_evolution_steps(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = list(reversed(history))
+    milestones: list[dict[str, Any]] = []
+    previous_skills: set[str] = set()
+    previous_file_count = 0
+    previous_active_days = 0
+
+    for index, item in enumerate(ordered):
+        snapshot = item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {}
+        created_at = str(item.get("created_at") or "").strip()
+        summary = _extract_summary(snapshot) or ""
+        file_count = _snapshot_file_count(snapshot)
+        active_days = _snapshot_active_days(snapshot)
+        skills = _snapshot_skill_names(snapshot)
+        skill_set = {skill.lower(): skill for skill in skills}
+        new_skills = [skill_set[key] for key in skill_set if key not in previous_skills][:4]
+        file_delta = file_count - previous_file_count if index > 0 else file_count
+        skill_delta = len(skills) - len(previous_skills) if index > 0 else len(skills)
+        active_days_delta = active_days - previous_active_days if index > 0 else active_days
+
+        if index == 0:
+            milestone_type = "Baseline"
+        elif index == len(ordered) - 1:
+            milestone_type = "Current State"
+        elif file_delta >= 5 or skill_delta >= 2:
+            milestone_type = "Expansion"
+        elif active_days_delta > 0 or new_skills:
+            milestone_type = "Refinement"
+        else:
+            milestone_type = f"Iteration {index + 1}"
+
+        change_summary_parts: list[str] = []
+        if file_delta > 0:
+            change_summary_parts.append(f"Added {file_delta} file{'s' if file_delta != 1 else ''}")
+        elif file_delta < 0:
+            change_summary_parts.append(f"Reduced file scope by {abs(file_delta)}")
+
+        if skill_delta > 0:
+            change_summary_parts.append(f"Expanded into {skill_delta} more skill signal{'s' if skill_delta != 1 else ''}")
+        elif skill_delta < 0:
+            change_summary_parts.append(f"Focused down by {abs(skill_delta)} skill signal{'s' if skill_delta != 1 else ''}")
+
+        if active_days_delta > 0:
+            change_summary_parts.append(f"Increased active span by {active_days_delta} day{'s' if active_days_delta != 1 else ''}")
+
+        if new_skills:
+            change_summary_parts.append(f"Introduced {', '.join(new_skills[:3])}")
+
+        if not change_summary_parts:
+            change_summary_parts.append("Maintained the implementation baseline")
+
+        milestones.append(
+            {
+                "label": milestone_type,
+                "timestamp": created_at,
+                "summary": summary,
+                "changeSummary": ". ".join(change_summary_parts) + ".",
+                "metrics": {
+                    "files": file_count,
+                    "skills": len(skills),
+                    "active_days": active_days,
+                },
+                "delta": {
+                    "files": file_delta,
+                    "skills": skill_delta,
+                    "active_days": active_days_delta,
+                },
+                "new_skills": new_skills,
+                "highlights": _extract_highlights(snapshot)[:3],
+            }
+        )
+
+        previous_skills = set(skill_set.keys())
+        previous_file_count = file_count
+        previous_active_days = active_days
+
+    return milestones
+
+
+def _normalize_heatmap_granularity(value: Any) -> str:
+    raw = str(value or "day").strip().lower()
+    if raw in {"year", "month", "day"}:
+        return raw
+    return "day"
+
+
+def _build_heatmap_period_key(period: str, granularity: str) -> Optional[str]:
+    raw = str(period or "").strip()
+    if granularity == "day":
+        if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+            return raw
+        return None
+    if granularity == "month":
+        if len(raw) >= 7 and raw[4] == "-":
+            return raw[:7]
+        return None
+    if granularity == "year":
+        if len(raw) >= 4:
+            return raw[:4]
+        return None
+    return None
+
+
+def _collect_heatmap_project_activity(row: dict[str, Any]) -> dict[str, int]:
+    snapshot = row.get("snapshot") or {}
+    zip_path = row.get("zip_path")
+
+    if not isinstance(snapshot, dict):
+        return {}
+
+    file_summary = snapshot.get("file_summary") or {}
+    monthly_timeline = file_summary.get("timeline") if isinstance(file_summary, dict) else {}
+    activity_by_day = {}
+    if isinstance(file_summary, dict):
+        activity_by_day = file_summary.get("daily_timeline") or {}
+
+    if not isinstance(activity_by_day, dict) or not activity_by_day:
+        activity_by_day = _build_daily_activity_from_zip_path(zip_path)
+
+    if (not isinstance(activity_by_day, dict) or not activity_by_day) and isinstance(monthly_timeline, dict):
+        activity_by_day = _expand_monthly_timeline_to_daily(monthly_timeline)
+
+    if not isinstance(activity_by_day, dict):
+        return {}
+
+    return activity_by_day
+
+
+def _build_heatmap_response(
+    rows: list[dict[str, Any]],
+    granularity: str,
+    selected_project_id: str,
+) -> dict[str, Any]:
+    activity_counts: dict[str, int] = {}
+    available_projects: list[str] = []
+    contributing_projects: set[str] = set()
+
+    for row in rows:
+        project_id = str(row.get("project_id") or "").strip()
+        if not project_id:
+            continue
+
+        available_projects.append(project_id)
+
+        if selected_project_id and project_id != selected_project_id:
+            continue
+
+        activity_by_day = _collect_heatmap_project_activity(row)
+        if not activity_by_day:
+            continue
+
+        contributing_projects.add(project_id)
+
+        for period, count in activity_by_day.items():
+            key = _build_heatmap_period_key(str(period), granularity)
+            if not key:
+                continue
+            activity_counts[key] = activity_counts.get(key, 0) + _safe_int(count)
+
+    project_ids = sorted(set(available_projects))
+
+    if not activity_counts:
+        return {
+            "cells": [],
+            "maxCount": 0,
+            "projectCount": len(contributing_projects),
+            "granularity": granularity,
+            "selectedProjectId": selected_project_id,
+            "projects": project_ids,
+        }
+
+    ordered_periods = sorted(activity_counts.items(), key=lambda item: item[0])
+    max_count = max(activity_counts.values()) if activity_counts else 0
+    cells = []
+
+    for period, count in ordered_periods:
+        intensity = round(count / max_count, 3) if max_count > 0 else 0.0
+        cells.append(
+            {
+                "period": period,
+                "count": count,
+                "intensity": intensity,
+            }
+        )
+
+    return {
+        "cells": cells,
+        "maxCount": max_count,
+        "projectCount": len(contributing_projects),
+        "granularity": granularity,
+        "selectedProjectId": selected_project_id,
+        "projects": project_ids,
+    }
 
 
 def _extract_row_project_and_snapshot(row: Any) -> tuple[Optional[str], Optional[dict[str, Any]]]:

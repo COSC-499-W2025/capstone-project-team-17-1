@@ -16,22 +16,25 @@ try:
     from .storage import (
         open_db as _open_db,
         close_db as _close_db,
+        _UNSET as _DB_UNSET,
     )
 except Exception:
     _open_db = None
     _close_db = None
+    _DB_UNSET = object()
 
 
 @contextmanager
-def _db_session(db_dir: str | None):
+def _db_session(db_dir: str | None, *, user=_DB_UNSET):
     """
     Always close the SQLite handle (critical on Windows).
     Uses capstone.storage.open_db/close_db if available.
+    Pass user=None to explicitly open the guest DB regardless of CURRENT_USER.
     """
     base_path = Path(db_dir) if db_dir else None
 
     if _open_db is not None:
-        conn = _open_db(base_path)  # pass Path or None
+        conn = _open_db(base_path, user=user)  # pass Path or None
     else:
         target = Path(db_dir) if db_dir else Path("data")
         target.mkdir(parents=True, exist_ok=True)

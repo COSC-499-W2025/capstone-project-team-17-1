@@ -1044,10 +1044,11 @@ def get_project_collaboration(project_id: str):
         raise HTTPException(status_code=404, detail="No analysis data found for this project")
 
     collab = snapshot.get("collaboration") or {}
-    is_github = bool(conn.execute(
-        "SELECT 1 FROM github_projects WHERE project_id = ? LIMIT 1",
+    _proj_row = conn.execute(
+        "SELECT github_url FROM projects WHERE project_id = ? AND source = 'github' LIMIT 1",
         (project_id,),
-    ).fetchone())
+    ).fetchone()
+    is_github = _proj_row is not None
 
     cached = snapshot.get("collaboration_cached")
     if isinstance(cached, dict) and isinstance(cached.get("contributors"), list):
@@ -1080,13 +1081,14 @@ def get_project_collaboration(project_id: str):
 
         if is_github:
             try:
-                row = conn.execute(
-                    "SELECT owner, repo FROM github_projects WHERE project_id = ? LIMIT 1",
+                _gh_url_row = conn.execute(
+                    "SELECT github_url FROM projects WHERE project_id = ? AND source = 'github' LIMIT 1",
                     (project_id,),
                 ).fetchone()
-                if row:
-                    owner = (row[0] if isinstance(row, tuple) else row["owner"] or "").strip()
-                    repo = (row[1] if isinstance(row, tuple) else row["repo"] or "").strip()
+                if _gh_url_row:
+                    _url_parts = (_gh_url_row[0] or "").rstrip("/").split("/")
+                    owner = _url_parts[-2] if len(_url_parts) >= 2 else ""
+                    repo = _url_parts[-1] if _url_parts else ""
                     token = storage.get_github_token()
                     if owner and repo:
                         prs_by_login, reviews_by_login = _fetch_github_pr_review_stats(owner, repo, token)
@@ -1179,13 +1181,14 @@ def get_project_collaboration(project_id: str):
 
         if is_github and contributors:
             try:
-                row = conn.execute(
-                    "SELECT owner, repo FROM github_projects WHERE project_id = ? LIMIT 1",
+                _gh_url_row2 = conn.execute(
+                    "SELECT github_url FROM projects WHERE project_id = ? AND source = 'github' LIMIT 1",
                     (project_id,),
                 ).fetchone()
-                if row:
-                    owner = (row[0] if isinstance(row, tuple) else row["owner"] or "").strip()
-                    repo = (row[1] if isinstance(row, tuple) else row["repo"] or "").strip()
+                if _gh_url_row2:
+                    _url_parts2 = (_gh_url_row2[0] or "").rstrip("/").split("/")
+                    owner = _url_parts2[-2] if len(_url_parts2) >= 2 else ""
+                    repo = _url_parts2[-1] if _url_parts2 else ""
                     token = storage.get_github_token()
                     if owner and repo:
                         prs_by_login, reviews_by_login = _fetch_github_pr_review_stats(owner, repo, token)

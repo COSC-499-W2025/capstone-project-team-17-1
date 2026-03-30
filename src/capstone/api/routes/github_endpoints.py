@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
-from capstone.storage import open_db, save_github_token, get_github_token, fetch_latest_snapshot, store_analysis_snapshot
+from capstone.storage import open_db, save_github_token, get_github_token, fetch_latest_snapshot, store_analysis_snapshot, upsert_project
 import capstone.storage as storage_module
 from capstone.system.cloud_storage import upload_database, upload_project_zip
 from capstone.github_contributors import sync_contributor_stats
@@ -571,7 +571,7 @@ def import_repository(
     try:
         existing_snapshot = fetch_latest_snapshot(conn, project_id) or {}
         existing_github = conn.execute(
-            "SELECT 1 FROM github_projects WHERE project_id = ? LIMIT 1",
+            "SELECT 1 FROM projects WHERE project_id = ? AND source = 'github' LIMIT 1",
             (project_id,),
         ).fetchone()
         if existing_snapshot and existing_github and not refresh:
@@ -628,16 +628,6 @@ def import_repository(
                 conn=conn,
                 skip_contributor_storage=True,
             )
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO github_projects
-                (project_id, owner, repo, branch)
-                VALUES (?, ?, ?, ?)
-                """,
-                (project_id, owner, repo, branch)
-            )
-            conn.commit()
-
             # Patch snapshot with real commit dates from GitHub API.
             # GitHub zipballs have no .git directory, so ZipAnalyzer cannot
             # extract timestamps from git log — we fetch them here instead.
@@ -646,6 +636,18 @@ def import_repository(
             _store_commit_sha_in_latest_snapshot(conn, project_id, latest_commit_sha)
             if isinstance(persisted_snapshot, dict):
                 summary["collaboration"] = persisted_snapshot.get("collaboration") or summary.get("collaboration")
+
+            # Sync source, github_url, github_branch and commit dates into the projects table.
+            _github_url = f"https://github.com/{owner}/{repo}"
+            _collab = (summary.get("collaboration") or {})
+            upsert_project(
+                conn, project_id,
+                source="github",
+                github_url=_github_url,
+                github_branch=branch,
+                first_commit_at=_collab.get("first_commit_date"),
+                last_commit_at=_collab.get("last_commit_date"),
+            )
 
             # Sync full contributor stats (commits, PRs, issues, reviews) via GitHub API.
             # This enriches the contributor_stats table so resume generation can show
@@ -700,12 +702,12 @@ def pull_repository(project_id: str, refresh: bool = False):
 
     conn = open_db()
 
-    row = conn.execute(
-        "SELECT owner, repo, branch FROM github_projects WHERE project_id=?",
+    proj_row = conn.execute(
+        "SELECT github_url, github_branch FROM projects WHERE project_id=? AND source='github'",
         (project_id,)
     ).fetchone()
 
-    if not row:
+    if not proj_row:
         conn.close()
         raise HTTPException(404, "Project is not a GitHub project")
 
@@ -719,7 +721,15 @@ def pull_repository(project_id: str, refresh: bool = False):
             "reason": "snapshot_exists",
         }
 
-    owner, repo, branch = row
+    _github_url, branch = proj_row
+    branch = branch or "main"
+    # Parse owner/repo from stored github_url (e.g. https://github.com/owner/repo)
+    _url_parts = (_github_url or "").rstrip("/").split("/")
+    owner = _url_parts[-2] if len(_url_parts) >= 2 else ""
+    repo = _url_parts[-1] if _url_parts else ""
+    if not owner or not repo:
+        conn.close()
+        raise HTTPException(400, "Stored GitHub URL is malformed")
     latest_commit_sha = _fetch_latest_commit_sha(owner, repo, branch, headers)
     cached_sha = str(existing_snapshot.get("github_latest_commit_sha") or "").strip() or None
 

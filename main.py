@@ -55,8 +55,8 @@ from capstone.storage import (
     fetch_project_thumbnail_meta,
     fetch_latest_snapshot,
     fetch_latest_snapshots,
-    fetch_user_project_activity_periods,
-    get_user_profile,
+    fetch_project_contributor_activity_periods,
+    get_user,
     open_db,
     store_github_source,
     upsert_default_resume_modules,
@@ -2146,7 +2146,7 @@ def _build_resume_preview_from_modular_resume(
             return preferred_default
         return text
 
-    profile = get_user_profile(conn, user_id) or {}
+    profile = get_user(conn) or {}
     sections = _list_resume_sections(conn, resume_id)
     section_by_key = {str(section.get("key") or ""): section for section in sections}
 
@@ -2417,7 +2417,7 @@ def _prompt_profile_value(label: str) -> str | None:
 
 
 def _ensure_user_profile_for_resume(conn: sqlite3.Connection, user_id: int) -> dict:
-    profile = get_user_profile(conn, user_id) or {}
+    profile = get_user(conn) or {}
     missing_fields: List[tuple[str, str]] = []
     for key, label in (
         ("full_name", "Full name"),
@@ -2438,8 +2438,8 @@ def _ensure_user_profile_for_resume(conn: sqlite3.Connection, user_id: int) -> d
             if user_value is not None:
                 updates[key] = user_value
         if updates:
-            update_user_profile(conn, user_id, **updates)
-            profile = get_user_profile(conn, user_id) or profile
+            update_user_profile(conn, **updates)
+            profile = get_user(conn) or profile
     return profile
 
 
@@ -2458,7 +2458,7 @@ def _apply_user_profile_to_resume_preview(resume_preview: dict, profile: dict) -
 
 
 def _load_user_profile_fields_for_edit(conn: sqlite3.Connection, user_id: int) -> list[tuple[str, str]]:
-    profile = get_user_profile(conn, user_id) or {}
+    profile = get_user(conn) or {}
     return [
         ("username", str(profile.get("username") or "")),
         ("email", str(profile.get("email") or "")),
@@ -3164,7 +3164,7 @@ def _sync_generated_resume_modules_to_db(
         str(snap.get("project_id") or (snap.get("snapshot") or {}).get("project_id") or "").strip()
         for snap in chosen_snapshots
     ]
-    activity_map = fetch_user_project_activity_periods(
+    activity_map = fetch_project_contributor_activity_periods(
         conn,
         user_id=user_id,
         project_ids=chosen_project_ids,

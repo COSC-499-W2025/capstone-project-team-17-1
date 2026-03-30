@@ -40,14 +40,16 @@ class _ResumeAPIBase(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
 
-        # Seed a user so all tests have a valid user_id
+        # After M23 resumes.user_id FK → user(id); the singleton row (id=1) is
+        # always present. contributor_id is used only for project-linking operations.
         conn = storage.open_db(self.tmp_path)
-        self.user_id = storage.upsert_user(conn, "testuser", email="test@example.com")
+        self.user_id = 1  # resume ownership always uses the singleton user
+        self.contributor_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
 
     # ------------------------------------------------------------------ helpers
 
     def _create_resume(self, title: str = "My Resume") -> dict:
-        r = self.client.post("/resumes", json={"user_id": self.user_id, "title": title})
+        r = self.client.post("/resumes/blank", json={"user_id": 1, "title": title})
         self.assertEqual(r.status_code, 201, r.text)
         return r.json()["data"]
 
@@ -82,7 +84,7 @@ class ResumeCRUDTestCase(_ResumeAPIBase):
         self.assertEqual(data["user_id"], self.user_id)
 
     def test_create_resume_missing_user_id_returns_400(self):
-        r = self.client.post("/resumes", json={"title": "No User"})
+        r = self.client.post("/resumes/blank", json={"title": "No User"})
         self.assertEqual(r.status_code, 400)
 
     def test_get_resume_returns_200(self):
@@ -174,8 +176,8 @@ class ResumeGuestGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_resume_works_without_login_using_guest_bucket(self):
         conn = storage.open_db(self.tmp_path)
-        guest_id = storage.upsert_user(conn, "guestuser", email=None)
-        storage.link_user_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
+        guest_id = storage.upsert_contributor(conn, "guestuser", email=None)
+        storage.link_contributor_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
         storage.store_analysis_snapshot(
             conn,
             project_id="demo-project",
@@ -189,10 +191,11 @@ class ResumeGuestGenerateTestCase(_ResumeAPIBase):
             },
         )
 
-        r = self.client.post("/resumes/generate", json={"create_new": True, "project_ids": ["demo-project"]})
+        r = self.client.post("/resumes/auto-generate", json={"create_new": True, "project_ids": ["demo-project"]})
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
-        self.assertEqual(data["user_id"], guest_id)
+        # After M23 resumes.user_id FK → user(id); always 1 (singleton user per DB)
+        self.assertEqual(data["user_id"], 1)
         self.assertTrue(data["title"].startswith("guestuser_"))
 
 
@@ -434,17 +437,19 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def setUp(self) -> None:
         super().setUp()
-        # Inject a fake session so generate endpoint can resolve owner_id from Bearer token
+        # Inject a fake session (no contributor_id — auth is now decoupled from contributors).
+        # Seed the local user row so _resolve_data_contributor_id can match the contributor.
         from capstone.api.routes.auth import _SESSIONS
         _SESSIONS["test-token"] = {
-            "contributor_id": self.user_id,
             "user": {"username": "testuser", "email": "test@example.com"},
         }
+        conn = storage.open_db(self.tmp_path)
+        storage.upsert_user(conn, "testuser", github_username="testuser")
         self.addCleanup(lambda: _SESSIONS.pop("test-token", None))
         self.auth_headers = {"Authorization": "Bearer test-token"}
 
     def _seed_project_for_user(self, project_id: str) -> None:
-        self._seed_project_for_user_id(self.user_id, project_id)
+        self._seed_project_for_user_id(self.contributor_id, project_id)
 
     def _seed_project_for_user_id(self, user_id: int, project_id: str) -> None:
         conn = storage.open_db(self.tmp_path)
@@ -463,26 +468,27 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             primary_contributor="testuser",
             snapshot=snapshot,
         )
-        storage.link_user_to_project(conn, user_id, project_id, contributor_name="testuser")
+        storage.link_contributor_to_project(conn, user_id, project_id, contributor_name="testuser")
 
     # --- fixed existing tests (now pass Bearer token) ---
 
     def test_generate_creates_resume_with_sections(self):
         self._seed_project_for_user("gen-proj-1")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         data = r.json()["data"]
         self.assertIsNotNone(data.get("id"))
         section_keys = [s["key"] for s in (data.get("sections") or [])]
         self.assertTrue(len(section_keys) > 0)
 
-    def test_generate_without_auth_uses_guest_bucket(self):
-        r = self.client.post("/resumes/generate", json={})
+    def test_generate_without_auth_returns_default_local_resume(self):
+        r = self.client.post("/resumes/auto-generate", json={})
         self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()["data"]["user_id"], 1)
 
     def test_generate_includes_skills_from_snapshot(self):
         self._seed_project_for_user("gen-proj-2")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         resume_json = json.dumps(r.json()["data"])
         self.assertTrue(
@@ -492,12 +498,12 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_create_new_flag_makes_fresh_resume(self):
         self._seed_project_for_user("gen-proj-3")
-        r1 = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r1 = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r1.status_code, 201)
         id1 = r1.json()["data"]["id"]
 
         r2 = self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"create_new": True, "resume_title": "New Resume"},
             headers=self.auth_headers,
         )
@@ -510,18 +516,18 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_without_user_id_defaults_to_session_owner(self):
         # Omitting user_id → data_user_id defaults to owner; resume stored under owner
         self._seed_project_for_user("gen-proj-self")
-        r = self.client.post("/resumes/generate", json={}, headers=self.auth_headers)
+        r = self.client.post("/resumes/auto-generate", json={}, headers=self.auth_headers)
         self.assertEqual(r.status_code, 201, r.text)
         self.assertEqual(r.json()["data"]["user_id"], self.user_id)
 
     def test_generate_for_other_contributor_owned_by_session_user(self):
         # user_id in body = other contributor → resume.user_id must still equal session owner
         conn = storage.open_db(self.tmp_path)
-        other_id = storage.upsert_user(conn, "otheruser", email="other@example.com")
+        other_id = storage.upsert_contributor(conn, "otheruser", email="other@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-1")
 
         r = self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"user_id": other_id},
             headers=self.auth_headers,
         )
@@ -532,24 +538,25 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
             "Resume must be owned by the session user, not the data contributor",
         )
 
-    def test_generate_for_other_not_in_target_users_resume_list(self):
-        # After generating for another user, their resume list should remain empty
+    def test_generate_for_other_appears_in_session_users_resume_list(self):
+        # After M23 all resumes are owned by user_id=1 (singleton per DB).
+        # Generating using another contributor's data still stores the resume under user_id=1.
         conn = storage.open_db(self.tmp_path)
-        other_id = storage.upsert_user(conn, "otheruser2", email="other2@example.com")
+        other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-2")
 
         self.client.post(
-            "/resumes/generate",
+            "/resumes/auto-generate",
             json={"user_id": other_id},
             headers=self.auth_headers,
         )
 
-        r = self.client.get(f"/resumes?user_id={other_id}")
+        r = self.client.get("/resumes", headers=self.auth_headers)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(
+        self.assertGreaterEqual(
             len(r.json()["data"]),
-            0,
-            "Target contributor's resume list must stay empty when someone else generated for them",
+            1,
+            "Generated resume must appear in the session user's list (user_id=1)",
         )
 
 

@@ -332,6 +332,11 @@ function getTimelineSkillName(skill) {
   return normalizeSkillName(skill?.name || skill?.skill || "unknown") || "unknown";
 }
 
+function isDisplayableTimelineSkill(skill) {
+  const rawName = String(skill?.name || skill?.skill || "").trim().toLowerCase();
+  return Boolean(rawName) && rawName !== "0";
+}
+
 function getTimelineSkillWeight(skill) {
   const rawWeight = Number(skill?.weight ?? skill?.score ?? skill?.confidence ?? 0);
   if (!Number.isFinite(rawWeight)) return 0;
@@ -378,7 +383,7 @@ function buildTimelineEntries(timeline) {
   const previousComplexities = new Map();
 
   return timeline.map((entry) => {
-    const rawSkills = Array.isArray(entry.skills) ? entry.skills : [];
+    const rawSkills = Array.isArray(entry.skills) ? entry.skills.filter(isDisplayableTimelineSkill) : [];
     const aggregatedSkills = new Map();
     const projectId = String(entry?.project_id || "").trim();
     const projectMetrics =
@@ -647,7 +652,7 @@ function buildTopProjectsMarkup({
 
 function buildSkillsTimelineMarkup(timeline) {
   const visibleTimeline = timeline.filter((entry) => {
-    const skills = Array.isArray(entry?.skills) ? entry.skills : [];
+    const skills = Array.isArray(entry?.skills) ? entry.skills.filter(isDisplayableTimelineSkill) : [];
     const metrics = entry?.project_metrics && typeof entry.project_metrics === "object"
       ? entry.project_metrics
       : {};

@@ -175,7 +175,7 @@ def _extract_contributors_from_zip(conn, file_id: str) -> list[tuple[str, str | 
     (written by ``_write_git_log`` in cli.py).
 
     Returns deduplicated ``(author_name, email_or_None)`` tuples.  Passing both
-    values to ``upsert_user`` lets the storage layer match contributors across
+    values to ``upsert_contributor`` lets the storage layer match contributors across
     the GitHub-URL flow (GitHub login + email) and the ZIP flow (git user.name +
     git user.email), reconciling them via shared email when available.
     """
@@ -376,13 +376,13 @@ async def upload_project(
     )
     log_event("SUCCESS", f"Full analysis snapshot stored · Project: {project_id}")
     # Mirror GitHub import flow: extract git-log contributors and store in users/user_projects.
-    # Pass email alongside the git author name so upsert_user can reconcile with the same
+    # Pass email alongside the git author name so upsert_contributor can reconcile with the same
     # person's GitHub-login record (matched by shared email) rather than creating a duplicate.
     try:
         contributors = _extract_contributors_from_zip(conn, stored["file_id"])
         for cname, cemail in contributors:
-            uid = storage.upsert_user(conn, cname, email=cemail)
-            storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+            uid = storage.upsert_contributor(conn, cname, email=cemail)
+            storage.link_contributor_to_project(conn, uid, project_id, contributor_name=cname)
     except Exception:
         pass  # non-fatal; contributors will be populated on full analysis
 
@@ -509,8 +509,8 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                 try:
                     contributors = _extract_contributors_from_zip(conn, stored["file_id"])
                     for cname, cemail in contributors:
-                        uid = storage.upsert_user(conn, cname, email=cemail)
-                        storage.link_user_to_project(conn, uid, project_id, contributor_name=cname)
+                        uid = storage.upsert_contributor(conn, cname, email=cemail)
+                        storage.link_contributor_to_project(conn, uid, project_id, contributor_name=cname)
                 except Exception:
                     pass  # non-fatal
 
@@ -578,6 +578,9 @@ def list_projects(request: Request):
                    f.size_bytes, f.path
             FROM uploads u
             JOIN files f ON f.file_id = u.file_id
+            WHERE u.id = (
+                SELECT MIN(u2.id) FROM uploads u2 WHERE u2.upload_id = u.upload_id
+            )
             ORDER BY datetime(u.created_at) DESC
             """
         ).fetchall()
@@ -659,9 +662,9 @@ def delete_project(id: str, request: Request):
         (id,),
     ).fetchone()
 
-    # --- GitHub-import path: project lives only in github_projects / project_analysis ---
+    # --- GitHub-import path: project lives only in projects (source='github') / project_analysis ---
     github_row = conn.execute(
-        "SELECT project_id FROM github_projects WHERE project_id = ?",
+        "SELECT project_id FROM projects WHERE project_id = ? AND source = 'github'",
         (id,),
     ).fetchone() if not upload_row else None
 
@@ -698,16 +701,10 @@ def delete_project(id: str, request: Request):
                 (file_id,),
             )
 
-    # Always remove shared analysis / contributor records and related metadata
-    conn.execute("DELETE FROM project_analysis WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM error_analysis_results WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_overrides WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_metadata WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_images WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM project_evidence WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM contributor_stats WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM user_projects WHERE project_id = ?", (id,))
-    conn.execute("DELETE FROM github_projects WHERE project_id = ?", (id,))
+    # Deleting from projects cascades to all child tables (project_analysis,
+    # error_analysis_results, project_overrides, project_images, project_evidence,
+    # project_contributors) via ON DELETE CASCADE FKs added in M24.
+    conn.execute("DELETE FROM projects WHERE project_id = ?", (id,))
     conn.commit()
 
     # Remove physical blob only when no other upload references it
@@ -981,11 +978,11 @@ async def generate_project_resume(project_id: str, request: Request):
         # Fall back to any contributor linked to this project
         linked = conn.execute(
             """
-            SELECT u.username
-            FROM user_projects up
-            JOIN users u ON u.id = up.user_id
-            WHERE up.project_id = ?
-            ORDER BY up.id
+            SELECT u.github_username
+            FROM project_contributors pc
+            JOIN contributors u ON u.id = pc.contributor_id
+            WHERE pc.project_id = ?
+            ORDER BY pc.id
             LIMIT 1
             """,
             (project_id,),
@@ -996,8 +993,8 @@ async def generate_project_resume(project_id: str, request: Request):
         username = project_id  # last-resort fallback
 
     # 3. Upsert user and ensure project link
-    user_id = storage.upsert_user(conn, username)
-    storage.link_user_to_project(conn, user_id, project_id, contributor_name=username)
+    user_id = storage.upsert_contributor(conn, username)
+    storage.link_contributor_to_project(conn, user_id, project_id, contributor_name=username)
 
     # 4. Extract skills from snapshot (languages + frameworks + skills list)
     skill_names: list[str] = []
@@ -1041,7 +1038,7 @@ async def generate_project_resume(project_id: str, request: Request):
     project_items = [project_item]
 
     # 6. Build header from user profile
-    user_profile = storage.get_user_profile(conn, user_id) or {}
+    user_profile = storage.get_user(conn) or {}
     city = (user_profile.get("city") or "").strip()
     state = (user_profile.get("state_region") or "").strip()
     location = ", ".join(part for part in [city, state] if part)
