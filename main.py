@@ -36,17 +36,8 @@ from capstone.modes import resolve_mode
 from capstone.project_ranking import rank_projects_from_snapshots
 import capstone.consent as consent_mod
 import capstone.config as config_mod 
-from capstone.resume_retrieval import (
+from capstone.resume_service import (
     build_resume_project_summary,
-    build_resume_preview,
-    delete_resume_project_description,
-    generate_resume_project_descriptions,
-    get_resume_entry,
-    get_resume_project_description,
-    insert_resume_entry,
-    query_resume_entries,
-    update_resume_entry,
-    upsert_resume_project_description,
 )
 from capstone.storage import (
     fetch_github_source,
@@ -1821,6 +1812,34 @@ def _build_resume_preview_from_snapshots(chosen_snapshots: List[dict]) -> dict:
     }
 
 
+def _get_portfolio_showcase_override(conn: sqlite3.Connection, project_id: str) -> str | None:
+    override = fetch_project_overrides(conn, project_id)
+    if not override:
+        return None
+    text = str(override.get("portfolio_blurb") or "").strip()
+    return text or None
+
+
+def _set_portfolio_showcase_override(conn: sqlite3.Connection, project_id: str, summary: str) -> str:
+    override = upsert_project_overrides(
+        conn,
+        project_id=project_id,
+        portfolio_blurb=summary.strip(),
+    )
+    return str(override.get("portfolio_blurb") or summary).strip()
+
+
+def _delete_portfolio_showcase_override(conn: sqlite3.Connection, project_id: str) -> None:
+    conn.execute(
+        """
+        DELETE FROM project_overrides
+        WHERE project_id = ?
+        """,
+        (project_id,),
+    )
+    conn.commit()
+
+
 # Build showcase items from selected snapshots
 def _build_portfolio_showcase_entries(
     chosen_snapshots: List[dict],
@@ -1865,17 +1884,13 @@ def _build_portfolio_showcase_entries(
                 or project_id
                 or "Untitled"
             )
-            description = get_resume_project_description(
-                conn,
-                project_id,
-                variant_name="portfolio_showcase",
-            )
+            description = _get_portfolio_showcase_override(conn, project_id)
             if project_id in summary_map:
                 # Prefer portfolio summary
                 summary = summary_map[project_id]
                 source = "portfolio_summary"
             elif description:
-                summary = description.summary
+                summary = description
                 source = "custom"
             else:
                 summary = build_resume_project_summary(project_id or name, snapshot_data)
@@ -3705,12 +3720,8 @@ def main():
                         make_entry = _prompt_choice("Do you want to begin processing this zip file? (y/n): ", ["y", "n"])
                         if make_entry == "y":
                             project_id = summary.get("project_id") or effective_project_id
-                            insert_resume_entry(
-                                conn,
-                                section="projects",
-                                title=project_id,
-                                body=f"Auto-generated resume entry for {project_id}.",
-                                projects=[project_id],
+                            print(
+                                f"Project {project_id} is available for the modular resume generator."
                             )
                             add_meta = input("\nWould you like to add project timeline info? (y/n): ").strip().lower()
 
@@ -4249,14 +4260,12 @@ def main():
                                                     print("Summary cannot be empty. Add text or cancel.")
                                                     continue
                                                 try:
-                                                    saved = upsert_resume_project_description(
+                                                    saved_summary = _set_portfolio_showcase_override(
                                                         conn,
                                                         project_id=item["project_id"],
                                                         summary=new_summary,
-                                                        variant_name="portfolio_showcase",
-                                                        metadata={"source": "custom"},
                                                     )
-                                                    item["summary"] = saved.summary
+                                                    item["summary"] = saved_summary
                                                     item["source"] = "custom"
                                                     print(f"{edit_label} updated successfully.")
                                                 except Exception as exc:
@@ -5135,7 +5144,7 @@ def main():
                             "DELETE FROM contributor_stats WHERE project_id = ?",
                             (project_id,),
                         )
-                        delete_resume_project_description(conn, project_id=project_id)
+                        _delete_portfolio_showcase_override(conn, project_id)
                         conn.commit()
                         if deleted:
                             print("Project insights deleted.")

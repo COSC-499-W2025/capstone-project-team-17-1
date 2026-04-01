@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from capstone.api.portfolio_helpers import (
-    ensure_portfolio_tables,
     get_portfolio_customization,
     list_portfolio_images,
 )
@@ -148,8 +147,6 @@ def get_latest_snapshot_dict(conn: sqlite3.Connection, project_id: str) -> Optio
 
 
 def get_portfolio_entry(conn: sqlite3.Connection, project_id: str) -> Optional[Dict[str, Any]]:
-    ensure_portfolio_tables(conn)
-
     snapshot = get_latest_snapshot_dict(conn, project_id)
     if snapshot is None:
         return None

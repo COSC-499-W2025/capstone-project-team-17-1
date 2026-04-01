@@ -26,8 +26,6 @@ from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetc
 from capstone.project_role import infer_project_role_from_snapshot
 from capstone.top_project_summaries import gather_evidence
 from capstone.api.portfolio_helpers import (
-    ensure_indexes,
-    ensure_portfolio_tables,
     get_portfolio_customization,
     list_portfolio_images,
     save_portfolio_image,
@@ -1057,9 +1055,6 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
     
     if customization_requested and payload.projects is None:
         with _db_session(db_dir) as conn:
-            ensure_portfolio_tables(conn)
-            ensure_indexes(conn)
-            
             snapshot = helper_get_latest_snapshot(conn, id)
             if not snapshot:
                 raise HTTPException(status_code=404, detail="Project not found")
@@ -1263,9 +1258,6 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
 
     if format == ExportFormat.pdf:
         with _db_session(db_dir) as conn:
-            ensure_portfolio_tables(conn)
-            ensure_indexes(conn)
-            
             if id == "latest":
                 rows = fetch_latest_snapshots(conn) or []
                 project_ids: list[str] = []
@@ -1323,9 +1315,6 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-        
         snapshot = helper_get_latest_snapshot(conn, id)
         customization = get_portfolio_customization(conn, id) or {}
         images = list_portfolio_images(conn, id)
@@ -1385,8 +1374,6 @@ def read_portfolio_images(id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
         return {"data": {"images": list_portfolio_images(conn, id)}, "error": None}
 
 
@@ -1408,9 +1395,6 @@ async def upload_portfolio_image(
     file_bytes = await file.read()
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
         snapshot = helper_get_latest_snapshot(conn, id)
         if not snapshot:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -1441,9 +1425,6 @@ def remove_portfolio_image(id: str, image_id: str, request: Request) -> dict[str
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
         deleted = delete_portfolio_image(conn, project_id=id, image_id=image_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1461,9 +1442,6 @@ def choose_cover_portfolio_image(id: str, image_id: str, request: Request) -> di
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
         updated = set_cover_portfolio_image(conn, project_id=id, image_id=image_id)
         if not updated:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1485,9 +1463,6 @@ def reorder_project_portfolio_images(
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
         try:
             images = reorder_portfolio_images(conn, project_id=id, image_ids=payload.image_ids)
         except ValueError as exc:
@@ -1506,9 +1481,6 @@ def get_portfolio_image_file(id: str, image_id: str, request: Request):
         raise HTTPException(status_code=500, detail="Database not configured")
 
     with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
         row = conn.execute(
             """
             SELECT image_path

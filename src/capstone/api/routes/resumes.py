@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from capstone.portfolio_retrieval import _db_session
 from capstone.resume_pdf_builder import build_pdf_with_latex
-from capstone.resume_retrieval import build_resume_project_item, build_resume_summary
+from capstone.resume_service import build_resume_project_item, build_resume_summary
 from capstone.github_contributors import _is_bot_contributor, _is_noreply_email
 import capstone.storage as storage
 

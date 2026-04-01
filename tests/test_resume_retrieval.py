@@ -1,4 +1,4 @@
-"""Tests for resume_retrieval functions added in the refactoring branch.
+"""Tests for resume_service functions added in the refactoring branch.
 
 Covers:
 - _normalise_lang_name  — canonical display names for languages
@@ -15,7 +15,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone.resume_retrieval import (
+from capstone.resume_service import (
     _extract_major,
     _normalise_lang_name,
     build_resume_summary,

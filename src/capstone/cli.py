@@ -48,7 +48,6 @@ from .job_matching import build_jd_profile, rank_projects_for_job
 from .resume_generator import generate_tailored_resume, resume_to_json, resume_to_pdf
 from .resume_pdf_builder import build_pdf_with_latex
 from .storage import fetch_latest_snapshot as get_portfolio_latest
-from .api.portfolio_helpers import ensure_indexes as ensure_portfolio_indexes
 from .api.portfolio_helpers import list_snapshots as list_portfolio_snapshots
 from .top_project_summaries import export_markdown, generate_top_project_summaries
 from .github_contributors import get_contributor_rankings, sync_contributor_stats
@@ -713,7 +712,6 @@ def _handle_portfolio(args: argparse.Namespace) -> int:
     store = SnapshotStore(args.db_dir)
     conn = store.open()
     try:
-        ensure_portfolio_indexes(conn)
         if args.portfolio_action == "latest":
             data = get_portfolio_latest(conn, args.project_id)
             if data is None:

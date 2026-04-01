@@ -16,7 +16,7 @@ from capstone.metrics import FileMetric, compute_metrics
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
-from capstone.resume_retrieval import build_resume_project_item
+from capstone.resume_service import build_resume_project_item
 from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
 import capstone.storage as storage_module
 class ProjectEdit(BaseModel):

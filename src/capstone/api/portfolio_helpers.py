@@ -20,58 +20,6 @@ class SnapshotRow:
     created_at: str  # ISO string stored as TEXT in SQLite
 
 
-def ensure_indexes(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_pa_project_created "
-        "ON project_analysis(project_id, created_at DESC)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_portfolio_images_project "
-        "ON portfolio_images(project_id, sort_order, created_at)"
-    )
-    conn.commit()
-
-
-def _ensure_portfolio_customization_columns(conn: sqlite3.Connection) -> None:
-    """Migrate portfolio_customizations for new optional columns."""
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(portfolio_customizations)").fetchall()}
-    if "case_study_abstract" not in cols:
-        conn.execute("ALTER TABLE portfolio_customizations ADD COLUMN case_study_abstract TEXT")
-    conn.commit()
-
-
-def ensure_portfolio_tables(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS portfolio_customizations (
-            project_id TEXT PRIMARY KEY,
-            template_id TEXT NOT NULL DEFAULT 'classic',
-            key_role TEXT,
-            evidence_of_success TEXT,
-            portfolio_blurb TEXT,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS portfolio_images (
-            id TEXT PRIMARY KEY,
-            project_id TEXT NOT NULL,
-            image_path TEXT NOT NULL,
-            caption TEXT,
-            is_cover INTEGER DEFAULT 0,
-            sort_order INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    conn.commit()
-    _ensure_portfolio_customization_columns(conn)
-
-
 def _validate_sort(sort_field: str, sort_dir: str) -> Tuple[str, str]:
     sf = sort_field if sort_field in {"created_at", "classification"} else "created_at"
     sd = sort_dir.lower() if sort_dir.lower() in {"asc", "desc"} else "desc"

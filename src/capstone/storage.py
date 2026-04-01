@@ -139,7 +139,6 @@ def _has_required_schema(conn: sqlite3.Connection) -> bool:
 
 
 # Schema + migrations
-
 def _initialize_schema(conn: sqlite3.Connection) -> None:
     """Create all tables and indexes. No migration logic — see _run_migrations."""
 
@@ -305,6 +304,36 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
     """)
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_customizations (
+            project_id TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL DEFAULT 'classic',
+            key_role TEXT,
+            evidence_of_success TEXT,
+            portfolio_blurb TEXT,
+            case_study_abstract TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_images (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            caption TEXT,
+            is_cover INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+        """
+    )
+
     # contributor_stats removed in M22 — superseded by project_contributors
     # user_projects removed in M22 — superseded by project_contributors
     conn.execute("""
@@ -402,6 +431,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_evidence_project ON project_evidence (project_id, created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files (hash)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file ON uploads (file_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pa_project_created ON project_analysis(project_id, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_images_project ON portfolio_images(project_id, sort_order, created_at)")
 
     conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
