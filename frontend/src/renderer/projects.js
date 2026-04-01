@@ -3,7 +3,7 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
-import { authFetch, hasAuthToken, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 
 export async function fetchProjects() {
@@ -125,9 +125,7 @@ export async function loadProjects() {
             throw new Error("Pull failed");
           }
 
-          if (hasAuthToken()) {
-            await authFetch("/cloud/db/upload", { method: "POST" });
-          }
+          // Cloud sync disabled — all data is local-only for now.
 
           pullBtn.innerText = "Updated ✓";
 
