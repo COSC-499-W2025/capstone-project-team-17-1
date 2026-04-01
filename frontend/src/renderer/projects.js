@@ -4,6 +4,7 @@ import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
 import { authFetch, hasAuthToken, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
 
 export async function fetchProjects() {
   const res = await authFetch("/dashboard/recent-projects");
@@ -80,7 +81,7 @@ export async function loadProjects() {
         const projectId = deleteBtn.dataset.id;
         if (!projectId) return;
 
-        if (!confirm(`Delete project "${projectId}"?`)) return;
+        if (!(await confirmDialog(`Delete project "${projectId}"?`))) return;
 
         try {
           const res = await authFetch(`/projects/${encodeURIComponent(projectId)}`, {
@@ -102,7 +103,7 @@ export async function loadProjects() {
           ]);
         } catch (err) {
           console.error("Delete failed:", err);
-          alert("Failed to delete project.");
+          await alertDialog("Failed to delete project.");
         }
       });
 

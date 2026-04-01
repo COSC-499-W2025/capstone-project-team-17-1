@@ -1605,6 +1605,180 @@ body.light .activity-line.level-success {
   flex-shrink: 0;
 }
 
+/* =========================================================
+   CUSTOM DIALOG (confirm / alert)
+========================================================= */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+  transition: background 0.18s ease;
+}
+
+.dialog-overlay.dialog-visible {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog-box {
+  width: min(380px, calc(100vw - 40px));
+  border-radius: 16px;
+  padding: 28px 24px 22px;
+  background: var(--surface-elevated, rgba(12, 18, 36, 0.96));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  transform: scale(0.92) translateY(8px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.dialog-visible .dialog-box {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.dialog-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-icon--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.dialog-icon--info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+}
+
+.dialog-message {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary, #f5f8ff);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.dialog-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  outline: none;
+}
+
+.dialog-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent, #1e90ff);
+}
+
+.dialog-btn:active {
+  transform: scale(0.97);
+}
+
+.dialog-btn--cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, rgba(223, 233, 252, 0.78));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dialog-btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dialog-btn--danger {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.dialog-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.dialog-btn--primary {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.dialog-btn--primary:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+/* Dialog — light mode */
+body.light .dialog-overlay.dialog-visible {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+body.light .dialog-box {
+  background: var(--surface-elevated, #fff);
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.1));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+}
+
+body.light .dialog-message {
+  color: var(--text-primary, #111);
+}
+
+body.light .dialog-icon--danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+
+body.light .dialog-icon--info {
+  background: rgba(59, 130, 246, 0.08);
+  color: #2563eb;
+}
+
+body.light .dialog-btn--cancel {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-secondary, #555);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+body.light .dialog-btn--cancel:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+body.light .dialog-btn--danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+body.light .dialog-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+body.light .dialog-btn--primary {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+body.light .dialog-btn--primary:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
 /* Login / consent detail modals: light surfaces in light mode (keep dark defaults above) */
 body.light .auth-modal {
   background: var(--overlay-scrim);
