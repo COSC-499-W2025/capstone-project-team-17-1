@@ -7,6 +7,7 @@ The system supports three workflows: CLI analysis, interactive menu usage, and F
 
 - [Quickstart(involve Windows instruction--open loom)](#quickstart)
 - [Installation Guide for Future Development Team](#installation-guide-for-future-development-team)
+- [OpenAI API key (developers and testers)](#openai-api-key-developers-and-testers)
 - [MAC instruction--open loom](#mac-instruction--open-loom)
 - [Usage](#usage)
 - [API Route Map (Table)](#api-route-map-table)
@@ -69,6 +70,11 @@ bash scripts/setup.sh
 #    Windows (PowerShell, run as Administrator):
 .\scripts\setup.ps1
 
+# 5b) OpenAI API key — set before starting the backend if you use LLM-backed features (Sienna, error analysis, etc.).
+#     Windows (Command Prompt or PowerShell):  setx OPENAI_API_KEY "your_api_key_here"
+#     Then close and reopen your terminal so the variable is picked up.
+#     Details, macOS/Linux, and why we cannot ship a shared key: see "OpenAI API key" under the Installation Guide below.
+
 # 6) Run Backend
 #    macOS:
 python -m capstone.run_server
@@ -110,6 +116,7 @@ This section is the recommended setup path for the next team working on the repo
 | Setup scripts | [`scripts/`](scripts) |
 | Frontend startup (macOS) | [MAC instruction--open loom](#mac-instruction--open-loom) |
 | Known limitations and workarounds | [Known Bugs](#known-bugs) |
+| OpenAI API key setup | [OpenAI API key (developers and testers)](#openai-api-key-developers-and-testers) |
 
 ### 1. Clone and create a Python environment
 
@@ -185,6 +192,38 @@ cd ..
 - API route details are documented in [`docs/api.md`](docs/api.md).
 - Sample archives for demos and regression checks live in [`test_data/`](test_data).
 - The current test suite assumes local filesystem access for generated app data and logs.
+
+### OpenAI API key (developers and testers)
+
+Several features (including LLM-backed HTTP routes and tooling that uses [`src/capstone/llm_client.py`](src/capstone/llm_client.py)) expect an **`OPENAI_API_KEY`** environment variable. Without it, those features return configuration errors or fall back where implemented.
+
+#### Why we do not put a key in this repository
+
+**Do not commit API keys to GitHub.** OpenAI and similar providers routinely **detect, revoke, or block keys** that appear in public repositories, gists, or other leaked locations. For that reason this project **does not include a shared team API key** in the repo. **Developers and testers must supply their own key**, or use a **pre-built / course-distributed application** if one is provided that already bundles or configures access appropriately.
+
+#### Windows (recommended command for a persistent user variable)
+
+Open **Command Prompt** or **PowerShell** and run (replace the placeholder with your real secret from the [OpenAI API keys](https://platform.openai.com/api-keys) page):
+
+```cmd
+setx OPENAI_API_KEY "your_api_key_here"
+```
+
+**Important:** `setx` updates the environment for **new** processes only. **Close and reopen** your terminal, IDE, and Electron app (if applicable) before starting the backend so `OPENAI_API_KEY` is visible to Python.
+
+#### macOS / Linux
+
+For the current shell session:
+
+```bash
+export OPENAI_API_KEY="your_api_key_here"
+```
+
+To persist across sessions, add the same `export` line to `~/.zshrc`, `~/.bashrc`, or the profile file your shell loads on startup, then open a new terminal.
+
+#### Verify
+
+With your virtual environment activated, you can confirm the variable is set (command varies by shell); then start the API server as usual. If the key is missing, endpoints that require OpenAI will respond with errors such as `OPENAI_API_KEY is not set` until you configure it.
 
 ## MAC instruction--open loom
 
