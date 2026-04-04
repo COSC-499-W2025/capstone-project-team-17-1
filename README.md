@@ -199,7 +199,7 @@ Several features (including LLM-backed HTTP routes and tooling that uses [`src/c
 
 #### Why we do not put a key in this repository
 
-**Do not commit API keys to GitHub.** OpenAI and similar providers routinely **detect, revoke, or block keys** that appear in public repositories, gists, or other leaked locations. For that reason this project **does not include a shared team API key** in the repo. **Developers and testers must supply their own key**, or use a **pre-built / course-distributed application** if one is provided that already bundles or configures access appropriately.
+**Do not commit API keys to GitHub.** OpenAI and similar providers routinely **detect, revoke, or block keys** that appear in public repositories, gists, or other leaked locations. For that reason this project **does not include a shared team API key** in the repo. **Developers and testers must supply their own key**.
 
 #### Windows (recommended command for a persistent user variable)
 
