@@ -1,11 +1,12 @@
-from fastapi import APIRouter
-from typing import List
-from pydantic import BaseModel
 from datetime import datetime
-import sqlite3
-from capstone.portfolio_retrieval import _db_session
+import json
+from typing import List
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
 from capstone.activity_log import log_event
-import capstone.storage as storage
+from capstone.portfolio_retrieval import _db_session
 
 router = APIRouter()
 
@@ -20,85 +21,37 @@ class RecentProject(BaseModel):
     is_github: bool
     contributor_count: int
 
-
-import json
-
-
-def _load_upload_ids(db) -> set[str]:
-    try:
-        return {
-            str(row[0]).strip()
-            for row in db.execute("SELECT DISTINCT upload_id FROM uploads").fetchall()
-            if str(row[0]).strip()
-        }
-    except sqlite3.OperationalError as exc:
-        if "no such table" in str(exc).lower() and "uploads" in str(exc).lower():
-            log_event("WARNING", "Recent projects loaded without uploads table; falling back to snapshot-only filtering")
-            return set()
-        raise
-
-
-def _fallback_projects_from_uploads(db) -> list[dict]:
-    rows = db.execute(
-        """
-        SELECT
-            u.upload_id,
-            MAX(u.created_at) AS created_at
-        FROM uploads u
-        WHERE u.upload_id IS NOT NULL AND TRIM(u.upload_id) != ''
-        GROUP BY u.upload_id
-        ORDER BY datetime(MAX(u.created_at)) DESC
-        """
-    ).fetchall()
-    payload = []
-    for project_id, created_at in rows:
-        payload.append(
-            {
-                "project_id": project_id,
-                "created_at": created_at,
-                "total_files": 0,
-                "total_skills": 0,
-                "classification": None,
-                "primary_contributor": None,
-                "is_github": False,
-                "contributor_count": 0,
-            }
-        )
-    return payload
-
-
 @router.get("/dashboard/recent-projects", response_model=List[RecentProject])
 def get_recent_projects():
     with _db_session(None) as db:
-        rows = db.execute("""
-SELECT
-    p.project_id,
-    COALESCE(pa.created_at, p.created_at) AS created_at,
-    pa.snapshot,
-    pa.classification,
-    pa.primary_contributor,
-    CASE
-        WHEN p.source = 'github' THEN 1
-        ELSE 0
-    END AS is_github,
-    COALESCE(uc.cnt, 0) AS contributor_count
-FROM projects p
-LEFT JOIN project_analysis pa
-    ON pa.project_id = p.project_id
-    AND pa.rowid = (
-        SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
-    )
-LEFT JOIN (
-    SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
-    FROM project_contributors
-    GROUP BY project_id
-) uc ON p.project_id = uc.project_id
-ORDER BY COALESCE(pa.created_at, p.created_at) DESC
-""").fetchall()
-
-        upload_ids = _load_upload_ids(db)
-        uploads_fallback = _fallback_projects_from_uploads(db)
-
+        rows = db.execute(
+            """
+            SELECT
+                p.project_id,
+                COALESCE(pa.created_at, p.created_at) AS created_at,
+                pa.snapshot,
+                pa.classification,
+                pa.primary_contributor,
+                CASE
+                    WHEN p.source = 'github' THEN 1
+                    ELSE 0
+                END AS is_github,
+                COALESCE(uc.cnt, 0) AS contributor_count
+            FROM projects p
+            LEFT JOIN project_analysis pa
+                ON pa.project_id = p.project_id
+                AND pa.rowid = (
+                    SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
+                )
+            LEFT JOIN (
+                SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
+                FROM project_contributors
+                GROUP BY project_id
+            ) uc ON p.project_id = uc.project_id
+            ORDER BY COALESCE(pa.created_at, p.created_at) DESC
+            """
+        ).fetchall()
+        
     projects = []
 
     for row in rows:
@@ -120,36 +73,7 @@ ORDER BY COALESCE(pa.created_at, p.created_at) DESC
             log_event("WARNING", f"Skipping invalid project snapshot in recent projects · Project: {project_id}")
             continue
 
-        normalized_project_id = str(project_id or "").strip()
-        snapshot_project_id = str(snapshot.get("project_id") or snapshot.get("id") or "").strip()
         file_summary = snapshot.get("file_summary")
-        has_file_summary = isinstance(file_summary, dict) and any(
-            file_summary.get(key) not in (None, "", 0)
-            for key in ("file_count", "active_days", "language_count", "total_lines")
-        )
-        raw_skills = snapshot.get("skills")
-        has_skills = (
-            isinstance(raw_skills, list) and len(raw_skills) > 0
-        ) or (
-            isinstance(raw_skills, dict) and len(raw_skills.keys()) > 0
-        )
-
-        # Filter out placeholder / broken recent-project entries that only have a bare
-        # ID snapshot and no corresponding uploaded project in the current workspace.
-        # Only enforce upload_id membership when the uploads table actually has rows;
-        # otherwise "not in upload_ids" is true for every project and we would hide all
-        # snapshots that lack file_summary/skills (common for GitHub imports or older DBs).
-        if (
-            upload_ids
-            and normalized_project_id not in upload_ids
-            and not has_file_summary
-            and not has_skills
-        ):
-            log_event(
-                "WARNING",
-                f"Skipping incomplete project snapshot in recent projects · Project: {normalized_project_id or snapshot_project_id or 'unknown'}",
-            )
-            continue
 
         # --- FILE COUNT ---
         if isinstance(file_summary, dict):
@@ -177,12 +101,5 @@ ORDER BY COALESCE(pa.created_at, p.created_at) DESC
             "is_github": is_github,
             "contributor_count": contributor_count
         })
-
-    if not projects and uploads_fallback:
-        log_event(
-            "WARNING",
-            "Recent projects fallback activated: project_analysis empty/incomplete, serving uploads-based list",
-        )
-        return uploads_fallback
 
     return projects
