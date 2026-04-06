@@ -17,7 +17,12 @@ from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
 from capstone.resume_service import build_resume_project_item
-from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
+from capstone.system.cloud_storage import (
+    upload_database,
+    upload_project_zip,
+    delete_project_zip,
+    delete_project_prefix,
+)
 import capstone.storage as storage_module
 class ProjectEdit(BaseModel):
     key_role: Optional[str] = None
@@ -650,6 +655,7 @@ def delete_project(id: str, request: Request):
     """
     _restore_user_from_request(request)
     conn = storage.open_db()
+    active_user = storage_module.get_current_user()
 
     # --- ZIP-upload path: project lives in uploads + files tables ---
     upload_row = conn.execute(
@@ -675,6 +681,27 @@ def delete_project(id: str, request: Request):
             (id,),
         ).fetchone()
         if not analysis_row:
+            if active_user:
+                try:
+                    cloud_delete = delete_project_prefix(active_user, id)
+                except Exception:
+                    cloud_delete = None
+                if cloud_delete and cloud_delete.get("deleted_keys"):
+                    try:
+                        upload_database(active_user)
+                    except Exception:
+                        pass
+                    log_event("WARNING", f"Cloud-only project deleted · Project: {id}")
+                    return {
+                        "data": {
+                            "deleted": True,
+                            "project_id": id,
+                            "file_id": None,
+                            "cloud_only": True,
+                            "deleted_keys": cloud_delete["deleted_keys"],
+                        },
+                        "error": None,
+                    }
             log_event("ERROR", "Project not found · Project: ")
             raise HTTPException(status_code=404, detail="Project not found")
 
@@ -715,7 +742,6 @@ def delete_project(id: str, request: Request):
             pass
 
     # Best-effort cloud cleanup
-    active_user = storage_module.get_current_user()
     if active_user:
         try:
             delete_project_zip(

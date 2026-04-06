@@ -146,6 +146,30 @@ def delete_project_zip(user_id: str, project_id: str, filename: str = "project.z
     }
 
 
+def delete_project_prefix(user_id: str, project_id: str):
+    canonical_user = storage.resolve_storage_user_key(user_id)
+    if not canonical_user:
+        return {"status": "skipped_guest", "deleted_keys": []}
+
+    prefix = f"users/{canonical_user}/projects/{project_id}/"
+    listing = list_objects(BUCKET_NAME, prefix) or {}
+    objects = listing.get("Contents") or []
+    deleted_keys: list[str] = []
+
+    for obj in objects:
+        key = str(obj.get("Key") or "").strip()
+        if not key or not key.startswith(prefix):
+            continue
+        delete_file(BUCKET_NAME, key)
+        deleted_keys.append(key)
+
+    return {
+        "status": "deleted" if deleted_keys else "no_cloud_zip",
+        "prefix": prefix,
+        "deleted_keys": deleted_keys,
+    }
+
+
 def upload_database(user_id: str):
     canonical_user = storage.resolve_storage_user_key(user_id)
     if not canonical_user:

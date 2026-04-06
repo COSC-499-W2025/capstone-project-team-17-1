@@ -67,46 +67,6 @@ def _fallback_projects_from_uploads(db) -> list[dict]:
     return payload
 
 
-def _fallback_projects_from_cloud(storage_user_key: str | None) -> list[dict]:
-    if not storage_user_key:
-        return []
-    try:
-        from capstone.system.cloud_storage import BUCKET_NAME, list_objects
-
-        prefix = f"users/{storage_user_key}/projects/"
-        resp = list_objects(BUCKET_NAME, prefix) or {}
-        objects = resp.get("Contents") or []
-        by_project: dict[str, str] = {}
-        for obj in objects:
-            key = str(obj.get("Key") or "")
-            if not key.startswith(prefix):
-                continue
-            suffix = key[len(prefix):]
-            project_id = suffix.split("/", 1)[0].strip()
-            if not project_id:
-                continue
-            last_modified = str(obj.get("LastModified") or "")
-            by_project[project_id] = max(last_modified, by_project.get(project_id, ""))
-
-        payload = []
-        for project_id, created_at in by_project.items():
-            payload.append(
-                {
-                    "project_id": project_id,
-                    "created_at": created_at or datetime.utcnow().isoformat(),
-                    "total_files": 0,
-                    "total_skills": 0,
-                    "classification": None,
-                    "primary_contributor": None,
-                    "is_github": False,
-                    "contributor_count": 0,
-                }
-            )
-        payload.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
-        return payload
-    except Exception:
-        return []
-
 @router.get("/dashboard/recent-projects", response_model=List[RecentProject])
 def get_recent_projects():
     with _db_session(None) as db:
@@ -218,56 +178,11 @@ ORDER BY COALESCE(pa.created_at, p.created_at) DESC
             "contributor_count": contributor_count
         })
 
-    storage_user_key = storage.resolve_storage_user_key(storage.get_current_user())
-    cloud_fallback = _fallback_projects_from_cloud(storage_user_key) if storage_user_key else []
-
-    # In authenticated mode the cloud is the source of truth.
-    # Build a merged list where cloud projects are always shown, supplemented
-    # by local analysis data when available.  Local-only projects (not yet
-    # confirmed in the cloud) are included only when they have real content
-    # (non-zero file or skill count) so that stale test/ghost entries are
-    # suppressed without hiding a project whose cloud upload just failed.
-    if storage_user_key and cloud_fallback:
-        cloud_project_ids = {str(row.get("project_id")) for row in cloud_fallback}
-        if projects:
-            local_by_id = {str(p.get("project_id")): p for p in projects}
-            merged: dict = {}
-            for row in cloud_fallback:
-                pid = str(row.get("project_id"))
-                # Use local data (has real stats) when available, cloud stub otherwise
-                merged[pid] = local_by_id.get(pid, row)
-            # Include local-only projects that have real content (not phantom entries)
-            for p in projects:
-                pid = str(p.get("project_id"))
-                if pid not in cloud_project_ids:
-                    has_content = int(p.get("total_files") or 0) > 0 or int(p.get("total_skills") or 0) > 0
-                    if has_content:
-                        merged.setdefault(pid, p)
-            return list(merged.values())
-        # Do not return cloud-only stubs here when local uploads exist: those rows are
-        # what DELETE /projects/{id} removes. Returning cloud first hid uploads and made
-        # the last local project undeletable (404) or out of sync with the card id.
-
     if not projects and uploads_fallback:
         log_event(
             "WARNING",
             "Recent projects fallback activated: project_analysis empty/incomplete, serving uploads-based list",
         )
-        if storage_user_key and cloud_fallback:
-            seen = {str(u.get("project_id")) for u in uploads_fallback if u.get("project_id")}
-            extra = [
-                row
-                for row in cloud_fallback
-                if str(row.get("project_id") or "") not in seen
-            ]
-            return uploads_fallback + extra
         return uploads_fallback
-
-    if not projects and cloud_fallback:
-        log_event(
-            "WARNING",
-            "Recent projects fallback activated: serving cloud prefix projects",
-        )
-        return cloud_fallback
 
     return projects

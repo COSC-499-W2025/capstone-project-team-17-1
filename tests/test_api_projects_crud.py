@@ -26,6 +26,7 @@ if str(SRC) not in sys.path:
 
 import capstone.storage as storage  # noqa: E402
 from capstone.api.server import create_app  # noqa: E402
+from capstone.api.routes import auth as auth_routes  # noqa: E402
 
 _ORIGINAL_BASE_DIR = storage.BASE_DIR
 
@@ -201,6 +202,44 @@ class TestDeleteProject(_ProjectsAPIBase):
         self.client.delete(f"/projects/{pid}")
         resp = self.client.delete(f"/projects/{pid}")
         self.assertEqual(resp.status_code, 404)
+
+    def test_delete_cloud_only_project_returns_200_for_authenticated_user(self) -> None:
+        token = "test-token-project-delete"
+        auth_routes._SESSIONS[token] = {"user": {"username": "cloud-user"}}
+        self.addCleanup(lambda: auth_routes._SESSIONS.pop(token, None))
+
+        import capstone.api.routes.projects as project_routes
+
+        deleted_keys = []
+        original_delete_project_prefix = project_routes.delete_project_prefix
+        original_upload_database = project_routes.upload_database
+
+        def _fake_delete_project_prefix(user_id: str, project_id: str):
+            self.assertEqual(user_id, "cloud-user")
+            self.assertEqual(project_id, "cloud-only-project")
+            keys = [f"users/{user_id}/projects/{project_id}/project.zip"]
+            deleted_keys.extend(keys)
+            return {"status": "deleted", "deleted_keys": keys}
+
+        def _fake_upload_database(user_id: str):
+            self.assertEqual(user_id, "cloud-user")
+            return {"status": "uploaded"}
+
+        project_routes.delete_project_prefix = _fake_delete_project_prefix
+        project_routes.upload_database = _fake_upload_database
+        self.addCleanup(setattr, project_routes, "delete_project_prefix", original_delete_project_prefix)
+        self.addCleanup(setattr, project_routes, "upload_database", original_upload_database)
+
+        resp = self.client.delete(
+            "/projects/cloud-only-project",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        body = resp.json()
+        self.assertTrue(body["data"]["deleted"])
+        self.assertTrue(body["data"]["cloud_only"])
+        self.assertEqual(body["data"]["project_id"], "cloud-only-project")
+        self.assertEqual(body["data"]["deleted_keys"], deleted_keys)
 
 
 # ---------------------------------------------------------------------------
