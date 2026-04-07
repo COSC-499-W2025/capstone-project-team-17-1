@@ -53,6 +53,92 @@ _EXT_TO_SKILL = {
 }
 
 
+def _build_project_summary_list(conn) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT
+            p.project_id,
+            COALESCE(pa.created_at, p.created_at) AS created_at,
+            pa.snapshot,
+            pa.classification,
+            pa.primary_contributor,
+            CASE
+                WHEN p.source = 'github' THEN 1
+                ELSE 0
+            END AS is_github,
+            COALESCE(uc.cnt, 0) AS contributor_count,
+            u.original_name,
+            u.file_id,
+            u.hash,
+            f.size_bytes,
+            f.path
+        FROM projects p
+        LEFT JOIN project_analysis pa
+            ON pa.project_id = p.project_id
+            AND pa.rowid = (
+                SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
+            )
+        LEFT JOIN (
+            SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
+            FROM project_contributors
+            GROUP BY project_id
+        ) uc ON p.project_id = uc.project_id
+        LEFT JOIN uploads u
+            ON u.upload_id = p.project_id
+            AND u.id = (
+                SELECT MAX(u2.id) FROM uploads u2 WHERE u2.upload_id = p.project_id
+            )
+        LEFT JOIN files f ON f.file_id = u.file_id
+        ORDER BY COALESCE(pa.created_at, p.created_at) DESC
+        """
+    ).fetchall()
+
+    projects = []
+    for row in rows:
+        snapshot_raw = row[2]
+        if snapshot_raw is None:
+            continue
+
+        try:
+            snapshot = json.loads(snapshot_raw)
+        except Exception:
+            log_event("WARNING", f"Skipping invalid project snapshot in project list · Project: {row[0]}")
+            continue
+
+        file_summary = snapshot.get("file_summary")
+        if isinstance(file_summary, dict):
+            total_files = file_summary.get("file_count", 0)
+        else:
+            total_files = snapshot.get("file_count", 0)
+
+        skills = snapshot.get("skills", [])
+        if isinstance(skills, list):
+            total_skills = len(skills)
+        elif isinstance(skills, dict):
+            total_skills = len(skills.keys())
+        else:
+            total_skills = 0
+
+        projects.append(
+            {
+                "project_id": row[0],
+                "created_at": row[1],
+                "total_files": total_files,
+                "total_skills": total_skills,
+                "classification": row[3],
+                "primary_contributor": row[4],
+                "is_github": bool(row[5]),
+                "contributor_count": int(row[6]),
+                "filename": row[7],
+                "file_id": row[8],
+                "hash": row[9],
+                "size_bytes": row[10],
+                "stored_path": row[11],
+            }
+        )
+    return projects
+
+
 def _restore_user_from_request(request: Request | None) -> None:
     """Restore storage.CURRENT_USER from the Bearer session when available."""
     if request is None:
@@ -572,41 +658,21 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
 @router.get("")
 def list_projects(request: Request):
     """
-    Lists uploaded .zip projects from CAS storage.
+    Lists projects as summary cards for the Projects tab while retaining
+    upload metadata fields used by older callers.
     """
     _restore_user_from_request(request)
     conn = storage.open_db()
     try:
-        rows = conn.execute(
-            """
-            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-                   f.size_bytes, f.path
-            FROM uploads u
-            JOIN files f ON f.file_id = u.file_id
-            WHERE u.id = (
-                SELECT MIN(u2.id) FROM uploads u2 WHERE u2.upload_id = u.upload_id
-            )
-            ORDER BY datetime(u.created_at) DESC
-            """
-        ).fetchall()
+        projects = _build_project_summary_list(conn)
     except Exception as exc:
         if "no such table" not in str(exc).lower():
             raise
-        rows = []
+        projects = []
+
     return {
-        "count": len(rows),
-        "projects": [
-            {
-                "project_id": r[0],
-                "filename": r[1],
-                "file_id": r[2],
-                "hash": r[3],
-                "created_at": r[4],
-                "size_bytes": r[5],
-                "stored_path": r[6],
-            }
-            for r in rows
-        ],
+        "count": len(projects),
+        "projects": projects,
     }
 
 

@@ -16,7 +16,9 @@ import base64
 import contextvars
 import hashlib
 import json
+import shutil
 import sqlite3
+import time
 import uuid
 from pathlib import Path
 from typing import Iterable, Optional
@@ -117,25 +119,6 @@ def _default_github_url(username: str | None) -> str | None:
     if not token:
         return None
     return f"https://github.com/{token}"
-
-
-def _has_required_schema(conn: sqlite3.Connection) -> bool:
-    """
-    Return True when the core tables needed for read endpoints already exist.
-    This allows the app to keep serving reads if the database is temporarily
-    opened in a readonly state and schema bootstrapping cannot run.
-    """
-    required = {
-        "project_analysis",
-        "files",
-        "uploads",
-        "error_analysis_results",
-    }
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-    ).fetchall()
-    existing = {str(row[0]) for row in rows}
-    return required.issubset(existing)
 
 
 # Schema + migrations
@@ -491,9 +474,44 @@ def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
         ref.close()
 
 
+def _backup_db_file(conn: sqlite3.Connection) -> Path | None:
+    """Copy the live DB file to a timestamped .bak-<ts> sibling before a destructive reset.
+
+    Returns the backup path on success, or None if the DB is in-memory / path unknown
+    / copy failed. Any failure is logged but never raised — backup is best-effort and
+    must not block the reset itself.
+    """
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    # PRAGMA database_list columns: (seq, name, file)
+    raw_path = row[2] if len(row) > 2 else None
+    if not raw_path:
+        return None
+    db_path = Path(raw_path)
+    if not db_path.exists() or db_path.stat().st_size == 0:
+        return None
+    backup_path = db_path.with_name(f"{db_path.name}.bak-{int(time.time())}")
+    try:
+        shutil.copy2(db_path, backup_path)
+    except OSError as exc:
+        logger.warning("Failed to back up %s before nuclear reset: %s", db_path, exc)
+        return None
+    logger.warning("Backed up %s → %s before nuclear reset", db_path, backup_path)
+    return backup_path
+
+
 def _nuclear_reset(conn: sqlite3.Connection) -> None:
-    """Drop all user tables and reinitialise from _initialize_schema."""
+    """Drop all user tables and reinitialise from _initialize_schema.
+
+    Before dropping anything, snapshot the live DB file to a timestamped backup
+    sibling so a mis-triggered reset can be recovered manually.
+    """
     logger.warning("Schema mismatch detected — dropping all tables and reinitialising")
+    _backup_db_file(conn)
     conn.execute("PRAGMA foreign_keys = OFF")
     tables = [
         row[0] for row in conn.execute(
@@ -582,7 +600,21 @@ def get_current_user() -> str | None:
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
 
-def get_database_path(user=_UNSET) -> Path:
+def get_database_root(root_dir: Path | str | None = None) -> Path:
+    """Resolve the database root directory.
+
+    - Default: <BASE_DIR>/data
+    - Override: explicit directory passed by CLI/server/tests
+    """
+    if root_dir is None:
+        root = BASE_DIR / "data"
+    else:
+        root = Path(root_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def get_database_path(user=_UNSET, *, root_dir: Path | str | None = None) -> Path:
     # Allow overriding the DB path for local debugging.
     # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
     # override = os.getenv("LOOM_DB_PATH")
@@ -599,22 +631,22 @@ def get_database_path(user=_UNSET) -> Path:
     else:
         storage_user_key = resolve_storage_user_key(user)
 
+    database_root = get_database_root(root_dir)
+
     if storage_user_key:
-        path = BASE_DIR / "data" / "users" / _user_dir(storage_user_key)
+        path = database_root / "users" / _user_dir(storage_user_key)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
-    path = BASE_DIR / "data" / "guest"
+    path = database_root / "guest"
     path.mkdir(parents=True, exist_ok=True)
     return path / "capstone.db"
 
 # -----------------------------
 # DB lifecycle
 # -----------------------------
-def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
-    target_dir = base_dir or BASE_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-    db_path = get_database_path(user=user)
+def open_db(base_dir: Path | str | None = None, *, user=_UNSET) -> sqlite3.Connection:
+    db_path = get_database_path(user=user, root_dir=base_dir)
     db_key = str(db_path.resolve())
 
     logger.info("Opening database at %s", db_path)
@@ -632,22 +664,9 @@ def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
         pass
 
     if db_key not in _SCHEMA_READY:
-        try:
-            _run_migrations(conn)
-            _initialize_schema(conn)
-            _SCHEMA_READY.add(db_key)
-        except sqlite3.OperationalError as exc:
-            message = str(exc).lower()
-            if "readonly" not in message and "locked" not in message:
-                raise
-            if not _has_required_schema(conn):
-                raise
-            _SCHEMA_READY.add(db_key)
-            logger.warning(
-                "Skipping schema initialization for %s because database is temporarily unavailable for writes: %s",
-                db_path,
-                exc,
-            )
+        _run_migrations(conn)
+        _initialize_schema(conn)
+        _SCHEMA_READY.add(db_key)
 
     return conn
 

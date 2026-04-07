@@ -7,14 +7,14 @@ import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js"
 import { confirmDialog, alertDialog } from "./dialog.js";
 
 export async function fetchProjects() {
-  const res = await authFetch("/dashboard/recent-projects");
+  const res = await authFetch("/projects");
 
   if (!res.ok) {
     throw new Error(`Failed to fetch projects: ${res.status}`);
   }
 
-  const projects = await res.json();
-  return Array.isArray(projects) ? projects : [];
+  const payload = await res.json();
+  return Array.isArray(payload?.projects) ? payload.projects : [];
 }
 
 export async function loadProjects() {

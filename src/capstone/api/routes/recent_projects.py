@@ -1,12 +1,11 @@
 from datetime import datetime
-import json
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from capstone.activity_log import log_event
-from capstone.portfolio_retrieval import _db_session
+from capstone import storage
+from capstone.api.routes.projects import _build_project_summary_list, _restore_user_from_request
 
 router = APIRouter()
 
@@ -22,84 +21,13 @@ class RecentProject(BaseModel):
     contributor_count: int
 
 @router.get("/dashboard/recent-projects", response_model=List[RecentProject])
-def get_recent_projects():
-    with _db_session(None) as db:
-        rows = db.execute(
-            """
-            SELECT
-                p.project_id,
-                COALESCE(pa.created_at, p.created_at) AS created_at,
-                pa.snapshot,
-                pa.classification,
-                pa.primary_contributor,
-                CASE
-                    WHEN p.source = 'github' THEN 1
-                    ELSE 0
-                END AS is_github,
-                COALESCE(uc.cnt, 0) AS contributor_count
-            FROM projects p
-            LEFT JOIN project_analysis pa
-                ON pa.project_id = p.project_id
-                AND pa.rowid = (
-                    SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
-                )
-            LEFT JOIN (
-                SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
-                FROM project_contributors
-                GROUP BY project_id
-            ) uc ON p.project_id = uc.project_id
-            ORDER BY COALESCE(pa.created_at, p.created_at) DESC
-            """
-        ).fetchall()
-        
-    projects = []
-
-    for row in rows:
-        project_id = row[0]
-        created_at = row[1]
-        snapshot_raw = row[2]
-        classification = row[3]
-        primary_contributor = row[4]
-        is_github = bool(row[5])
-        contributor_count = int(row[6])
-
-        if snapshot_raw is None:
-            # Project exists but has no analysis yet — skip
-            continue
-
-        try:
-            snapshot = json.loads(snapshot_raw)
-        except Exception:
-            log_event("WARNING", f"Skipping invalid project snapshot in recent projects · Project: {project_id}")
-            continue
-
-        file_summary = snapshot.get("file_summary")
-
-        # --- FILE COUNT ---
-        if isinstance(file_summary, dict):
-            total_files = file_summary.get("file_count", 0)
-        else:
-            total_files = snapshot.get("file_count", 0)
-
-        # --- SKILL COUNT ---
-        skills = snapshot.get("skills", [])
-
-        if isinstance(skills, list):
-            total_skills = len(skills)
-        elif isinstance(skills, dict):
-            total_skills = len(skills.keys())
-        else:
-            total_skills = 0
-
-        projects.append({
-            "project_id": project_id,
-            "created_at": created_at,
-            "total_files": total_files,
-            "total_skills": total_skills,
-            "classification": classification,
-            "primary_contributor": primary_contributor,
-            "is_github": is_github,
-            "contributor_count": contributor_count
-        })
-
-    return projects
+def get_recent_projects(request: Request):
+    _restore_user_from_request(request)
+    conn = storage.open_db()
+    try:
+        projects = _build_project_summary_list(conn)
+    except Exception as exc:
+        if "no such table" not in str(exc).lower():
+            raise
+        projects = []
+    return projects[:5]

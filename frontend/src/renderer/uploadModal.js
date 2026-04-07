@@ -7,6 +7,7 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { loadMostUsedSkills } from "./skills.js";
 import { authFetch } from "./auth.js";
+import { openProgressModal, setProgress, closeProgressModal } from "./progressModal.js";
 
 export function openUploadModal() {
   const existing = document.getElementById("upload-modal");
@@ -97,6 +98,7 @@ async function submitZipUpload() {
   console.log("Sending project_id:", projectId, "URL:", url);
 
   try {
+    openProgressModal(`Uploading ${file.name}...`);
     const res = await authFetch(url, {
       method: "POST",
       body: formData
@@ -107,6 +109,7 @@ async function submitZipUpload() {
       throw new Error(err.detail || `Upload failed: ${res.status}`);
     }
 
+    setProgress(100, "Done. Refreshing projects...");
     document.getElementById("upload-modal")?.remove();
     await Promise.all([
       loadProjects(),
@@ -116,8 +119,10 @@ async function submitZipUpload() {
       loadMostUsedSkills(),
     ]);
     notifyPortfolioDataUpdated();
+    closeProgressModal();
   } catch (err) {
     console.error("ZIP upload failed:", err);
+    closeProgressModal();
     alert(err.message || "Upload failed.");
   }
 }
