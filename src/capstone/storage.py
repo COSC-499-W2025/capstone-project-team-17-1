@@ -762,46 +762,13 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     ).fetchone()
     return json.loads(row[0]) if row else None
 
-def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
-    """
-    Returns the latest snapshot + zip_path for each project.
-    Used exclusively for AI error analysis.
-    Uses MAX(id) rowid-based selection to match recent_projects.py and avoid
-    datetime() parsing failures on rows with NULL or non-standard created_at.
-    """
+def _loads_snapshot(blob: object) -> dict:
+    """Parse a snapshot JSON blob, returning {} on any failure."""
+    try:
+        return json.loads(blob)
+    except Exception:
+        return {}
 
-    rows = conn.execute(
-        """
-        SELECT pa.project_id,
-               pa.snapshot,
-               pa.zip_path,
-               pa.created_at
-        FROM project_analysis pa
-        WHERE pa.id IN (
-            SELECT MAX(id)
-            FROM project_analysis
-            GROUP BY project_id
-        )
-        ORDER BY pa.id DESC
-        """
-    ).fetchall()
-
-    snapshots = []
-
-    for project_id, snapshot_json, zip_path, created_at in rows:
-        try:
-            snapshot = json.loads(snapshot_json)
-        except Exception:
-            snapshot = {}
-
-        snapshots.append({
-            "project_id": project_id,
-            "snapshot": snapshot,
-            "zip_path": zip_path,
-            "created_at": created_at,
-        })
-
-    return snapshots
 
 def fetch_project_snapshot_history(
     conn: sqlite3.Connection,
@@ -840,117 +807,59 @@ def fetch_project_snapshot_history(
 
     rows = conn.execute(sql, params).fetchall()
 
-    out: list[dict] = []
-    for row_id, pid, classification, contributor, snapshot_json, created_at in rows:
-        try:
-            snap = json.loads(snapshot_json)
-        except Exception:
-            snap = {}
-        out.append(
-            {
-                "id": row_id,
-                "project_id": pid,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snap,
-            }
-        )
-    return out
+    return [
+        {
+            "id": row_id,
+            "project_id": pid,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "created_at": created_at,
+            "snapshot": _loads_snapshot(snapshot_json),
+        }
+        for row_id, pid, classification, contributor, snapshot_json, created_at in rows
+    ]
 
 def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
     """
-    Return newest snapshot for every project saved in the database.
-    Each item contains snapshot + metadata.
+    Return newest snapshot for every project saved in the database, newest first.
+
+    Each item contains: project_id, classification, primary_contributor,
+    snapshot, zip_path, created_at.
     """
     if limit is not None and int(limit) <= 0:
         return []
 
+    limit_clause = "LIMIT ?" if limit is not None else ""
+    params: tuple = () if limit is None else (int(limit),)
+
+    # MAX(id) picks the latest row per project: `id` is AUTOINCREMENT and strictly
+    # monotonic, so it's more reliable than MAX(created_at) (second resolution,
+    # nullable on legacy rows).
     rows = conn.execute(
         f"""
-        WITH latest_time AS (
-            SELECT project_id, MAX(created_at) AS created_at
-            FROM project_analysis
-            GROUP BY project_id
-        ),
-        latest_row AS (
-            SELECT pa.project_id, MAX(pa.id) AS id
-            FROM project_analysis pa
-            JOIN latest_time lt
-              ON lt.project_id = pa.project_id
-             AND lt.created_at = pa.created_at
-            GROUP BY pa.project_id
-        )
-        SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
-        FROM project_analysis a
-        JOIN latest_row lr ON lr.id = a.id
-        ORDER BY datetime(a.created_at) DESC, a.id DESC
-        {"LIMIT ?" if limit is not None else ""}
-        """,
-        (() if limit is None else (int(limit),)),
-    ).fetchall()
-    payload: list[dict] = []
-    for project_id, classification, contributor, snapshot_json, created_at in rows:
-        try:
-            snapshot = json.loads(snapshot_json)
-        except Exception:
-            snapshot = {}
-        payload.append(
-            {
-                "project_id": project_id,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snapshot,
-            }
-        )
-    return payload
-
-
-def fetch_latest_snapshots_for_projects(
-    conn: sqlite3.Connection,
-    project_ids: Iterable[str],
-) -> dict[str, dict | None]:
-    """
-    Return {project_id: latest_snapshot_dict_or_None} for ONLY the given project_ids.
-    One SQL query (no N+1).
-    """
-    ids = [str(pid) for pid in project_ids if pid]
-    if not ids:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids))
-
-    rows = conn.execute(
-        f"""
-        WITH latest_time AS (
-            SELECT project_id, MAX(created_at) AS created_at
-            FROM project_analysis
-            WHERE project_id IN ({placeholders})
-            GROUP BY project_id
-        ),
-        latest_row AS (
-            SELECT pa.project_id, MAX(pa.id) AS id
-            FROM project_analysis pa
-            JOIN latest_time lt
-              ON lt.project_id = pa.project_id
-             AND lt.created_at = pa.created_at
-            GROUP BY pa.project_id
-        )
-        SELECT pa.project_id, pa.snapshot
+        SELECT pa.project_id, pa.classification, pa.primary_contributor,
+               pa.snapshot, pa.zip_path, pa.created_at
         FROM project_analysis pa
-        JOIN latest_row lr ON lr.id = pa.id
+        WHERE pa.id IN (
+            SELECT MAX(id) FROM project_analysis GROUP BY project_id
+        )
+        ORDER BY pa.id DESC
+        {limit_clause}
         """,
-        ids,
+        params,
     ).fetchall()
 
-    out: dict[str, dict | None] = {pid: None for pid in ids}
-    for pid, snap_json in rows:
-        try:
-            out[pid] = json.loads(snap_json)
-        except Exception:
-            out[pid] = {}
-    return out
+    return [
+        {
+            "project_id": project_id,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "snapshot": _loads_snapshot(snapshot_json),
+            "zip_path": zip_path,
+            "created_at": created_at,
+        }
+        for project_id, classification, contributor, snapshot_json, zip_path, created_at in rows
+    ]
 
 
 
@@ -2635,21 +2544,16 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
         """
     ).fetchall()
 
-    payload: list[dict] = []
-    for project_id, classification, contributor, blob, created_at in rows:
-        try:
-            snapshot = json.loads(blob)
-        except Exception:
-            snapshot = {}
-        payload.append(
-            {
-                "project_id": project_id,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snapshot,
-            }
-        )
+    payload = [
+        {
+            "project_id": project_id,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "created_at": created_at,
+            "snapshot": _loads_snapshot(blob),
+        }
+        for project_id, classification, contributor, blob, created_at in rows
+    ]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -2697,7 +2601,6 @@ __all__ = [
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
-    "fetch_latest_snapshots_for_projects",
     "fetch_project_snapshot_history",
     # github sources
     "store_github_source",

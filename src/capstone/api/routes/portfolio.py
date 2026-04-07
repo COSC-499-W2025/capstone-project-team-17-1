@@ -22,7 +22,7 @@ from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_por
 from capstone.storage import _UNSET as _DB_UNSET
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip, fetch_project_snapshot_history
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_project_snapshot_history
 from capstone.project_role import infer_project_role_from_snapshot
 from capstone.top_project_summaries import gather_evidence
 from capstone.api.portfolio_helpers import (
@@ -73,7 +73,7 @@ def _bind_current_user_from_session(request: Request) -> None:
 
 def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:
     with _db_session(db_dir, user=user) as c:
-        return fetch_latest_snapshots_with_zip(c) or []
+        return fetch_latest_snapshots(c) or []
 
 
 def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:

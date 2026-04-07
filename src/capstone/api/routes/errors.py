@@ -3,7 +3,7 @@ from typing import Dict, Any
 import capstone.storage as _storage
 
 from capstone.storage import (
-    fetch_latest_snapshots_with_zip,
+    fetch_latest_snapshots,
     save_error_results,
     fetch_error_results,
 )
@@ -69,8 +69,8 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
             for r in raw_rows:
                 print(f"  project_id={r[0]!r}  created_at={r[1]!r}  zip_path={r[2]!r}", flush=True)
 
-            snapshots = fetch_latest_snapshots_with_zip(conn)
-            print(f"[errors/analyze] fetch_latest_snapshots_with_zip -> {len(snapshots)} row(s)", flush=True)
+            snapshots = fetch_latest_snapshots(conn)
+            print(f"[errors/analyze] fetch_latest_snapshots -> {len(snapshots)} row(s)", flush=True)
 
             if not snapshots:
                 return {"status": "no_projects"}
