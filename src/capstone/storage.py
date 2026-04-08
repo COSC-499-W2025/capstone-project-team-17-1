@@ -13,6 +13,7 @@ This module centralizes:
 from __future__ import annotations
 
 import base64
+import contextlib
 import contextvars
 import hashlib
 import json
@@ -564,26 +565,39 @@ def fetch_error_results(conn):
     return results
 
 
-def set_current_user(user_id: str | None):
-    global CURRENT_USER
-    resolved = resolve_storage_user_key(user_id)
-    CURRENT_USER = resolved
-    _REQUEST_STORAGE_USER.set(resolved)
+# ---------------------------------------------------------------------------
+# Storage user identity API
+#
+# Public surface (use these):
+#   - current_storage_user()  — read the identity bound to this async task
+#   - storage_user_scope(uid) — bind an identity for the duration of a `with`
+#
+# Everything else below (set_current_user / bind_request_user / reset_request_user
+# / get_current_user / CURRENT_USER) is a legacy shim kept for Stage B migration
+# and will be deleted in Stage C. New code must not call them.
+# ---------------------------------------------------------------------------
 
 
-def bind_request_user(user_id: str | None) -> contextvars.Token:
+def current_storage_user() -> str | None:
+    """Return the storage user bound to the current async task / thread, or
+    None for guest. Read-only — use ``storage_user_scope`` to change it.
     """
-    Bind request-local storage user context and mirror it globally for legacy code.
-    Returns a context token so middleware can reset after the request completes.
+    scoped_user = _REQUEST_STORAGE_USER.get()
+    if scoped_user is not None:
+        return resolve_storage_user_key(scoped_user)
+    return resolve_storage_user_key(CURRENT_USER)
+
+
+def _bind_storage_user(user_id: str | None) -> contextvars.Token:
+    """Private primitive — bind identity and return a reset token.
+    Only ``storage_user_scope`` and legacy shims should call this.
     """
     resolved = resolve_storage_user_key(user_id)
-    token = _REQUEST_STORAGE_USER.set(resolved)
-    global CURRENT_USER
-    CURRENT_USER = resolved
-    return token
+    return _REQUEST_STORAGE_USER.set(resolved)
 
 
-def reset_request_user(token: contextvars.Token) -> None:
+def _reset_storage_user(token: contextvars.Token) -> None:
+    """Private primitive — reset a previous bind."""
     try:
         _REQUEST_STORAGE_USER.reset(token)
     except Exception:
@@ -591,11 +605,57 @@ def reset_request_user(token: contextvars.Token) -> None:
         _REQUEST_STORAGE_USER.set(None)
 
 
+@contextlib.contextmanager
+def storage_user_scope(user_id: str | None):
+    """Bind ``user_id`` as the storage identity for the enclosed block.
+
+    On exit the previous identity is restored, even if the block raises.
+    Safe across async tasks because it is backed by a ContextVar.
+
+    Typical uses:
+        with storage_user_scope(user_key):
+            return await call_next(request)        # HTTP middleware
+
+        with storage_user_scope(new_user_key):     # just-created account
+            upsert_user(conn, ...)
+
+        with storage_user_scope(canonical_user):   # temporary switch
+            sync_to_cloud(...)
+    """
+    token = _bind_storage_user(user_id)
+    try:
+        yield
+    finally:
+        _reset_storage_user(token)
+
+
+# --- Legacy shims (Stage C will delete) -----------------------------------
+
+def set_current_user(user_id: str | None):
+    """Deprecated — use ``storage_user_scope``. Token is intentionally dropped
+    because old callers never tracked it; identity leaks to subsequent code in
+    the same task, matching the previous behavior."""
+    global CURRENT_USER
+    resolved = resolve_storage_user_key(user_id)
+    CURRENT_USER = resolved
+    _REQUEST_STORAGE_USER.set(resolved)
+
+
+def bind_request_user(user_id: str | None) -> contextvars.Token:
+    """Deprecated — use ``storage_user_scope``."""
+    global CURRENT_USER
+    CURRENT_USER = resolve_storage_user_key(user_id)
+    return _bind_storage_user(user_id)
+
+
+def reset_request_user(token: contextvars.Token) -> None:
+    """Deprecated — use ``storage_user_scope``."""
+    _reset_storage_user(token)
+
+
 def get_current_user() -> str | None:
-    scoped_user = _REQUEST_STORAGE_USER.get()
-    if scoped_user is not None:
-        return resolve_storage_user_key(scoped_user)
-    return resolve_storage_user_key(CURRENT_USER)
+    """Deprecated — use ``current_storage_user``."""
+    return current_storage_user()
 
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
@@ -625,7 +685,7 @@ def get_database_path(user=_UNSET, *, root_dir: Path | str | None = None) -> Pat
         return p
 
     if user is _UNSET:
-        storage_user_key = get_current_user()
+        storage_user_key = current_storage_user()
     elif user is None:
         storage_user_key = None
     else:
@@ -2597,6 +2657,9 @@ __all__ = [
     "open_db",
     "close_db",
     "BASE_DIR",
+    # storage user identity
+    "current_storage_user",
+    "storage_user_scope",
     # snapshots
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
