@@ -148,7 +148,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
     if portfolio_err is None and portfolio_router is not None and configure_portfolio is not None:
         try:
-            configure_portfolio(db_dir, auth_token)
+            configure_portfolio(auth_token)
             app.include_router(portfolio_router)
         except Exception:
             app.state.portfolio_mount_error = traceback.format_exc()
@@ -159,7 +159,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     showcase_router, configure_showcase, showcase_err = _safe_import_showcase()
     if showcase_err is None and showcase_router is not None and configure_showcase is not None:
         try:
-            configure_showcase(db_dir, auth_token)
+            configure_showcase(auth_token)
             app.include_router(showcase_router)
         except Exception:
             app.state.showcase_mount_error = traceback.format_exc()
@@ -170,7 +170,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     resumes_router, configure_resumes, resumes_err = _safe_import_resumes()
     if resumes_err is None and resumes_router is not None and configure_resumes is not None:
         try:
-            configure_resumes(db_dir, auth_token)
+            configure_resumes(auth_token)
             app.include_router(resumes_router)
         except Exception:
             app.state.resume_mount_error = traceback.format_exc()

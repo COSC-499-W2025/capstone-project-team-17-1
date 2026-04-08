@@ -97,13 +97,11 @@ def _resume_to_markdown(resume: dict) -> str:
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
 
-_DB_DIR: Optional[str] = None
 _TOKEN: Optional[str] = None
 
 
-def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
-    global _DB_DIR, _TOKEN
-    _DB_DIR = db_dir
+def configure(auth_token: Optional[str]) -> None:
+    global _TOKEN
     _TOKEN = auth_token
 
 
@@ -114,10 +112,6 @@ def _check_auth(request: Request) -> None:
     h = request.headers.get("Authorization", "")
     if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == token):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
-
-
-def _get_db_dir() -> Optional[str]:
-    return _DB_DIR
 
 
 async def _get_payload(request: Request) -> dict:
@@ -154,7 +148,7 @@ def _get_current_user_contributor_id(conn) -> Optional[int]:
 @router.get("")
 def list_resumes(request: Request, user_id: Optional[int] = None):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         # After M23 all resumes belong to user_id=1 (singleton user per DB)
         resumes = storage.fetch_resumes(conn, 1)
     return {"data": resumes, "meta": {"total": len(resumes)}, "error": None}
@@ -169,7 +163,7 @@ async def create_blank_resume(request: Request):
         raise HTTPException(status_code=400, detail="user_id is required")
     title = str(payload.get("title") or "Default Resume").strip()
     target_role = payload.get("target_role")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         resume_id = storage.insert_resume(conn, int(user_id), title, target_role)
         resume = storage.fetch_resume(conn, resume_id)
     return JSONResponse({"data": resume, "error": None}, status_code=201)
@@ -215,7 +209,7 @@ async def auto_generate_resume(request: Request):
     resume_title = payload.get("resume_title") or None
     selected_project_ids = payload.get("project_ids") or None
 
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         from capstone.api.routes.auth import _SESSIONS, _extract_bearer
         auth_token = _extract_bearer(request)
         auth_user = (_SESSIONS.get(auth_token) or {}).get("user") or {} if auth_token else {}
@@ -397,7 +391,7 @@ async def auto_generate_resume(request: Request):
 @router.get("/{resume_id}")
 def get_resume(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         resume = storage.fetch_resume(conn, resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -408,7 +402,7 @@ def get_resume(resume_id: str, request: Request):
 async def update_resume(resume_id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         found = storage.update_resume(
             conn,
             resume_id,
@@ -425,7 +419,7 @@ async def update_resume(resume_id: str, request: Request):
 @router.delete("/{resume_id}")
 def delete_resume(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         ok = storage.delete_resume(conn, resume_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -439,7 +433,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
     fmt = format.lower()
     if fmt not in {"json", "markdown", "pdf"}:
         raise HTTPException(status_code=400, detail="format must be json, markdown, or pdf")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         resume = storage.fetch_resume(conn, resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -471,7 +465,7 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
 @router.get("/{resume_id}/sections")
 def list_sections(resume_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         sections = storage.fetch_resume_sections(conn, resume_id)
@@ -485,7 +479,7 @@ async def reorder_sections(resume_id: str, request: Request):
     ids = payload.get("ids")
     if not isinstance(ids, list):
         raise HTTPException(status_code=400, detail="ids must be a list")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         sections = storage.reorder_resume_sections(conn, resume_id, ids)
@@ -504,7 +498,7 @@ async def create_section(resume_id: str, request: Request):
         raise HTTPException(status_code=400, detail="label is required")
     is_custom = bool(payload.get("is_custom", True))
     sort_order = payload.get("sort_order")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         if not storage.fetch_resume(conn, resume_id):
             raise HTTPException(status_code=404, detail="Resume not found")
         section_id = storage.insert_resume_section(
@@ -523,7 +517,7 @@ async def update_section(resume_id: str, section_id: str, request: Request):
     payload = await _get_payload(request)
     is_enabled = payload.get("is_enabled")
     sort_order = payload.get("sort_order")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         found = storage.update_resume_section(
             conn,
             section_id,
@@ -541,7 +535,7 @@ async def update_section(resume_id: str, section_id: str, request: Request):
 @router.delete("/{resume_id}/sections/{section_id}")
 def delete_section(resume_id: str, section_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         ok = storage.delete_resume_section(conn, section_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Section not found")
@@ -555,7 +549,7 @@ def delete_section(resume_id: str, section_id: str, request: Request):
 @router.get("/{resume_id}/sections/{section_id}/items")
 def list_items(resume_id: str, section_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         items = storage.fetch_resume_items(conn, section_id)
     return {"data": items, "meta": {"total": len(items)}, "error": None}
 
@@ -567,7 +561,7 @@ async def reorder_items(resume_id: str, section_id: str, request: Request):
     ids = payload.get("ids")
     if not isinstance(ids, list):
         raise HTTPException(status_code=400, detail="ids must be a list")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         items = storage.reorder_resume_items(conn, section_id, ids)
     return {"data": items, "error": None}
 
@@ -583,7 +577,7 @@ async def create_item(resume_id: str, section_id: str, request: Request):
         raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         item_id = storage.insert_resume_item(
             conn,
             section_id,
@@ -613,7 +607,7 @@ async def update_item(resume_id: str, section_id: str, item_id: str, request: Re
         raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         found = storage.update_resume_item(
             conn,
             item_id,
@@ -637,7 +631,7 @@ async def update_item(resume_id: str, section_id: str, item_id: str, request: Re
 @router.delete("/{resume_id}/sections/{section_id}/items/{item_id}")
 def delete_item(resume_id: str, section_id: str, item_id: str, request: Request):
     _check_auth(request)
-    with _db_session(_get_db_dir()) as conn:
+    with _db_session(None) as conn:
         ok = storage.delete_resume_item(conn, item_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Item not found")

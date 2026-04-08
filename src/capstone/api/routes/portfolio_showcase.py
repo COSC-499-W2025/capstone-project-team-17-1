@@ -12,14 +12,11 @@ from capstone.api.portfolio_helpers import list_snapshots
 
 router = APIRouter(prefix="/showcase", tags=["portfolio", "resume", "users"])
 
-# global variables
-_DB_DIR: Optional[str] = None   # SQLite db path
 _TOKEN: Optional[str] = None   # optional auth token to protect endpoints
 
 # for server startup
-def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
-    global _DB_DIR, _TOKEN
-    _DB_DIR = db_dir
+def configure(auth_token: Optional[str]) -> None:
+    global _TOKEN
     _TOKEN = auth_token
 
 # token check for if auth is required
@@ -32,9 +29,6 @@ def _check_auth(request: Request) -> None:
     if not (h.startswith("Bearer ") and h.split(" ", 1)[1] == _TOKEN):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-def _require_db() -> Optional[str]:
-    return _DB_DIR
-
 # align naming used in handlers
 get_latest_snapshot = fetch_latest_snapshot
 
@@ -42,7 +36,7 @@ get_latest_snapshot = fetch_latest_snapshot
 def list_users(request: Request):
     from capstone.github_contributors import _is_bot_contributor
     _check_auth(request)
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         rows = c.execute("""
             SELECT DISTINCT u.id, u.github_username, u.email
             FROM contributors u
@@ -73,7 +67,7 @@ def list_users(request: Request):
 @router.get("/users/{user}/projects")
 def list_user_projects(user: str, request: Request):
     _check_auth(request)
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         rows = c.execute(
             """
             SELECT DISTINCT pc.project_id
@@ -90,7 +84,7 @@ def list_user_projects(user: str, request: Request):
 @router.get("/portfolio/summary")
 def portfolio_summary(user: str, request: Request, limit: int = 3):
     _check_auth(request)
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         snapshots = fetch_latest_snapshots(c)
     snapshot_map = {
         str(item.get("project_id")): (item.get("snapshot") or {})
@@ -109,7 +103,7 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
 
     user_role = None
     if user:
-        with _db_session(_require_db()) as c:
+        with _db_session(None) as c:
             row = c.execute(
                 """
                 SELECT 1 FROM project_contributors pc
@@ -121,7 +115,7 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
         if row:
             user_role = "primary_contributor"
 
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         data = get_latest_snapshot(c, projectId)
     if data is None:
         raise HTTPException(status_code=404, detail="No snapshots found")
@@ -134,7 +128,7 @@ def latest(request: Request, projectId: str, view: Optional[str] = None, user: O
 @router.get("/portfolios/evidence")
 def evidence_latest(request: Request, projectId: str):
     _check_auth(request)
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         snap = get_latest_snapshot(c, projectId)
     if snap is None:
         raise HTTPException(status_code=404, detail="No snapshots found")
@@ -146,7 +140,7 @@ def evidence_latest(request: Request, projectId: str):
 def list_(request: Request, projectId: str, page: int = 1, pageSize: int = 20, sort: str = "created_at:desc"):
     _check_auth(request)
     sort_field, _, sort_dir = sort.partition(":")
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         items, total = list_snapshots(
             c,
             project_id=projectId,
@@ -172,7 +166,7 @@ def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None
 
     user_role = None
     if user:
-        with _db_session(_require_db()) as c:
+        with _db_session(None) as c:
             row = c.execute(
                 """SELECT 1 FROM project_contributors pc
                    JOIN contributors con ON con.id = pc.contributor_id
@@ -182,7 +176,7 @@ def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None
         if row:
             user_role = "primary_contributor"
 
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         entry = get_portfolio_entry(c, id)
 
     if entry:
@@ -190,7 +184,7 @@ def get_portfolio_showcase(id: str, request: Request, user: Optional[str] = None
             entry["user_role"] = user_role
         return {"data": entry, "error": None}
 
-    with _db_session(_require_db()) as c:
+    with _db_session(None) as c:
         snap = get_latest_snapshot(c, id)
 
     if not snap:
