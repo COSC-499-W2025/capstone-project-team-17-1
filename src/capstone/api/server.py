@@ -58,6 +58,14 @@ def _safe_import_resumes():
 
 
 def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
+    # Fold db_dir into the single source of truth (storage.BASE_DIR). All
+    # route handlers, middleware, and helpers resolve DB paths via BASE_DIR,
+    # so setting it here is sufficient — no db_dir threading required.
+    if db_dir is not None:
+        import capstone.storage as storage_module
+        from pathlib import Path as _Path
+        storage_module.BASE_DIR = _Path(db_dir)
+
     @asynccontextmanager
     async def lifespan(app):
         # Startup
@@ -71,7 +79,6 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         print("Application shutdown complete.")
     app = FastAPI(title="Capstone API", lifespan=lifespan)
     app.state.auth_token = auth_token
-    app.state.db_dir = db_dir
 
     app.add_middleware(
         CORSMiddleware,

@@ -1549,6 +1549,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Fold --db-dir into the single source of truth (storage.BASE_DIR).
+    # Command handlers still forward args.db_dir to library functions for now,
+    # but any code path that ultimately reaches open_db() without an explicit
+    # root_dir will already pick up the caller's intent via BASE_DIR.
+    db_dir = getattr(args, "db_dir", None)
+    if db_dir is not None:
+        import capstone.storage as _storage_module
+        _storage_module.BASE_DIR = Path(db_dir)
+
     if args.command == "consent":
         return _handle_consent(args)
     elif args.command == "preview":
