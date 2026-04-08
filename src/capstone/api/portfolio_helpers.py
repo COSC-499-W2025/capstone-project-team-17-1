@@ -20,6 +20,26 @@ class SnapshotRow:
     created_at: str  # ISO string stored as TEXT in SQLite
 
 
+def ensure_portfolio_tables(conn: sqlite3.Connection) -> None:
+    """No-op — storage.open_db's schema init already creates every portfolio
+    table. Kept only as a stable call site for tests that were written when
+    this module owned its own DDL."""
+    return
+
+
+def ensure_indexes(conn: sqlite3.Connection) -> None:
+    """Create performance indexes on project_analysis if missing.
+
+    ``storage.open_db`` already creates these during schema init, so this is a
+    no-op for DBs opened through storage. Tests that build their own
+    connections with an ad-hoc schema still call it explicitly.
+    """
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pa_project_created "
+        "ON project_analysis(project_id, created_at DESC)"
+    )
+
+
 def _validate_sort(sort_field: str, sort_dir: str) -> Tuple[str, str]:
     sf = sort_field if sort_field in {"created_at", "classification"} else "created_at"
     sd = sort_dir.lower() if sort_dir.lower() in {"asc", "desc"} else "desc"

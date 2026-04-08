@@ -30,7 +30,7 @@ def test_portfolios_evidence_happy_path(tmp_path, monkeypatch):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     _insert_snapshot(tmp_path, project_id="p1")
 
     app = create_app(db_dir=str(tmp_path), auth_token=None)
@@ -61,7 +61,7 @@ def test_portfolios_evidence_missing_project_id(tmp_path, monkeypatch):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
 
     app = create_app(db_dir=str(tmp_path), auth_token=None)
     client = TestClient(app)
@@ -80,7 +80,7 @@ def test_portfolios_evidence_not_found(tmp_path, monkeypatch):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     storage.open_db()  # initialise schema; no data inserted
     storage.close_db()
 

@@ -28,7 +28,7 @@ def _db_session(db_dir: str | None, *, user=_DB_UNSET):
     """
     Always close the SQLite handle (critical on Windows).
     Uses capstone.storage.open_db/close_db if available.
-    Pass user=None to explicitly open the guest DB regardless of CURRENT_USER.
+    Pass user=None to explicitly open the guest DB regardless of the scoped storage user.
     """
     base_path = Path(db_dir) if db_dir else None
 

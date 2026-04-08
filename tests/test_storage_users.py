@@ -10,11 +10,10 @@ from capstone import storage
 @contextmanager
 def _open_isolated_db(db_dir: Path):
     original_base_dir = storage.BASE_DIR
-    original_current_user = storage.CURRENT_USER
+    original_current_user = storage.current_storage_user()
     original_loom_db_path = os.environ.pop("LOOM_DB_PATH", None)
-    storage.close_db()
     storage.BASE_DIR = db_dir
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     conn = storage.open_db(db_dir)
     try:
         yield conn
@@ -23,9 +22,8 @@ def _open_isolated_db(db_dir: Path):
             conn.close()
         except Exception:
             pass
-        storage.close_db()
         storage.BASE_DIR = original_base_dir
-        storage.CURRENT_USER = original_current_user
+        storage._bind_storage_user(original_current_user)
         if original_loom_db_path is not None:
             os.environ["LOOM_DB_PATH"] = original_loom_db_path
 

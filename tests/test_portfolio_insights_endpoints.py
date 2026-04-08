@@ -58,9 +58,9 @@ def _insert_snapshot(
 def insights_client(tmp_path: Path):
     db_dir = str(tmp_path)
     original_base_dir = storage.BASE_DIR
-    original_current_user = storage.CURRENT_USER
+    original_current_user = storage.current_storage_user()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
 
     db_path = tmp_path / "data" / "guest" / "capstone.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,7 +130,7 @@ def insights_client(tmp_path: Path):
         yield client
     finally:
         storage.BASE_DIR = original_base_dir
-        storage.CURRENT_USER = original_current_user
+        storage._bind_storage_user(original_current_user)
 
 
 def test_portfolio_activity_heatmap_supports_project_and_granularity_filters(insights_client: TestClient):

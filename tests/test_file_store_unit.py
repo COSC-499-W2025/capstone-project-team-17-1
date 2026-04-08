@@ -22,22 +22,20 @@ class FileStoreUnitTests(unittest.TestCase):
         # isolate DB and files root
         self._original_base_dir = storage.BASE_DIR
         self._original_db_dir = getattr(storage, "DB_DIR", None)
-        self._original_current_user = storage.CURRENT_USER
+        self._original_current_user = storage.current_storage_user()
         self._original_files_root = file_store.DEFAULT_FILES_ROOT
-        storage.close_db()
         storage.BASE_DIR = Path(self.tmpdir.name)
         storage.DB_DIR = Path(self.tmpdir.name) / "data"
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = Path(self.tmpdir.name) / "files"
 
         self.conn = storage.open_db(storage.DB_DIR)
 
     def tearDown(self) -> None:
-        storage.close_db()
         storage.BASE_DIR = self._original_base_dir
         if self._original_db_dir is not None:
             storage.DB_DIR = self._original_db_dir
-        storage.CURRENT_USER = self._original_current_user
+        storage._bind_storage_user(self._original_current_user)
         file_store.DEFAULT_FILES_ROOT = self._original_files_root
 
     def _make_zip_file(self) -> Path:

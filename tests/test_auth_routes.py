@@ -8,9 +8,8 @@ from capstone.api.server import create_app, get_app_for_tests
 
 
 def _client(tmp_path) -> TestClient:
-    storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     auth_routes._SESSIONS.clear()
     app = create_app(db_dir=str(tmp_path), auth_token=None)
     return TestClient(app)

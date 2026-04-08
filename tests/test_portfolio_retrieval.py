@@ -49,10 +49,9 @@ class PortfolioRetrievalTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
+        self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         db_path = self.dbdir / "data" / "guest" / "capstone.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self.con = sqlite3.connect(db_path)
@@ -62,9 +61,8 @@ class PortfolioRetrievalTests(unittest.TestCase):
 
     def tearDown(self):
         self.con.close()
-        storage.close_db()
         storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
+        storage._bind_storage_user(self._original_current_user)
         self.tmp.cleanup()
 
     def test_get_latest_snapshot(self):

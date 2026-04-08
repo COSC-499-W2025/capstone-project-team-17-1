@@ -19,10 +19,9 @@ class StorageTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
+        self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = Path(self._tmpdir.name)
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         self.addCleanup(self._tmpdir.cleanup)
 
     def test_open_db_creates_directory_and_reuses_connection(self) -> None:
@@ -163,9 +162,8 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(fh.read().decode("utf-8"), "hello world")
 
     def tearDown(self) -> None:
-        storage.close_db()
         storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
+        storage._bind_storage_user(self._original_current_user)
 
 
 class ProjectDetectionTests(unittest.TestCase):

@@ -12,7 +12,7 @@ def showcase_client(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     db_dir = str(tmp_path)
     app = create_app(db_dir=db_dir, auth_token=None)
     client = TestClient(app)
@@ -73,7 +73,7 @@ def test_showcase_auth_enforced_with_db(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     db_dir = str(tmp_path)
     app = create_app(db_dir=db_dir, auth_token="secret-token")
     client = TestClient(app)

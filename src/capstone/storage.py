@@ -22,7 +22,7 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable
 from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
@@ -81,9 +81,6 @@ def get_base_data_dir():
     return base
 
 BASE_DIR = get_base_data_dir()
-_DB_HANDLE: Optional[sqlite3.Connection] = None
-_DB_PATH: Optional[Path] = None
-CURRENT_USER = None
 _REQUEST_STORAGE_USER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "storage_current_user", default=None
 )
@@ -572,9 +569,8 @@ def fetch_error_results(conn):
 #   - current_storage_user()  — read the identity bound to this async task
 #   - storage_user_scope(uid) — bind an identity for the duration of a `with`
 #
-# Everything else below (set_current_user / bind_request_user / reset_request_user
-# / get_current_user / CURRENT_USER) is a legacy shim kept for Stage B migration
-# and will be deleted in Stage C. New code must not call them.
+# ``_bind_storage_user`` / ``_reset_storage_user`` are private primitives used
+# by ``storage_user_scope``; tests may call them directly to set up fixtures.
 # ---------------------------------------------------------------------------
 
 
@@ -582,16 +578,11 @@ def current_storage_user() -> str | None:
     """Return the storage user bound to the current async task / thread, or
     None for guest. Read-only — use ``storage_user_scope`` to change it.
     """
-    scoped_user = _REQUEST_STORAGE_USER.get()
-    if scoped_user is not None:
-        return resolve_storage_user_key(scoped_user)
-    return resolve_storage_user_key(CURRENT_USER)
+    return resolve_storage_user_key(_REQUEST_STORAGE_USER.get())
 
 
 def _bind_storage_user(user_id: str | None) -> contextvars.Token:
-    """Private primitive — bind identity and return a reset token.
-    Only ``storage_user_scope`` and legacy shims should call this.
-    """
+    """Private primitive — bind identity and return a reset token."""
     resolved = resolve_storage_user_key(user_id)
     return _REQUEST_STORAGE_USER.set(resolved)
 
@@ -627,35 +618,6 @@ def storage_user_scope(user_id: str | None):
         yield
     finally:
         _reset_storage_user(token)
-
-
-# --- Legacy shims (Stage C will delete) -----------------------------------
-
-def set_current_user(user_id: str | None):
-    """Deprecated — use ``storage_user_scope``. Token is intentionally dropped
-    because old callers never tracked it; identity leaks to subsequent code in
-    the same task, matching the previous behavior."""
-    global CURRENT_USER
-    resolved = resolve_storage_user_key(user_id)
-    CURRENT_USER = resolved
-    _REQUEST_STORAGE_USER.set(resolved)
-
-
-def bind_request_user(user_id: str | None) -> contextvars.Token:
-    """Deprecated — use ``storage_user_scope``."""
-    global CURRENT_USER
-    CURRENT_USER = resolve_storage_user_key(user_id)
-    return _bind_storage_user(user_id)
-
-
-def reset_request_user(token: contextvars.Token) -> None:
-    """Deprecated — use ``storage_user_scope``."""
-    _reset_storage_user(token)
-
-
-def get_current_user() -> str | None:
-    """Deprecated — use ``current_storage_user``."""
-    return current_storage_user()
 
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
@@ -731,23 +693,14 @@ def open_db(base_dir: Path | str | None = None, *, user=_UNSET) -> sqlite3.Conne
     return conn
 
 def close_db(conn: sqlite3.Connection | None = None) -> None:
-    if conn is not None:
-        try:
-            conn.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close DB connection", exc_info=True)
+    """Close the given connection. The no-arg form is a legacy no-op now that
+    every caller passes its own connection."""
+    if conn is None:
         return
-
-    """Close the shared database handle if it exists."""
-    global _DB_HANDLE, _DB_PATH
-    if _DB_HANDLE is not None:
-        try:
-            _DB_HANDLE.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close DB cleanly", exc_info=True)
-        finally:
-            _DB_HANDLE = None
-            _DB_PATH = None
+    try:
+        conn.close()
+    except Exception:  # pragma: no cover
+        logger.warning("Failed to close DB connection", exc_info=True)
 
 # Snapshots
 

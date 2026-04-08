@@ -28,11 +28,11 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
+        self._original_current_user = storage.current_storage_user()
         self._original_files_root = file_store.DEFAULT_FILES_ROOT
         storage.close_db()
         storage.BASE_DIR = self.tmp_path
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = self.tmp_path / "files"
         config_dir = self.tmp_path / "config"
         config_path = config_dir / "user_config.json"
@@ -46,7 +46,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
         self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
-        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(storage._bind_storage_user, self._original_current_user)
         self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _make_archive(
@@ -336,11 +336,11 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
+        self._original_current_user = storage.current_storage_user()
         self._original_files_root = file_store.DEFAULT_FILES_ROOT
         storage.close_db()
         storage.BASE_DIR = self.tmp_path
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = self.tmp_path / "files"
         config_dir = self.tmp_path / "config"
         config_path = config_dir / "user_config.json"
@@ -354,7 +354,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
         self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
-        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(storage._bind_storage_user, self._original_current_user)
         self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _make_archive(self, git_log_content: str, name: str = "project.zip") -> Path:
@@ -513,17 +513,17 @@ class ExtractContributorsFromZipTestCase(unittest.TestCase):
         self.tmp_path = Path(self._tmpdir.name)
         self.files_root = self.tmp_path / "files"
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
+        self._original_current_user = storage.current_storage_user()
         self._original_files_root = file_store.DEFAULT_FILES_ROOT
         storage.close_db()
         storage.BASE_DIR = self.tmp_path
-        storage.CURRENT_USER = None
+        storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = self.files_root
         self.conn = storage.open_db(self.tmp_path / "db")
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
         self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
-        self.addCleanup(setattr, storage, "CURRENT_USER", self._original_current_user)
+        self.addCleanup(storage._bind_storage_user, self._original_current_user)
         self.addCleanup(setattr, file_store, "DEFAULT_FILES_ROOT", self._original_files_root)
 
     def _store_zip_with_git_log(self, git_log_content: str) -> str:

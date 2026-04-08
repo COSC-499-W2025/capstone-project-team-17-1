@@ -10,9 +10,8 @@ from capstone import storage
 @pytest.fixture()
 def client(tmp_path):
     original_base_dir = storage.BASE_DIR
-    storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     db_dir = str(tmp_path)
     db_path = str(Path(db_dir) / "data" / "guest" / "capstone.db")
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
