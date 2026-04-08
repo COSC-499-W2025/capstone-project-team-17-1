@@ -28,7 +28,7 @@ def _get_current_username(request: Request) -> str:
     username = auth_routes.get_authenticated_username(request)
     storage_user_key = auth_routes.get_authenticated_storage_user_key(request)
     if storage_user_key:
-        storage.set_current_user(storage_user_key)
+        # Middleware has already bound the storage user for this request.
         print(
             "[cloud-route] "
             f"username={username!r} "
@@ -59,7 +59,7 @@ def debug_db():
     conn = storage.open_db()
     try:
         return {
-            "current_user": storage.get_current_user(),
+            "current_user": storage.current_storage_user(),
             "db_path": str(storage.get_database_path()),
         }
     finally:

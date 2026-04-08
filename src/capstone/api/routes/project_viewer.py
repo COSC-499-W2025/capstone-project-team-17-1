@@ -115,7 +115,7 @@ def _get_file_id_for_project(project_id: str) -> str:
                 logger.info("Project %s found via filename match in files table", project_id)
                 return fid
 
-    storage_user_key = storage.resolve_storage_user_key(storage.get_current_user())
+    storage_user_key = storage.resolve_storage_user_key(storage.current_storage_user())
     if storage_user_key:
         prefix = f"users/{storage_user_key}/projects/{project_id}/"
         listing = cloud_list_objects(CLOUD_BUCKET, prefix) or {}
@@ -368,7 +368,7 @@ def update_project_file(payload: UpdateFilePayload):
         tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to update file: {exc}")
 
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
     if active_user:
         try:
             cloud_upload_zip(

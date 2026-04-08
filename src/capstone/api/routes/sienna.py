@@ -198,13 +198,8 @@ class _ProjectContext:
 
 
 def _restore_user_from_request(request: Request) -> None:
-    try:
-        from capstone.api.routes.auth import get_authenticated_username
-
-        username = get_authenticated_username(request)
-        storage_module.set_current_user(username)
-    except Exception:
-        pass
+    # No-op: server.py middleware binds the storage user for the whole request.
+    return
 
 
 def _is_debug_intent(message: str, explicit_debug_flag: bool) -> bool:

@@ -88,20 +88,17 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         from capstone.api.routes.auth import get_authenticated_storage_user_key
 
         storage_user_key = get_authenticated_storage_user_key(request)
-        token = storage_module.bind_request_user(storage_user_key)
-        mode = "user" if storage_user_key else "guest"
-        print(
-            "[storage-bind] "
-            f"path={request.url.path!r} "
-            f"mode={mode!r} "
-            f"user_id={storage_user_key!r} "
-            f"db_path={str(storage_module.get_database_path())!r}",
-            flush=True,
-        )
-        try:
+        with storage_module.storage_user_scope(storage_user_key):
+            mode = "user" if storage_user_key else "guest"
+            print(
+                "[storage-bind] "
+                f"path={request.url.path!r} "
+                f"mode={mode!r} "
+                f"user_id={storage_user_key!r} "
+                f"db_path={str(storage_module.get_database_path())!r}",
+                flush=True,
+            )
             return await call_next(request)
-        finally:
-            storage_module.reset_request_user(token)
 
     @app.get("/")
     def root():

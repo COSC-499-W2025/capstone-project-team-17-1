@@ -205,8 +205,8 @@ def register(payload: RegisterRequest):
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
-    storage.set_current_user(user["username"])
-    _sync_profile_to_local_db(user)
+    with storage.storage_user_scope(user["username"]):
+        _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
@@ -237,8 +237,8 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    storage.set_current_user(user["username"])
-    _sync_profile_to_local_db(user)
+    with storage.storage_user_scope(user["username"]):
+        _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
@@ -258,8 +258,7 @@ def login(payload: LoginRequest):
 def me(request: Request):
     session = _require_session(request)
     user = session["user"]
-    # Always restore CURRENT_USER from the session — critical after server restart
-    storage.set_current_user(user["username"])
+    # Middleware has already bound the storage user from the Bearer session.
     from capstone.portfolio_retrieval import _db_session
     from capstone.api.routes.resumes import _get_current_user_contributor_id
     with _db_session(None) as conn:
@@ -288,8 +287,8 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
-    storage.set_current_user(updated_user["username"])
-    _sync_profile_to_local_db(updated_user)
+    with storage.storage_user_scope(updated_user["username"]):
+        _sync_profile_to_local_db(updated_user)
 
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
@@ -356,15 +355,15 @@ def change_password(payload: ChangePasswordRequest, request: Request):
 @router.post("/logout")
 def logout(request: Request):
     token = _extract_bearer(request)
-    before_user = storage.get_current_user()
+    before_user = storage.current_storage_user()
     if token:
         _SESSIONS.pop(token, None)
         _save_sessions()
 
-    storage.set_current_user(None)
+    # Middleware scope for this request ends on return; next request will
+    # re-bind from the (now-missing) Bearer token as guest.
     print(
-        f"[auth/logout] previous_user={before_user!r} mode='guest' "
-        f"local_db={str(storage.get_database_path())!r}",
+        f"[auth/logout] previous_user={before_user!r} mode='guest'",
         flush=True,
     )
     return {"ok": True}

@@ -67,8 +67,10 @@ def _check_auth(request: Request) -> None:
 
 
 def _bind_current_user_from_session(request: Request) -> None:
-    username = get_authenticated_username(request)
-    storage_module.set_current_user(username)
+    # No-op: the HTTP middleware (server.py) already binds the storage user
+    # from the Bearer session via storage_user_scope for the whole request.
+    # Kept as a stable call site in case route handlers want to re-check.
+    return
 
 
 def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:

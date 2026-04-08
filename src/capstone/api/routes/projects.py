@@ -140,16 +140,9 @@ def _build_project_summary_list(conn) -> list[dict]:
 
 
 def _restore_user_from_request(request: Request | None) -> None:
-    """Restore storage.CURRENT_USER from the Bearer session when available."""
-    if request is None:
-        return
-    try:
-        from capstone.api.routes.auth import get_authenticated_storage_user_key
-
-        storage_user_key = get_authenticated_storage_user_key(request)
-        storage_module.set_current_user(storage_user_key)
-    except Exception:
-        pass
+    # No-op: server.py middleware binds the storage user via storage_user_scope
+    # for every request before this handler runs. Kept as a stable call site.
+    return
 
 
 def _normalize_token(value: str | None) -> str:
@@ -410,7 +403,7 @@ async def upload_project(
 
     conn = storage.open_db()
     try:
-        active_user = storage_module.get_current_user()
+        active_user = storage_module.current_storage_user()
         mode = "user" if active_user else "guest"
         db_path = str(storage.get_database_path())
         auto_detected = False
@@ -486,7 +479,7 @@ async def upload_project(
         message = "Upload stored and matched to existing project automatically."
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
     if active_user:
         try:
             upload_project_zip(
@@ -618,7 +611,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                         "skills": summary.get("skills", []),
                     }
                 )
-                active_user = storage_module.get_current_user()
+                active_user = storage_module.current_storage_user()
                 if active_user:
                     try:
                         upload_project_zip(
@@ -641,7 +634,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
         except Exception:
             pass
 
-        active_user = storage_module.get_current_user()
+        active_user = storage_module.current_storage_user()
         if active_user:
             try:
                 upload_database(active_user)
@@ -721,7 +714,7 @@ def delete_project(id: str, request: Request):
     """
     _restore_user_from_request(request)
     conn = storage.open_db()
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
 
     # --- ZIP-upload path: project lives in uploads + files tables ---
     upload_row = conn.execute(
