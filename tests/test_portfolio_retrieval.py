@@ -1,6 +1,5 @@
 # tests/test_portfolio_retrieval.py
 import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,26 +19,28 @@ from capstone import storage
 from capstone.api.server import create_app
 from fastapi.testclient import TestClient
 
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS project_analysis(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  classification TEXT,
-  primary_contributor TEXT,
-  snapshot TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-"""
-
-
-def seed(conn: sqlite3.Connection, project_id: str, n: int = 3):
+def seed(conn, project_id: str, n: int = 3):
     for i in range(n):
         snap = {"n": i, "meta": f"s{i}"}
+        storage.store_analysis_snapshot(
+            conn,
+            project_id=project_id,
+            classification="ok",
+            primary_contributor="alice",
+            snapshot=snap,
+        )
         conn.execute(
-            "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (project_id, "ok", "alice", json.dumps(snap), f"2025-01-0{i+1}T00:00:00"),
+            """
+            UPDATE project_analysis
+            SET created_at = ?
+            WHERE id = (
+                SELECT id FROM project_analysis
+                WHERE project_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            """,
+            (f"2025-01-0{i+1}T00:00:00", project_id),
         )
     conn.commit()
 
@@ -52,10 +53,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
         storage._bind_storage_user(None)
-        db_path = self.dbdir / "data" / "guest" / "capstone.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(db_path)
-        self.con.executescript(SCHEMA)
+        self.con = storage.open_db()
         ensure_indexes(self.con)
         seed(self.con, "demo", 5)
 
