@@ -37,8 +37,8 @@ class TimelineSmokeTest(unittest.TestCase):
             proj_csv = out_dir / "projects_timeline.csv"
             skills_csv = out_dir / "skills_timeline.csv"
 
-            n_projects = write_projects_timeline(db_dir=None, out_csv=proj_csv)
-            n_skills   = write_skills_timeline(db_dir=None, out_csv=skills_csv)
+            n_projects = write_projects_timeline(out_csv=proj_csv)
+            n_skills   = write_skills_timeline(out_csv=skills_csv)
 
             # Files created
             self.assertTrue(proj_csv.exists(), "projects CSV not created")

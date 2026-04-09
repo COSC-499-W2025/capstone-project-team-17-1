@@ -58,8 +58,8 @@ class SkillTimelineTests(unittest.TestCase):
             tmpdir = Path(tempfile.mkdtemp())
             out_csv = tmpdir / "skills.csv"
             out_json = tmpdir / "top_skills.json"
-            rows = tl.write_skills_timeline(db_dir=None, out_csv=out_csv)
-            years = tl.write_top_skills_by_year(db_dir=None, out_json=out_json, top_n=3)
+            rows = tl.write_skills_timeline(out_csv=out_csv)
+            years = tl.write_top_skills_by_year(out_json=out_json, top_n=3)
             self.assertEqual(rows, 1)
             payload = json.loads(out_json.read_text(encoding="utf-8"))
             self.assertIn("2024", payload)

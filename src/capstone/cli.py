@@ -689,7 +689,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ----------------------------- Handlers --------------------------------
 def _handle_job_match(args: argparse.Namespace) -> int:
     job_text = args.job_file.read_text(encoding="utf-8", errors="ignore")
-    result = match_job_to_project(job_text, args.project_id, args.db_dir)
+    result = match_job_to_project(job_text, args.project_id)
     snippet = build_resume_snippet(result)
     print(snippet)
     return 0
@@ -709,7 +709,7 @@ def _handle_api(args: argparse.Namespace) -> int:
 
 
 def _handle_portfolio(args: argparse.Namespace) -> int:
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     conn = store.open()
     try:
         if args.portfolio_action == "latest":
@@ -749,7 +749,7 @@ def _handle_portfolio(args: argparse.Namespace) -> int:
 
 
 def _handle_collab_summary(args: argparse.Namespace) -> int:
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     service = SnapshotSummaryService(store)
     try:
         payload = service.collab_summary(args.project_id)
@@ -760,7 +760,7 @@ def _handle_collab_summary(args: argparse.Namespace) -> int:
 
 
 def _handle_tech_summary(args: argparse.Namespace) -> int:
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     service = SnapshotSummaryService(store)
     try:
         payload = service.tech_summary(args.project_id)
@@ -771,7 +771,7 @@ def _handle_tech_summary(args: argparse.Namespace) -> int:
 
 
 def _handle_skill_summary(args: argparse.Namespace) -> int:
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     service = SnapshotSummaryService(store)
     try:
         payload = service.skill_summary(args.project_id)
@@ -813,7 +813,6 @@ def _handle_contributors(args: argparse.Namespace) -> int:
                 repo_url=args.repo_url,
                 token=token,
                 project_id=args.project_id,
-                db_dir=args.db_dir,
                 max_contributors=args.max_contributors,
                 progress_cb=_progress,
             )
@@ -828,7 +827,7 @@ def _handle_contributors(args: argparse.Namespace) -> int:
         return 0
 
     if args.contributors_action == "rank":
-        conn = open_db(args.db_dir)
+        conn = open_db()
         try:
             rankings = get_contributor_rankings(conn, args.project_id, sort_by=args.sort_by)
         finally:
@@ -849,7 +848,7 @@ def _handle_contributors(args: argparse.Namespace) -> int:
 
 
 def _handle_metrics_summary(args: argparse.Namespace) -> int:
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     service = SnapshotSummaryService(store)
     try:
         payload = service.metrics_summary(args.project_id)
@@ -861,7 +860,7 @@ def _handle_metrics_summary(args: argparse.Namespace) -> int:
 
 def _handle_top_summary(args: argparse.Namespace) -> int:
     g = globals()
-    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    store = SnapshotStore(fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
     service = TopSummaryService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
         payload = service.generate(
@@ -882,13 +881,13 @@ def _handle_top_summary(args: argparse.Namespace) -> int:
 
 
 def _handle_projects_timeline(args: argparse.Namespace) -> int:
-    rows = TimelineService().export_projects(args.db_dir, args.output)
+    rows = TimelineService().export_projects(args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
 
 def _handle_skills_timeline(args: argparse.Namespace) -> int:
-    rows = TimelineService().export_skills(args.db_dir, args.output)
+    rows = TimelineService().export_skills(args.output)
     print(json.dumps({"rows": rows, "output": str(args.output)}, indent=2))
     return 0
 
@@ -1152,7 +1151,6 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             mode=mode,
             preferences=config.preferences,
             project_id=args.project_id,
-            db_dir=args.db_dir,
         )
     except ArchiveAnalysisError as exc:
         print(json.dumps(exc.payload), file=sys.stderr)
@@ -1171,7 +1169,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         _print_human_summary(summary, args)
 
     # --- Save analysis snapshot to SQLite (for resume / ranking) ---
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     try:
         store.store_snapshot(
             project_id=summary.get("project_id") or args.project_id or archive_path.stem,
@@ -1228,14 +1226,13 @@ def _handle_import_repo(args: argparse.Namespace) -> int:
             quiet=args.quiet,
             summary_to_stdout=args.summary_to_stdout,
             project_id=project_id,
-            db_dir=args.db_dir,
         )
         return _handle_analyze(analyze_args)
 
 
 def _handle_rank_projects(args: argparse.Namespace) -> int:
     g = globals()
-    store = SnapshotStore(args.db_dir, fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
+    store = SnapshotStore(fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots))
     service = RankingService(store, ranker=g.get("rank_projects_from_snapshots", rank_projects_from_snapshots))
     try:
         rankings, snapshot_map = service.rank(user=args.user, limit=args.limit)
@@ -1269,7 +1266,6 @@ def _handle_summarize_projects(args: argparse.Namespace) -> int:
     g = globals()  # tests patch fetch_latest_snapshots
     close_fn = g.get("close_db", close_db)
     store = SnapshotStore(
-        args.db_dir,
         open_fn=g.get("open_db", open_db),
         fetch_all_fn=g.get("fetch_latest_snapshots", fetch_latest_snapshots),
         close_fn=close_fn,
@@ -1352,7 +1348,7 @@ def _handle_generate_resume(args: argparse.Namespace) -> int:
     # If your implementation has a slightly different signature, tweak this call.
     # 3) Load latest project snapshots
     # 3) Open DB and load all project snapshots
-    store = SnapshotStore(args.db_dir)
+    store = SnapshotStore()
     snapshots = store.fetch_all_latest()
     store.close()
 
@@ -1550,9 +1546,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Fold --db-dir into the single source of truth (storage.BASE_DIR).
-    # Command handlers still forward args.db_dir to library functions for now,
-    # but any code path that ultimately reaches open_db() without an explicit
-    # root_dir will already pick up the caller's intent via BASE_DIR.
+    # Downstream library functions no longer take db_dir; they resolve via BASE_DIR.
     db_dir = getattr(args, "db_dir", None)
     if db_dir is not None:
         import capstone.storage as _storage_module

@@ -19,6 +19,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# Pin the single source of truth for DB paths to the repo root so downstream
+# open_db()/SnapshotStore() calls resolve to the same per-user DB location as
+# the rest of the application.
+import capstone.storage as _storage_module  # noqa: E402
+_storage_module.BASE_DIR = ROOT
+
 from capstone.consent import ensure_external_permission
 from capstone.llm_client import LLMClient, build_default_llm
 from capstone.code_bundle import bundle_code_from_zip
@@ -904,8 +910,7 @@ def _contributor_menu(project_id: str) -> None:
         _exit_app()
 
 def _open_app_db():
-    # Pin to repo-local data directory to avoid cwd-dependent DBs.
-    return open_db(ROOT / "data")
+    return open_db()
 
 
 def _record_zip_upload(path: pathlib.Path, original_name: str | None = None) -> None:
@@ -3706,7 +3711,7 @@ def main():
                             mode=mode,
                             preferences=config.preferences,
                         )
-                    store = SnapshotStore(ROOT / "data")
+                    store = SnapshotStore()
                     try:
                         store.store_snapshot(
                             project_id=summary.get("project_id") or effective_project_id,
@@ -3856,7 +3861,7 @@ def main():
                                         "source": "github_api",
                                     }
 
-                                store = SnapshotStore(ROOT / "data")
+                                store = SnapshotStore()
                                 try:
                                     store.store_snapshot(
                                         project_id=project_id,

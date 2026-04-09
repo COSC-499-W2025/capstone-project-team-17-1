@@ -31,7 +31,7 @@ def _db_session(*, user=_DB_UNSET):
     Pass user=None to explicitly open the guest DB regardless of the scoped storage user.
     """
     if _open_db is not None:
-        conn = _open_db(None, user=user)
+        conn = _open_db(user=user)
     else:
         target = Path("data")
         target.mkdir(parents=True, exist_ok=True)

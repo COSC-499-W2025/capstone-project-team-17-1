@@ -35,7 +35,6 @@ def match_single_project(payload: JobMatchRequest) -> Dict[str, Any]:
         result = match_job_to_project(
             job_text=payload.job_description,
             project_id=payload.project_id,
-            db_dir=None,
         )
 
         log_event(
@@ -66,7 +65,7 @@ def rank_projects(
     payload: JobRankingRequest,
     top_k: int = Query(10, ge=1, le=100, description="Return top K matches (1–100). Default 10."),
 ) -> Any:
-    conn = open_db(None)
+    conn = open_db()
     try:
         cursor = conn.execute("SELECT project_id, snapshot FROM project_analysis")
         rows = cursor.fetchall()

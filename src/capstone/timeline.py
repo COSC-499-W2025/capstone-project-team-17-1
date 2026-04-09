@@ -50,8 +50,8 @@ def build_project_timeline(projects, snapshots, metadata_map):
 
     return timeline
 
-def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
-    conn = open_db(db_dir)
+def write_projects_timeline(out_csv: Path) -> int:
+    conn = open_db()
     rows: list[Dict[str, Any]] = []
     for pid, snap in _iter_snapshots(conn):
         fs = snap.get("file_summary", {}) or {}
@@ -99,8 +99,8 @@ def write_projects_timeline(db_dir: Path | None, out_csv: Path) -> int:
     return len(rows)
 
 
-def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
-    conn = open_db(db_dir)
+def write_skills_timeline(out_csv: Path) -> int:
+    conn = open_db()
     agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
     for _, snap in _iter_snapshots(conn):
         skill_timeline = (snap.get("skill_timeline") or {}).get("skills")
@@ -168,12 +168,12 @@ def write_skills_timeline(db_dir: Path | None, out_csv: Path) -> int:
     return len(rows)
 
 
-def write_top_skills_by_year(db_dir: Path | None, out_json: Path, top_n: int = 5) -> int:
+def write_top_skills_by_year(out_json: Path, top_n: int = 5) -> int:
     """
     for each year, list the top N skills by weight
     uses skill_timeline.year_counts if available.
     """
-    conn = open_db(db_dir)
+    conn = open_db()
     years: Dict[str, Dict[str, float]] = {}
     for _, snap in _iter_snapshots(conn):
         skill_timeline = (snap.get("skill_timeline") or {}).get("skills") or []

@@ -12,6 +12,7 @@ from capstone.job_matching import (
     extract_job_skills,
     JobMatchResult,
     match_job_to_project,
+    has_matching_skills,
     build_resume_snippet,
     compute_weights_from_jd,
     score_project_for_job,
@@ -86,7 +87,7 @@ class TestMatchJobToProject(unittest.TestCase):
         ]
 
         job_text = "This job requires strong Python skills and experience with React."
-        result = match_job_to_project(job_text, project_id="demo", db_dir=None)
+        result = match_job_to_project(job_text, project_id="demo")
 
         # Job skills
         self.assertIn("python", result.job_skills)
@@ -108,7 +109,7 @@ class TestMatchJobToProject(unittest.TestCase):
         ]
 
         job_text = "We are looking for a Python developer with React experience."
-        result = match_job_to_project(job_text, project_id="demo", db_dir=None)
+        result = match_job_to_project(job_text, project_id="demo")
 
         # Job wants python and react
         self.assertIn("python", result.job_skills)
@@ -120,6 +121,22 @@ class TestMatchJobToProject(unittest.TestCase):
         # Both job skills should show up as missing
         self.assertIn("python", result.missing_skills)
         self.assertIn("react", result.missing_skills)
+
+
+class TestHasMatchingSkills(unittest.TestCase):
+    @patch("capstone.job_matching.match_job_to_project")
+    def test_has_matching_skills_returns_true_when_matches_exist(self, mock_match_job_to_project):
+        mock_match_job_to_project.return_value = JobMatchResult(
+            project_id="demo",
+            job_skills=["python"],
+            matched_skills=[{"skill": "python"}],
+            missing_skills=[],
+        )
+
+        result = has_matching_skills("python role", "demo")
+
+        self.assertTrue(result)
+        mock_match_job_to_project.assert_called_once_with("python role", "demo")
 
 class TestComputeWeights(unittest.TestCase):
     def test_weights_sum_to_one(self):
