@@ -622,21 +622,17 @@ def storage_user_scope(user_id: str | None):
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
 
-def get_database_root(root_dir: Path | str | None = None) -> Path:
+def get_database_root() -> Path:
     """Resolve the database root directory.
 
-    - Default: <BASE_DIR>/data
-    - Override: explicit directory passed by CLI/server/tests
+    Always resolves to <BASE_DIR>/data.
     """
-    if root_dir is None:
-        root = BASE_DIR / "data"
-    else:
-        root = Path(root_dir)
+    root = BASE_DIR / "data"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
-def get_database_path(user=_UNSET, *, root_dir: Path | str | None = None) -> Path:
+def get_database_path(user=_UNSET) -> Path:
     # Allow overriding the DB path for local debugging.
     # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
     # override = os.getenv("LOOM_DB_PATH")
@@ -653,7 +649,7 @@ def get_database_path(user=_UNSET, *, root_dir: Path | str | None = None) -> Pat
     else:
         storage_user_key = resolve_storage_user_key(user)
 
-    database_root = get_database_root(root_dir)
+    database_root = get_database_root()
 
     if storage_user_key:
         path = database_root / "users" / _user_dir(storage_user_key)
@@ -667,8 +663,8 @@ def get_database_path(user=_UNSET, *, root_dir: Path | str | None = None) -> Pat
 # -----------------------------
 # DB lifecycle
 # -----------------------------
-def open_db(base_dir: Path | str | None = None, *, user=_UNSET) -> sqlite3.Connection:
-    db_path = get_database_path(user=user, root_dir=base_dir)
+def open_db(*, user=_UNSET) -> sqlite3.Connection:
+    db_path = get_database_path(user=user)
     db_key = str(db_path.resolve())
 
     logger.info("Opening database at %s", db_path)

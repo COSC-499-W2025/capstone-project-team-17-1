@@ -54,7 +54,7 @@ class ApiEndpointTests(unittest.TestCase):
         self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
         storage._bind_storage_user(None)
-        self.con = storage.open_db(None, user=None)
+        self.con = storage.open_db(user=None)
         ensure_indexes(self.con)
         seed_project(self.con, "demo")
 
@@ -100,7 +100,7 @@ class ApiEndpointTests(unittest.TestCase):
 
         r = client.post("/portfolio/demo/edit", json={"summary": "Custom showcase summary."}, headers=headers)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["data"]["summary"], "Custom showcase summary.")
+        self.assertEqual(r.json()["data"]["portfolio_blurb"], "Custom showcase summary.")
 
         r = client.post("/portfolio/demo/edit", json={}, headers=headers)
         self.assertEqual(r.status_code, 400)
@@ -110,7 +110,9 @@ class ApiEndpointTests(unittest.TestCase):
 
         try:
             r = client.get("/portfolio/does-not-exist", headers=headers)
-            self.assertEqual(r.status_code, 404)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()["data"]["project_id"], "does-not-exist")
+            self.assertEqual(r.json()["data"]["resolved"]["portfolio_blurb"], "")
         except NameError:
             self.skipTest("Current showcase route raises internal NameError for missing projects")
 
@@ -126,7 +128,7 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
 
-        r = client.get("/portfolio/summary?user=alice&limit=1", headers=headers)
+        r = client.get("/showcase/portfolio/summary?user=alice&limit=1", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
 
