@@ -696,9 +696,11 @@ def _handle_job_match(args: argparse.Namespace) -> int:
 
 
 def _handle_api(args: argparse.Namespace) -> int:
-    db_dir = str(args.db_dir) if args.db_dir else None
+    if args.db_dir is not None:
+        import capstone.storage as storage_module
+        storage_module.BASE_DIR = Path(args.db_dir)
     from capstone.api.server import create_app as create_api_app
-    app = create_api_app(db_dir=db_dir, auth_token=args.token)
+    app = create_api_app(auth_token=args.token)
     try:
         import uvicorn
     except Exception:

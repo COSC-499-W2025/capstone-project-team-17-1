@@ -124,7 +124,7 @@ def insights_client(tmp_path: Path):
     finally:
         conn.close()
 
-    app = create_app(db_dir=db_dir, auth_token=None)
+    app = create_app(auth_token=None)
     client = TestClient(app)
     try:
         yield client

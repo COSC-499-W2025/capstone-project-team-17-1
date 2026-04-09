@@ -13,7 +13,7 @@ def no_auth(monkeypatch):
 
 @pytest.fixture()
 def fake_request(tmp_path):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_dir=str(tmp_path), auth_token=None)))
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(auth_token=None)))
 
 
 def test_build_portfolio_blurb_uses_individual_wording():

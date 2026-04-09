@@ -71,7 +71,7 @@ class _ProjectsAPIBase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         storage.BASE_DIR = Path(self._tmpdir.name)
-        app = create_app(db_dir=self._tmpdir.name, auth_token=None)
+        app = create_app(auth_token=None)
         self.client = TestClient(app)
 
     def tearDown(self) -> None:

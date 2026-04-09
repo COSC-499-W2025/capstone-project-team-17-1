@@ -59,7 +59,7 @@ class ApiEndpointTests(unittest.TestCase):
         seed_project(self.con, "demo")
 
         try:
-            self.app = create_app(db_dir=str(self.dbdir), auth_token="t")
+            self.app = create_app(auth_token="t")
         except Exception:
             self.app = None
 

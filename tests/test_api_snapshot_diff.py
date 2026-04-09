@@ -13,7 +13,7 @@ def test_auto_detect_project_id_and_snapshot_diff(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    app = get_app_for_tests(str(tmp_path))
+    app = get_app_for_tests()
     client = TestClient(app)
     seed_project_id = f"snapshot-diff-{uuid.uuid4().hex[:8]}"
 

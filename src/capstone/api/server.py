@@ -1,4 +1,3 @@
-import os
 import traceback
 from contextlib import asynccontextmanager
 
@@ -57,15 +56,7 @@ def _safe_import_resumes():
         return None, None, traceback.format_exc()
 
 
-def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
-    # Fold db_dir into the single source of truth (storage.BASE_DIR). All
-    # route handlers, middleware, and helpers resolve DB paths via BASE_DIR,
-    # so setting it here is sufficient — no db_dir threading required.
-    if db_dir is not None:
-        import capstone.storage as storage_module
-        from pathlib import Path as _Path
-        storage_module.BASE_DIR = _Path(db_dir)
-
+def create_app(auth_token: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
         # Startup
@@ -135,7 +126,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.add_api_route("/api/github/token", put_github_token, methods=["PUT"], tags=["github"])
     app.include_router(cloud_router)
     app.include_router(project_viewer_router)
-    configure_auth(db_dir)
+    configure_auth()
     app.include_router(auth_router)
     # Optional job-match routes (since routes/job_match.py may not exist in this branch)
     job_match_router, job_match_err = _safe_import_job_match()
@@ -198,11 +189,15 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     return app
 
 
-def get_app_for_tests(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
-    return create_app(db_dir=db_dir, auth_token=auth_token)
+def get_app_for_tests(auth_token: str | None = None) -> FastAPI:
+    return create_app(auth_token=auth_token)
 
 
-DB_DIR = os.getenv("CAPSTONE_DB_DIR")
+import os
+if (db_dir := os.getenv("CAPSTONE_DB_DIR")):
+    import capstone.storage as storage_module
+    from pathlib import Path as _Path
+    storage_module.BASE_DIR = _Path(db_dir)
 AUTH_TOKEN = os.getenv("CAPSTONE_AUTH_TOKEN")
 
-app = create_app(db_dir=DB_DIR, auth_token=AUTH_TOKEN)
+app = create_app(auth_token=AUTH_TOKEN)

@@ -15,7 +15,7 @@ def test_project_edit_roundtrip(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    app = get_app_for_tests(str(tmp_path))
+    app = get_app_for_tests()
     client = TestClient(app)
 
     zip_path = _any_zip()

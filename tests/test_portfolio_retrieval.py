@@ -83,7 +83,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         # Unauthorized
         r = client.get("/portfolios/latest?projectId=demo")
@@ -99,7 +99,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 
@@ -144,7 +144,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 
@@ -185,7 +185,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 

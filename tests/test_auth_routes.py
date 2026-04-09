@@ -11,13 +11,15 @@ def _client(tmp_path) -> TestClient:
     storage.BASE_DIR = tmp_path
     storage._bind_storage_user(None)
     auth_routes._SESSIONS.clear()
-    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    app = create_app(auth_token=None)
     return TestClient(app)
 
 
 def _isolated_client(tmp_path) -> TestClient:
     """Use get_app_for_tests for proper DB isolation in pytest tmp_path fixtures."""
-    app = get_app_for_tests(db_dir=str(tmp_path))
+    storage.BASE_DIR = tmp_path
+    storage._bind_storage_user(None)
+    app = get_app_for_tests()
     return TestClient(app)
 
 

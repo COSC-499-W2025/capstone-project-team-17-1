@@ -45,7 +45,7 @@ def client(tmp_path):
     finally:
         conn.close()
     
-    app = create_app(db_dir=db_dir, auth_token=None)
+    app = create_app(auth_token=None)
     test_client = TestClient(app)
     try:
         yield test_client

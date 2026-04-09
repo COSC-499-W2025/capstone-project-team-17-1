@@ -35,10 +35,16 @@ class _ResumeAPIBase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
-        self.app = get_app_for_tests(db_dir=str(self.tmp_path))
+        self._original_base_dir = storage.BASE_DIR
+        self._original_current_user = storage.current_storage_user()
+        storage.BASE_DIR = self.tmp_path
+        storage._bind_storage_user(None)
+        self.app = get_app_for_tests()
         self.client = TestClient(self.app)
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
+        self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)
+        self.addCleanup(storage._bind_storage_user, self._original_current_user)
 
         # After M23 resumes.user_id FK → user(id); the singleton row (id=1) is
         # always present. contributor_id is used only for project-linking operations.
@@ -443,32 +449,37 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         _SESSIONS["test-token"] = {
             "user": {"username": "testuser", "email": "test@example.com"},
         }
-        conn = storage.open_db()
-        storage.upsert_user(conn, "testuser", github_username="testuser")
+        with storage.storage_user_scope("testuser"):
+            conn = storage.open_db()
+            storage.upsert_user(conn, "testuser", github_username="testuser")
         self.addCleanup(lambda: _SESSIONS.pop("test-token", None))
         self.auth_headers = {"Authorization": "Bearer test-token"}
 
     def _seed_project_for_user(self, project_id: str) -> None:
-        self._seed_project_for_user_id(self.contributor_id, project_id)
+        with storage.storage_user_scope("testuser"):
+            conn = storage.open_db()
+            contributor_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
+            self._seed_project_for_user_id(contributor_id, project_id)
 
     def _seed_project_for_user_id(self, user_id: int, project_id: str) -> None:
-        conn = storage.open_db()
-        snapshot = {
-            "project_name": "Cool Project",
-            "languages": {"Python": 5, "SQL": 2},
-            "frameworks": ["fastapi"],
-            "skills": [{"skill": "pytest"}],
-            "collaboration": {"classification": "collaborative"},
-            "file_summary": {"file_count": 10, "total_bytes": 5000, "active_days": 30},
-        }
-        storage.store_analysis_snapshot(
-            conn,
-            project_id=project_id,
-            classification="collaborative",
-            primary_contributor="testuser",
-            snapshot=snapshot,
-        )
-        storage.link_contributor_to_project(conn, user_id, project_id, contributor_name="testuser")
+        with storage.storage_user_scope("testuser"):
+            conn = storage.open_db()
+            snapshot = {
+                "project_name": "Cool Project",
+                "languages": {"Python": 5, "SQL": 2},
+                "frameworks": ["fastapi"],
+                "skills": [{"skill": "pytest"}],
+                "collaboration": {"classification": "collaborative"},
+                "file_summary": {"file_count": 10, "total_bytes": 5000, "active_days": 30},
+            }
+            storage.store_analysis_snapshot(
+                conn,
+                project_id=project_id,
+                classification="collaborative",
+                primary_contributor="testuser",
+                snapshot=snapshot,
+            )
+            storage.link_contributor_to_project(conn, user_id, project_id, contributor_name="testuser")
 
     # --- fixed existing tests (now pass Bearer token) ---
 
@@ -522,8 +533,9 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_for_other_contributor_owned_by_session_user(self):
         # user_id in body = other contributor → resume.user_id must still equal session owner
-        conn = storage.open_db()
-        other_id = storage.upsert_contributor(conn, "otheruser", email="other@example.com")
+        with storage.storage_user_scope("testuser"):
+            conn = storage.open_db()
+            other_id = storage.upsert_contributor(conn, "otheruser", email="other@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-1")
 
         r = self.client.post(
@@ -541,8 +553,9 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_for_other_appears_in_session_users_resume_list(self):
         # After M23 all resumes are owned by user_id=1 (singleton per DB).
         # Generating using another contributor's data still stores the resume under user_id=1.
-        conn = storage.open_db()
-        other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
+        with storage.storage_user_scope("testuser"):
+            conn = storage.open_db()
+            other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-2")
 
         self.client.post(

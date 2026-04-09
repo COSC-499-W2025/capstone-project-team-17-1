@@ -95,8 +95,7 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-def configure(db_dir: Optional[str] = None):
-    # server.py passes db_dir here, but auth no longer uses SQLite locally.
+def configure():
     global _AUTH_BASE_URL
     _AUTH_BASE_URL = "https://loom-auth.amirparsaaminian1383.workers.dev"
     _load_sessions()
