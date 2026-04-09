@@ -45,14 +45,16 @@ def seed_snapshot(db_path: str, project_id: str, snapshot: dict):
 def seed_contributor(db_path: str, project_id: str, contributor: str = "alice"):
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute(
-            """
-            INSERT INTO contributor_stats(project_id, contributor, commits, pull_requests, issues, reviews, score, source)
-            VALUES (?, ?, 1, 0, 0, 0, 1.0, "test")
-            """,
-            (project_id, contributor),
+        user_id = storage.upsert_contributor(conn, contributor)
+        storage.upsert_project(conn, project_id)
+        storage.store_contributor_stats(
+            conn,
+            project_id=project_id,
+            contributor=contributor,
+            user_id=user_id,
+            commits=1,
+            score=1.0,
         )
-        conn.commit()
     finally:
         conn.close()
 

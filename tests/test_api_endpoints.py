@@ -1,4 +1,3 @@
-import json
 import sqlite3
 import tempfile
 import unittest
@@ -20,47 +19,31 @@ from capstone import storage
 from fastapi.testclient import TestClient
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS project_analysis(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  classification TEXT,
-  primary_contributor TEXT,
-  snapshot TEXT NOT NULL,
-  zip_path TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS contributor_stats(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  contributor TEXT NOT NULL,
-  commits INTEGER NOT NULL DEFAULT 0,
-  pull_requests INTEGER NOT NULL DEFAULT 0,
-  issues INTEGER NOT NULL DEFAULT 0,
-  reviews INTEGER NOT NULL DEFAULT 0,
-  score REAL NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-"""
-
-
 def seed_project(conn: sqlite3.Connection, project_id: str = "demo"):
     snap = {
         "project_name": "Demo Project",
         "file_summary": {"file_count": 2, "total_bytes": 123, "active_days": 1},
         "collaboration": {"primary_contributor": "alice"},
     }
-    conn.execute(
-        "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (project_id, "ok", "alice", json.dumps(snap), "2025-01-01T00:00:00"),
+    storage.store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification="ok",
+        primary_contributor="alice",
+        snapshot=snap,
     )
-    conn.execute(
-        "INSERT INTO contributor_stats(project_id, contributor, commits, pull_requests, issues, reviews, score, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (project_id, "alice", 3, 1, 2, 1, 1.0, "2025-01-01T00:00:00"),
+    user_id = storage.upsert_contributor(conn, "alice")
+    storage.store_contributor_stats(
+        conn,
+        project_id=project_id,
+        contributor="alice",
+        user_id=user_id,
+        commits=3,
+        pull_requests=1,
+        issues=2,
+        reviews=1,
+        score=1.0,
     )
-    conn.commit()
 
 
 class ApiEndpointTests(unittest.TestCase):
@@ -71,10 +54,7 @@ class ApiEndpointTests(unittest.TestCase):
         self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
         storage._bind_storage_user(None)
-        db_path = self.dbdir / "data" / "guest" / "capstone.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(db_path)
-        self.con.executescript(SCHEMA)
+        self.con = storage.open_db(None, user=None)
         ensure_indexes(self.con)
         seed_project(self.con, "demo")
 
@@ -84,7 +64,7 @@ class ApiEndpointTests(unittest.TestCase):
             self.app = None
 
     def tearDown(self):
-        self.con.close()
+        storage.close_db(self.con)
         storage.BASE_DIR = self._original_base_dir
         storage._bind_storage_user(self._original_current_user)
         self.tmp.cleanup()
