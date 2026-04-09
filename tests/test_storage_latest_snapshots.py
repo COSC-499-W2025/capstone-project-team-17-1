@@ -1,6 +1,5 @@
 import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -32,20 +31,8 @@ def _insert_row(conn, project_id: str, created_at: str, snapshot_obj, classifica
 
 class TestFetchLatestSnapshots(unittest.TestCase):
     def _open_temp_db(self):
-        td = tempfile.TemporaryDirectory()
-        self.addCleanup(td.cleanup)
-
-        db_dir = Path(td.name)
-        original_base_dir = storage.BASE_DIR
-        original_current_user = storage.current_storage_user()
-        storage.BASE_DIR = db_dir
-        storage._bind_storage_user(None)
-        conn = storage.open_db(db_dir)
-
-        # close must happen before td.cleanup
+        conn = storage.open_db()
         self.addCleanup(conn.close)
-        self.addCleanup(setattr, storage, "BASE_DIR", original_base_dir)
-        self.addCleanup(storage._bind_storage_user, original_current_user)
         return conn
 
     def test_empty_db_returns_empty_list(self):

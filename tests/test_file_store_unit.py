@@ -29,7 +29,7 @@ class FileStoreUnitTests(unittest.TestCase):
         storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = Path(self.tmpdir.name) / "files"
 
-        self.conn = storage.open_db(storage.DB_DIR)
+        self.conn = storage.open_db()
 
     def tearDown(self) -> None:
         storage.BASE_DIR = self._original_base_dir

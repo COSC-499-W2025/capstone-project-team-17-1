@@ -1,16 +1,14 @@
-import tempfile
 import time
 import unittest
-from pathlib import Path
 
 from capstone import storage
 
 
 class TestIncrementalSnapshots(unittest.TestCase):
     def test_same_project_multiple_snapshots_are_preserved(self):
-        with tempfile.TemporaryDirectory() as td:
-            conn = storage.open_db(Path(td))
+        conn = storage.open_db()
 
+        try:
             project_id = "p1"
 
             # Store two snapshots for same project (incremental uploads)
@@ -40,5 +38,5 @@ class TestIncrementalSnapshots(unittest.TestCase):
             # newest-first ordering
             self.assertEqual(history[0]["snapshot"]["version"], 2)
             self.assertEqual(history[1]["snapshot"]["version"], 1)
-
+        finally:
             storage.close_db()

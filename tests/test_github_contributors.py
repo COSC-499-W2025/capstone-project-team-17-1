@@ -1,5 +1,4 @@
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from capstone.storage import (  # noqa: E402
     fetch_latest_contributor_stats,
     open_db,
     store_contributor_stats,
+    upsert_contributor,
 )
 
 
@@ -97,63 +97,63 @@ class GitHubContributorTests(unittest.TestCase):
         self.assertEqual(by_name["bob"].commits, 3)
 
     def test_rankings_refresh_when_weights_change(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            try:
-                conn = open_db(Path(tmpdir))
-                old_weights = {
-                    "commits": 0.3,
-                    "pull_requests": 0.2,
-                    "issues": 0.15,
-                    "reviews": 0.1,
-                }
-                old_score = compute_score(
+        conn = open_db()
+        try:
+            old_weights = {
+                "commits": 0.3,
+                "pull_requests": 0.2,
+                "issues": 0.15,
+                "reviews": 0.1,
+            }
+            old_score = compute_score(
+                {
+                    "commits": 10,
+                    "pull_requests": 2,
+                    "issues": 1,
+                    "reviews": 0,
+                },
+                weights=old_weights,
+            )
+            store_contributor_stats(
+                conn,
+                project_id="demo",
+                contributor="alice",
+                user_id=upsert_contributor(conn, "alice"),
+                commits=10,
+                pull_requests=2,
+                issues=1,
+                reviews=0,
+                score=old_score,
+                weights_hash=weights_hash(old_weights),
+                source="github",
+            )
+
+            new_weights = {
+                "commits": 0.25,
+                "pull_requests": 0.25,
+                "issues": 0.15,
+                "reviews": 0.1,
+            }
+            rankings = get_contributor_rankings(conn, "demo", weights=new_weights)
+            self.assertEqual(rankings[0]["contributor"], "alice")
+
+            updated = fetch_latest_contributor_stats(conn, "demo")[0]
+            self.assertEqual(updated["weights_hash"], weights_hash(new_weights))
+            self.assertAlmostEqual(
+                updated["score"],
+                compute_score(
                     {
                         "commits": 10,
                         "pull_requests": 2,
                         "issues": 1,
                         "reviews": 0,
                     },
-                    weights=old_weights,
-                )
-                store_contributor_stats(
-                    conn,
-                    project_id="demo",
-                    contributor="alice",
-                    commits=10,
-                    pull_requests=2,
-                    issues=1,
-                    reviews=0,
-                    score=old_score,
-                    weights_hash=weights_hash(old_weights),
-                    source="github",
-                )
-
-                new_weights = {
-                    "commits": 0.25,
-                    "pull_requests": 0.25,
-                    "issues": 0.15,
-                    "reviews": 0.1,
-                }
-                rankings = get_contributor_rankings(conn, "demo", weights=new_weights)
-                self.assertEqual(rankings[0]["contributor"], "alice")
-
-                updated = fetch_latest_contributor_stats(conn, "demo")[0]
-                self.assertEqual(updated["weights_hash"], weights_hash(new_weights))
-                self.assertAlmostEqual(
-                    updated["score"],
-                    compute_score(
-                        {
-                            "commits": 10,
-                            "pull_requests": 2,
-                            "issues": 1,
-                            "reviews": 0,
-                        },
-                        weights=new_weights,
-                    ),
-                    places=6,
-                )
-            finally:
-                close_db()
+                    weights=new_weights,
+                ),
+                places=6,
+            )
+        finally:
+            close_db()
 
 
 if __name__ == "__main__":

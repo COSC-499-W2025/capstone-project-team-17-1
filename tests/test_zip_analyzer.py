@@ -89,7 +89,6 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             mode=mode,
             preferences=load_config().preferences,
             project_id="sample",
-            db_dir=self.tmp_path / "db",
         )
 
         self.assertEqual(summary["resolved_mode"], "local")
@@ -118,7 +117,7 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
         self.assertEqual(updated_prefs.analysis_mode, "local")
         self.assertIsNotNone(updated_prefs.last_opened_path)
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         cursor = conn.execute("SELECT COUNT(*) FROM project_analysis WHERE project_id = ?", ("sample",))
         self.assertEqual(cursor.fetchone()[0], 1)
         # uploaded archive should be tracked in files/uploads
@@ -161,7 +160,6 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             mode=mode,
             preferences=load_config().preferences,
             project_id="sample_utf16",
-            db_dir=self.tmp_path / "db",
         )
 
         self.assertEqual(summary["collaboration"]["classification"], "collaborative")
@@ -189,7 +187,6 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             mode=mode,
             preferences=load_config().preferences,
             project_id="sample",
-            db_dir=self.tmp_path / "db",
         )
         second = analyzer.analyze(
             zip_path=archive_path,
@@ -198,13 +195,12 @@ class ZipAnalyzerIntegrationTestCase(unittest.TestCase):
             mode=mode,
             preferences=load_config().preferences,
             project_id="sample2",
-            db_dir=self.tmp_path / "db",
         )
 
         self.assertEqual(first["archive_file_id"], second["archive_file_id"])
         self.assertTrue(second["archive_dedup"])
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         ref_count = conn.execute("SELECT ref_count FROM files WHERE file_id = ?", (first["archive_file_id"],)).fetchone()[0]
         self.assertEqual(ref_count, 2)
         upload_count = conn.execute("SELECT COUNT(*) FROM uploads WHERE file_id = ?", (first["archive_file_id"],)).fetchone()[0]
@@ -377,7 +373,6 @@ class ZipContributorStorageTestCase(unittest.TestCase):
             mode=mode,
             preferences=load_config().preferences,
             project_id=project_id,
-            db_dir=self.tmp_path / "db",
         )
 
     def test_human_contributors_stored_in_users_table(self):
@@ -387,7 +382,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj1")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         rows = conn.execute("SELECT github_username FROM contributors ORDER BY github_username").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
@@ -400,7 +395,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj2")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         rows = conn.execute(
             """
             SELECT c.github_username
@@ -419,7 +414,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         git_log = _reflog_line("Alice Example", "alice@example.com", 1700000000)
         self._run_analyze(self._make_archive(git_log), "proj3")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         row = conn.execute(
             """
             SELECT pc.commits, pc.score
@@ -440,7 +435,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj4")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         rows = conn.execute("SELECT github_username FROM contributors").fetchall()
         names = [r[0] for r in rows]
         self.assertIn("Alice Example", names)
@@ -453,7 +448,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj5")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         rows = conn.execute(
             """
             SELECT c.github_username
@@ -473,7 +468,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj6")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         row = conn.execute(
             """
             SELECT pc.id FROM project_contributors pc
@@ -492,7 +487,7 @@ class ZipContributorStorageTestCase(unittest.TestCase):
         )
         self._run_analyze(self._make_archive(git_log), "proj7")
 
-        conn = storage.open_db(self.tmp_path / "db")
+        conn = storage.open_db()
         row = conn.execute(
             "SELECT email FROM contributors WHERE github_username = ?", ("Alice Example",)
         ).fetchone()
@@ -519,7 +514,7 @@ class ExtractContributorsFromZipTestCase(unittest.TestCase):
         storage.BASE_DIR = self.tmp_path
         storage._bind_storage_user(None)
         file_store.DEFAULT_FILES_ROOT = self.files_root
-        self.conn = storage.open_db(self.tmp_path / "db")
+        self.conn = storage.open_db()
         self.addCleanup(self._tmpdir.cleanup)
         self.addCleanup(storage.close_db)
         self.addCleanup(setattr, storage, "BASE_DIR", self._original_base_dir)

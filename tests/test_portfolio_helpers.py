@@ -19,8 +19,7 @@ from capstone.storage import open_db, close_db, store_analysis_snapshot
 
 @pytest.fixture()
 def conn(tmp_path):
-    database_dir = tmp_path / "db"
-    connection = open_db(database_dir)
+    connection = open_db()
     ensure_portfolio_tables(connection)
     ensure_indexes(connection)
     yield connection

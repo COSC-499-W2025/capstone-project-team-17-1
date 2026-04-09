@@ -1,6 +1,5 @@
 import io
 import sys
-import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -60,10 +59,7 @@ class ProjectRankingTests(unittest.TestCase):
 
     def test_cli_rank_projects_output(self) -> None:
         # Smoke test the CLI handler to ensure ranked output is surfaced to stdout with metrics.
-        tmpdir = tempfile.TemporaryDirectory()
-        self.addCleanup(tmpdir.cleanup)
-        db_dir = Path(tmpdir.name)
-        conn = open_db(db_dir)
+        conn = open_db()
         snapshot = {
             "file_summary": {
                 "file_count": 3,
@@ -81,7 +77,7 @@ class ProjectRankingTests(unittest.TestCase):
         }
         store_analysis_snapshot(conn, project_id="gamma", classification="individual", primary_contributor="me", snapshot=snapshot)
 
-        args = type("Args", (), {"db_dir": db_dir, "user": "me", "limit": None})
+        args = type("Args", (), {"db_dir": None, "user": "me", "limit": None})
         with io.StringIO() as buffer, mock.patch("sys.stdout", buffer):
             exit_code = cli._handle_rank_projects(args)
             output = buffer.getvalue()

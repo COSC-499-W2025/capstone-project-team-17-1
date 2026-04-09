@@ -25,16 +25,14 @@ class StorageTests(unittest.TestCase):
         self.addCleanup(self._tmpdir.cleanup)
 
     def test_open_db_creates_directory_and_reuses_connection(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
-        conn1 = storage.open_db(base_dir)
-        self.assertTrue(base_dir.exists())
+        conn1 = storage.open_db()
+        self.assertTrue(storage.get_database_root().exists())
         self.assertIsInstance(conn1, sqlite3.Connection)
-        conn2 = storage.open_db(base_dir)
+        conn2 = storage.open_db()
         self.assertIsInstance(conn2, sqlite3.Connection)
 
     def test_store_snapshot_validates_and_exports(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
-        conn = storage.open_db(base_dir)
+        conn = storage.open_db()
         snapshot = {"file_summary": {"file_count": 1}}
         storage.store_analysis_snapshot(conn, project_id="demo", classification="individual", primary_contributor="alice", snapshot=snapshot)
 
@@ -56,8 +54,7 @@ class StorageTests(unittest.TestCase):
         self.assertIn("snapshot", exported[0])
 
     def test_store_and_fetch_github_source(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
-        conn = storage.open_db(base_dir)
+        conn = storage.open_db()
         storage.store_github_source(conn, "org/repo", "https://github.com/org/repo", "token-123")
         record = storage.fetch_github_source(conn, "org/repo")
         self.assertIsNotNone(record)
@@ -66,8 +63,7 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(record["token"], "token-123")
 
     def test_store_and_rank_contributor_stats(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
-        conn = storage.open_db(base_dir)
+        conn = storage.open_db()
 
         # contributors must exist before store_contributor_stats (post-M22 schema)
         storage.upsert_contributor(conn, "alice")
@@ -119,8 +115,7 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(ranked_commits[0]["contributor"], "bob")
 
     def test_files_and_uploads_schema_and_uniqueness(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
-        conn = storage.open_db(base_dir)
+        conn = storage.open_db()
 
         # verify tables and required columns exist
         files_cols = {row[1] for row in conn.execute("PRAGMA table_info(files)").fetchall()}
@@ -140,9 +135,8 @@ class StorageTests(unittest.TestCase):
             )
 
     def test_file_store_dedup_and_open(self) -> None:
-        base_dir = Path(self._tmpdir.name) / "db"
         files_root = Path(self._tmpdir.name) / "files"
-        conn = storage.open_db(base_dir)
+        conn = storage.open_db()
 
         tmp_file = Path(self._tmpdir.name) / "sample.txt"
         tmp_file.write_text("hello world", encoding="utf-8")

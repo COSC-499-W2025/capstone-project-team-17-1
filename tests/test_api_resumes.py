@@ -42,7 +42,7 @@ class _ResumeAPIBase(unittest.TestCase):
 
         # After M23 resumes.user_id FK → user(id); the singleton row (id=1) is
         # always present. contributor_id is used only for project-linking operations.
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         self.user_id = 1  # resume ownership always uses the singleton user
         self.contributor_id = storage.upsert_contributor(conn, "testuser", email="test@example.com")
 
@@ -175,7 +175,7 @@ class ResumeExportTestCase(_ResumeAPIBase):
 class ResumeGuestGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_resume_works_without_login_using_guest_bucket(self):
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         guest_id = storage.upsert_contributor(conn, "guestuser", email=None)
         storage.link_contributor_to_project(conn, guest_id, "demo-project", contributor_name="guestuser")
         storage.store_analysis_snapshot(
@@ -443,7 +443,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         _SESSIONS["test-token"] = {
             "user": {"username": "testuser", "email": "test@example.com"},
         }
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         storage.upsert_user(conn, "testuser", github_username="testuser")
         self.addCleanup(lambda: _SESSIONS.pop("test-token", None))
         self.auth_headers = {"Authorization": "Bearer test-token"}
@@ -452,7 +452,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
         self._seed_project_for_user_id(self.contributor_id, project_id)
 
     def _seed_project_for_user_id(self, user_id: int, project_id: str) -> None:
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         snapshot = {
             "project_name": "Cool Project",
             "languages": {"Python": 5, "SQL": 2},
@@ -522,7 +522,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
 
     def test_generate_for_other_contributor_owned_by_session_user(self):
         # user_id in body = other contributor → resume.user_id must still equal session owner
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         other_id = storage.upsert_contributor(conn, "otheruser", email="other@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-1")
 
@@ -541,7 +541,7 @@ class ResumeGenerateTestCase(_ResumeAPIBase):
     def test_generate_for_other_appears_in_session_users_resume_list(self):
         # After M23 all resumes are owned by user_id=1 (singleton per DB).
         # Generating using another contributor's data still stores the resume under user_id=1.
-        conn = storage.open_db(self.tmp_path)
+        conn = storage.open_db()
         other_id = storage.upsert_contributor(conn, "otheruser2", email="other2@example.com")
         self._seed_project_for_user_id(other_id, "other-proj-2")
 
