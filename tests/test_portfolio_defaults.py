@@ -127,7 +127,7 @@ def test_read_portfolio_entry_prefers_overrides_but_exposes_analysis_defaults(mo
         def __exit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr(portfolio_route, "_db_session", lambda db_dir: DummySession())
+    monkeypatch.setattr(portfolio_route, "_db_session", lambda: DummySession())
     monkeypatch.setattr(portfolio_route, "helper_get_latest_snapshot", lambda conn, project_id: snapshot)
     monkeypatch.setattr(portfolio_route, "get_portfolio_customization", lambda conn, project_id: customization)
     monkeypatch.setattr(portfolio_route, "list_portfolio_images", lambda conn, project_id: [])

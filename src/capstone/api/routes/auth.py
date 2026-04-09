@@ -261,7 +261,7 @@ def me(request: Request):
     # Middleware has already bound the storage user from the Bearer session.
     from capstone.portfolio_retrieval import _db_session
     from capstone.api.routes.resumes import _get_current_user_contributor_id
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         contributor_id = _get_current_user_contributor_id(conn)
     return {"user": user, "contributor_id": contributor_id}
 
@@ -305,7 +305,7 @@ def update_me(payload: UpdateProfileRequest, request: Request):
 def get_my_education(request: Request):
     _require_session(request)
     from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         entries = storage.get_user_education(conn, 1)
     return {"data": entries, "error": None}
 
@@ -324,7 +324,7 @@ async def update_my_education(request: Request):
         if not isinstance(e, dict) or not str(e.get("university") or "").strip():
             raise HTTPException(status_code=400, detail="each entry requires a university field")
     from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         storage.replace_user_education(conn, 1, entries)
         result = storage.get_user_education(conn, 1)
     return {"data": result, "error": None}

@@ -68,7 +68,7 @@ def _bind_current_user_from_session(request: Request) -> None:
 
 
 def _load_heatmap_rows(*, user=_DB_UNSET) -> list[dict[str, Any]]:
-    with _db_session(None, user=user) as c:
+    with _db_session(user=user) as c:
         return fetch_latest_snapshots(c) or []
 
 
@@ -971,7 +971,7 @@ def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> d
 
     projects: list[PortfolioProject] = []
 
-    with _db_session(None) as c:
+    with _db_session() as c:
         for pid in payload.project_ids:
             snapshot = fetch_latest_snapshot(c, str(pid))
 
@@ -1040,7 +1040,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
     )
     
     if customization_requested and payload.projects is None:
-        with _db_session(None) as conn:
+        with _db_session() as conn:
             snapshot = helper_get_latest_snapshot(conn, id)
             if not snapshot:
                 raise HTTPException(status_code=404, detail="Project not found")
@@ -1094,7 +1094,7 @@ def latest_portfolio_summary(request: Request) -> dict[str, Any]:
         _check_auth(request)
         _bind_current_user_from_session(request)
 
-        with _db_session(None) as c:
+        with _db_session() as c:
             rows = fetch_latest_snapshots(c) or []
 
         if not rows:
@@ -1189,7 +1189,7 @@ def portfolio_project_evolution(
             return {"data": {}, "error": None}
 
         payload: dict[str, Any] = {}
-        with _db_session(None) as c:
+        with _db_session() as c:
             for project_id in cleaned_ids:
                 history = fetch_project_snapshot_history(c, project_id, limit=max(1, min(int(limit), 12)))
                 payload[project_id] = {
@@ -1227,7 +1227,7 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         return {"content": content}
 
     if format == ExportFormat.pdf:
-        with _db_session(None) as conn:
+        with _db_session() as conn:
             if id == "latest":
                 rows = fetch_latest_snapshots(conn) or []
                 project_ids: list[str] = []
@@ -1280,7 +1280,7 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         snapshot = helper_get_latest_snapshot(conn, id)
         customization = get_portfolio_customization(conn, id) or {}
         images = list_portfolio_images(conn, id)
@@ -1335,7 +1335,7 @@ def read_portfolio_images(id: str, request: Request) -> dict[str, Any]:
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         return {"data": {"images": list_portfolio_images(conn, id)}, "error": None}
 
 
@@ -1352,7 +1352,7 @@ async def upload_portfolio_image(
 
     file_bytes = await file.read()
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         snapshot = helper_get_latest_snapshot(conn, id)
         if not snapshot:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -1378,7 +1378,7 @@ def remove_portfolio_image(id: str, image_id: str, request: Request) -> dict[str
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         deleted = delete_portfolio_image(conn, project_id=id, image_id=image_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1391,7 +1391,7 @@ def choose_cover_portfolio_image(id: str, image_id: str, request: Request) -> di
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         updated = set_cover_portfolio_image(conn, project_id=id, image_id=image_id)
         if not updated:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1408,7 +1408,7 @@ def reorder_project_portfolio_images(
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         try:
             images = reorder_portfolio_images(conn, project_id=id, image_ids=payload.image_ids)
         except ValueError as exc:
@@ -1422,7 +1422,7 @@ def get_portfolio_image_file(id: str, image_id: str, request: Request):
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         row = conn.execute(
             """
             SELECT image_path

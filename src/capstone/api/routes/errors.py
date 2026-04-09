@@ -41,7 +41,7 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
             )
             return {"status": "local_consent_required"}
 
-        with _db_session(None) as conn:
+        with _db_session() as conn:
             raw_rows = conn.execute(
                 "SELECT project_id, created_at, zip_path FROM project_analysis ORDER BY id DESC LIMIT 10"
             ).fetchall()
@@ -102,7 +102,7 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
 # ---------------------------------------------------------
 @router.get("/errors")
 def get_error_analysis(request: Request) -> Dict[str, Any]:
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         results = fetch_error_results(conn)
 
         if results is None:
