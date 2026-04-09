@@ -1,20 +1,12 @@
-import os
 import sqlite3
-import tempfile
-from pathlib import Path
 from contextlib import contextmanager
 
 from capstone import storage
 
 
 @contextmanager
-def _open_isolated_db(db_dir: Path):
-    original_base_dir = storage.BASE_DIR
-    original_current_user = storage.current_storage_user()
-    original_loom_db_path = os.environ.pop("LOOM_DB_PATH", None)
-    storage.BASE_DIR = db_dir
-    storage._bind_storage_user(None)
-    conn = storage.open_db(db_dir)
+def _open_isolated_db():
+    conn = storage.open_db()
     try:
         yield conn
     finally:
@@ -22,16 +14,10 @@ def _open_isolated_db(db_dir: Path):
             conn.close()
         except Exception:
             pass
-        storage.BASE_DIR = original_base_dir
-        storage._bind_storage_user(original_current_user)
-        if original_loom_db_path is not None:
-            os.environ["LOOM_DB_PATH"] = original_loom_db_path
 
 
 def test_users_and_links_schema_and_fk():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             # Tables exist
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -95,9 +81,7 @@ def test_users_and_links_schema_and_fk():
 
 
 def test_get_and_update_user_profile():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             storage.upsert_user(conn, "alice")
             storage.update_user_profile(
@@ -120,9 +104,7 @@ def test_get_and_update_user_profile():
 
 
 def test_upsert_contributor_sets_default_github_url():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             user_id = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             row = conn.execute(
@@ -133,9 +115,7 @@ def test_upsert_contributor_sets_default_github_url():
 
 
 def test_upsert_default_resume_modules_creates_default_sections_and_templates():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             resume_id = storage.upsert_default_resume_modules(
                 conn,
@@ -222,9 +202,7 @@ def test_upsert_default_resume_modules_creates_default_sections_and_templates():
 
 
 def test_upsert_default_resume_modules_updates_existing_draft_title():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             first_id = storage.upsert_default_resume_modules(
                 conn,
@@ -261,13 +239,10 @@ def test_upsert_default_resume_modules_updates_existing_draft_title():
             row = conn.execute("SELECT title FROM resumes WHERE id = ?", (first_id,)).fetchone()
             assert row and row[0] == "Alice Doe_20260215020406"
 
-        conn.close()
 
 
 def test_upsert_default_resume_modules_create_new_for_same_user():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             first_id = storage.upsert_default_resume_modules(
                 conn,
@@ -311,9 +286,7 @@ def test_upsert_default_resume_modules_create_new_for_same_user():
 
 
 def test_upsert_contributor_filters_noreply_and_sets_user_id_in_stats():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             uid = storage.upsert_contributor(conn, "boty", email="noreply@github.com")
             assert uid > 0
@@ -333,9 +306,7 @@ def test_upsert_contributor_filters_noreply_and_sets_user_id_in_stats():
 
 
 def test_bulk_upsert_contributors_links_projects_and_users():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             class Row:
                 def __init__(self, contributor, email=None):
@@ -361,9 +332,7 @@ def test_bulk_upsert_contributors_links_projects_and_users():
 
 
 def test_store_contributor_stats_updates_latest_user_id():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
 
             uid1 = storage.upsert_contributor(conn, "alice", email="alice@example.com")
             storage.store_contributor_stats(conn, project_id="demo", contributor="alice", user_id=None, commits=1)
@@ -373,7 +342,6 @@ def test_store_contributor_stats_updates_latest_user_id():
             assert latest and latest[0]["user_id"] == uid1
             assert latest[0]["commits"] == 2
 
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -386,9 +354,7 @@ def test_store_contributor_stats_updates_latest_user_id():
 
 @contextmanager
 def _edu_conn():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             storage.replace_user_education(conn, 1, [])
             yield conn
 
@@ -461,9 +427,7 @@ def test_replace_user_education_partial_fields_stored_as_none():
 
 
 def test_user_education_table_has_required_columns():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(user_education)").fetchall()}
             for col in ("id", "user_id", "university", "degree", "start_date", "end_date", "city", "state", "sort_order"):
                 assert col in columns, f"Missing column: {col}"
@@ -484,9 +448,7 @@ _HEADER = {
 
 
 def test_upsert_default_resume_modules_populates_summary_section():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             resume_id = storage.upsert_default_resume_modules(
                 conn,
                 user_id=1,
@@ -509,9 +471,7 @@ def test_upsert_default_resume_modules_populates_summary_section():
 
 
 def test_upsert_default_resume_modules_no_summary_uses_empty_template():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             resume_id = storage.upsert_default_resume_modules(
                 conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
                 summary=None, create_new=True,
@@ -529,9 +489,7 @@ def test_upsert_default_resume_modules_no_summary_uses_empty_template():
 
 
 def test_upsert_default_resume_modules_populates_education_section():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             edu = [{"university": "UBCO", "degree": "BSc CS", "start_date": "2022",
                     "end_date": "Present", "city": "Kelowna", "state": "BC"}]
             resume_id = storage.upsert_default_resume_modules(
@@ -552,9 +510,7 @@ def test_upsert_default_resume_modules_populates_education_section():
 
 
 def test_upsert_default_resume_modules_education_location_city_state():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             edu = [{"university": "UBC", "degree": "BSc", "city": "Vancouver", "state": "BC"}]
             resume_id = storage.upsert_default_resume_modules(
                 conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
@@ -571,9 +527,7 @@ def test_upsert_default_resume_modules_education_location_city_state():
 
 
 def test_upsert_default_resume_modules_refreshes_summary_on_regenerate():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_dir = Path(tmpdir)
-        with _open_isolated_db(db_dir) as conn:
+    with _open_isolated_db() as conn:
             resume_id = storage.upsert_default_resume_modules(
                 conn, user_id=1, header=_HEADER, core_skills=[], projects=[],
                 summary="First summary.", create_new=True,
