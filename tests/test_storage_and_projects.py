@@ -26,7 +26,7 @@ class StorageTests(unittest.TestCase):
 
     def test_open_db_creates_directory_and_reuses_connection(self) -> None:
         conn1 = storage.open_db()
-        self.assertTrue(storage.get_database_root().exists())
+        self.assertTrue((storage.BASE_DIR / "data").exists())
         self.assertIsInstance(conn1, sqlite3.Connection)
         conn2 = storage.open_db()
         self.assertIsInstance(conn2, sqlite3.Connection)
