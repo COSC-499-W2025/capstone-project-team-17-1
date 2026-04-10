@@ -198,13 +198,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     """)
 
     # github_projects removed in M21 — superseded by projects (source, github_url, github_branch)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS github_auth (
-            id INTEGER PRIMARY KEY,
-            access_token TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # github_auth removed in M25 — token now lives in user.github_token_enc
 
     # --- Child tables ---
 
@@ -2564,34 +2558,42 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
 # -------------------------------
 
 def save_github_token(token: str):
-    """Store GitHub access token."""
-    with open_db() as conn:
-        conn.execute("DELETE FROM github_auth")
+    """Encrypt and store GitHub access token in the user row."""
+    conn = open_db()
+    try:
         conn.execute(
-            "INSERT INTO github_auth (access_token) VALUES (?)",
-            (token,)
+            "UPDATE user SET github_token_enc = ? WHERE id = 1",
+            (_encrypt_token(token),),
         )
         conn.commit()
+    finally:
+        close_db(conn)
 
 
 def get_github_token():
-    """Return stored GitHub token if it exists."""
-    with open_db() as conn:
+    """Return decrypted GitHub token, or None if not set."""
+    conn = open_db()
+    try:
         row = conn.execute(
-            "SELECT access_token FROM github_auth LIMIT 1"
+            "SELECT github_token_enc FROM user WHERE id = 1"
         ).fetchone()
-
-        if row:
-            return row[0]
-
-    return None
+        if row and row[0]:
+            return _decrypt_token(row[0])
+        return None
+    finally:
+        close_db(conn)
 
 
 def clear_github_token():
-    """Logout GitHub user."""
-    with open_db() as conn:
-        conn.execute("DELETE FROM github_auth")
+    """Remove stored GitHub token."""
+    conn = open_db()
+    try:
+        conn.execute(
+            "UPDATE user SET github_token_enc = NULL WHERE id = 1"
+        )
         conn.commit()
+    finally:
+        close_db(conn)
 
 __all__ = [
     "open_db",
