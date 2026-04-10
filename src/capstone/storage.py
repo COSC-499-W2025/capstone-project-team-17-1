@@ -23,7 +23,6 @@ import time
 import uuid
 from pathlib import Path
 from typing import Iterable
-from datetime import datetime
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
 import os
@@ -525,12 +524,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""
         INSERT INTO error_analysis_results (project_id, errors_json, updated_at)
-        VALUES (?, ?, ?)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(project_id)
         DO UPDATE SET
             errors_json = excluded.errors_json,
-            updated_at = excluded.updated_at
-    """, (project_id, json.dumps(errors), datetime.utcnow().isoformat()))
+            updated_at = CURRENT_TIMESTAMP
+    """, (project_id, json.dumps(errors)))
     conn.commit()
 
 
@@ -617,15 +616,6 @@ _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
 
 def get_database_path(user=_UNSET) -> Path:
-    # Allow overriding the DB path for local debugging.
-    # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
-    # override = os.getenv("LOOM_DB_PATH")
-    override = None
-    if override:
-        p = Path(override)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        return p
-
     if user is _UNSET:
         storage_user_key = current_storage_user()
     elif user is None:
