@@ -899,19 +899,19 @@ def store_github_source(
     # Ensure the parent projects row exists (FK constraint added in M24)
     upsert_project(conn, project_id, source="github", github_url=repo_url)
 
-    existing = conn.execute(
-        "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
+    latest = conn.execute(
+        "SELECT id FROM project_analysis WHERE project_id = ? ORDER BY id DESC LIMIT 1",
         (project_id,),
     ).fetchone()
 
-    if existing:
+    if latest:
         conn.execute(
             """
             UPDATE project_analysis
             SET repo_url = ?, token_enc = ?
-            WHERE project_id = ?
+            WHERE id = ?
             """,
-            (repo_url, token_enc, project_id),
+            (repo_url, token_enc, latest[0]),
         )
     else:
         conn.execute(
