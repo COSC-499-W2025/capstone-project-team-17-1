@@ -68,6 +68,54 @@ def test_render_latex_default_education_experience_labels(tmp_path):
     assert r"\item Content..." in rendered
 
 
+def test_render_latex_omits_empty_github_and_portfolio_links():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github_url": "",
+            "portfolio_url": "",
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert "Portfolio" not in rendered
+    assert "https://github.com/your-handle" not in rendered
+    assert "https://your-portfolio.example.com" not in rendered
+
+
+def test_render_latex_renders_only_present_profile_link():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "portfolio_url": "https://alice.dev",
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert r"\href{https://alice.dev}{Portfolio}" in rendered
+
+
+def test_render_latex_ignores_legacy_profile_link_fields():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github": "https://github.com/legacy",
+            "portfolio": "https://legacy.example.com",
+            "links": {
+                "github": "https://github.com/legacy-links",
+                "portfolio": "https://legacy-links.example.com",
+            },
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert "Portfolio" not in rendered
+    assert "legacy" not in rendered
+
+
 # ---------------------------------------------------------------------------
 # _pick_bullets — content field fallback (added in refactoring)
 # ---------------------------------------------------------------------------

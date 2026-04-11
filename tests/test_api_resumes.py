@@ -23,6 +23,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from capstone import storage
+from capstone.api.routes.resumes import _resume_to_latex_payload
 from capstone.api.server import get_app_for_tests
 
 
@@ -176,6 +177,53 @@ class ResumeExportTestCase(_ResumeAPIBase):
     def test_export_nonexistent_resume_returns_404(self):
         r = self.client.get("/resumes/ghost/export?format=json")
         self.assertEqual(r.status_code, 404)
+
+    def test_latex_payload_uses_canonical_profile_url_fields(self):
+        payload = _resume_to_latex_payload({
+            "title": "Canonical Resume",
+            "sections": [
+                {
+                    "key": "header",
+                    "items": [
+                        {
+                            "metadata": {
+                                "full_name": "Alice",
+                                "email": "alice@example.com",
+                                "github_url": "https://github.com/alice",
+                                "portfolio_url": "https://alice.dev",
+                            }
+                        }
+                    ],
+                }
+            ],
+        })
+
+        self.assertEqual(payload["github_url"], "https://github.com/alice")
+        self.assertEqual(payload["portfolio_url"], "https://alice.dev")
+        self.assertNotIn("github", payload)
+        self.assertNotIn("portfolio", payload)
+
+    def test_latex_payload_accepts_normalized_header_section_name(self):
+        payload = _resume_to_latex_payload({
+            "title": "Canonical Resume",
+            "sections": [
+                {
+                    "name": "header",
+                    "items": [
+                        {
+                            "metadata": {
+                                "full_name": "Alice",
+                                "email": "alice@example.com",
+                                "github_url": "https://github.com/alice",
+                            }
+                        }
+                    ],
+                }
+            ],
+        })
+
+        self.assertEqual(payload["fullName"], "Alice")
+        self.assertEqual(payload["github_url"], "https://github.com/alice")
 
 
 class ResumeGuestGenerateTestCase(_ResumeAPIBase):

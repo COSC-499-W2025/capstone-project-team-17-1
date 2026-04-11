@@ -50,7 +50,7 @@ def _resume_to_latex_payload(resume: dict) -> dict:
         "sections": [],
     }
     for sec in resume.get("sections") or []:
-        key = sec.get("key", "")
+        key = sec.get("key") or sec.get("name") or ""
         items = [_item_for_pdf(i) for i in (sec.get("items") or [])]
         # Hoist header metadata to top-level fields PDF builder expects
         if key == "header" and items:
@@ -59,8 +59,8 @@ def _resume_to_latex_payload(resume: dict) -> dict:
             payload.setdefault("email", meta.get("email", ""))
             payload.setdefault("phone", meta.get("phone", ""))
             payload.setdefault("location", meta.get("location", ""))
-            payload.setdefault("github", meta.get("github_url", ""))
-            payload.setdefault("portfolio", meta.get("portfolio_url", ""))
+            payload.setdefault("github_url", meta.get("github_url", ""))
+            payload.setdefault("portfolio_url", meta.get("portfolio_url", ""))
         section_name = _KEY_MAP.get(key, key)
         payload["sections"].append({"name": section_name, "items": items})
     return payload
@@ -181,10 +181,11 @@ async def render_pdf(request: Request):
     resume_payload = payload.get("resume")
     if not isinstance(resume_payload, dict):
         raise HTTPException(status_code=400, detail="resume object is required")
+    pdf_payload = _resume_to_latex_payload(resume_payload)
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = Path(tmpdir) / "resume.pdf"
         try:
-            build_pdf_with_latex(resume_payload, out_path)
+            build_pdf_with_latex(pdf_payload, out_path)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
         encoded = base64.b64encode(out_path.read_bytes()).decode("ascii")

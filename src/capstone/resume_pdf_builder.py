@@ -225,8 +225,18 @@ def _render_resume_entry_block(title: str, date_text: str, subtitle: str, locati
     return "\n".join(lines)
 
 
+def _render_profile_links(github_url: str, portfolio_url: str) -> str:
+    links = []
+    if github_url:
+        links.append(rf"\href{{{_safe_text(github_url)}}}{{GitHub}}")
+    if portfolio_url:
+        links.append(rf"\href{{{_safe_text(portfolio_url)}}}{{Portfolio}}")
+    if not links:
+        return ""
+    return r"{\small\color{MutedText} " + r" \quad | \quad ".join(links) + r"}"
+
+
 def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
-    links = resume.get("links") if isinstance(resume.get("links"), dict) else {}
     contact = resume.get("contact") if isinstance(resume.get("contact"), dict) else {}
     candidate = resume.get("candidate") if isinstance(resume.get("candidate"), dict) else {}
 
@@ -252,16 +262,8 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         or "City, State"
     )
 
-    github_url = (
-        _as_clean_text(links.get("github"))
-        or _as_clean_text(resume.get("github"))
-        or "https://github.com/your-handle"
-    )
-    portfolio_url = (
-        _as_clean_text(links.get("portfolio"))
-        or _as_clean_text(resume.get("portfolio"))
-        or "https://your-portfolio.example.com"
-    )
+    github_url = _as_clean_text(resume.get("github_url"))
+    portfolio_url = _as_clean_text(resume.get("portfolio_url"))
 
     summary = _as_clean_text(resume.get("professionalSummary")) or _as_clean_text(resume.get("summary"))
     summary_entries = _extract_resume_entries(resume, "summary")
@@ -417,6 +419,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "LOCATION": _safe_text(location),
         "GITHUB_URL": _safe_text(github_url),
         "PORTFOLIO_URL": _safe_text(portfolio_url),
+        "PROFILE_LINKS": _render_profile_links(github_url, portfolio_url),
         "SUMMARY_BLOCK": summary_block,
         "CORE_SKILL_BLOCK": core_skill_block,
         "EXPERIENCE_BLOCK": experience_block,
