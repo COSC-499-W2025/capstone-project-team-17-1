@@ -8,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone.resume_pdf_builder import _pick_bullets, _pick_tex_engine, render_latex_from_template
+from capstone.resume_pdf_builder import build_pdf_with_latex, _pick_bullets, _pick_tex_engine, render_latex_from_template
 
 
 def test_render_latex_skips_placeholder_replacement_in_comments(tmp_path):
@@ -95,6 +95,43 @@ def test_render_latex_renders_only_present_profile_link():
 
     assert "GitHub" not in rendered
     assert r"\href{https://alice.dev}{Portfolio}" in rendered
+
+
+def test_render_latex_prefixes_github_link_with_icon():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github_url": "https://github.com/alice",
+        },
+    )
+
+    assert r"\includegraphics[height=0.9em]{github_logo.png}" in rendered
+    assert r"\href{https://github.com/alice}{GitHub}" in rendered
+
+
+def test_build_pdf_copies_github_icon_asset(tmp_path):
+    def fake_run(cmd, cwd, **kwargs):
+        assert (Path(cwd) / "github_logo.png").exists()
+        (Path(cwd) / "resume.pdf").write_bytes(b"%PDF-1.4\n")
+
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        return Result()
+
+    with patch("capstone.resume_pdf_builder._pick_tex_engine", return_value="pdflatex"):
+        with patch("capstone.resume_pdf_builder.subprocess.run", side_effect=fake_run):
+            build_pdf_with_latex(
+                {
+                    "fullName": "Alice",
+                    "email": "alice@example.com",
+                    "github_url": "https://github.com/alice",
+                },
+                tmp_path / "resume.pdf",
+            )
 
 
 def test_render_latex_ignores_legacy_profile_link_fields():

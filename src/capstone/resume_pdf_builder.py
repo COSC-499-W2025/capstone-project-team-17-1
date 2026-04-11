@@ -41,6 +41,10 @@ def _default_template_path() -> Path:
     return _repo_root() / "templates" / "resume_template.tex"
 
 
+def _github_icon_asset_path() -> Path:
+    return _repo_root() / "frontend" / "assets" / "github_logo.png"
+
+
 def _iter_project_items(resume: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     for section in resume.get("sections", []) or []:
         if section.get("name") != "projects":
@@ -228,7 +232,10 @@ def _render_resume_entry_block(title: str, date_text: str, subtitle: str, locati
 def _render_profile_links(github_url: str, portfolio_url: str) -> str:
     links = []
     if github_url:
-        links.append(rf"\href{{{_safe_text(github_url)}}}{{GitHub}}")
+        links.append(
+            rf"\raisebox{{-0.15em}}{{\includegraphics[height=0.9em]{{github_logo.png}}}}~"
+            rf"\href{{{_safe_text(github_url)}}}{{GitHub}}"
+        )
     if portfolio_url:
         links.append(rf"\href{{{_safe_text(portfolio_url)}}}{{Portfolio}}")
     if not links:
@@ -511,6 +518,9 @@ def build_pdf_with_latex(
         tex_path = tmp / "resume.tex"
         pdf_path = tmp / "resume.pdf"
         tex_path.write_text(tex_source, encoding="utf-8")
+        github_icon = _github_icon_asset_path()
+        if github_icon.exists():
+            shutil.copyfile(github_icon, tmp / "github_logo.png")
 
         if engine == "tectonic":
             cmd = [engine, "--keep-logs", "--outdir", str(tmp), tex_path.name]
