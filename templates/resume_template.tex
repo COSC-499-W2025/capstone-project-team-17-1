@@ -48,10 +48,12 @@
 }
 
 \newcommand{\ResumeEntry}[4]{%
-  \begin{tabularx}{\textwidth}{@{}X>{\raggedleft\arraybackslash}p{0.30\textwidth}@{}}
-    {\bfseries\color{Primary} #1} & {\small\color{MutedText} #2} \\[-12pt]
-    {\small\itshape\color{MutedText} #3} & {\small\itshape\color{MutedText} #4}
-  \end{tabularx}
+  \noindent\begin{minipage}[t]{0.68\textwidth}\raggedright{\bfseries\color{Primary} #1}\end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.30\textwidth}\raggedleft{\small\color{MutedText} #2}\end{minipage}\par
+  \noindent\begin{minipage}[t]{0.68\textwidth}\raggedright{\small\itshape\color{MutedText} #3}\end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.30\textwidth}\raggedleft{\small\itshape\color{MutedText} #4}\end{minipage}\par
 }
 
 \newcommand{\SkillRow}[2]{%
