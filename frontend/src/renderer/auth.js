@@ -645,7 +645,8 @@ function _renderEduCards() {
   if (!container) return;
   container.innerHTML = "";
   _educationEntries.forEach((entry, idx) => {
-    const isCurrent = !entry.end_date || entry.end_date.toLowerCase() === "present";
+    const normalizedEndDate = String(entry.end_date || "").trim().toLowerCase();
+    const isCurrent = normalizedEndDate === "present" || normalizedEndDate === "current";
     const card = document.createElement("div");
     card.className = "edu-card";
     card.innerHTML = `
@@ -657,7 +658,7 @@ function _renderEduCards() {
           <input class="settings-input edu-start" placeholder="Start (e.g. Sep 2020)" value="${entry.start_date || ""}" data-idx="${idx}" data-field="start_date" />
           <input class="settings-input edu-end" placeholder="End (e.g. May 2024)" value="${isCurrent ? "" : (entry.end_date || "")}" data-idx="${idx}" data-field="end_date" ${isCurrent ? "disabled" : ""} />
           <label class="edu-current-label">
-            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent && entry.university ? "checked" : ""} />
+            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent ? "checked" : ""} />
             <span>Current</span>
           </label>
         </div>
