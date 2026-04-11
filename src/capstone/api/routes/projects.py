@@ -3,6 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
 from datetime import datetime
+import json
 import tempfile
 import shutil
 import time
@@ -101,7 +102,7 @@ def _build_project_summary_list(conn) -> list[dict]:
 
         try:
             snapshot = json.loads(snapshot_raw)
-        except Exception:
+        except json.JSONDecodeError:
             log_event("WARNING", f"Skipping invalid project snapshot in project list · Project: {row[0]}")
             continue
 

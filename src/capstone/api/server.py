@@ -1,7 +1,29 @@
+import logging
 import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+
+# Noisy frontend polling endpoints — suppressed from [storage-bind] and uvicorn access logs
+# so that real request logs (e.g. /projects/upload, /projects) stay readable.
+_QUIET_PATHS = frozenset({
+    "/health",
+    "/api/health",
+    "/activity",
+    "/system/system-metrics",
+})
+
+
+class _QuietAccessFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+            for path in _QUIET_PATHS:
+                if f'"GET {path} ' in message or f'"POST {path} ' in message:
+                    return False
+        except Exception:
+            pass
+        return True
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
@@ -57,6 +79,8 @@ def _safe_import_resumes():
 
 
 def create_app(auth_token: str | None = None) -> FastAPI:
+    logging.getLogger("uvicorn.access").addFilter(_QuietAccessFilter())
+
     @asynccontextmanager
     async def lifespan(app):
         # Startup
@@ -87,15 +111,16 @@ def create_app(auth_token: str | None = None) -> FastAPI:
 
         storage_user_key = get_authenticated_storage_user_key(request)
         with storage_module.storage_user_scope(storage_user_key):
-            mode = "user" if storage_user_key else "guest"
-            print(
-                "[storage-bind] "
-                f"path={request.url.path!r} "
-                f"mode={mode!r} "
-                f"user_id={storage_user_key!r} "
-                f"db_path={str(storage_module.get_database_path())!r}",
-                flush=True,
-            )
+            if request.url.path not in _QUIET_PATHS:
+                mode = "user" if storage_user_key else "guest"
+                print(
+                    "[storage-bind] "
+                    f"path={request.url.path!r} "
+                    f"mode={mode!r} "
+                    f"user_id={storage_user_key!r} "
+                    f"db_path={str(storage_module.get_database_path())!r}",
+                    flush=True,
+                )
             return await call_next(request)
 
     @app.get("/")
