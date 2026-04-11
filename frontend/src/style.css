@@ -6194,6 +6194,24 @@ body.light .export-modal-footer {
   margin-bottom: 4px;
 }
 
+.re-item-meta .re-editable[data-header-field="location"]:empty::before {
+  content: "Location";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
+.re-item-meta .re-editable[data-header-field="email"]:empty::before {
+  content: "Email";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
+.re-item-meta .re-editable[data-header-field="phone"]:empty::before {
+  content: "Phone";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
 .re-item-meta-links {
   font-size: 0.8rem;
   color: #2563eb;

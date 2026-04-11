@@ -1058,10 +1058,11 @@ function buildResumeHtml(resume) {
     const github    = meta.github_url    || "";
     const portfolio = meta.portfolio_url || "";
 
+    const showEmptyHeaderFields = isPrivateMode();
     const contactParts = [
-      location && ceHeader("location", location, ctx),
-      email    && ceHeader("email",    email,    ctx),
-      phone    && ceHeader("phone",    phone,    ctx),
+      (showEmptyHeaderFields || location) && ceHeader("location", location, ctx),
+      (showEmptyHeaderFields || email)    && ceHeader("email",    email,    ctx),
+      (showEmptyHeaderFields || phone)    && ceHeader("phone",    phone,    ctx),
     ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
 
     const linkParts = [
