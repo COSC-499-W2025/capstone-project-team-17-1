@@ -194,10 +194,9 @@ function buildStyledResumePreviewHtml(resume) {
   const projectItems = (projectSection?.items || []).filter((item) => item?.is_enabled !== false);
   const totalProjects = projectItems.length;
   const totalSkills = dedupeStrings(rawSkillTokens).length;
-  const totalBullets = projectItems.reduce(
-    (sum, item) => sum + ((Array.isArray(item?.bullets) ? item.bullets.filter(Boolean).length : 0)),
-    0
-  );
+  const totalBullets = projectItems.reduce((sum, item) => {
+    return sum + String(item?.content || "").split(/\r?\n/).filter((line) => line.trim()).length;
+  }, 0);
   const highlightCount = awards.length + totalBullets;
   const professionalSummary =
     summaryText ||
@@ -973,13 +972,19 @@ function ceHeader(field, value, ctx = "") {
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
+function contentBulletLines(item) {
+  return String(item.content || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 // Build HTML for a single item card (reused for initial render + after add)
 function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
   const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
   const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
-  const bullets = (item.bullets || []).filter(Boolean);
 
   if (sectionKey === "core_skill") {
     return `
@@ -1005,6 +1010,15 @@ function buildItemHtml(rid, sid, sectionKey, item) {
 
   // education / experience / project / custom
   const showDateSep = item.start_date || item.end_date;
+  const hasContentField = item.content !== undefined;
+  const supportsContentBullets = sectionKey !== "education";
+  const contentLines = supportsContentBullets && hasContentField ? contentBulletLines(item) : [];
+  if (supportsContentBullets && hasContentField && isPrivateMode() && !contentLines.length) {
+    contentLines.push("");
+  }
+  const bulletItems = contentLines
+    .map((line) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content_bullet" ${ctx} class="re-item-content ${isPrivateMode() ? "re-editable" : ""}">${line}</li>`)
+    .join("");
   return `
     <div class="re-item" data-item-id="${iid}">
       ${drag}${del}
@@ -1021,10 +1035,9 @@ function buildItemHtml(rid, sid, sectionKey, item) {
         ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
         ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
       </div>` : ""}
-      ${item.content  ? `<div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content}</div>` : ""}
-      ${bullets.length ? `
+      ${bulletItems ? `
         <ul class="re-bullets">
-          ${bullets.map((b) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="bullet" ${ctx} class="${isPrivateMode() ? "re-editable" : ""}">${b}</li>`).join("")}
+          ${bulletItems}
         </ul>` : ""}
     </div>`;
 }
@@ -1313,13 +1326,12 @@ function attachEditListeners(container) {
     const field = el.dataset.field;
     try {
       if (iid) {
-        if (field === "bullet") {
-          const bullets = [...el.closest(".re-bullets").querySelectorAll("li")]
-            .map((li) => li.innerText.trim()).filter(Boolean);
+        if (field === "content_bullet") {
+          const content = contentFromBulletList(el.closest(".re-bullets"));
           await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bullets }),
+            body: JSON.stringify({ content }),
           });
         } else {
           await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
@@ -1350,6 +1362,57 @@ function attachEditListeners(container) {
     } catch (err) { console.error("Auto-save failed:", err); }
   }
 
+  function contentFromBulletList(ul) {
+    return [...(ul?.querySelectorAll("li") || [])]
+      .map((li) => li.innerText.trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function saveContentBulletList(ul, fallbackEl = null) {
+    const sourceEl = ul?.querySelector("li[data-item-id]") || fallbackEl;
+    if (!sourceEl) return;
+    const { resumeId: rid, sectionId: sid, itemId: iid } = sourceEl.dataset;
+    const content = contentFromBulletList(ul);
+    try {
+      await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      updateCardMeta(container, rid);
+    } catch (err) { console.error("Content bullet auto-save failed:", err); }
+  }
+
+  function createBulletEditor(afterEl) {
+    const itemEl = afterEl.closest(".re-item");
+    if (!itemEl) return null;
+
+    let list = itemEl.querySelector(".re-bullets");
+    if (!list) {
+      list = document.createElement("ul");
+      list.className = "re-bullets";
+      afterEl.insertAdjacentElement("afterend", list);
+    }
+
+    const newLi = document.createElement("li");
+    newLi.contentEditable = "true";
+    newLi.className = "re-item-content re-editable";
+    newLi.dataset.field = "content_bullet";
+    newLi.dataset.resumeId = afterEl.dataset.resumeId;
+    newLi.dataset.sectionId = afterEl.dataset.sectionId;
+    newLi.dataset.itemId = afterEl.dataset.itemId;
+    if (afterEl.parentElement === list) {
+      afterEl.insertAdjacentElement("afterend", newLi);
+    } else {
+      list.appendChild(newLi);
+    }
+    initEditable(newLi);
+    newLi.focus();
+    recalcExpand(container);
+    return newLi;
+  }
+
   // --- init a single contenteditable element ---
   function initEditable(el) {
     el.dataset.original = el.innerText.trim();
@@ -1364,26 +1427,18 @@ function attachEditListeners(container) {
       sel.collapseToEnd();
     });
 
-    if (!el.dataset.headerField && el.dataset.field === "bullet") {
+    if (!el.dataset.headerField && el.dataset.field === "content_bullet") {
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const newLi = document.createElement("li");
-          newLi.contentEditable = "true";
-          newLi.className = "re-editable";
-          newLi.dataset.field = "bullet";
-          newLi.dataset.resumeId = el.dataset.resumeId;
-          newLi.dataset.sectionId = el.dataset.sectionId;
-          newLi.dataset.itemId = el.dataset.itemId;
-          el.after(newLi);
-          newLi.focus();
-          initEditable(newLi);
+          createBulletEditor(el);
         } else if (e.key === "Backspace" && el.innerText.trim() === "") {
           e.preventDefault();
+          const list = el.closest(".re-bullets");
           const prev = el.previousElementSibling;
           el.remove();
           prev?.focus();
-          save(el);
+          saveContentBulletList(list, el);
         }
       });
     } else {

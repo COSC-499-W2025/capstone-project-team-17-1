@@ -88,10 +88,9 @@ def _resume_to_markdown(resume: dict) -> str:
             header_parts = filter(None, [title, subtitle, dates])
             lines.append(f"**{', '.join(header_parts)}**" if title else "")
             if item.get("content"):
-                lines.append(item["content"])
-            for bullet in item.get("bullets") or []:
-                if bullet:
-                    lines.append(f"- {bullet}")
+                for line in str(item["content"]).splitlines():
+                    if line.strip():
+                        lines.append(f"- {line.strip()}")
             lines.append("")
     return "\n".join(lines).strip()
 
@@ -572,10 +571,7 @@ async def create_item(resume_id: str, section_id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
     sort_order = payload.get("sort_order")
-    bullets = payload.get("bullets")
     metadata = payload.get("metadata")
-    if bullets is not None and not isinstance(bullets, list):
-        raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
     with _db_session() as conn:
@@ -588,7 +584,6 @@ async def create_item(resume_id: str, section_id: str, request: Request):
             end_date=payload.get("end_date"),
             location=payload.get("location"),
             content=payload.get("content"),
-            bullets=bullets,
             metadata=metadata,
             sort_order=int(sort_order) if sort_order is not None else None,
         )
@@ -601,11 +596,8 @@ async def create_item(resume_id: str, section_id: str, request: Request):
 async def update_item(resume_id: str, section_id: str, item_id: str, request: Request):
     _check_auth(request)
     payload = await _get_payload(request)
-    bullets = payload.get("bullets")
     metadata = payload.get("metadata")
     is_enabled = payload.get("is_enabled")
-    if bullets is not None and not isinstance(bullets, list):
-        raise HTTPException(status_code=400, detail="bullets must be a list")
     if metadata is not None and not isinstance(metadata, dict):
         raise HTTPException(status_code=400, detail="metadata must be an object")
     with _db_session() as conn:
@@ -618,7 +610,6 @@ async def update_item(resume_id: str, section_id: str, item_id: str, request: Re
             end_date=payload.get("end_date"),
             location=payload.get("location"),
             content=payload.get("content"),
-            bullets=bullets,
             metadata=metadata,
             is_enabled=bool(is_enabled) if is_enabled is not None else None,
         )

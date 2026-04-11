@@ -355,16 +355,16 @@ class ResumeItemTestCase(_ResumeAPIBase):
         self.assertIsNotNone(item.get("id"))
         self.assertEqual(item["title"], "Software Engineer")
 
-    def test_create_item_with_bullets(self):
+    def test_create_item_with_multiline_content(self):
         r = self.client.post(
             f"/resumes/{self.resume['id']}/sections/{self.section['id']}/items",
             json={
                 "title": "Dev",
-                "bullets": ["Built APIs", "Wrote tests"],
+                "content": "Built APIs\nWrote tests",
             },
         )
         self.assertEqual(r.status_code, 201)
-        self.assertEqual(r.json()["data"]["bullets"], ["Built APIs", "Wrote tests"])
+        self.assertEqual(r.json()["data"]["content"], "Built APIs\nWrote tests")
 
     def test_create_item_with_metadata(self):
         r = self.client.post(
@@ -374,10 +374,10 @@ class ResumeItemTestCase(_ResumeAPIBase):
         self.assertEqual(r.status_code, 201)
         self.assertEqual(r.json()["data"]["metadata"]["project_id"], "abc123")
 
-    def test_create_item_invalid_bullets_type_returns_400(self):
+    def test_create_item_invalid_metadata_type_returns_400(self):
         r = self.client.post(
             f"/resumes/{self.resume['id']}/sections/{self.section['id']}/items",
-            json={"title": "X", "bullets": "not a list"},
+            json={"title": "X", "metadata": "not an object"},
         )
         self.assertEqual(r.status_code, 400)
 

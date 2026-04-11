@@ -6237,6 +6237,12 @@ body.light .export-modal-footer {
   margin-top: 4px;
 }
 
+.re-item-content.re-editable:empty::before {
+  content: "Content. Press Enter to add a bullet.";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
 /* --- Bullets --- */
 .re-bullets {
   margin: 6px 0 0 16px;

@@ -158,13 +158,13 @@ def test_render_latex_ignores_legacy_profile_link_fields():
 # ---------------------------------------------------------------------------
 
 
-def test_pick_bullets_returns_explicit_bullets_list():
-    entry = {"bullets": ["Did A", "Did B"]}
-    assert _pick_bullets(entry) == ["Did A", "Did B"]
+def test_pick_bullets_reads_multiline_content_as_canonical_bullets():
+    entry = {"content": "First bullet.\nSecond bullet."}
+    assert _pick_bullets(entry) == ["First bullet.", "Second bullet."]
 
 
 def test_pick_bullets_skips_empty_bullets_falls_to_content():
-    entry = {"bullets": [], "content": "Built the API layer."}
+    entry = {"content": "Built the API layer."}
     result = _pick_bullets(entry)
     assert result == ["Built the API layer."]
 
@@ -194,14 +194,64 @@ def test_pick_bullets_multiline_content_becomes_multiple_bullets():
     assert result == ["Line one.", "Line two.", "Line three."]
 
 
-def test_pick_bullets_highlights_list_used_before_content():
+def test_pick_bullets_content_preferred_over_legacy_highlights():
     entry = {"highlights": ["Highlight A"], "content": "Should not appear"}
     result = _pick_bullets(entry)
-    assert result == ["Highlight A"]
+    assert result == ["Should not appear"]
 
 
 def test_pick_bullets_empty_entry_with_no_fallback_returns_empty():
     assert _pick_bullets({}) == []
+
+
+def test_render_latex_keeps_all_project_content_lines(tmp_path):
+    template = tmp_path / "template.tex"
+    template.write_text("__PROJECT_SECTION__\n", encoding="utf-8")
+
+    rendered = render_latex_from_template(
+        resume={
+            "sections": [
+                {
+                    "name": "projects",
+                    "items": [{
+                        "title": "Project A",
+                        "content": "Bullet one\nBullet two\nBullet three\nBullet four",
+                    }],
+                }
+            ]
+        },
+        template_path=template,
+    )
+
+    assert r"\item Bullet one" in rendered
+    assert r"\item Bullet two" in rendered
+    assert r"\item Bullet three" in rendered
+    assert r"\item Bullet four" in rendered
+
+
+def test_render_latex_keeps_all_experience_content_lines(tmp_path):
+    template = tmp_path / "template.tex"
+    template.write_text("__EXPERIENCE_SECTION__\n", encoding="utf-8")
+
+    rendered = render_latex_from_template(
+        resume={
+            "sections": [
+                {
+                    "name": "experience",
+                    "items": [{
+                        "title": "Experience A",
+                        "content": "Did one\nDid two\nDid three\nDid four",
+                    }],
+                }
+            ]
+        },
+        template_path=template,
+    )
+
+    assert r"\item Did one" in rendered
+    assert r"\item Did two" in rendered
+    assert r"\item Did three" in rendered
+    assert r"\item Did four" in rendered
 
 
 def test_pick_tex_engine_prefers_tectonic():

@@ -370,7 +370,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             end_date TEXT,
             location TEXT,
             content TEXT,
-            bullets_json TEXT,
             metadata_json TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_enabled INTEGER NOT NULL DEFAULT 1,
@@ -1713,9 +1712,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 (
                     str(uuid.uuid4()),
@@ -1726,7 +1725,6 @@ def upsert_default_resume_modules(
                     item.get("end_date"),
                     item.get("location"),
                     item.get("content"),
-                    json.dumps(item.get("bullets") or []),
                     json.dumps(item.get("metadata") or {}),
                     idx,
                 ),
@@ -1758,7 +1756,6 @@ def upsert_default_resume_modules(
     core_skill_item = {
         "title": "Core Skill",
         "content": ", ".join(deduped_skills),
-        "bullets": deduped_skills,
     }
     _replace_items("core_skill", [core_skill_item])
 
@@ -1802,9 +1799,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id),
             )
@@ -1823,9 +1820,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id),
             )
@@ -1842,9 +1839,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id, title),
             )
@@ -1861,7 +1858,7 @@ def _item_row_to_dict(row: tuple) -> dict:
     """Convert a resume_items DB row to a plain dict."""
     (
         id_, section_id, title, subtitle, start_date, end_date,
-        location, content, bullets_json, metadata_json,
+        location, content, metadata_json,
         sort_order, is_enabled, created_at, updated_at,
     ) = row
     return {
@@ -1873,7 +1870,6 @@ def _item_row_to_dict(row: tuple) -> dict:
         "end_date": end_date,
         "location": location,
         "content": content,
-        "bullets": json.loads(bullets_json or "[]"),
         "metadata": json.loads(metadata_json or "{}"),
         "sort_order": sort_order,
         "is_enabled": bool(is_enabled),
@@ -1956,7 +1952,7 @@ def fetch_resume(conn: sqlite3.Connection, resume_id: str) -> dict | None:
         item_rows = conn.execute(
             """
             SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
-                   bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                   metadata_json, sort_order, is_enabled, created_at, updated_at
             FROM resume_items
             WHERE section_id = ?
             ORDER BY sort_order, id
@@ -2104,7 +2100,7 @@ def fetch_resume_items(conn: sqlite3.Connection, section_id: str) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
-               bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+               metadata_json, sort_order, is_enabled, created_at, updated_at
         FROM resume_items WHERE section_id = ? ORDER BY sort_order, id
         """,
         (section_id,),
@@ -2122,7 +2118,6 @@ def insert_resume_item(
     end_date: str | None = None,
     location: str | None = None,
     content: str | None = None,
-    bullets: list | None = None,
     metadata: dict | None = None,
     sort_order: int | None = None,
 ) -> str:
@@ -2137,12 +2132,12 @@ def insert_resume_item(
         """
         INSERT INTO resume_items (
             id, section_id, title, subtitle, start_date, end_date, location, content,
-            bullets_json, metadata_json, sort_order, is_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            metadata_json, sort_order, is_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """,
         (
             item_id, section_id, title, subtitle, start_date, end_date, location, content,
-            json.dumps(bullets or []), json.dumps(metadata or {}), sort_order,
+            json.dumps(metadata or {}), sort_order,
         ),
     )
     conn.commit()
@@ -2159,7 +2154,6 @@ def update_resume_item(
     end_date: str | None = None,
     location: str | None = None,
     content: str | None = None,
-    bullets: list | None = None,
     metadata: dict | None = None,
     is_enabled: bool | None = None,
 ) -> bool:
@@ -2176,8 +2170,6 @@ def update_resume_item(
         sets.append("location = ?"); params.append(location)
     if content is not None:
         sets.append("content = ?"); params.append(content)
-    if bullets is not None:
-        sets.append("bullets_json = ?"); params.append(json.dumps(bullets))
     if metadata is not None:
         sets.append("metadata_json = ?"); params.append(json.dumps(metadata))
     if is_enabled is not None:

@@ -172,17 +172,6 @@ def _extract_resume_entries(resume: Dict[str, Any], section_name: str) -> list[D
 
 
 def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
-    bullets = entry.get("bullets")
-    if isinstance(bullets, list):
-        result = [str(x).strip() for x in bullets if str(x).strip()]
-        if result:
-            return result
-    for key in ("highlights", "responsibilities"):
-        values = entry.get(key)
-        if isinstance(values, list):
-            result = [str(x).strip() for x in values if str(x).strip()]
-            if result:
-                return result
     summary = (
         _as_clean_text(entry.get("entrySummary"))
         or _as_clean_text(entry.get("summary"))
@@ -190,15 +179,18 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
         or _as_clean_text(entry.get("entryBody"))
         or _as_clean_text(entry.get("body"))
         or _as_clean_text(entry.get("excerpt"))
-        or fallback
     )
-    if not summary:
-        return []
-    # Preserve multi-line CLI input as multiple bullets.
-    lines = [line.strip() for line in str(summary).splitlines() if line.strip()]
-    if lines:
-        return lines
-    return [summary]
+    summary_lines = [line.strip() for line in str(summary).splitlines() if line.strip()]
+    if summary_lines:
+        return summary_lines
+    for key in ("highlights", "responsibilities"):
+        values = entry.get(key)
+        if isinstance(values, list):
+            result = [str(x).strip() for x in values if str(x).strip()]
+            if result:
+                return result
+    fallback_text = _as_clean_text(fallback)
+    return [fallback_text] if fallback_text else []
 
 
 def _entry_field(entry: Dict[str, Any], *keys: str, fallback: str = "") -> str:
@@ -318,7 +310,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
     experience_blocks: list[str] = []
     for entry in experience_entries:
-        bullets = _pick_bullets(entry, "Content...")[:3]
+        bullets = _pick_bullets(entry, "Content...")
         experience_blocks.append(
             _render_resume_entry_block(
                 title=_entry_field(entry, "title", fallback="Event"),
@@ -346,7 +338,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 )
     project_blocks: list[str] = []
     for entry in project_entries:
-        bullets = _pick_bullets(entry, "Implemented core features and improvements.")[:2]
+        bullets = _pick_bullets(entry, "Implemented core features and improvements.")
         project_blocks.append(
             _render_resume_entry_block(
                 title=_entry_field(entry, "title", fallback="Project"),
@@ -544,4 +536,3 @@ def build_pdf_with_latex(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(pdf_path.read_bytes())
         return output_path
-
