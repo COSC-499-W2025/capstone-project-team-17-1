@@ -6218,6 +6218,18 @@ body.light .export-modal-footer {
   margin-top: 2px;
 }
 
+.re-item-meta-links .re-editable[data-header-field="github_url"]:empty::before {
+  content: "GitHub URL";
+  color: #93b3df;
+  pointer-events: none;
+}
+
+.re-item-meta-links .re-editable[data-header-field="portfolio_url"]:empty::before {
+  content: "Portfolio URL";
+  color: #93b3df;
+  pointer-events: none;
+}
+
 .re-item-content {
   font-size: 0.875rem;
   color: #334155;

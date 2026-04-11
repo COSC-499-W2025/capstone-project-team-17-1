@@ -1066,8 +1066,8 @@ function buildResumeHtml(resume) {
     ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
 
     const linkParts = [
-      github    && ceHeader("github_url",    github,    ctx),
-      portfolio && ceHeader("portfolio_url", portfolio, ctx),
+      (showEmptyHeaderFields || github)    && ceHeader("github_url",    github,    ctx),
+      (showEmptyHeaderFields || portfolio) && ceHeader("portfolio_url", portfolio, ctx),
     ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
 
     headerSecHtml = `
