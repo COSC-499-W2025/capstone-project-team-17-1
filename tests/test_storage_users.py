@@ -1,4 +1,3 @@
-import sqlite3
 from contextlib import contextmanager
 
 from capstone import storage
@@ -26,6 +25,25 @@ def test_users_and_links_schema_and_fk():
             assert "resumes" in tables
             assert "resume_sections" in tables
             assert "resume_items" in tables
+            account_columns = [
+                row[1] for row in conn.execute("PRAGMA table_info(user)").fetchall()
+            ]
+            assert account_columns == [
+                "id",
+                "username",
+                "email",
+                "full_name",
+                "phone_number",
+                "city",
+                "state_region",
+                "github_username",
+                "github_url",
+                "portfolio_url",
+                "github_token_enc",
+                "password_hash",
+                "created_at",
+                "last_login_at",
+            ]
             user_columns = {
                 row[1] for row in conn.execute("PRAGMA table_info(contributors)").fetchall()
             }
@@ -86,6 +104,7 @@ def test_get_and_update_user_profile():
             storage.upsert_user(conn, "alice")
             storage.update_user_profile(
                 conn,
+                email="alice@example.com",
                 full_name="Alice A",
                 phone_number="555-1234",
                 city="Vancouver",
@@ -95,6 +114,7 @@ def test_get_and_update_user_profile():
             )
             profile = storage.get_user(conn)
             assert profile is not None
+            assert profile["email"] == "alice@example.com"
             assert profile["full_name"] == "Alice A"
             assert profile["phone_number"] == "555-1234"
             assert profile["city"] == "Vancouver"

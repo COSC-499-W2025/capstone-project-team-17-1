@@ -128,15 +128,16 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS user (
             id INTEGER PRIMARY KEY CHECK(id = 1),
             username TEXT NOT NULL,
-            password_hash TEXT,
-            github_username TEXT,
-            github_url TEXT,
-            github_token_enc TEXT,
+            email TEXT,
             full_name TEXT,
             phone_number TEXT,
             city TEXT,
             state_region TEXT,
+            github_username TEXT,
+            github_url TEXT,
             portfolio_url TEXT,
+            github_token_enc TEXT,
+            password_hash TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login_at TIMESTAMP
         )
@@ -1455,9 +1456,9 @@ def get_user(conn: sqlite3.Connection) -> dict | None:
     """Return the single login account row, or None if not yet set."""
     row = conn.execute(
         """
-        SELECT id, username, password_hash, github_username, github_url,
-               github_token_enc, full_name, phone_number, city, state_region,
-               portfolio_url, created_at, last_login_at
+        SELECT id, username, email, full_name, phone_number, city,
+               state_region, github_username, github_url, portfolio_url,
+               github_token_enc, password_hash, created_at, last_login_at
         FROM user
         WHERE id = 1
         LIMIT 1
@@ -1468,17 +1469,18 @@ def get_user(conn: sqlite3.Connection) -> dict | None:
     return {
         "id": int(row[0]),
         "username": row[1],
-        "password_hash": row[2],
-        "github_username": row[3],
-        "github_url": row[4],
-        "github_token_enc": row[5],
-        "full_name": row[6],
-        "phone_number": row[7],
-        "city": row[8],
-        "state_region": row[9],
-        "portfolio_url": row[10],
-        "created_at": row[11],
-        "last_login_at": row[12],
+        "email": row[2],
+        "full_name": row[3],
+        "phone_number": row[4],
+        "city": row[5],
+        "state_region": row[6],
+        "github_username": row[7],
+        "github_url": row[8],
+        "portfolio_url": row[9],
+        "github_token_enc": row[10],
+        "password_hash": row[11],
+        "created_at": row[12],
+        "last_login_at": row[13],
     }
 
 
@@ -1486,6 +1488,7 @@ def upsert_user(
     conn: sqlite3.Connection,
     username: str,
     *,
+    email: str | None = None,
     password_hash: str | None = None,
     github_username: str | None = None,
     github_url: str | None = None,
@@ -1500,24 +1503,25 @@ def upsert_user(
         raise ValueError("username must be provided")
     conn.execute(
         """
-        INSERT INTO user (id, username, password_hash, github_username, github_url,
-                          github_token_enc, full_name, phone_number, city, state_region,
-                          portfolio_url)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user (id, username, email, full_name, phone_number, city,
+                          state_region, github_username, github_url, portfolio_url,
+                          github_token_enc, password_hash)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             username = excluded.username,
-            password_hash = COALESCE(excluded.password_hash, password_hash),
-            github_username = COALESCE(excluded.github_username, github_username),
-            github_url = COALESCE(excluded.github_url, github_url),
-            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            email = COALESCE(excluded.email, email),
             full_name = COALESCE(excluded.full_name, full_name),
             phone_number = COALESCE(excluded.phone_number, phone_number),
             city = COALESCE(excluded.city, city),
             state_region = COALESCE(excluded.state_region, state_region),
-            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url)
+            github_username = COALESCE(excluded.github_username, github_username),
+            github_url = COALESCE(excluded.github_url, github_url),
+            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url),
+            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            password_hash = COALESCE(excluded.password_hash, password_hash)
         """,
-        (username, password_hash, github_username, github_url, github_token_enc,
-         full_name, phone_number, city, state_region, portfolio_url),
+        (username, email, full_name, phone_number, city, state_region,
+         github_username, github_url, portfolio_url, github_token_enc, password_hash),
     )
     conn.commit()
 
@@ -1525,6 +1529,7 @@ def upsert_user(
 def update_user_profile(
     conn: sqlite3.Connection,
     *,
+    email: str | None = None,
     full_name: str | None = None,
     phone_number: str | None = None,
     city: str | None = None,
@@ -1538,6 +1543,7 @@ def update_user_profile(
         """
         UPDATE user
         SET
+            email = COALESCE(?, email),
             full_name = COALESCE(?, full_name),
             phone_number = COALESCE(?, phone_number),
             city = COALESCE(?, city),
@@ -1547,7 +1553,7 @@ def update_user_profile(
             portfolio_url = COALESCE(?, portfolio_url)
         WHERE id = 1
         """,
-        (full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
+        (email, full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
     )
     conn.commit()
 

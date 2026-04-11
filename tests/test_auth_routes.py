@@ -123,6 +123,14 @@ def test_auth_profile_update_and_password_change_persist_to_db(tmp_path):
         assert body["email"] == "bob@example.com"
         assert body["full_name"] == "Bob Stone"
         assert body["city"] == "Seattle"
+        with storage.storage_user_scope("bob"):
+            conn = storage.open_db()
+            try:
+                local_user = storage.get_user(conn)
+            finally:
+                storage.close_db(conn)
+        assert local_user["email"] == "bob@example.com"
+        assert local_user["full_name"] == "Bob Stone"
 
         bad_pw = client.post(
             "/auth/password",

@@ -55,6 +55,7 @@ def _sync_profile_to_local_db(auth_user: dict) -> None:
         storage.upsert_user(
             conn,
             username,
+            email=(auth_user.get("email") or "").strip() or None,
             github_username=github_handle,
             github_url=github_url,
             full_name=(auth_user.get("full_name") or "").strip() or None,
