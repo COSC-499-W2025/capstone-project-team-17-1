@@ -28,12 +28,6 @@ def _resume_to_latex_payload(resume: dict) -> dict:
     - Hoists header metadata to top-level fields
     - Adds 'dateRange' to each item from start_date / end_date
     """
-    # PDF builder expects plural section names for these
-    _KEY_MAP = {
-        "project": "projects",
-        "certification": "certifications",
-        "award": "awards",
-    }
 
     def _item_for_pdf(item: dict) -> dict:
         """Add dateRange field and keep everything else as-is."""
@@ -61,8 +55,7 @@ def _resume_to_latex_payload(resume: dict) -> dict:
             payload.setdefault("location", meta.get("location", ""))
             payload.setdefault("github_url", meta.get("github_url", ""))
             payload.setdefault("portfolio_url", meta.get("portfolio_url", ""))
-        section_name = _KEY_MAP.get(key, key)
-        payload["sections"].append({"name": section_name, "label": sec.get("label", ""), "items": items})
+        payload["sections"].append({"name": key, "label": sec.get("label", ""), "items": items})
     return payload
 
 

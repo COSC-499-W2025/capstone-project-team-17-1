@@ -47,7 +47,7 @@ def _github_icon_asset_path() -> Path:
 
 def _iter_project_items(resume: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     for section in resume.get("sections", []) or []:
-        if section.get("name") != "projects":
+        if section.get("name") != "project":
             continue
         for item in section.get("items", []) or []:
             if isinstance(item, dict):
