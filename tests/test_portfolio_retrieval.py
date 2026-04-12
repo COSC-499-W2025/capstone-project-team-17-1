@@ -1,6 +1,5 @@
 # tests/test_portfolio_retrieval.py
 import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,26 +19,28 @@ from capstone import storage
 from capstone.api.server import create_app
 from fastapi.testclient import TestClient
 
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS project_analysis(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  classification TEXT,
-  primary_contributor TEXT,
-  snapshot TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-"""
-
-
-def seed(conn: sqlite3.Connection, project_id: str, n: int = 3):
+def seed(conn, project_id: str, n: int = 3):
     for i in range(n):
         snap = {"n": i, "meta": f"s{i}"}
+        storage.store_analysis_snapshot(
+            conn,
+            project_id=project_id,
+            classification="ok",
+            primary_contributor="alice",
+            snapshot=snap,
+        )
         conn.execute(
-            "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (project_id, "ok", "alice", json.dumps(snap), f"2025-01-0{i+1}T00:00:00"),
+            """
+            UPDATE project_analysis
+            SET created_at = ?
+            WHERE id = (
+                SELECT id FROM project_analysis
+                WHERE project_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            """,
+            (f"2025-01-0{i+1}T00:00:00", project_id),
         )
     conn.commit()
 
@@ -49,22 +50,17 @@ class PortfolioRetrievalTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
+        self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
-        storage.CURRENT_USER = None
-        db_path = self.dbdir / "data" / "guest" / "capstone.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(db_path)
-        self.con.executescript(SCHEMA)
+        storage._bind_storage_user(None)
+        self.con = storage.open_db()
         ensure_indexes(self.con)
         seed(self.con, "demo", 5)
 
     def tearDown(self):
         self.con.close()
-        storage.close_db()
         storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
+        storage._bind_storage_user(self._original_current_user)
         self.tmp.cleanup()
 
     def test_get_latest_snapshot(self):
@@ -85,7 +81,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         # Unauthorized
         r = client.get("/portfolios/latest?projectId=demo")
@@ -101,7 +97,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 
@@ -146,7 +142,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 
@@ -187,7 +183,7 @@ class PortfolioRetrievalTests(unittest.TestCase):
         if TestClient is None:
             self.skipTest("FastAPI TestClient not available")
             return
-        app = create_app(db_dir=str(self.dbdir), auth_token="t")
+        app = create_app(auth_token="t")
         client = TestClient(app)
         headers = {"Authorization": "Bearer t"}
 

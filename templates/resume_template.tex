@@ -7,6 +7,7 @@
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{xcolor}
+\usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{enumitem}
 \usepackage{tabularx}
@@ -28,7 +29,7 @@
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{3pt}
-\setstretch{1.06}
+\setstretch{1}
 \pagenumbering{gobble}
 \raggedbottom
 
@@ -36,26 +37,15 @@
   {\large\bfseries\color{Primary}}
   {}{0pt}{}
   [\vspace{2pt}\color{RuleColor}\titlerule]
-\titlespacing*{\section}{0pt}{10pt}{6pt}
+\titlespacing*{\section}{0pt}{6pt}{4pt}
 
-\setlist[itemize]{leftmargin=1.15em, itemsep=2pt, topsep=3pt}
+\setlist[itemize]{leftmargin=1.15em, itemsep=1.5pt, parsep=0pt, topsep=2pt}
 \renewcommand{\arraystretch}{1.1}
 
 \newcommand{\ResumeHeader}[4]{%
   {\fontsize{20}{24}\selectfont\bfseries\color{Primary} #1}\par
   \vspace{2pt}
   {\small\color{MutedText} #2 \quad | \quad #3 \quad | \quad #4}\par
-}
-
-\newcommand{\ResumeEntry}[4]{%
-  \begin{tabularx}{\textwidth}{@{}X>{\raggedleft\arraybackslash}p{0.30\textwidth}@{}}
-    {\bfseries\color{Primary} #1} & {\small\color{MutedText} #2} \\[-12pt]
-    {\small\itshape\color{MutedText} #3} & {\small\itshape\color{MutedText} #4}
-  \end{tabularx}
-}
-
-\newcommand{\SkillRow}[2]{%
-  {\small\bfseries\color{Primary} #1:} {\small\color{BodyText} #2}\par
 }
 
 \begin{document}
@@ -66,27 +56,24 @@
 % =============================
 
 \ResumeHeader{__FULL_NAME__}{__LOCATION__}{\href{mailto:__EMAIL__}{__EMAIL__}}{__PHONE__}
-{\small\color{MutedText}
-  \href{__GITHUB_URL__}{GitHub} \quad | \quad
-  \href{__PORTFOLIO_URL__}{Portfolio}
-}
+__PROFILE_LINKS__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __SUMMARY_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __EDUCATION_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __EXPERIENCE_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __CORE_SKILL_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __PROJECT_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __CUSTOM_SECTION_BLOCK__
 
 \end{document}

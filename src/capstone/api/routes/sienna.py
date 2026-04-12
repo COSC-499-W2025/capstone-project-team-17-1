@@ -198,13 +198,8 @@ class _ProjectContext:
 
 
 def _restore_user_from_request(request: Request) -> None:
-    try:
-        from capstone.api.routes.auth import get_authenticated_username
-
-        username = get_authenticated_username(request)
-        storage_module.set_current_user(username)
-    except Exception:
-        pass
+    # No-op: server.py middleware binds the storage user for the whole request.
+    return
 
 
 def _is_debug_intent(message: str, explicit_debug_flag: bool) -> bool:
@@ -607,7 +602,7 @@ def _synthesize_openai_voice(text: str) -> dict[str, str] | None:
 @router.get("/projects", response_model=list[SiennaProject])
 def list_sienna_projects(request: Request):
     _restore_user_from_request(request)
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         rows = conn.execute(
             """
             SELECT pa.project_id, pa.created_at, pa.classification, pa.primary_contributor, pa.snapshot
@@ -682,7 +677,7 @@ def ask_sienna(payload: SiennaChatRequest, request: Request) -> dict[str, Any]:
     except ExternalPermissionDenied:
         raise HTTPException(status_code=403, detail="External AI consent is required for Ask Sienna")
 
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         project = _load_project_context(conn, project_id)
         debug_mode = _is_debug_intent(message, payload.debug)
         snippets = _collect_relevant_code_snippets(conn, project, message) if debug_mode else []

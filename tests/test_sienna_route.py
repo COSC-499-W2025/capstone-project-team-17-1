@@ -13,7 +13,7 @@ class _DummyRequest:
 
 
 @contextmanager
-def _dummy_db_session(_db_dir):
+def _dummy_db_session(*, user=None):
     yield object()
 
 

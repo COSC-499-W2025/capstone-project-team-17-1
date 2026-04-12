@@ -145,9 +145,8 @@ class SnapshotStore:
 
     def __init__(
         self,
-        db_dir: Path | None = None,
         *,
-        open_fn: Callable[[Path | None], object] = open_db,
+        open_fn: Callable[[], object] = open_db,
         close_fn: Callable[[], None] = close_db,
         fetch_latest_fn: Callable[[object, str], Mapping[str, object] | None] = fetch_latest_snapshot,
         fetch_all_fn: Callable[[object], Iterable[Mapping[str, object]]] = fetch_latest_snapshots,
@@ -155,7 +154,6 @@ class SnapshotStore:
         backup_fn: Callable[[object, Path], Path] = backup_database,
         export_fn: Callable[[object, Path], int] = export_snapshots_to_json,
     ) -> None:
-        self.db_dir = db_dir
         self._open = open_fn
         self._close = close_fn
         self._fetch_latest = fetch_latest_fn
@@ -167,7 +165,7 @@ class SnapshotStore:
 
     def open(self) -> object:
         if self._conn is None:
-            self._conn = self._open(self.db_dir)
+            self._conn = self._open()
         return self._conn
 
     def close(self) -> None:
@@ -263,17 +261,17 @@ class TimelineService:
     def __init__(
         self,
         *,
-        projects_fn: Callable[[Path | None, Path], int] = write_projects_timeline,
-        skills_fn: Callable[[Path | None, Path], int] = write_skills_timeline,
+        projects_fn: Callable[[Path], int] = write_projects_timeline,
+        skills_fn: Callable[[Path], int] = write_skills_timeline,
     ) -> None:
         self._projects_fn = projects_fn
         self._skills_fn = skills_fn
 
-    def export_projects(self, db_dir: Path | None, output: Path) -> int:
-        return self._projects_fn(db_dir, output)
+    def export_projects(self, output: Path) -> int:
+        return self._projects_fn(output)
 
-    def export_skills(self, db_dir: Path | None, output: Path) -> int:
-        return self._skills_fn(db_dir, output)
+    def export_skills(self, output: Path) -> int:
+        return self._skills_fn(output)
 
 
 class RankingService:

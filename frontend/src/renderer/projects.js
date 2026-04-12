@@ -3,17 +3,18 @@ import { loadProjectHealth } from "./projectHealth.js";
 import { loadErrorAnalysis } from "./errors.js";
 import { openProjectViewer } from "./projectViewer.js";
 import { notifyPortfolioDataUpdated } from "./portfolioState.js";
-import { authFetch, hasAuthToken, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
 
 export async function fetchProjects() {
-  const res = await authFetch("/dashboard/recent-projects");
+  const res = await authFetch("/projects");
 
   if (!res.ok) {
     throw new Error(`Failed to fetch projects: ${res.status}`);
   }
 
-  const projects = await res.json();
-  return Array.isArray(projects) ? projects : [];
+  const payload = await res.json();
+  return Array.isArray(payload?.projects) ? payload.projects : [];
 }
 
 export async function loadProjects() {
@@ -80,7 +81,7 @@ export async function loadProjects() {
         const projectId = deleteBtn.dataset.id;
         if (!projectId) return;
 
-        if (!confirm(`Delete project "${projectId}"?`)) return;
+        if (!(await confirmDialog(`Delete project "${projectId}"?`))) return;
 
         try {
           const res = await authFetch(`/projects/${encodeURIComponent(projectId)}`, {
@@ -102,7 +103,7 @@ export async function loadProjects() {
           ]);
         } catch (err) {
           console.error("Delete failed:", err);
-          alert("Failed to delete project.");
+          await alertDialog("Failed to delete project.");
         }
       });
 
@@ -124,9 +125,7 @@ export async function loadProjects() {
             throw new Error("Pull failed");
           }
 
-          if (hasAuthToken()) {
-            await authFetch("/cloud/db/upload", { method: "POST" });
-          }
+          // Cloud sync disabled — all data is local-only for now.
 
           pullBtn.innerText = "Updated ✓";
 

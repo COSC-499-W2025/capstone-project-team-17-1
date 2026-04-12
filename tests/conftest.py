@@ -35,18 +35,13 @@ def isolated_db():
     """
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         original_base_dir = storage.BASE_DIR
-        original_current_user = storage.CURRENT_USER
         original_loom_db_path = os.environ.pop("LOOM_DB_PATH", None)
 
-        storage.close_db()
         storage.BASE_DIR = Path(tmpdir)
-        storage.CURRENT_USER = None
+        with storage.storage_user_scope(None):
+            yield
 
-        yield
-
-        storage.close_db()
         gc.collect()  # ensure SQLite connection objects are released before temp dir cleanup
         storage.BASE_DIR = original_base_dir
-        storage.CURRENT_USER = original_current_user
         if original_loom_db_path is not None:
             os.environ["LOOM_DB_PATH"] = original_loom_db_path

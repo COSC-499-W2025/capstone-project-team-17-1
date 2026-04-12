@@ -3,7 +3,7 @@ from typing import Dict, Any
 import capstone.storage as _storage
 
 from capstone.storage import (
-    fetch_latest_snapshots_with_zip,
+    fetch_latest_snapshots,
     save_error_results,
     fetch_error_results,
 )
@@ -20,24 +20,6 @@ from capstone.activity_log import log_event
 router = APIRouter(tags=["errors"])
 
 
-def _restore_user_from_request(request: Request) -> None:
-    """
-    Restore storage.CURRENT_USER from the session Bearer token if present.
-    Called at the top of every errors endpoint so the correct per-user DB is
-    used even after a server restart (where the global CURRENT_USER is None).
-    """
-    try:
-        from capstone.api.routes.auth import get_authenticated_storage_user_key
-        storage_user_key = get_authenticated_storage_user_key(request)
-        _storage.set_current_user(storage_user_key)
-        if storage_user_key:
-            print(f"[errors] Restored CURRENT_USER = {storage_user_key!r} from Bearer token", flush=True)
-        else:
-            print("[errors] No Bearer token — CURRENT_USER = None (guest)", flush=True)
-    except Exception as exc:
-        print(f"[errors] Could not restore user from token: {exc}", flush=True)
-
-
 # ---------------------------------------------------------
 # POST /errors/analyze
 # Trigger AI error analysis
@@ -45,10 +27,8 @@ def _restore_user_from_request(request: Request) -> None:
 @router.post("/errors/analyze")
 def analyze_errors(request: Request) -> Dict[str, Any]:
     try:
-        _restore_user_from_request(request)
-
         db_path = _storage.get_database_path()
-        print(f"[errors/analyze] CURRENT_USER = {_storage.get_current_user()!r}", flush=True)
+        print(f"[errors/analyze] user          = {_storage.current_storage_user()!r}", flush=True)
         print(f"[errors/analyze] DB path       = {db_path}", flush=True)
         print(f"[errors/analyze] DB exists?    = {db_path.exists()}", flush=True)
 
@@ -61,7 +41,7 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
             )
             return {"status": "local_consent_required"}
 
-        with _db_session(None) as conn:
+        with _db_session() as conn:
             raw_rows = conn.execute(
                 "SELECT project_id, created_at, zip_path FROM project_analysis ORDER BY id DESC LIMIT 10"
             ).fetchall()
@@ -69,8 +49,8 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
             for r in raw_rows:
                 print(f"  project_id={r[0]!r}  created_at={r[1]!r}  zip_path={r[2]!r}", flush=True)
 
-            snapshots = fetch_latest_snapshots_with_zip(conn)
-            print(f"[errors/analyze] fetch_latest_snapshots_with_zip -> {len(snapshots)} row(s)", flush=True)
+            snapshots = fetch_latest_snapshots(conn)
+            print(f"[errors/analyze] fetch_latest_snapshots -> {len(snapshots)} row(s)", flush=True)
 
             if not snapshots:
                 return {"status": "no_projects"}
@@ -122,9 +102,7 @@ def analyze_errors(request: Request) -> Dict[str, Any]:
 # ---------------------------------------------------------
 @router.get("/errors")
 def get_error_analysis(request: Request) -> Dict[str, Any]:
-    _restore_user_from_request(request)
-
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         results = fetch_error_results(conn)
 
         if results is None:

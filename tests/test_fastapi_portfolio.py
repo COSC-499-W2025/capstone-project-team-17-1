@@ -1,7 +1,5 @@
 import json
-import sqlite3
 import pytest
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 from capstone.api.server import create_app
@@ -12,41 +10,27 @@ def client(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
-    db_dir = str(tmp_path)
-    db_path = str(Path(db_dir) / "data" / "guest" / "capstone.db")
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    
-    conn = sqlite3.connect(db_path)
+    storage._bind_storage_user(None)
+
+    conn = storage.open_db()
     try:
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS project_analysis(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            classification TEXT,
-            primary_contributor TEXT,
-            snapshot TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """
-        )
-        conn.commit()
-        
         snap = {
             "project_name": "Demo Project",
             "languages": {"Python": 1.0},
             "summary": "demo summary",
             "highlights": ["FastAPI"]
         }
-        conn.execute(
-            "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot) VALUES (?, ?, ?, ?)",
-            ("demo", "ok", "alice", json.dumps(snap)),
+        storage.store_analysis_snapshot(
+            conn,
+            project_id="demo",
+            classification="ok",
+            primary_contributor="alice",
+            snapshot=snap,
         )
-        conn.commit()
     finally:
         conn.close()
     
-    app = create_app(db_dir=db_dir, auth_token=None)
+    app = create_app(auth_token=None)
     test_client = TestClient(app)
     try:
         yield test_client

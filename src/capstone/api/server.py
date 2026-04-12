@@ -1,8 +1,29 @@
-import os
+import logging
 import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+
+# Noisy frontend polling endpoints — suppressed from [storage-bind] and uvicorn access logs
+# so that real request logs (e.g. /projects/upload, /projects) stay readable.
+_QUIET_PATHS = frozenset({
+    "/health",
+    "/api/health",
+    "/activity",
+    "/system/system-metrics",
+})
+
+
+class _QuietAccessFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+            for path in _QUIET_PATHS:
+                if f'"GET {path} ' in message or f'"POST {path} ' in message:
+                    return False
+        except Exception:
+            pass
+        return True
 
 from capstone.api.routes.consent import router as consent_router
 from capstone.api.routes.projects import router as projects_router
@@ -57,7 +78,9 @@ def _safe_import_resumes():
         return None, None, traceback.format_exc()
 
 
-def create_app(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
+def create_app(auth_token: str | None = None) -> FastAPI:
+    logging.getLogger("uvicorn.access").addFilter(_QuietAccessFilter())
+
     @asynccontextmanager
     async def lifespan(app):
         # Startup
@@ -71,7 +94,6 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         print("Application shutdown complete.")
     app = FastAPI(title="Capstone API", lifespan=lifespan)
     app.state.auth_token = auth_token
-    app.state.db_dir = db_dir
 
     app.add_middleware(
         CORSMiddleware,
@@ -88,20 +110,18 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
         from capstone.api.routes.auth import get_authenticated_storage_user_key
 
         storage_user_key = get_authenticated_storage_user_key(request)
-        token = storage_module.bind_request_user(storage_user_key)
-        mode = "user" if storage_user_key else "guest"
-        print(
-            "[storage-bind] "
-            f"path={request.url.path!r} "
-            f"mode={mode!r} "
-            f"user_id={storage_user_key!r} "
-            f"db_path={str(storage_module.get_database_path())!r}",
-            flush=True,
-        )
-        try:
+        with storage_module.storage_user_scope(storage_user_key):
+            if request.url.path not in _QUIET_PATHS:
+                mode = "user" if storage_user_key else "guest"
+                print(
+                    "[storage-bind] "
+                    f"path={request.url.path!r} "
+                    f"mode={mode!r} "
+                    f"user_id={storage_user_key!r} "
+                    f"db_path={str(storage_module.get_database_path())!r}",
+                    flush=True,
+                )
             return await call_next(request)
-        finally:
-            storage_module.reset_request_user(token)
 
     @app.get("/")
     def root():
@@ -131,7 +151,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     app.add_api_route("/api/github/token", put_github_token, methods=["PUT"], tags=["github"])
     app.include_router(cloud_router)
     app.include_router(project_viewer_router)
-    configure_auth(db_dir)
+    configure_auth()
     app.include_router(auth_router)
     # Optional job-match routes (since routes/job_match.py may not exist in this branch)
     job_match_router, job_match_err = _safe_import_job_match()
@@ -144,7 +164,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     portfolio_router, configure_portfolio, portfolio_err = _safe_import_portfolio()
     if portfolio_err is None and portfolio_router is not None and configure_portfolio is not None:
         try:
-            configure_portfolio(db_dir, auth_token)
+            configure_portfolio(auth_token)
             app.include_router(portfolio_router)
         except Exception:
             app.state.portfolio_mount_error = traceback.format_exc()
@@ -155,7 +175,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     showcase_router, configure_showcase, showcase_err = _safe_import_showcase()
     if showcase_err is None and showcase_router is not None and configure_showcase is not None:
         try:
-            configure_showcase(db_dir, auth_token)
+            configure_showcase(auth_token)
             app.include_router(showcase_router)
         except Exception:
             app.state.showcase_mount_error = traceback.format_exc()
@@ -166,7 +186,7 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     resumes_router, configure_resumes, resumes_err = _safe_import_resumes()
     if resumes_err is None and resumes_router is not None and configure_resumes is not None:
         try:
-            configure_resumes(db_dir, auth_token)
+            configure_resumes(auth_token)
             app.include_router(resumes_router)
         except Exception:
             app.state.resume_mount_error = traceback.format_exc()
@@ -194,11 +214,15 @@ def create_app(db_dir: str | None = None, auth_token: str | None = None) -> Fast
     return app
 
 
-def get_app_for_tests(db_dir: str | None = None, auth_token: str | None = None) -> FastAPI:
-    return create_app(db_dir=db_dir, auth_token=auth_token)
+def get_app_for_tests(auth_token: str | None = None) -> FastAPI:
+    return create_app(auth_token=auth_token)
 
 
-DB_DIR = os.getenv("CAPSTONE_DB_DIR")
+import os
+if (db_dir := os.getenv("CAPSTONE_DB_DIR")):
+    import capstone.storage as storage_module
+    from pathlib import Path as _Path
+    storage_module.BASE_DIR = _Path(db_dir)
 AUTH_TOKEN = os.getenv("CAPSTONE_AUTH_TOKEN")
 
-app = create_app(db_dir=DB_DIR, auth_token=AUTH_TOKEN)
+app = create_app(auth_token=AUTH_TOKEN)

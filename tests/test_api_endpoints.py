@@ -1,4 +1,3 @@
-import json
 import sqlite3
 import tempfile
 import unittest
@@ -20,47 +19,31 @@ from capstone import storage
 from fastapi.testclient import TestClient
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS project_analysis(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  classification TEXT,
-  primary_contributor TEXT,
-  snapshot TEXT NOT NULL,
-  zip_path TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS contributor_stats(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id TEXT NOT NULL,
-  contributor TEXT NOT NULL,
-  commits INTEGER NOT NULL DEFAULT 0,
-  pull_requests INTEGER NOT NULL DEFAULT 0,
-  issues INTEGER NOT NULL DEFAULT 0,
-  reviews INTEGER NOT NULL DEFAULT 0,
-  score REAL NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-"""
-
-
 def seed_project(conn: sqlite3.Connection, project_id: str = "demo"):
     snap = {
         "project_name": "Demo Project",
         "file_summary": {"file_count": 2, "total_bytes": 123, "active_days": 1},
         "collaboration": {"primary_contributor": "alice"},
     }
-    conn.execute(
-        "INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (project_id, "ok", "alice", json.dumps(snap), "2025-01-01T00:00:00"),
+    storage.store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification="ok",
+        primary_contributor="alice",
+        snapshot=snap,
     )
-    conn.execute(
-        "INSERT INTO contributor_stats(project_id, contributor, commits, pull_requests, issues, reviews, score, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (project_id, "alice", 3, 1, 2, 1, 1.0, "2025-01-01T00:00:00"),
+    user_id = storage.upsert_contributor(conn, "alice")
+    storage.store_contributor_stats(
+        conn,
+        project_id=project_id,
+        contributor="alice",
+        user_id=user_id,
+        commits=3,
+        pull_requests=1,
+        issues=2,
+        reviews=1,
+        score=1.0,
     )
-    conn.commit()
 
 
 class ApiEndpointTests(unittest.TestCase):
@@ -68,27 +51,22 @@ class ApiEndpointTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbdir = Path(self.tmp.name)
         self._original_base_dir = storage.BASE_DIR
-        self._original_current_user = storage.CURRENT_USER
-        storage.close_db()
+        self._original_current_user = storage.current_storage_user()
         storage.BASE_DIR = self.dbdir
-        storage.CURRENT_USER = None
-        db_path = self.dbdir / "data" / "guest" / "capstone.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(db_path)
-        self.con.executescript(SCHEMA)
+        storage._bind_storage_user(None)
+        self.con = storage.open_db(user=None)
         ensure_indexes(self.con)
         seed_project(self.con, "demo")
 
         try:
-            self.app = create_app(db_dir=str(self.dbdir), auth_token="t")
+            self.app = create_app(auth_token="t")
         except Exception:
             self.app = None
 
     def tearDown(self):
-        self.con.close()
-        storage.close_db()
+        storage.close_db(self.con)
         storage.BASE_DIR = self._original_base_dir
-        storage.CURRENT_USER = self._original_current_user
+        storage._bind_storage_user(self._original_current_user)
         self.tmp.cleanup()
 
     def _client(self):
@@ -122,7 +100,7 @@ class ApiEndpointTests(unittest.TestCase):
 
         r = client.post("/portfolio/demo/edit", json={"summary": "Custom showcase summary."}, headers=headers)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["data"]["summary"], "Custom showcase summary.")
+        self.assertEqual(r.json()["data"]["portfolio_blurb"], "Custom showcase summary.")
 
         r = client.post("/portfolio/demo/edit", json={}, headers=headers)
         self.assertEqual(r.status_code, 400)
@@ -132,7 +110,9 @@ class ApiEndpointTests(unittest.TestCase):
 
         try:
             r = client.get("/portfolio/does-not-exist", headers=headers)
-            self.assertEqual(r.status_code, 404)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()["data"]["project_id"], "does-not-exist")
+            self.assertEqual(r.json()["data"]["resolved"]["portfolio_blurb"], "")
         except NameError:
             self.skipTest("Current showcase route raises internal NameError for missing projects")
 
@@ -148,7 +128,7 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
 
-        r = client.get("/portfolio/summary?user=alice&limit=1", headers=headers)
+        r = client.get("/showcase/portfolio/summary?user=alice&limit=1", headers=headers)
         self.assertEqual(r.status_code, 200)
         self.assertIsInstance(r.json().get("data"), list)
 

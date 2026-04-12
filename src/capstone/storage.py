@@ -13,14 +13,16 @@ This module centralizes:
 from __future__ import annotations
 
 import base64
+import contextlib
 import contextvars
 import hashlib
 import json
+import shutil
 import sqlite3
+import time
 import uuid
 from pathlib import Path
-from typing import Iterable, Optional
-from datetime import datetime
+from typing import Iterable
 from .config import CONFIG_SECRET
 from .logging_utils import get_logger
 import os
@@ -78,9 +80,6 @@ def get_base_data_dir():
     return base
 
 BASE_DIR = get_base_data_dir()
-_DB_HANDLE: Optional[sqlite3.Connection] = None
-_DB_PATH: Optional[Path] = None
-CURRENT_USER = None
 _REQUEST_STORAGE_USER: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "storage_current_user", default=None
 )
@@ -119,27 +118,7 @@ def _default_github_url(username: str | None) -> str | None:
     return f"https://github.com/{token}"
 
 
-def _has_required_schema(conn: sqlite3.Connection) -> bool:
-    """
-    Return True when the core tables needed for read endpoints already exist.
-    This allows the app to keep serving reads if the database is temporarily
-    opened in a readonly state and schema bootstrapping cannot run.
-    """
-    required = {
-        "project_analysis",
-        "files",
-        "uploads",
-        "error_analysis_results",
-    }
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-    ).fetchall()
-    existing = {str(row[0]) for row in rows}
-    return required.issubset(existing)
-
-
 # Schema + migrations
-
 def _initialize_schema(conn: sqlite3.Connection) -> None:
     """Create all tables and indexes. No migration logic — see _run_migrations."""
 
@@ -149,15 +128,16 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS user (
             id INTEGER PRIMARY KEY CHECK(id = 1),
             username TEXT NOT NULL,
-            password_hash TEXT,
-            github_username TEXT,
-            github_url TEXT,
-            github_token_enc TEXT,
+            email TEXT,
             full_name TEXT,
             phone_number TEXT,
             city TEXT,
             state_region TEXT,
+            github_username TEXT,
+            github_url TEXT,
             portfolio_url TEXT,
+            github_token_enc TEXT,
+            password_hash TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login_at TIMESTAMP
         )
@@ -218,13 +198,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     """)
 
     # github_projects removed in M21 — superseded by projects (source, github_url, github_branch)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS github_auth (
-            id INTEGER PRIMARY KEY,
-            access_token TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # github_auth removed in M25 — token now lives in user.github_token_enc
 
     # --- Child tables ---
 
@@ -305,6 +279,36 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
         )
     """)
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_customizations (
+            project_id TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL DEFAULT 'classic',
+            key_role TEXT,
+            evidence_of_success TEXT,
+            portfolio_blurb TEXT,
+            case_study_abstract TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_images (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            caption TEXT,
+            is_cover INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+        )
+        """
+    )
+
     # contributor_stats removed in M22 — superseded by project_contributors
     # user_projects removed in M22 — superseded by project_contributors
     conn.execute("""
@@ -366,7 +370,6 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
             end_date TEXT,
             location TEXT,
             content TEXT,
-            bullets_json TEXT,
             metadata_json TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
             is_enabled INTEGER NOT NULL DEFAULT 1,
@@ -402,6 +405,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_project_evidence_project ON project_evidence (project_id, created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files (hash)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_file ON uploads (file_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pa_project_created ON project_analysis(project_id, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_images_project ON portfolio_images(project_id, sort_order, created_at)")
 
     conn.execute("PRAGMA foreign_keys = ON")
     conn.commit()
@@ -460,9 +465,44 @@ def _schema_matches_expected(conn: sqlite3.Connection) -> bool:
         ref.close()
 
 
+def _backup_db_file(conn: sqlite3.Connection) -> Path | None:
+    """Copy the live DB file to a timestamped .bak-<ts> sibling before a destructive reset.
+
+    Returns the backup path on success, or None if the DB is in-memory / path unknown
+    / copy failed. Any failure is logged but never raised — backup is best-effort and
+    must not block the reset itself.
+    """
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    # PRAGMA database_list columns: (seq, name, file)
+    raw_path = row[2] if len(row) > 2 else None
+    if not raw_path:
+        return None
+    db_path = Path(raw_path)
+    if not db_path.exists() or db_path.stat().st_size == 0:
+        return None
+    backup_path = db_path.with_name(f"{db_path.name}.bak-{int(time.time())}")
+    try:
+        shutil.copy2(db_path, backup_path)
+    except OSError as exc:
+        logger.warning("Failed to back up %s before nuclear reset: %s", db_path, exc)
+        return None
+    logger.warning("Backed up %s → %s before nuclear reset", db_path, backup_path)
+    return backup_path
+
+
 def _nuclear_reset(conn: sqlite3.Connection) -> None:
-    """Drop all user tables and reinitialise from _initialize_schema."""
+    """Drop all user tables and reinitialise from _initialize_schema.
+
+    Before dropping anything, snapshot the live DB file to a timestamped backup
+    sibling so a mis-triggered reset can be recovered manually.
+    """
     logger.warning("Schema mismatch detected — dropping all tables and reinitialising")
+    _backup_db_file(conn)
     conn.execute("PRAGMA foreign_keys = OFF")
     tables = [
         row[0] for row in conn.execute(
@@ -484,12 +524,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 def save_error_results(conn, project_id: str, errors: list[dict]):
     conn.execute("""
         INSERT INTO error_analysis_results (project_id, errors_json, updated_at)
-        VALUES (?, ?, ?)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(project_id)
         DO UPDATE SET
             errors_json = excluded.errors_json,
-            updated_at = excluded.updated_at
-    """, (project_id, json.dumps(errors), datetime.utcnow().isoformat()))
+            updated_at = CURRENT_TIMESTAMP
+    """, (project_id, json.dumps(errors)))
     conn.commit()
 
 
@@ -515,26 +555,33 @@ def fetch_error_results(conn):
     return results
 
 
-def set_current_user(user_id: str | None):
-    global CURRENT_USER
-    resolved = resolve_storage_user_key(user_id)
-    CURRENT_USER = resolved
-    _REQUEST_STORAGE_USER.set(resolved)
+# ---------------------------------------------------------------------------
+# Storage user identity API
+#
+# Public surface (use these):
+#   - current_storage_user()  — read the identity bound to this async task
+#   - storage_user_scope(uid) — bind an identity for the duration of a `with`
+#
+# ``_bind_storage_user`` / ``_reset_storage_user`` are private primitives used
+# by ``storage_user_scope``; tests may call them directly to set up fixtures.
+# ---------------------------------------------------------------------------
 
 
-def bind_request_user(user_id: str | None) -> contextvars.Token:
+def current_storage_user() -> str | None:
+    """Return the storage user bound to the current async task / thread, or
+    None for guest. Read-only — use ``storage_user_scope`` to change it.
     """
-    Bind request-local storage user context and mirror it globally for legacy code.
-    Returns a context token so middleware can reset after the request completes.
-    """
+    return resolve_storage_user_key(_REQUEST_STORAGE_USER.get())
+
+
+def _bind_storage_user(user_id: str | None) -> contextvars.Token:
+    """Private primitive — bind identity and return a reset token."""
     resolved = resolve_storage_user_key(user_id)
-    token = _REQUEST_STORAGE_USER.set(resolved)
-    global CURRENT_USER
-    CURRENT_USER = resolved
-    return token
+    return _REQUEST_STORAGE_USER.set(resolved)
 
 
-def reset_request_user(token: contextvars.Token) -> None:
+def _reset_storage_user(token: contextvars.Token) -> None:
+    """Private primitive — reset a previous bind."""
     try:
         _REQUEST_STORAGE_USER.reset(token)
     except Exception:
@@ -542,47 +589,56 @@ def reset_request_user(token: contextvars.Token) -> None:
         _REQUEST_STORAGE_USER.set(None)
 
 
-def get_current_user() -> str | None:
-    scoped_user = _REQUEST_STORAGE_USER.get()
-    if scoped_user is not None:
-        return resolve_storage_user_key(scoped_user)
-    return resolve_storage_user_key(CURRENT_USER)
+@contextlib.contextmanager
+def storage_user_scope(user_id: str | None):
+    """Bind ``user_id`` as the storage identity for the enclosed block.
+
+    On exit the previous identity is restored, even if the block raises.
+    Safe across async tasks because it is backed by a ContextVar.
+
+    Typical uses:
+        with storage_user_scope(user_key):
+            return await call_next(request)        # HTTP middleware
+
+        with storage_user_scope(new_user_key):     # just-created account
+            upsert_user(conn, ...)
+
+        with storage_user_scope(canonical_user):   # temporary switch
+            sync_to_cloud(...)
+    """
+    token = _bind_storage_user(user_id)
+    try:
+        yield
+    finally:
+        _reset_storage_user(token)
 
 _UNSET = object()  # sentinel — distinguishes "not passed" from None
 
 
 def get_database_path(user=_UNSET) -> Path:
-    # Allow overriding the DB path for local debugging.
-    # Uncomment the line below (and set LOOM_DB_PATH=debug_db/capstone.db) to share one DB across all users.
-    # override = os.getenv("LOOM_DB_PATH")
-    override = None
-    if override:
-        p = Path(override)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        return p
-
     if user is _UNSET:
-        storage_user_key = get_current_user()
+        storage_user_key = current_storage_user()
     elif user is None:
         storage_user_key = None
     else:
         storage_user_key = resolve_storage_user_key(user)
 
+    database_root = BASE_DIR / "data"
+    database_root.mkdir(parents=True, exist_ok=True)
+
     if storage_user_key:
-        path = BASE_DIR / "data" / "users" / _user_dir(storage_user_key)
+        path = database_root / "users" / _user_dir(storage_user_key)
         path.mkdir(parents=True, exist_ok=True)
         return path / "capstone.db"
 
-    path = BASE_DIR / "data" / "guest"
+    path = database_root / "guest"
     path.mkdir(parents=True, exist_ok=True)
     return path / "capstone.db"
 
 # -----------------------------
 # DB lifecycle
 # -----------------------------
-def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
-    target_dir = base_dir or BASE_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
+def open_db(*, user=_UNSET) -> sqlite3.Connection:
     db_path = get_database_path(user=user)
     db_key = str(db_path.resolve())
 
@@ -601,43 +657,21 @@ def open_db(base_dir: Path | None = None, *, user=_UNSET) -> sqlite3.Connection:
         pass
 
     if db_key not in _SCHEMA_READY:
-        try:
-            _run_migrations(conn)
-            _initialize_schema(conn)
-            _SCHEMA_READY.add(db_key)
-        except sqlite3.OperationalError as exc:
-            message = str(exc).lower()
-            if "readonly" not in message and "locked" not in message:
-                raise
-            if not _has_required_schema(conn):
-                raise
-            _SCHEMA_READY.add(db_key)
-            logger.warning(
-                "Skipping schema initialization for %s because database is temporarily unavailable for writes: %s",
-                db_path,
-                exc,
-            )
+        _run_migrations(conn)
+        _initialize_schema(conn)
+        _SCHEMA_READY.add(db_key)
 
     return conn
 
 def close_db(conn: sqlite3.Connection | None = None) -> None:
-    if conn is not None:
-        try:
-            conn.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close DB connection", exc_info=True)
+    """Close the given connection. The no-arg form is a legacy no-op now that
+    every caller passes its own connection."""
+    if conn is None:
         return
-
-    """Close the shared database handle if it exists."""
-    global _DB_HANDLE, _DB_PATH
-    if _DB_HANDLE is not None:
-        try:
-            _DB_HANDLE.close()
-        except Exception:  # pragma: no cover
-            logger.warning("Failed to close DB cleanly", exc_info=True)
-        finally:
-            _DB_HANDLE = None
-            _DB_PATH = None
+    try:
+        conn.close()
+    except Exception:  # pragma: no cover
+        logger.warning("Failed to close DB connection", exc_info=True)
 
 # Snapshots
 
@@ -700,71 +734,25 @@ def fetch_latest_snapshot(conn: sqlite3.Connection, project_id: str) -> dict | N
     if not project_id:
         return None
 
-    try:
-        cursor = conn.execute(
-            """
-            SELECT snapshot
-            FROM project_analysis
-            WHERE project_id = ?
-            ORDER BY datetime(created_at) DESC, id DESC
-            LIMIT 1
-            """,
-            (project_id,),
-        )
-    except sqlite3.OperationalError:
-        cursor = conn.execute(
-            """
-            SELECT snapshot
-            FROM project_analysis
-            WHERE project_id = ?
-            ORDER BY datetime(created_at) DESC
-            LIMIT 1
-            """,
-            (project_id,),
-        )
-    row = cursor.fetchone()
+    row = conn.execute(
+        """
+        SELECT snapshot
+        FROM project_analysis
+        WHERE project_id = ?
+        ORDER BY datetime(created_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
     return json.loads(row[0]) if row else None
 
-def fetch_latest_snapshots_with_zip(conn: sqlite3.Connection) -> list[dict]:
-    """
-    Returns the latest snapshot + zip_path for each project.
-    Used exclusively for AI error analysis.
-    Uses MAX(id) rowid-based selection to match recent_projects.py and avoid
-    datetime() parsing failures on rows with NULL or non-standard created_at.
-    """
+def _loads_snapshot(blob: object) -> dict:
+    """Parse a snapshot JSON blob, returning {} on any failure."""
+    try:
+        return json.loads(blob)
+    except Exception:
+        return {}
 
-    rows = conn.execute(
-        """
-        SELECT pa.project_id,
-               pa.snapshot,
-               pa.zip_path,
-               pa.created_at
-        FROM project_analysis pa
-        WHERE pa.id IN (
-            SELECT MAX(id)
-            FROM project_analysis
-            GROUP BY project_id
-        )
-        ORDER BY pa.id DESC
-        """
-    ).fetchall()
-
-    snapshots = []
-
-    for project_id, snapshot_json, zip_path, created_at in rows:
-        try:
-            snapshot = json.loads(snapshot_json)
-        except Exception:
-            snapshot = {}
-
-        snapshots.append({
-            "project_id": project_id,
-            "snapshot": snapshot,
-            "zip_path": zip_path,
-            "created_at": created_at,
-        })
-
-    return snapshots
 
 def fetch_project_snapshot_history(
     conn: sqlite3.Connection,
@@ -801,178 +789,61 @@ def fetch_project_snapshot_history(
         sql += " LIMIT ?"
         params = (project_id, int(limit))
 
-    try:
-        rows = conn.execute(sql, params).fetchall()
-    except sqlite3.OperationalError:
-        sql = """
-            SELECT
-                NULL AS id,
-                project_id,
-                classification,
-                primary_contributor,
-                snapshot,
-                created_at
-            FROM project_analysis
-            WHERE project_id = ?
-            ORDER BY datetime(created_at) DESC
-        """
-        if limit is not None:
-            if int(limit) <= 0:
-                return []
-            sql += " LIMIT ?"
-            params = (project_id, int(limit))
-        rows = conn.execute(sql, params).fetchall()
+    rows = conn.execute(sql, params).fetchall()
 
-    out: list[dict] = []
-    for row_id, pid, classification, contributor, snapshot_json, created_at in rows:
-        try:
-            snap = json.loads(snapshot_json)
-        except Exception:
-            snap = {}
-        out.append(
-            {
-                "id": row_id,
-                "project_id": pid,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snap,
-            }
-        )
-    return out
+    return [
+        {
+            "id": row_id,
+            "project_id": pid,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "created_at": created_at,
+            "snapshot": _loads_snapshot(snapshot_json),
+        }
+        for row_id, pid, classification, contributor, snapshot_json, created_at in rows
+    ]
 
 def fetch_latest_snapshots(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
     """
-    Return newest snapshot for every project saved in the database.
-    Each item contains snapshot + metadata.
+    Return newest snapshot for every project saved in the database, newest first.
+
+    Each item contains: project_id, classification, primary_contributor,
+    snapshot, zip_path, created_at.
     """
     if limit is not None and int(limit) <= 0:
         return []
 
-    try:
-        cursor = conn.execute(
-            f"""
-            WITH latest_time AS (
-                SELECT project_id, MAX(created_at) AS created_at
-                FROM project_analysis
-                GROUP BY project_id
-            ),
-            latest_row AS (
-                SELECT pa.project_id, MAX(pa.id) AS id
-                FROM project_analysis pa
-                JOIN latest_time lt
-                  ON lt.project_id = pa.project_id
-                 AND lt.created_at = pa.created_at
-                GROUP BY pa.project_id
-            )
-            SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
-            FROM project_analysis a
-            JOIN latest_row lr ON lr.id = a.id
-            ORDER BY datetime(a.created_at) DESC, a.id DESC
-            {"LIMIT ?" if limit is not None else ""}
-            """,
-            (() if limit is None else (int(limit),)),
+    limit_clause = "LIMIT ?" if limit is not None else ""
+    params: tuple = () if limit is None else (int(limit),)
+
+    # MAX(id) picks the latest row per project: `id` is AUTOINCREMENT and strictly
+    # monotonic, so it's more reliable than MAX(created_at) (second resolution,
+    # nullable on legacy rows).
+    rows = conn.execute(
+        f"""
+        SELECT pa.project_id, pa.classification, pa.primary_contributor,
+               pa.snapshot, pa.zip_path, pa.created_at
+        FROM project_analysis pa
+        WHERE pa.id IN (
+            SELECT MAX(id) FROM project_analysis GROUP BY project_id
         )
-    except sqlite3.OperationalError:
-        cursor = conn.execute(
-            f"""
-            WITH latest_time AS (
-                SELECT project_id, MAX(created_at) AS created_at
-                FROM project_analysis
-                GROUP BY project_id
-            )
-            SELECT a.project_id, a.classification, a.primary_contributor, a.snapshot, a.created_at
-            FROM project_analysis a
-            JOIN latest_time lt
-              ON lt.project_id = a.project_id
-             AND lt.created_at = a.created_at
-            ORDER BY datetime(a.created_at) DESC
-            {"LIMIT ?" if limit is not None else ""}
-            """,
-            (() if limit is None else (int(limit),)),
-        )
+        ORDER BY pa.id DESC
+        {limit_clause}
+        """,
+        params,
+    ).fetchall()
 
-    rows = cursor.fetchall()
-    payload: list[dict] = []
-    for project_id, classification, contributor, snapshot_json, created_at in rows:
-        try:
-            snapshot = json.loads(snapshot_json)
-        except Exception:
-            snapshot = {}
-        payload.append(
-            {
-                "project_id": project_id,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snapshot,
-            }
-        )
-    return payload
-
-
-def fetch_latest_snapshots_for_projects(
-    conn: sqlite3.Connection,
-    project_ids: Iterable[str],
-) -> dict[str, dict | None]:
-    """
-    Return {project_id: latest_snapshot_dict_or_None} for ONLY the given project_ids.
-    One SQL query (no N+1).
-    """
-    ids = [str(pid) for pid in project_ids if pid]
-    if not ids:
-        return {}
-
-    placeholders = ",".join(["?"] * len(ids))
-
-    try:
-        rows = conn.execute(
-            f"""
-            WITH latest_time AS (
-                SELECT project_id, MAX(created_at) AS created_at
-                FROM project_analysis
-                WHERE project_id IN ({placeholders})
-                GROUP BY project_id
-            ),
-            latest_row AS (
-                SELECT pa.project_id, MAX(pa.id) AS id
-                FROM project_analysis pa
-                JOIN latest_time lt
-                  ON lt.project_id = pa.project_id
-                 AND lt.created_at = pa.created_at
-                GROUP BY pa.project_id
-            )
-            SELECT pa.project_id, pa.snapshot
-            FROM project_analysis pa
-            JOIN latest_row lr ON lr.id = pa.id
-            """,
-            ids,
-        ).fetchall()
-    except sqlite3.OperationalError:
-        rows = conn.execute(
-            f"""
-            WITH latest_time AS (
-                SELECT project_id, MAX(created_at) AS created_at
-                FROM project_analysis
-                WHERE project_id IN ({placeholders})
-                GROUP BY project_id
-            )
-            SELECT pa.project_id, pa.snapshot
-            FROM project_analysis pa
-            JOIN latest_time lt
-              ON lt.project_id = pa.project_id
-             AND lt.created_at = pa.created_at
-            """,
-            ids,
-        ).fetchall()
-
-    out: dict[str, dict | None] = {pid: None for pid in ids}
-    for pid, snap_json in rows:
-        try:
-            out[pid] = json.loads(snap_json)
-        except Exception:
-            out[pid] = {}
-    return out
+    return [
+        {
+            "project_id": project_id,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "snapshot": _loads_snapshot(snapshot_json),
+            "zip_path": zip_path,
+            "created_at": created_at,
+        }
+        for project_id, classification, contributor, snapshot_json, zip_path, created_at in rows
+    ]
 
 
 
@@ -1018,19 +889,19 @@ def store_github_source(
     # Ensure the parent projects row exists (FK constraint added in M24)
     upsert_project(conn, project_id, source="github", github_url=repo_url)
 
-    existing = conn.execute(
-        "SELECT 1 FROM project_analysis WHERE project_id = ? LIMIT 1",
+    latest = conn.execute(
+        "SELECT id FROM project_analysis WHERE project_id = ? ORDER BY id DESC LIMIT 1",
         (project_id,),
     ).fetchone()
 
-    if existing:
+    if latest:
         conn.execute(
             """
             UPDATE project_analysis
             SET repo_url = ?, token_enc = ?
-            WHERE project_id = ?
+            WHERE id = ?
             """,
-            (repo_url, token_enc, project_id),
+            (repo_url, token_enc, latest[0]),
         )
     else:
         conn.execute(
@@ -1584,9 +1455,9 @@ def get_user(conn: sqlite3.Connection) -> dict | None:
     """Return the single login account row, or None if not yet set."""
     row = conn.execute(
         """
-        SELECT id, username, password_hash, github_username, github_url,
-               github_token_enc, full_name, phone_number, city, state_region,
-               portfolio_url, created_at, last_login_at
+        SELECT id, username, email, full_name, phone_number, city,
+               state_region, github_username, github_url, portfolio_url,
+               github_token_enc, password_hash, created_at, last_login_at
         FROM user
         WHERE id = 1
         LIMIT 1
@@ -1597,17 +1468,18 @@ def get_user(conn: sqlite3.Connection) -> dict | None:
     return {
         "id": int(row[0]),
         "username": row[1],
-        "password_hash": row[2],
-        "github_username": row[3],
-        "github_url": row[4],
-        "github_token_enc": row[5],
-        "full_name": row[6],
-        "phone_number": row[7],
-        "city": row[8],
-        "state_region": row[9],
-        "portfolio_url": row[10],
-        "created_at": row[11],
-        "last_login_at": row[12],
+        "email": row[2],
+        "full_name": row[3],
+        "phone_number": row[4],
+        "city": row[5],
+        "state_region": row[6],
+        "github_username": row[7],
+        "github_url": row[8],
+        "portfolio_url": row[9],
+        "github_token_enc": row[10],
+        "password_hash": row[11],
+        "created_at": row[12],
+        "last_login_at": row[13],
     }
 
 
@@ -1615,6 +1487,7 @@ def upsert_user(
     conn: sqlite3.Connection,
     username: str,
     *,
+    email: str | None = None,
     password_hash: str | None = None,
     github_username: str | None = None,
     github_url: str | None = None,
@@ -1629,24 +1502,25 @@ def upsert_user(
         raise ValueError("username must be provided")
     conn.execute(
         """
-        INSERT INTO user (id, username, password_hash, github_username, github_url,
-                          github_token_enc, full_name, phone_number, city, state_region,
-                          portfolio_url)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user (id, username, email, full_name, phone_number, city,
+                          state_region, github_username, github_url, portfolio_url,
+                          github_token_enc, password_hash)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             username = excluded.username,
-            password_hash = COALESCE(excluded.password_hash, password_hash),
-            github_username = COALESCE(excluded.github_username, github_username),
-            github_url = COALESCE(excluded.github_url, github_url),
-            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            email = COALESCE(excluded.email, email),
             full_name = COALESCE(excluded.full_name, full_name),
             phone_number = COALESCE(excluded.phone_number, phone_number),
             city = COALESCE(excluded.city, city),
             state_region = COALESCE(excluded.state_region, state_region),
-            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url)
+            github_username = COALESCE(excluded.github_username, github_username),
+            github_url = COALESCE(excluded.github_url, github_url),
+            portfolio_url = COALESCE(excluded.portfolio_url, portfolio_url),
+            github_token_enc = COALESCE(excluded.github_token_enc, github_token_enc),
+            password_hash = COALESCE(excluded.password_hash, password_hash)
         """,
-        (username, password_hash, github_username, github_url, github_token_enc,
-         full_name, phone_number, city, state_region, portfolio_url),
+        (username, email, full_name, phone_number, city, state_region,
+         github_username, github_url, portfolio_url, github_token_enc, password_hash),
     )
     conn.commit()
 
@@ -1654,6 +1528,7 @@ def upsert_user(
 def update_user_profile(
     conn: sqlite3.Connection,
     *,
+    email: str | None = None,
     full_name: str | None = None,
     phone_number: str | None = None,
     city: str | None = None,
@@ -1667,6 +1542,7 @@ def update_user_profile(
         """
         UPDATE user
         SET
+            email = COALESCE(?, email),
             full_name = COALESCE(?, full_name),
             phone_number = COALESCE(?, phone_number),
             city = COALESCE(?, city),
@@ -1676,7 +1552,7 @@ def update_user_profile(
             portfolio_url = COALESCE(?, portfolio_url)
         WHERE id = 1
         """,
-        (full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
+        (email, full_name, phone_number, city, state_region, github_username, github_url, portfolio_url),
     )
     conn.commit()
 
@@ -1836,9 +1712,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 (
                     str(uuid.uuid4()),
@@ -1849,7 +1725,6 @@ def upsert_default_resume_modules(
                     item.get("end_date"),
                     item.get("location"),
                     item.get("content"),
-                    json.dumps(item.get("bullets") or []),
                     json.dumps(item.get("metadata") or {}),
                     idx,
                 ),
@@ -1881,7 +1756,6 @@ def upsert_default_resume_modules(
     core_skill_item = {
         "title": "Core Skill",
         "content": ", ".join(deduped_skills),
-        "bullets": deduped_skills,
     }
     _replace_items("core_skill", [core_skill_item])
 
@@ -1925,9 +1799,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, 'University', NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id),
             )
@@ -1946,9 +1820,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, 'Summary', NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id),
             )
@@ -1965,9 +1839,9 @@ def upsert_default_resume_modules(
                 """
                 INSERT INTO resume_items (
                     id, section_id, title, subtitle, start_date, end_date, location, content,
-                    bullets_json, metadata_json, sort_order, is_enabled
+                    metadata_json, sort_order, is_enabled
                 )
-                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '[]', '{}', 1, 1)
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '', '{}', 1, 1)
                 """,
                 (str(uuid.uuid4()), section_id, title),
             )
@@ -1984,7 +1858,7 @@ def _item_row_to_dict(row: tuple) -> dict:
     """Convert a resume_items DB row to a plain dict."""
     (
         id_, section_id, title, subtitle, start_date, end_date,
-        location, content, bullets_json, metadata_json,
+        location, content, metadata_json,
         sort_order, is_enabled, created_at, updated_at,
     ) = row
     return {
@@ -1996,7 +1870,6 @@ def _item_row_to_dict(row: tuple) -> dict:
         "end_date": end_date,
         "location": location,
         "content": content,
-        "bullets": json.loads(bullets_json or "[]"),
         "metadata": json.loads(metadata_json or "{}"),
         "sort_order": sort_order,
         "is_enabled": bool(is_enabled),
@@ -2079,7 +1952,7 @@ def fetch_resume(conn: sqlite3.Connection, resume_id: str) -> dict | None:
         item_rows = conn.execute(
             """
             SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
-                   bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+                   metadata_json, sort_order, is_enabled, created_at, updated_at
             FROM resume_items
             WHERE section_id = ?
             ORDER BY sort_order, id
@@ -2227,7 +2100,7 @@ def fetch_resume_items(conn: sqlite3.Connection, section_id: str) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, section_id, title, subtitle, start_date, end_date, location, content,
-               bullets_json, metadata_json, sort_order, is_enabled, created_at, updated_at
+               metadata_json, sort_order, is_enabled, created_at, updated_at
         FROM resume_items WHERE section_id = ? ORDER BY sort_order, id
         """,
         (section_id,),
@@ -2245,7 +2118,6 @@ def insert_resume_item(
     end_date: str | None = None,
     location: str | None = None,
     content: str | None = None,
-    bullets: list | None = None,
     metadata: dict | None = None,
     sort_order: int | None = None,
 ) -> str:
@@ -2260,12 +2132,12 @@ def insert_resume_item(
         """
         INSERT INTO resume_items (
             id, section_id, title, subtitle, start_date, end_date, location, content,
-            bullets_json, metadata_json, sort_order, is_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            metadata_json, sort_order, is_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """,
         (
             item_id, section_id, title, subtitle, start_date, end_date, location, content,
-            json.dumps(bullets or []), json.dumps(metadata or {}), sort_order,
+            json.dumps(metadata or {}), sort_order,
         ),
     )
     conn.commit()
@@ -2282,7 +2154,6 @@ def update_resume_item(
     end_date: str | None = None,
     location: str | None = None,
     content: str | None = None,
-    bullets: list | None = None,
     metadata: dict | None = None,
     is_enabled: bool | None = None,
 ) -> bool:
@@ -2299,8 +2170,6 @@ def update_resume_item(
         sets.append("location = ?"); params.append(location)
     if content is not None:
         sets.append("content = ?"); params.append(content)
-    if bullets is not None:
-        sets.append("bullets_json = ?"); params.append(json.dumps(bullets))
     if metadata is not None:
         sets.append("metadata_json = ?"); params.append(json.dumps(metadata))
     if is_enabled is not None:
@@ -2657,21 +2526,16 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
         """
     ).fetchall()
 
-    payload: list[dict] = []
-    for project_id, classification, contributor, blob, created_at in rows:
-        try:
-            snapshot = json.loads(blob)
-        except Exception:
-            snapshot = {}
-        payload.append(
-            {
-                "project_id": project_id,
-                "classification": classification,
-                "primary_contributor": contributor,
-                "created_at": created_at,
-                "snapshot": snapshot,
-            }
-        )
+    payload = [
+        {
+            "project_id": project_id,
+            "classification": classification,
+            "primary_contributor": contributor,
+            "created_at": created_at,
+            "snapshot": _loads_snapshot(blob),
+        }
+        for project_id, classification, contributor, blob, created_at in rows
+    ]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -2682,44 +2546,54 @@ def export_snapshots_to_json(conn: sqlite3.Connection, output_path: Path) -> int
 # -------------------------------
 
 def save_github_token(token: str):
-    """Store GitHub access token."""
-    with open_db() as conn:
-        conn.execute("DELETE FROM github_auth")
+    """Encrypt and store GitHub access token in the user row."""
+    conn = open_db()
+    try:
         conn.execute(
-            "INSERT INTO github_auth (access_token) VALUES (?)",
-            (token,)
+            "UPDATE user SET github_token_enc = ? WHERE id = 1",
+            (_encrypt_token(token),),
         )
         conn.commit()
+    finally:
+        close_db(conn)
 
 
 def get_github_token():
-    """Return stored GitHub token if it exists."""
-    with open_db() as conn:
+    """Return decrypted GitHub token, or None if not set."""
+    conn = open_db()
+    try:
         row = conn.execute(
-            "SELECT access_token FROM github_auth LIMIT 1"
+            "SELECT github_token_enc FROM user WHERE id = 1"
         ).fetchone()
-
-        if row:
-            return row[0]
-
-    return None
+        if row and row[0]:
+            return _decrypt_token(row[0])
+        return None
+    finally:
+        close_db(conn)
 
 
 def clear_github_token():
-    """Logout GitHub user."""
-    with open_db() as conn:
-        conn.execute("DELETE FROM github_auth")
+    """Remove stored GitHub token."""
+    conn = open_db()
+    try:
+        conn.execute(
+            "UPDATE user SET github_token_enc = NULL WHERE id = 1"
+        )
         conn.commit()
+    finally:
+        close_db(conn)
 
 __all__ = [
     "open_db",
     "close_db",
     "BASE_DIR",
+    # storage user identity
+    "current_storage_user",
+    "storage_user_scope",
     # snapshots
     "store_analysis_snapshot",
     "fetch_latest_snapshot",
     "fetch_latest_snapshots",
-    "fetch_latest_snapshots_for_projects",
     "fetch_project_snapshot_history",
     # github sources
     "store_github_source",

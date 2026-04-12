@@ -346,7 +346,6 @@ def sync_contributor_stats(
     *,
     token: str | None,
     project_id: str | None = None,
-    db_dir: Path | None = None,
     weights: dict | None = None,
     max_contributors: int = 50,
     include_bots: bool = False,
@@ -368,7 +367,7 @@ def sync_contributor_stats(
     )
     if progress_cb:
         progress_cb("Saving contributor stats", None, None)
-    conn = open_db(db_dir)
+    conn = open_db()
     for row in stats:
         # upsert contributor first to get stable id
         user_id = upsert_contributor(conn, row.contributor, email=row.email)

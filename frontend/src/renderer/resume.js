@@ -1,4 +1,5 @@
 import { authFetch, isPrivateMode } from "./auth.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
 
 // ---------------------------------------------------------------------------
 // API — all requests carry Bearer token via authFetch
@@ -80,57 +81,6 @@ function escapeHtml(value) {
 // text input unresponsive until the window is clicked.  Always use these
 // instead of the native versions.
 // ---------------------------------------------------------------------------
-
-function _confirmDialog(message, okLabel = "Delete") {
-  return new Promise((resolve) => {
-    const modal = document.createElement("div");
-    modal.className = "auth-modal";
-    modal.style.cssText = "z-index:4000";
-    modal.innerHTML = `
-      <div class="auth-dialog" style="text-align:center;max-width:360px">
-        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
-        <div style="display:flex;gap:10px;justify-content:center">
-          <button class="re-cf-cancel secondary-btn">Cancel</button>
-          <button class="re-cf-ok danger-btn">${escapeHtml(okLabel)}</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    const ok = modal.querySelector(".re-cf-ok");
-    const cancel = modal.querySelector(".re-cf-cancel");
-    const finish = (val) => { modal.remove(); resolve(val); };
-    ok.addEventListener("click", () => finish(true));
-    cancel.addEventListener("click", () => finish(false));
-    modal.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") finish(false);
-      if (e.key === "Enter") finish(true);
-    });
-    cancel.focus();
-  });
-}
-
-function _alertDialog(message) {
-  return new Promise((resolve) => {
-    const modal = document.createElement("div");
-    modal.className = "auth-modal";
-    modal.style.cssText = "z-index:4000";
-    modal.innerHTML = `
-      <div class="auth-dialog" style="text-align:center;max-width:360px">
-        <p style="margin:0 0 20px;font-size:14px">${escapeHtml(message)}</p>
-        <div style="display:flex;justify-content:center">
-          <button class="re-cf-ok secondary-btn">OK</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    const okBtn = modal.querySelector(".re-cf-ok");
-    okBtn.addEventListener("click", () => { modal.remove(); resolve(); });
-    modal.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" || e.key === "Enter") { modal.remove(); resolve(); }
-    });
-    okBtn.focus();
-  });
-}
 
 function normalizeSkillName(value) {
   const raw = String(value || "").trim();
@@ -244,10 +194,9 @@ function buildStyledResumePreviewHtml(resume) {
   const projectItems = (projectSection?.items || []).filter((item) => item?.is_enabled !== false);
   const totalProjects = projectItems.length;
   const totalSkills = dedupeStrings(rawSkillTokens).length;
-  const totalBullets = projectItems.reduce(
-    (sum, item) => sum + ((Array.isArray(item?.bullets) ? item.bullets.filter(Boolean).length : 0)),
-    0
-  );
+  const totalBullets = projectItems.reduce((sum, item) => {
+    return sum + String(item?.content || "").split(/\r?\n/).filter((line) => line.trim()).length;
+  }, 0);
   const highlightCount = awards.length + totalBullets;
   const professionalSummary =
     summaryText ||
@@ -361,7 +310,6 @@ let _newResumeId = null;
 
 // Multi-select state: Set of selected resume IDs + id→title map for naming exports
 let _selectedResumeIds = new Set();
-let _resumeTitleMap = {};  // id → title
 
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
@@ -476,12 +424,12 @@ function setupListDragDrop(container) {
 
 async function _openExportSequential(ids) {
   for (const id of ids) {
-    await new Promise((resolve) => openExportModal(id, _resumeTitleMap[id] || "", resolve));
+    await new Promise((resolve) => openExportModal(id, resolve));
   }
 }
 
 async function _bulkDelete(ids) {
-  if (!await _confirmDialog(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
+  if (!await confirmDialog(`Delete ${ids.length} resume${ids.length !== 1 ? "s" : ""}?`)) return;
   await Promise.all(ids.map((id) => deleteResume(id).catch(() => {})));
   _selectedResumeIds.clear();
   await renderResumeList();
@@ -507,8 +455,6 @@ async function renderResumeList() {
 
   // Reset selection when list re-renders; rebuild title map
   _selectedResumeIds.clear();
-  _resumeTitleMap = Object.fromEntries(resumes.map((r) => [r.id, r.title || "Untitled Resume"]));
-
   const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -641,7 +587,7 @@ async function renderResumeList() {
       if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
         _openExportSequential([..._selectedResumeIds]);
       } else {
-        openExportModal(id, btn.dataset.resumeTitle);
+        openExportModal(id);
       }
     });
   });
@@ -857,10 +803,8 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function openExportModal(resumeId, resumeTitle, onClose) {
+function openExportModal(resumeId, onClose) {
   document.getElementById("export-modal")?.remove();
-
-  const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
 
   const modal = document.createElement("div");
   modal.id = "export-modal";
@@ -911,30 +855,24 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
 
     try {
+      const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error (${res.status})`);
+      }
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const fnMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = fnMatch ? fnMatch[1] : `resume.${format === "markdown" ? "md" : format}`;
+
       if (format === "pdf") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=pdf`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
         const blob = await res.blob();
-        cache[format] = { blob, url: URL.createObjectURL(blob) };
+        cache[format] = { blob, url: URL.createObjectURL(blob), filename };
       } else if (format === "json") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=json`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
         const payload = await res.json();
         const resume = payload?.data ?? payload;
-        cache[format] = { text: JSON.stringify(resume, null, 2) };
+        cache[format] = { text: JSON.stringify(resume, null, 2), filename };
       } else {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
-        cache[format] = { text: await res.text() };
+        cache[format] = { text: await res.text(), filename };
       }
 
       renderPreview(format, cache[format]);
@@ -975,14 +913,14 @@ function openExportModal(resumeId, resumeTitle, onClose) {
 
   document.getElementById("export-download-btn").addEventListener("click", async () => {
     const data = cache[currentFormat];
-    if (!data) { await _alertDialog("Please wait for the preview to finish loading."); return; }
+    if (!data) { await alertDialog("Please wait for the preview to finish loading."); return; }
 
     if (currentFormat === "pdf") {
-      downloadBlob(data.blob, `${slug}.pdf`);
+      downloadBlob(data.blob, data.filename);
     } else if (currentFormat === "json") {
-      downloadBlob(new Blob([data.text], { type: "application/json" }), `${slug}.json`);
+      downloadBlob(new Blob([data.text], { type: "application/json" }), data.filename);
     } else {
-      downloadBlob(new Blob([data.text], { type: "text/markdown" }), `${slug}.md`);
+      downloadBlob(new Blob([data.text], { type: "text/markdown" }), data.filename);
     }
   });
 
@@ -994,12 +932,12 @@ function openExportModal(resumeId, resumeTitle, onClose) {
 // ---------------------------------------------------------------------------
 
 async function confirmDeleteResume(resumeId) {
-  if (!await _confirmDialog("Delete this resume?")) return;
+  if (!await confirmDialog("Delete this resume?")) return;
   try {
     await deleteResume(resumeId);
     await renderResumeList();
   } catch (_) {
-    await _alertDialog("Failed to delete resume.");
+    await alertDialog("Failed to delete resume.");
   }
 }
 
@@ -1008,11 +946,12 @@ async function confirmDeleteResume(resumeId) {
 // Editable resume renderer
 // ---------------------------------------------------------------------------
 
-function ce(field, value, ctx = "") {
+function ce(field, value, ctx = "", placeholder = "") {
   if (!isPrivateMode()) {
     return `<span data-field="${field}" ${ctx}>${value ?? ""}</span>`;
   }
-  return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
+  const ph = placeholder ? ` data-placeholder="${placeholder}"` : "";
+  return `<span contenteditable="true" data-field="${field}" ${ctx}${ph} class="re-editable">${value ?? ""}</span>`;
 }
 
 function ceHeader(field, value, ctx = "") {
@@ -1023,27 +962,19 @@ function ceHeader(field, value, ctx = "") {
   return `<span contenteditable="true" data-header-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
 }
 
+function contentBulletLines(item) {
+  return String(item.content || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 // Build HTML for a single item card (reused for initial render + after add)
 function buildItemHtml(rid, sid, sectionKey, item) {
   const iid  = item.id;
   const ctx  = `data-resume-id="${rid}" data-section-id="${sid}" data-item-id="${iid}"`;
   const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
   const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
-  const bullets = (item.bullets || []).filter(Boolean);
-
-  if (sectionKey === "core_skill") {
-    return `
-      <div class="re-item" data-item-id="${iid}">
-        ${drag}${del}
-        <div class="re-item-header">
-          <span class="re-item-header-left">
-            ${ce("title", item.title, ctx)}
-            <span class="re-sep">: </span>
-            ${ce("content", item.content, ctx)}
-          </span>
-        </div>
-      </div>`;
-  }
 
   if (sectionKey === "summary") {
     return `
@@ -1054,27 +985,42 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   }
 
   // education / experience / project / custom
-  const showDateSep = item.start_date || item.end_date;
+  const priv = isPrivateMode();
+  const hasDate = !!(item.start_date || item.end_date);
+  const hasSubtitle = !!item.subtitle;
+  const hasLocation = !!(item.location && sectionKey !== "project");
+  const showDate = priv ? (item.start_date !== undefined || item.end_date !== undefined) : hasDate;
+  const showSubRow = priv ? (item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) : (hasSubtitle || hasLocation);
+  const hasContentField = item.content !== undefined;
+  const supportsContentBullets = sectionKey !== "education";
+  const contentLines = supportsContentBullets && hasContentField ? contentBulletLines(item) : [];
+  if (supportsContentBullets && hasContentField && priv && !contentLines.length) {
+    contentLines.push("");
+  }
+  const bulletItems = contentLines
+    .map((line) => `<li ${priv ? 'contenteditable="true"' : ""} data-field="content_bullet" ${ctx} class="re-item-content ${priv ? "re-editable" : ""}">${line}</li>`)
+    .join("");
+  const showDateSep = priv ? (item.start_date || item.end_date) : (item.start_date && item.end_date);
   return `
     <div class="re-item" data-item-id="${iid}">
       ${drag}${del}
+      ${priv || item.title || hasDate ? `
       <div class="re-item-header">
-        <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
-        <span class="re-item-date">
-          ${ce("start_date", item.start_date || "", ctx)}
+        <span class="re-item-header-left">${ce("title", item.title, ctx, "Title")}</span>
+        ${showDate ? `<span class="re-item-date">
+          ${ce("start_date", item.start_date || "", ctx, "Start Date")}
           <span class="re-date-sep"${showDateSep ? "" : ' style="display:none"'}> – </span>
-          ${ce("end_date", item.end_date || "", ctx)}
-        </span>
-      </div>
-      ${(item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) ? `
-      <div class="re-item-sub-row">
-        ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
-        ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
+          ${ce("end_date", item.end_date || "", ctx, "End Date")}
+        </span>` : ""}
       </div>` : ""}
-      ${item.content  ? `<div class="re-item-content ${isPrivateMode() ? "re-editable" : ""}" ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content" ${ctx}>${item.content}</div>` : ""}
-      ${bullets.length ? `
+      ${showSubRow ? `
+      <div class="re-item-sub-row">
+        ${(priv ? item.subtitle !== undefined : hasSubtitle) ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx, "Subtitle")}</span>` : ""}
+        ${(priv ? (item.location !== undefined && sectionKey !== "project") : hasLocation) ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx, "Location")}</span>` : ""}
+      </div>` : ""}
+      ${bulletItems ? `
         <ul class="re-bullets">
-          ${bullets.map((b) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="bullet" ${ctx} class="${isPrivateMode() ? "re-editable" : ""}">${b}</li>`).join("")}
+          ${bulletItems}
         </ul>` : ""}
     </div>`;
 }
@@ -1108,15 +1054,16 @@ function buildResumeHtml(resume) {
     const github    = meta.github_url    || "";
     const portfolio = meta.portfolio_url || "";
 
+    const showEmptyHeaderFields = isPrivateMode();
     const contactParts = [
-      location && ceHeader("location", location, ctx),
-      email    && ceHeader("email",    email,    ctx),
-      phone    && ceHeader("phone",    phone,    ctx),
+      (showEmptyHeaderFields || location) && ceHeader("location", location, ctx),
+      (showEmptyHeaderFields || email)    && ceHeader("email",    email,    ctx),
+      (showEmptyHeaderFields || phone)    && ceHeader("phone",    phone,    ctx),
     ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
 
     const linkParts = [
-      github    && ceHeader("github_url",    github,    ctx),
-      portfolio && ceHeader("portfolio_url", portfolio, ctx),
+      (showEmptyHeaderFields || github)    && ceHeader("github_url",    github,    ctx),
+      (showEmptyHeaderFields || portfolio) && ceHeader("portfolio_url", portfolio, ctx),
     ].filter(Boolean).join(`<span class="re-sep"> · </span>`);
 
     headerSecHtml = `
@@ -1180,7 +1127,7 @@ function defaultItemPayload(sectionKey) {
     case "project":
       return { title: "Project Name", subtitle: "Tech Stack", start_date: "", end_date: "", content: "" };
     case "core_skill":
-      return { title: "Skill Category", content: "skill1, skill2" };
+      return { title: "Skill Category", subtitle: "", start_date: "", end_date: "", content: "" };
     case "summary":
       return { title: "Summary", content: "Write your professional summary here." };
     default:
@@ -1362,13 +1309,12 @@ function attachEditListeners(container) {
     const field = el.dataset.field;
     try {
       if (iid) {
-        if (field === "bullet") {
-          const bullets = [...el.closest(".re-bullets").querySelectorAll("li")]
-            .map((li) => li.innerText.trim()).filter(Boolean);
+        if (field === "content_bullet") {
+          const content = contentFromBulletList(el.closest(".re-bullets"));
           await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bullets }),
+            body: JSON.stringify({ content }),
           });
         } else {
           await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
@@ -1399,6 +1345,57 @@ function attachEditListeners(container) {
     } catch (err) { console.error("Auto-save failed:", err); }
   }
 
+  function contentFromBulletList(ul) {
+    return [...(ul?.querySelectorAll("li") || [])]
+      .map((li) => li.innerText.trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function saveContentBulletList(ul, fallbackEl = null) {
+    const sourceEl = ul?.querySelector("li[data-item-id]") || fallbackEl;
+    if (!sourceEl) return;
+    const { resumeId: rid, sectionId: sid, itemId: iid } = sourceEl.dataset;
+    const content = contentFromBulletList(ul);
+    try {
+      await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      updateCardMeta(container, rid);
+    } catch (err) { console.error("Content bullet auto-save failed:", err); }
+  }
+
+  function createBulletEditor(afterEl) {
+    const itemEl = afterEl.closest(".re-item");
+    if (!itemEl) return null;
+
+    let list = itemEl.querySelector(".re-bullets");
+    if (!list) {
+      list = document.createElement("ul");
+      list.className = "re-bullets";
+      afterEl.insertAdjacentElement("afterend", list);
+    }
+
+    const newLi = document.createElement("li");
+    newLi.contentEditable = "true";
+    newLi.className = "re-item-content re-editable";
+    newLi.dataset.field = "content_bullet";
+    newLi.dataset.resumeId = afterEl.dataset.resumeId;
+    newLi.dataset.sectionId = afterEl.dataset.sectionId;
+    newLi.dataset.itemId = afterEl.dataset.itemId;
+    if (afterEl.parentElement === list) {
+      afterEl.insertAdjacentElement("afterend", newLi);
+    } else {
+      list.appendChild(newLi);
+    }
+    initEditable(newLi);
+    newLi.focus();
+    recalcExpand(container);
+    return newLi;
+  }
+
   // --- init a single contenteditable element ---
   function initEditable(el) {
     el.dataset.original = el.innerText.trim();
@@ -1413,26 +1410,18 @@ function attachEditListeners(container) {
       sel.collapseToEnd();
     });
 
-    if (!el.dataset.headerField && el.dataset.field === "bullet") {
+    if (!el.dataset.headerField && el.dataset.field === "content_bullet") {
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const newLi = document.createElement("li");
-          newLi.contentEditable = "true";
-          newLi.className = "re-editable";
-          newLi.dataset.field = "bullet";
-          newLi.dataset.resumeId = el.dataset.resumeId;
-          newLi.dataset.sectionId = el.dataset.sectionId;
-          newLi.dataset.itemId = el.dataset.itemId;
-          el.after(newLi);
-          newLi.focus();
-          initEditable(newLi);
+          createBulletEditor(el);
         } else if (e.key === "Backspace" && el.innerText.trim() === "") {
           e.preventDefault();
+          const list = el.closest(".re-bullets");
           const prev = el.previousElementSibling;
           el.remove();
           prev?.focus();
-          save(el);
+          saveContentBulletList(list, el);
         }
       });
     } else {
@@ -1467,13 +1456,13 @@ function attachEditListeners(container) {
       const anyEl  = card?.querySelector("[data-resume-id]");
       if (!anyEl) return;
       const { resumeId: rid, sectionId: sid, itemId: iid } = anyEl.dataset;
-      if (!await _confirmDialog("Delete this item?")) return;
+      if (!await confirmDialog("Delete this item?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}/items/${iid}`, { method: "DELETE" });
         card.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to delete item."); }
+      } catch (_) { await alertDialog("Failed to delete item."); }
       return;
     }
 
@@ -1482,13 +1471,13 @@ function attachEditListeners(container) {
     if (delSecBtn) {
       const { resumeId: rid, sectionId: sid } = delSecBtn.dataset;
       const secEl = container.querySelector(`.re-section[data-section-id="${sid}"]`);
-      if (!await _confirmDialog("Delete this entire section?")) return;
+      if (!await confirmDialog("Delete this entire section?")) return;
       try {
         await authFetch(`/resumes/${rid}/sections/${sid}`, { method: "DELETE" });
         secEl?.remove();
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to delete section."); }
+      } catch (_) { await alertDialog("Failed to delete section."); }
       return;
     }
 
@@ -1515,7 +1504,7 @@ function attachEditListeners(container) {
           recalcExpand(container);
           updateCardMeta(container, rid);
         }
-      } catch (_) { await _alertDialog("Failed to add item."); }
+      } catch (_) { await alertDialog("Failed to add item."); }
       return;
     }
 
@@ -1570,7 +1559,7 @@ function attachEditListeners(container) {
         initAllEditables(newSec);
         recalcExpand(container);
         updateCardMeta(container, rid);
-      } catch (_) { await _alertDialog("Failed to add section."); }
+      } catch (_) { await alertDialog("Failed to add section."); }
     }
   });
 }

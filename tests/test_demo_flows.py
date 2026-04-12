@@ -74,7 +74,7 @@ def test_analyze_creates_ids_and_ranking(tmp_path):
         assert lines, "metadata should not be empty"
         assert all(json.loads(line).get("id") for line in lines)
 
-        conn = open_db(db_dir)
+        conn = open_db()
         try:
             snapshots = fetch_latest_snapshots(conn)
             assert snapshots

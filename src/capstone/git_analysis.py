@@ -138,7 +138,6 @@ def analyze_repository(
     project_id: str,
     include_bots: bool = False,
     main_user: str | None = None,
-    db_dir: Path | None = None,
     external_limit: int = 5,
 ) -> dict:
     """Analyze a repository, persist the snapshot, and return the summary."""
@@ -171,7 +170,7 @@ def analyze_repository(
             if external_artifacts:
                 snapshot["external_artifacts"] = external_artifacts
 
-    conn = open_db(db_dir)
+    conn = open_db()
     store_analysis_snapshot(
         conn,
         project_id=project_id,

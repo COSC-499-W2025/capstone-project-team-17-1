@@ -8,17 +8,18 @@ from capstone.api.server import create_app, get_app_for_tests
 
 
 def _client(tmp_path) -> TestClient:
-    storage.close_db()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
     auth_routes._SESSIONS.clear()
-    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    app = create_app(auth_token=None)
     return TestClient(app)
 
 
 def _isolated_client(tmp_path) -> TestClient:
     """Use get_app_for_tests for proper DB isolation in pytest tmp_path fixtures."""
-    app = get_app_for_tests(db_dir=str(tmp_path))
+    storage.BASE_DIR = tmp_path
+    storage._bind_storage_user(None)
+    app = get_app_for_tests()
     return TestClient(app)
 
 
@@ -122,6 +123,14 @@ def test_auth_profile_update_and_password_change_persist_to_db(tmp_path):
         assert body["email"] == "bob@example.com"
         assert body["full_name"] == "Bob Stone"
         assert body["city"] == "Seattle"
+        with storage.storage_user_scope("bob"):
+            conn = storage.open_db()
+            try:
+                local_user = storage.get_user(conn)
+            finally:
+                storage.close_db(conn)
+        assert local_user["email"] == "bob@example.com"
+        assert local_user["full_name"] == "Bob Stone"
 
         bad_pw = client.post(
             "/auth/password",

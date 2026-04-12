@@ -1,5 +1,4 @@
 import json
-import sqlite3
 import zipfile
 from pathlib import Path
 
@@ -9,26 +8,8 @@ from fastapi.testclient import TestClient
 from capstone.api.server import create_app
 import capstone.storage as storage
 
-
-def _create_project_analysis_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS project_analysis (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            classification TEXT,
-            primary_contributor TEXT,
-            snapshot TEXT NOT NULL,
-            zip_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-
-
 def _insert_snapshot(
-    conn: sqlite3.Connection,
+    conn,
     *,
     project_id: str,
     snapshot: dict,
@@ -37,37 +18,39 @@ def _insert_snapshot(
     primary_contributor: str = "alice",
     zip_path: str | None = None,
 ) -> None:
+    storage.store_analysis_snapshot(
+        conn,
+        project_id=project_id,
+        classification=classification,
+        primary_contributor=primary_contributor,
+        snapshot=snapshot,
+        zip_path=zip_path,
+    )
     conn.execute(
         """
-        INSERT INTO project_analysis(project_id, classification, primary_contributor, snapshot, zip_path, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        UPDATE project_analysis
+        SET created_at = ?
+        WHERE id = (
+            SELECT id FROM project_analysis
+            WHERE project_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        )
         """,
-        (
-            project_id,
-            classification,
-            primary_contributor,
-            json.dumps(snapshot),
-            zip_path,
-            created_at,
-        ),
+        (created_at, project_id),
     )
     conn.commit()
 
 
 @pytest.fixture()
 def insights_client(tmp_path: Path):
-    db_dir = str(tmp_path)
     original_base_dir = storage.BASE_DIR
-    original_current_user = storage.CURRENT_USER
+    original_current_user = storage.current_storage_user()
     storage.BASE_DIR = tmp_path
-    storage.CURRENT_USER = None
+    storage._bind_storage_user(None)
 
-    db_path = tmp_path / "data" / "guest" / "capstone.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = storage.open_db()
     try:
-        _create_project_analysis_table(conn)
-
         _insert_snapshot(
             conn,
             project_id="alpha",
@@ -124,13 +107,13 @@ def insights_client(tmp_path: Path):
     finally:
         conn.close()
 
-    app = create_app(db_dir=db_dir, auth_token=None)
+    app = create_app(auth_token=None)
     client = TestClient(app)
     try:
         yield client
     finally:
         storage.BASE_DIR = original_base_dir
-        storage.CURRENT_USER = original_current_user
+        storage._bind_storage_user(original_current_user)
 
 
 def test_portfolio_activity_heatmap_supports_project_and_granularity_filters(insights_client: TestClient):

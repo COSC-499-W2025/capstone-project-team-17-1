@@ -41,9 +41,13 @@ def _default_template_path() -> Path:
     return _repo_root() / "templates" / "resume_template.tex"
 
 
+def _github_icon_asset_path() -> Path:
+    return _repo_root() / "frontend" / "assets" / "github_logo.png"
+
+
 def _iter_project_items(resume: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     for section in resume.get("sections", []) or []:
-        if section.get("name") != "projects":
+        if section.get("name") != "project":
             continue
         for item in section.get("items", []) or []:
             if isinstance(item, dict):
@@ -156,6 +160,15 @@ def _join_or_dash(items: list[str]) -> str:
     return ", ".join(items)
 
 
+def _section_label(resume: Dict[str, Any], *keys: str, fallback: str = "") -> str:
+    for section in resume.get("sections", []) or []:
+        if section.get("name") in keys or section.get("key") in keys:
+            label = _as_clean_text(section.get("label"))
+            if label:
+                return label
+    return fallback
+
+
 def _extract_resume_entries(resume: Dict[str, Any], section_name: str) -> list[Dict[str, Any]]:
     entries: list[Dict[str, Any]] = []
     for section in resume.get("sections", []) or []:
@@ -168,17 +181,6 @@ def _extract_resume_entries(resume: Dict[str, Any], section_name: str) -> list[D
 
 
 def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
-    bullets = entry.get("bullets")
-    if isinstance(bullets, list):
-        result = [str(x).strip() for x in bullets if str(x).strip()]
-        if result:
-            return result
-    for key in ("highlights", "responsibilities"):
-        values = entry.get(key)
-        if isinstance(values, list):
-            result = [str(x).strip() for x in values if str(x).strip()]
-            if result:
-                return result
     summary = (
         _as_clean_text(entry.get("entrySummary"))
         or _as_clean_text(entry.get("summary"))
@@ -186,15 +188,18 @@ def _pick_bullets(entry: Dict[str, Any], fallback: str = "") -> list[str]:
         or _as_clean_text(entry.get("entryBody"))
         or _as_clean_text(entry.get("body"))
         or _as_clean_text(entry.get("excerpt"))
-        or fallback
     )
-    if not summary:
-        return []
-    # Preserve multi-line CLI input as multiple bullets.
-    lines = [line.strip() for line in str(summary).splitlines() if line.strip()]
-    if lines:
-        return lines
-    return [summary]
+    summary_lines = [line.strip() for line in str(summary).splitlines() if line.strip()]
+    if summary_lines:
+        return summary_lines
+    for key in ("highlights", "responsibilities"):
+        values = entry.get(key)
+        if isinstance(values, list):
+            result = [str(x).strip() for x in values if str(x).strip()]
+            if result:
+                return result
+    fallback_text = _as_clean_text(fallback)
+    return [fallback_text] if fallback_text else []
 
 
 def _entry_field(entry: Dict[str, Any], *keys: str, fallback: str = "") -> str:
@@ -216,17 +221,48 @@ def _render_itemize_block(bullets: list[str]) -> str:
 
 
 def _render_resume_entry_block(title: str, date_text: str, subtitle: str, location: str, bullets: list[str]) -> str:
-    lines = [
-        rf"\ResumeEntry{{{_safe_text(title)}}}{{{_safe_text(date_text)}}}{{{_safe_text(subtitle)}}}{{{_safe_text(location)}}}"
-    ]
+    lines: list[str] = []
+    has_title_row = title.strip() or date_text.strip()
+    has_sub_row = subtitle.strip() or location.strip()
+    if has_title_row:
+        left = rf"{{\bfseries\color{{Primary}} {_safe_text(title)}}}" if title.strip() else ""
+        right = rf"{{\small\color{{MutedText}} {_safe_text(date_text)}}}" if date_text.strip() else ""
+        lines.append(
+            rf"\noindent\begin{{minipage}}[t]{{0.68\textwidth}}\raggedright {left}\end{{minipage}}%"
+            "\n  \\hfill\n"
+            rf"  \begin{{minipage}}[t]{{0.30\textwidth}}\raggedleft {right}\end{{minipage}}\par"
+        )
+    if has_sub_row:
+        if has_title_row:
+            lines.append(r"\vspace{-5pt}")
+        left = rf"{{\small\itshape\color{{MutedText}} {_safe_text(subtitle)}}}" if subtitle.strip() else ""
+        right = rf"{{\small\itshape\color{{MutedText}} {_safe_text(location)}}}" if location.strip() else ""
+        lines.append(
+            rf"\noindent\begin{{minipage}}[t]{{0.68\textwidth}}\raggedright {left}\end{{minipage}}%"
+            "\n  \\hfill\n"
+            rf"  \begin{{minipage}}[t]{{0.30\textwidth}}\raggedleft {right}\end{{minipage}}\par"
+        )
     itemize = _render_itemize_block(bullets)
     if itemize:
         lines.append(itemize)
     return "\n".join(lines)
 
 
+def _render_profile_links(github_url: str, portfolio_url: str) -> str:
+    links = []
+    if github_url:
+        links.append(
+            rf"\raisebox{{-0.15em}}{{\includegraphics[height=0.9em]{{github_logo.png}}}}~"
+            rf"\href{{{_safe_text(github_url)}}}{{GitHub}}"
+        )
+    if portfolio_url:
+        links.append(rf"\href{{{_safe_text(portfolio_url)}}}{{Portfolio}}")
+    if not links:
+        return ""
+    return r"{\small\color{MutedText} " + r" \quad | \quad ".join(links) + r"}"
+
+
 def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
-    links = resume.get("links") if isinstance(resume.get("links"), dict) else {}
     contact = resume.get("contact") if isinstance(resume.get("contact"), dict) else {}
     candidate = resume.get("candidate") if isinstance(resume.get("candidate"), dict) else {}
 
@@ -252,16 +288,8 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         or "City, State"
     )
 
-    github_url = (
-        _as_clean_text(links.get("github"))
-        or _as_clean_text(resume.get("github"))
-        or "https://github.com/your-handle"
-    )
-    portfolio_url = (
-        _as_clean_text(links.get("portfolio"))
-        or _as_clean_text(resume.get("portfolio"))
-        or "https://your-portfolio.example.com"
-    )
+    github_url = _as_clean_text(resume.get("github_url"))
+    portfolio_url = _as_clean_text(resume.get("portfolio_url"))
 
     summary = _as_clean_text(resume.get("professionalSummary")) or _as_clean_text(resume.get("summary"))
     summary_entries = _extract_resume_entries(resume, "summary")
@@ -289,33 +317,44 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     tools = _flatten_str_list(resume.get("tools"))
 
     core_skill_entries = _extract_resume_entries(resume, "core_skill")
-    core_skill_lines: list[str] = []
+    core_skill_blocks: list[str] = []
     if core_skill_entries:
         for entry in core_skill_entries:
-            label = _entry_field(entry, "title", fallback="Core")
-            content = _entry_field(entry, "content")
-            if not content:
-                bullets = _pick_bullets(entry, "")
-                content = ", ".join([token for token in bullets if token.strip()])
-            if content:
-                core_skill_lines.append(rf"\SkillRow{{{_safe_text(label)}}}{{{_safe_text(content)}}}")
-    if not core_skill_lines and (all_skills or tools or languages):
-        core_skill_lines = [
-            rf"\SkillRow{{Core}}{{{_safe_text(_join_or_dash(all_skills))}}}",
-            rf"\SkillRow{{Tools}}{{{_safe_text(_join_or_dash(tools))}}}",
-            rf"\SkillRow{{Languages}}{{{_safe_text(_join_or_dash(languages))}}}",
-        ]
+            bullets = _pick_bullets(entry, "")
+            core_skill_blocks.append(
+                _render_resume_entry_block(
+                    title=_entry_field(entry, "title",),
+                    date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                    subtitle=_entry_field(entry, "subtitle", fallback=""),
+                    location="",
+                    bullets=bullets,
+                )
+            )
+    if not core_skill_blocks and (all_skills or tools or languages):
+        fallback_bullets = []
+        if all_skills:
+            fallback_bullets.append(f"Core: {_join_or_dash(all_skills)}")
+        if tools:
+            fallback_bullets.append(f"Tools: {_join_or_dash(tools)}")
+        if languages:
+            fallback_bullets.append(f"Languages: {_join_or_dash(languages)}")
+        core_skill_blocks.append(
+            _render_resume_entry_block(
+                title="Skills", date_text="", subtitle="", location="",
+                bullets=fallback_bullets,
+            )
+        )
 
-    experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
+    experience_entries = _extract_resume_entries(resume, "experience")
     experience_blocks: list[str] = []
     for entry in experience_entries:
-        bullets = _pick_bullets(entry, "Content...")[:3]
+        bullets = _pick_bullets(entry, "")
         experience_blocks.append(
             _render_resume_entry_block(
-                title=_entry_field(entry, "title", fallback="Event"),
-                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
-                subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback="Company"),
-                location=_entry_field(entry, "location", fallback="Location"),
+                title=_entry_field(entry, "title", fallback=""),
+                date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback=""),
+                location=_entry_field(entry, "location", fallback=""),
                 bullets=bullets,
             )
         )
@@ -337,12 +376,12 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 )
     project_blocks: list[str] = []
     for entry in project_entries:
-        bullets = _pick_bullets(entry, "Implemented core features and improvements.")[:2]
+        bullets = _pick_bullets(entry, "")
         project_blocks.append(
             _render_resume_entry_block(
-                title=_entry_field(entry, "title", fallback="Project"),
-                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
-                subtitle=_entry_field(entry, "stack", "subtitle", fallback="Tech Stack"),
+                title=_entry_field(entry, "title", fallback=""),
+                date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                subtitle=_entry_field(entry, "stack", "subtitle", fallback=""),
                 location="",
                 bullets=bullets,
             )
@@ -352,12 +391,14 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     education_blocks: list[str] = []
     for entry in education_entries:
         coursework = _entry_field(entry, "coursework", "content", "entrySummary", "summary", "entryBody", "body")
-        lines = [
-            rf"\ResumeEntry{{{_safe_text(_entry_field(entry, 'school', 'title', fallback='University'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'dateRange', 'date', fallback='Date'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'degree', 'summary', 'subtitle', fallback='Degree Program'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'location', fallback='Location'))}}}"
-        ]
+        block = _render_resume_entry_block(
+            title=_entry_field(entry, "school", "title", fallback=""),
+            date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+            subtitle=_entry_field(entry, "degree", "summary", "subtitle", fallback=""),
+            location=_entry_field(entry, "location", fallback=""),
+            bullets=[],
+        )
+        lines = [block] if block else []
         if coursework:
             lines.append(r"{\small \textit{" + _safe_text(coursework) + r"}}\par")
         education_blocks.append("\n".join(lines))
@@ -392,15 +433,10 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 )
             )
 
-    cert_entries = _extract_resume_entries(resume, "certifications") or _extract_resume_entries(resume, "awards")
-    cert1 = cert_entries[0] if len(cert_entries) > 0 else {}
-    cert2 = cert_entries[1] if len(cert_entries) > 1 else {}
-    award1 = cert_entries[2] if len(cert_entries) > 2 else {}
-
     summary_block = "\n".join(summary_lines)
     education_block = "\n\n".join(education_blocks)
     experience_block = "\n\n".join(experience_blocks)
-    core_skill_block = "\n".join(core_skill_lines)
+    core_skill_block = "\n\n".join(core_skill_blocks)
     project_block = "\n\n".join(project_blocks)
     custom_block = "\n\n".join(custom_section_blocks)
 
@@ -417,25 +453,23 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "LOCATION": _safe_text(location),
         "GITHUB_URL": _safe_text(github_url),
         "PORTFOLIO_URL": _safe_text(portfolio_url),
+        "PROFILE_LINKS": _render_profile_links(github_url, portfolio_url),
         "SUMMARY_BLOCK": summary_block,
         "CORE_SKILL_BLOCK": core_skill_block,
         "EXPERIENCE_BLOCK": experience_block,
         "PROJECT_BLOCK": project_block,
         "EDUCATION_BLOCK": education_block,
         "CUSTOM_SECTION_BLOCK": custom_block,
-        "SUMMARY_SECTION": _wrap_section("Summary", summary_block),
-        "EDUCATION_SECTION": _wrap_section("Education", education_block),
-        "EXPERIENCE_SECTION": _wrap_section("Experience", experience_block),
-        "CORE_SKILL_SECTION": _wrap_section("Core Skill", core_skill_block),
-        "PROJECT_SECTION": _wrap_section("Project", project_block),
+        "SUMMARY_SECTION": _wrap_section(_section_label(resume, "summary", fallback="Summary"), summary_block),
+        "EDUCATION_SECTION": _wrap_section(_section_label(resume, "education", fallback="Education"), education_block),
+        "EXPERIENCE_SECTION": _wrap_section(_section_label(resume, "experience", fallback="Experience"), experience_block),
+        "CORE_SKILL_SECTION": _wrap_section(_section_label(resume, "core_skill", fallback="Core Skill"), core_skill_block),
+        "PROJECT_SECTION": _wrap_section(_section_label(resume, "project", fallback="Project"), project_block),
         # Backward-compatible placeholders for custom templates using old tokens.
         "PROFESSIONAL_SUMMARY": _safe_text(summary),
         "SKILL_CORE": _safe_text(_join_or_dash(all_skills)),
         "SKILL_TOOLS": _safe_text(_join_or_dash(tools)),
         "SKILL_LANGUAGES": _safe_text(_join_or_dash(languages)),
-        "CERT_1": _safe_text(_as_clean_text(cert1.get("title") if isinstance(cert1, dict) else cert1, "Certification Name")),
-        "CERT_2": _safe_text(_as_clean_text(cert2.get("title") if isinstance(cert2, dict) else cert2, "Certification Name")),
-        "AWARD_1": _safe_text(_as_clean_text(award1.get("title") if isinstance(award1, dict) else award1, "Award Name")),
     }
 
 
@@ -508,6 +542,9 @@ def build_pdf_with_latex(
         tex_path = tmp / "resume.tex"
         pdf_path = tmp / "resume.pdf"
         tex_path.write_text(tex_source, encoding="utf-8")
+        github_icon = _github_icon_asset_path()
+        if github_icon.exists():
+            shutil.copyfile(github_icon, tmp / "github_logo.png")
 
         if engine == "tectonic":
             cmd = [engine, "--keep-logs", "--outdir", str(tmp), tex_path.name]
@@ -531,4 +568,3 @@ def build_pdf_with_latex(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(pdf_path.read_bytes())
         return output_path
-

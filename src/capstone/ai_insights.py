@@ -15,10 +15,9 @@ def ask_deep_review_question(
     question: str,
     zip_path: Path,
     include_paths: Iterable[str],
-    db_dir: Optional[Path] = None,
     llm: Optional[OpenAILlmClient] = None,
 ) -> str:
-    conn = open_db(db_dir)
+    conn = open_db()
     snapshot = fetch_latest_snapshot(conn, project_id)
     if not snapshot:
         raise ValueError(f"No snapshot found for project '{project_id}'")
@@ -59,9 +58,8 @@ def ask_deep_review_question(
 def ask_project_question(
     project_id: str,
     question: str,
-    db_dir: Optional[Path] = None,
 ) -> str:
-    conn = open_db(db_dir)
+    conn = open_db()
     snapshot = fetch_latest_snapshot(conn, project_id)
 
     if not snapshot:

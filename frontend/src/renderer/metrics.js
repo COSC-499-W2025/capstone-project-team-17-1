@@ -1,4 +1,5 @@
 import { cpuChart, memoryChart, gpuChart } from "./chart.js"
+import { authFetch } from "./auth.js"
 
 let cpuHistory = []
 let memoryHistory = []
@@ -47,10 +48,10 @@ function updateMiniChart(chart, data) {
 }
 
 async function fetchMetrics() {
-  const metricsRes = await fetch("http://127.0.0.1:8002/system/system-metrics");
+  const metricsRes = await authFetch("/system/system-metrics");
   const metrics = await metricsRes.json();
 
-  const healthRes = await fetch("http://127.0.0.1:8002/health");
+  const healthRes = await authFetch("/health");
   const health = await healthRes.json();
 
   const statusDot = document.getElementById("status-dot");

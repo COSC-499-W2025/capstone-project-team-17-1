@@ -12,7 +12,7 @@ BAD_AUTH_HEADER = {"Authorization": "Bearer wrong-token"}
 @pytest.fixture()
 def client(tmp_path):
     # Use a temp db_dir so the test doesn't touch real data
-    app = create_app(db_dir=str(tmp_path), auth_token=AUTH_TOKEN)
+    app = create_app(auth_token=AUTH_TOKEN)
     return TestClient(app)
 
 

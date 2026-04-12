@@ -1,13 +1,18 @@
 import tempfile
 from pathlib import Path
 
+from capstone import storage
 from capstone.storage import open_db, close_db, store_uploaded_file_bytes
 
 
 def test_duplicate_upload_reuses_file_and_increments_refcount():
     with tempfile.TemporaryDirectory() as tmp:
         db_dir = Path(tmp) / "db"
-        conn = open_db(db_dir)
+        original_base_dir = storage.BASE_DIR
+        original_current_user = storage.current_storage_user()
+        storage.BASE_DIR = Path(tmp)
+        storage._bind_storage_user(None)
+        conn = open_db()
 
         try:
             data = b"same content every time"
@@ -49,3 +54,5 @@ def test_duplicate_upload_reuses_file_and_increments_refcount():
 
         finally:
             close_db()
+            storage.BASE_DIR = original_base_dir
+            storage._bind_storage_user(original_current_user)

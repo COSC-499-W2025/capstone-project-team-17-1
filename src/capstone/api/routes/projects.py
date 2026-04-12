@@ -3,6 +3,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response, Request
 from pathlib import Path
 from datetime import datetime
+import json
 import tempfile
 import shutil
 import time
@@ -16,8 +17,13 @@ from capstone.metrics import FileMetric, compute_metrics
 from capstone.zip_analyzer import ZipAnalyzer
 from capstone.config import Preferences
 from capstone.modes import ModeResolution
-from capstone.resume_retrieval import build_resume_project_item
-from capstone.system.cloud_storage import upload_database, upload_project_zip, delete_project_zip
+from capstone.resume_service import build_resume_project_item
+from capstone.system.cloud_storage import (
+    upload_database,
+    upload_project_zip,
+    delete_project_zip,
+    delete_project_prefix,
+)
 import capstone.storage as storage_module
 class ProjectEdit(BaseModel):
     key_role: Optional[str] = None
@@ -48,17 +54,96 @@ _EXT_TO_SKILL = {
 }
 
 
-def _restore_user_from_request(request: Request | None) -> None:
-    """Restore storage.CURRENT_USER from the Bearer session when available."""
-    if request is None:
-        return
-    try:
-        from capstone.api.routes.auth import get_authenticated_storage_user_key
+def _build_project_summary_list(conn) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT
+            p.project_id,
+            COALESCE(pa.created_at, p.created_at) AS created_at,
+            pa.snapshot,
+            pa.classification,
+            pa.primary_contributor,
+            CASE
+                WHEN p.source = 'github' THEN 1
+                ELSE 0
+            END AS is_github,
+            COALESCE(uc.cnt, 0) AS contributor_count,
+            u.original_name,
+            u.file_id,
+            u.hash,
+            f.size_bytes,
+            f.path
+        FROM projects p
+        LEFT JOIN project_analysis pa
+            ON pa.project_id = p.project_id
+            AND pa.rowid = (
+                SELECT MAX(rowid) FROM project_analysis WHERE project_id = p.project_id
+            )
+        LEFT JOIN (
+            SELECT project_id, COUNT(DISTINCT contributor_id) AS cnt
+            FROM project_contributors
+            GROUP BY project_id
+        ) uc ON p.project_id = uc.project_id
+        LEFT JOIN uploads u
+            ON u.upload_id = p.project_id
+            AND u.id = (
+                SELECT MAX(u2.id) FROM uploads u2 WHERE u2.upload_id = p.project_id
+            )
+        LEFT JOIN files f ON f.file_id = u.file_id
+        ORDER BY COALESCE(pa.created_at, p.created_at) DESC
+        """
+    ).fetchall()
 
-        storage_user_key = get_authenticated_storage_user_key(request)
-        storage_module.set_current_user(storage_user_key)
-    except Exception:
-        pass
+    projects = []
+    for row in rows:
+        snapshot_raw = row[2]
+        if snapshot_raw is None:
+            continue
+
+        try:
+            snapshot = json.loads(snapshot_raw)
+        except json.JSONDecodeError:
+            log_event("WARNING", f"Skipping invalid project snapshot in project list · Project: {row[0]}")
+            continue
+
+        file_summary = snapshot.get("file_summary")
+        if isinstance(file_summary, dict):
+            total_files = file_summary.get("file_count", 0)
+        else:
+            total_files = snapshot.get("file_count", 0)
+
+        skills = snapshot.get("skills", [])
+        if isinstance(skills, list):
+            total_skills = len(skills)
+        elif isinstance(skills, dict):
+            total_skills = len(skills.keys())
+        else:
+            total_skills = 0
+
+        projects.append(
+            {
+                "project_id": row[0],
+                "created_at": row[1],
+                "total_files": total_files,
+                "total_skills": total_skills,
+                "classification": row[3],
+                "primary_contributor": row[4],
+                "is_github": bool(row[5]),
+                "contributor_count": int(row[6]),
+                "filename": row[7],
+                "file_id": row[8],
+                "hash": row[9],
+                "size_bytes": row[10],
+                "stored_path": row[11],
+            }
+        )
+    return projects
+
+
+def _restore_user_from_request(request: Request | None) -> None:
+    # No-op: server.py middleware binds the storage user via storage_user_scope
+    # for every request before this handler runs. Kept as a stable call site.
+    return
 
 
 def _normalize_token(value: str | None) -> str:
@@ -319,7 +404,7 @@ async def upload_project(
 
     conn = storage.open_db()
     try:
-        active_user = storage_module.get_current_user()
+        active_user = storage_module.current_storage_user()
         mode = "user" if active_user else "guest"
         db_path = str(storage.get_database_path())
         auto_detected = False
@@ -395,7 +480,7 @@ async def upload_project(
         message = "Upload stored and matched to existing project automatically."
     else: 
         log_event("SUCCESS", f"New project uploaded · Project: {project_id}")
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
     if active_user:
         try:
             upload_project_zip(
@@ -527,7 +612,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
                         "skills": summary.get("skills", []),
                     }
                 )
-                active_user = storage_module.get_current_user()
+                active_user = storage_module.current_storage_user()
                 if active_user:
                     try:
                         upload_project_zip(
@@ -550,7 +635,7 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
         except Exception:
             pass
 
-        active_user = storage_module.get_current_user()
+        active_user = storage_module.current_storage_user()
         if active_user:
             try:
                 upload_database(active_user)
@@ -567,41 +652,21 @@ async def upload_project_bundle(request: Request, file: UploadFile = File(...)):
 @router.get("")
 def list_projects(request: Request):
     """
-    Lists uploaded .zip projects from CAS storage.
+    Lists projects as summary cards for the Projects tab while retaining
+    upload metadata fields used by older callers.
     """
     _restore_user_from_request(request)
     conn = storage.open_db()
     try:
-        rows = conn.execute(
-            """
-            SELECT u.upload_id, u.original_name, u.file_id, u.hash, u.created_at,
-                   f.size_bytes, f.path
-            FROM uploads u
-            JOIN files f ON f.file_id = u.file_id
-            WHERE u.id = (
-                SELECT MIN(u2.id) FROM uploads u2 WHERE u2.upload_id = u.upload_id
-            )
-            ORDER BY datetime(u.created_at) DESC
-            """
-        ).fetchall()
+        projects = _build_project_summary_list(conn)
     except Exception as exc:
         if "no such table" not in str(exc).lower():
             raise
-        rows = []
+        projects = []
+
     return {
-        "count": len(rows),
-        "projects": [
-            {
-                "project_id": r[0],
-                "filename": r[1],
-                "file_id": r[2],
-                "hash": r[3],
-                "created_at": r[4],
-                "size_bytes": r[5],
-                "stored_path": r[6],
-            }
-            for r in rows
-        ],
+        "count": len(projects),
+        "projects": projects,
     }
 
 
@@ -650,6 +715,7 @@ def delete_project(id: str, request: Request):
     """
     _restore_user_from_request(request)
     conn = storage.open_db()
+    active_user = storage_module.current_storage_user()
 
     # --- ZIP-upload path: project lives in uploads + files tables ---
     upload_row = conn.execute(
@@ -675,6 +741,27 @@ def delete_project(id: str, request: Request):
             (id,),
         ).fetchone()
         if not analysis_row:
+            if active_user:
+                try:
+                    cloud_delete = delete_project_prefix(active_user, id)
+                except Exception:
+                    cloud_delete = None
+                if cloud_delete and cloud_delete.get("deleted_keys"):
+                    try:
+                        upload_database(active_user)
+                    except Exception:
+                        pass
+                    log_event("WARNING", f"Cloud-only project deleted · Project: {id}")
+                    return {
+                        "data": {
+                            "deleted": True,
+                            "project_id": id,
+                            "file_id": None,
+                            "cloud_only": True,
+                            "deleted_keys": cloud_delete["deleted_keys"],
+                        },
+                        "error": None,
+                    }
             log_event("ERROR", "Project not found · Project: ")
             raise HTTPException(status_code=404, detail="Project not found")
 
@@ -715,7 +802,6 @@ def delete_project(id: str, request: Request):
             pass
 
     # Best-effort cloud cleanup
-    active_user = storage_module.get_current_user()
     if active_user:
         try:
             delete_project_zip(

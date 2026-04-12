@@ -55,6 +55,7 @@ def _sync_profile_to_local_db(auth_user: dict) -> None:
         storage.upsert_user(
             conn,
             username,
+            email=(auth_user.get("email") or "").strip() or None,
             github_username=github_handle,
             github_url=github_url,
             full_name=(auth_user.get("full_name") or "").strip() or None,
@@ -95,8 +96,7 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-def configure(db_dir: Optional[str] = None):
-    # server.py passes db_dir here, but auth no longer uses SQLite locally.
+def configure():
     global _AUTH_BASE_URL
     _AUTH_BASE_URL = "https://loom-auth.amirparsaaminian1383.workers.dev"
     _load_sessions()
@@ -205,8 +205,8 @@ def register(payload: RegisterRequest):
     if payload.github_url and not user.get("github_url"):
         user["github_url"] = payload.github_url
 
-    storage.set_current_user(user["username"])
-    _sync_profile_to_local_db(user)
+    with storage.storage_user_scope(user["username"]):
+        _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
@@ -237,8 +237,8 @@ def login(payload: LoginRequest):
     if not user:
         raise HTTPException(status_code=502, detail="auth service did not return user")
 
-    storage.set_current_user(user["username"])
-    _sync_profile_to_local_db(user)
+    with storage.storage_user_scope(user["username"]):
+        _sync_profile_to_local_db(user)
 
     token = _new_token()
     _SESSIONS[token] = {"user": user}
@@ -258,11 +258,10 @@ def login(payload: LoginRequest):
 def me(request: Request):
     session = _require_session(request)
     user = session["user"]
-    # Always restore CURRENT_USER from the session — critical after server restart
-    storage.set_current_user(user["username"])
+    # Middleware has already bound the storage user from the Bearer session.
     from capstone.portfolio_retrieval import _db_session
     from capstone.api.routes.resumes import _get_current_user_contributor_id
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         contributor_id = _get_current_user_contributor_id(conn)
     return {"user": user, "contributor_id": contributor_id}
 
@@ -288,8 +287,8 @@ def update_me(payload: UpdateProfileRequest, request: Request):
     if not updated_user:
         raise HTTPException(status_code=502, detail="auth service did not return updated user")
 
-    storage.set_current_user(updated_user["username"])
-    _sync_profile_to_local_db(updated_user)
+    with storage.storage_user_scope(updated_user["username"]):
+        _sync_profile_to_local_db(updated_user)
 
     token = _extract_bearer(request)
     if token and token in _SESSIONS:
@@ -306,7 +305,7 @@ def update_me(payload: UpdateProfileRequest, request: Request):
 def get_my_education(request: Request):
     _require_session(request)
     from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         entries = storage.get_user_education(conn, 1)
     return {"data": entries, "error": None}
 
@@ -325,7 +324,7 @@ async def update_my_education(request: Request):
         if not isinstance(e, dict) or not str(e.get("university") or "").strip():
             raise HTTPException(status_code=400, detail="each entry requires a university field")
     from capstone.portfolio_retrieval import _db_session
-    with _db_session(None) as conn:
+    with _db_session() as conn:
         storage.replace_user_education(conn, 1, entries)
         result = storage.get_user_education(conn, 1)
     return {"data": result, "error": None}
@@ -356,15 +355,15 @@ def change_password(payload: ChangePasswordRequest, request: Request):
 @router.post("/logout")
 def logout(request: Request):
     token = _extract_bearer(request)
-    before_user = storage.get_current_user()
+    before_user = storage.current_storage_user()
     if token:
         _SESSIONS.pop(token, None)
         _save_sessions()
 
-    storage.set_current_user(None)
+    # Middleware scope for this request ends on return; next request will
+    # re-bind from the (now-missing) Bearer token as guest.
     print(
-        f"[auth/logout] previous_user={before_user!r} mode='guest' "
-        f"local_db={str(storage.get_database_path())!r}",
+        f"[auth/logout] previous_user={before_user!r} mode='guest'",
         flush=True,
     )
     return {"ok": True}

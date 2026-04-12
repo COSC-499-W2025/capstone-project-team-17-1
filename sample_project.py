@@ -522,7 +522,7 @@ def _self_checks(metadata_output: Path, summary_output: Path, error_log: Path, d
     print(f"Error log recorded: {bool(has_error)}")
     print(f"DB present: {db_path.exists()} at {db_path}")
     try:
-        conn = open_db(db_path.parent)
+        conn = open_db()
         row = conn.execute("SELECT COUNT(*) FROM project_analysis").fetchone()
         print(f"Project_analysis rows: {row[0]}")
         backup_path = db_path.parent / "capstone_backup.json"
@@ -546,6 +546,10 @@ def _self_checks(metadata_output: Path, summary_output: Path, error_log: Path, d
 def run_demo() -> None:
     db_dir = ROOT / "demo_db"
     db_dir.mkdir(parents=True, exist_ok=True)
+    # Point the single source of truth at the demo directory so open_db()
+    # resolves to demo_db/data/... instead of the repo-root location.
+    import capstone.storage as _storage_module
+    _storage_module.BASE_DIR = db_dir
 
     _banner("Capstone Demo Runner")
     reset_config()  # reset config 
@@ -622,7 +626,7 @@ def run_demo() -> None:
         external_summary_path.write_text(json.dumps(ext_summary, indent=2), encoding="utf-8")
         print(f"External-mode summary written to: {external_summary_path}")
 
-        conn = open_db(db_dir)
+        conn = open_db()
         _record_config_snapshot(conn)
         _persist_relational_view(conn, summary_data)
         _seed_rankings(conn, summary_data)  # add extra snapshots for comparison

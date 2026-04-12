@@ -8,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from capstone.resume_pdf_builder import _pick_bullets, _pick_tex_engine, render_latex_from_template
+from capstone.resume_pdf_builder import build_pdf_with_latex, _pick_bullets, _pick_tex_engine, render_latex_from_template
 
 
 def test_render_latex_skips_placeholder_replacement_in_comments(tmp_path):
@@ -68,18 +68,103 @@ def test_render_latex_default_education_experience_labels(tmp_path):
     assert r"\item Content..." in rendered
 
 
+def test_render_latex_omits_empty_github_and_portfolio_links():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github_url": "",
+            "portfolio_url": "",
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert "Portfolio" not in rendered
+    assert "https://github.com/your-handle" not in rendered
+    assert "https://your-portfolio.example.com" not in rendered
+
+
+def test_render_latex_renders_only_present_profile_link():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "portfolio_url": "https://alice.dev",
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert r"\href{https://alice.dev}{Portfolio}" in rendered
+
+
+def test_render_latex_prefixes_github_link_with_icon():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github_url": "https://github.com/alice",
+        },
+    )
+
+    assert r"\includegraphics[height=0.9em]{github_logo.png}" in rendered
+    assert r"\href{https://github.com/alice}{GitHub}" in rendered
+
+
+def test_build_pdf_copies_github_icon_asset(tmp_path):
+    def fake_run(cmd, cwd, **kwargs):
+        assert (Path(cwd) / "github_logo.png").exists()
+        (Path(cwd) / "resume.pdf").write_bytes(b"%PDF-1.4\n")
+
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        return Result()
+
+    with patch("capstone.resume_pdf_builder._pick_tex_engine", return_value="pdflatex"):
+        with patch("capstone.resume_pdf_builder.subprocess.run", side_effect=fake_run):
+            build_pdf_with_latex(
+                {
+                    "fullName": "Alice",
+                    "email": "alice@example.com",
+                    "github_url": "https://github.com/alice",
+                },
+                tmp_path / "resume.pdf",
+            )
+
+
+def test_render_latex_ignores_legacy_profile_link_fields():
+    rendered = render_latex_from_template(
+        resume={
+            "fullName": "Alice",
+            "email": "alice@example.com",
+            "github": "https://github.com/legacy",
+            "portfolio": "https://legacy.example.com",
+            "links": {
+                "github": "https://github.com/legacy-links",
+                "portfolio": "https://legacy-links.example.com",
+            },
+        },
+    )
+
+    assert "GitHub" not in rendered
+    assert "Portfolio" not in rendered
+    assert "legacy" not in rendered
+
+
 # ---------------------------------------------------------------------------
 # _pick_bullets — content field fallback (added in refactoring)
 # ---------------------------------------------------------------------------
 
 
-def test_pick_bullets_returns_explicit_bullets_list():
-    entry = {"bullets": ["Did A", "Did B"]}
-    assert _pick_bullets(entry) == ["Did A", "Did B"]
+def test_pick_bullets_reads_multiline_content_as_canonical_bullets():
+    entry = {"content": "First bullet.\nSecond bullet."}
+    assert _pick_bullets(entry) == ["First bullet.", "Second bullet."]
 
 
 def test_pick_bullets_skips_empty_bullets_falls_to_content():
-    entry = {"bullets": [], "content": "Built the API layer."}
+    entry = {"content": "Built the API layer."}
     result = _pick_bullets(entry)
     assert result == ["Built the API layer."]
 
@@ -109,14 +194,64 @@ def test_pick_bullets_multiline_content_becomes_multiple_bullets():
     assert result == ["Line one.", "Line two.", "Line three."]
 
 
-def test_pick_bullets_highlights_list_used_before_content():
+def test_pick_bullets_content_preferred_over_legacy_highlights():
     entry = {"highlights": ["Highlight A"], "content": "Should not appear"}
     result = _pick_bullets(entry)
-    assert result == ["Highlight A"]
+    assert result == ["Should not appear"]
 
 
 def test_pick_bullets_empty_entry_with_no_fallback_returns_empty():
     assert _pick_bullets({}) == []
+
+
+def test_render_latex_keeps_all_project_content_lines(tmp_path):
+    template = tmp_path / "template.tex"
+    template.write_text("__PROJECT_SECTION__\n", encoding="utf-8")
+
+    rendered = render_latex_from_template(
+        resume={
+            "sections": [
+                {
+                    "name": "projects",
+                    "items": [{
+                        "title": "Project A",
+                        "content": "Bullet one\nBullet two\nBullet three\nBullet four",
+                    }],
+                }
+            ]
+        },
+        template_path=template,
+    )
+
+    assert r"\item Bullet one" in rendered
+    assert r"\item Bullet two" in rendered
+    assert r"\item Bullet three" in rendered
+    assert r"\item Bullet four" in rendered
+
+
+def test_render_latex_keeps_all_experience_content_lines(tmp_path):
+    template = tmp_path / "template.tex"
+    template.write_text("__EXPERIENCE_SECTION__\n", encoding="utf-8")
+
+    rendered = render_latex_from_template(
+        resume={
+            "sections": [
+                {
+                    "name": "experience",
+                    "items": [{
+                        "title": "Experience A",
+                        "content": "Did one\nDid two\nDid three\nDid four",
+                    }],
+                }
+            ]
+        },
+        template_path=template,
+    )
+
+    assert r"\item Did one" in rendered
+    assert r"\item Did two" in rendered
+    assert r"\item Did three" in rendered
+    assert r"\item Did four" in rendered
 
 
 def test_pick_tex_engine_prefers_tectonic():

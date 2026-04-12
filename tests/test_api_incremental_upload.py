@@ -16,7 +16,7 @@ def test_incremental_upload_creates_multiple_upload_rows(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    app = get_app_for_tests(str(tmp_path))
+    app = get_app_for_tests()
     client = TestClient(app)
 
     zip_path = _any_zip()
@@ -47,7 +47,7 @@ def test_duplicate_upload_sets_dedup_true(tmp_path):
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    app = get_app_for_tests(str(tmp_path))
+    app = get_app_for_tests()
     client = TestClient(app)
 
     zip_path = _any_zip()
@@ -79,7 +79,7 @@ def test_upload_auto_detects_existing_project_id_for_same_snapshot_series(tmp_pa
     original_base_dir = storage.BASE_DIR
     storage.close_db()
     storage.BASE_DIR = tmp_path
-    app = get_app_for_tests(str(tmp_path))
+    app = get_app_for_tests()
     client = TestClient(app)
 
     earlier_zip = Path("test_data/test-data-code-collab-earlier.zip")

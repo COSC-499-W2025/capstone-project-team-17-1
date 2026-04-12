@@ -13,7 +13,7 @@ def no_auth(monkeypatch):
 
 @pytest.fixture()
 def fake_request(tmp_path):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_dir=str(tmp_path), auth_token=None)))
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(auth_token=None)))
 
 
 def test_build_portfolio_blurb_uses_individual_wording():
@@ -104,12 +104,6 @@ def test_build_analysis_defaults_uses_project_role_and_generated_content(monkeyp
 
 
 def test_read_portfolio_entry_prefers_overrides_but_exposes_analysis_defaults(monkeypatch, fake_request):
-    monkeypatch.setattr(
-        portfolio_route,
-        "_resolve_db_dir",
-        lambda request: request.app.state.db_dir,
-    )
-
     snapshot = {
         "title": "Capstone",
         "project_role": "Frontend Developer",
@@ -133,9 +127,7 @@ def test_read_portfolio_entry_prefers_overrides_but_exposes_analysis_defaults(mo
         def __exit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr(portfolio_route, "_db_session", lambda db_dir: DummySession())
-    monkeypatch.setattr(portfolio_route, "ensure_portfolio_tables", lambda conn: None)
-    monkeypatch.setattr(portfolio_route, "ensure_indexes", lambda conn: None)
+    monkeypatch.setattr(portfolio_route, "_db_session", lambda: DummySession())
     monkeypatch.setattr(portfolio_route, "helper_get_latest_snapshot", lambda conn, project_id: snapshot)
     monkeypatch.setattr(portfolio_route, "get_portfolio_customization", lambda conn, project_id: customization)
     monkeypatch.setattr(portfolio_route, "list_portfolio_images", lambda conn, project_id: [])

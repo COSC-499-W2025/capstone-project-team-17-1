@@ -22,12 +22,10 @@ from capstone.portfolio_retrieval import _db_session, _extract_evidence, get_por
 from capstone.storage import _UNSET as _DB_UNSET
 from capstone.api.routes.auth import get_authenticated_username
 import capstone.storage as storage_module
-from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_latest_snapshots_with_zip, fetch_project_snapshot_history
+from capstone.storage import fetch_latest_snapshot, fetch_latest_snapshots, fetch_project_snapshot_history
 from capstone.project_role import infer_project_role_from_snapshot
 from capstone.top_project_summaries import gather_evidence
 from capstone.api.portfolio_helpers import (
-    ensure_indexes,
-    ensure_portfolio_tables,
     get_portfolio_customization,
     list_portfolio_images,
     save_portfolio_image,
@@ -40,18 +38,12 @@ from capstone.api.portfolio_helpers import (
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
-_DB_DIR: Optional[str] = None
 _TOKEN: Optional[str] = None
 
 
-def configure(db_dir: Optional[str], auth_token: Optional[str]) -> None:
-    global _DB_DIR, _TOKEN
-    _DB_DIR = db_dir
+def configure(auth_token: Optional[str]) -> None:
+    global _TOKEN
     _TOKEN = auth_token
-
-
-def _resolve_db_dir(request: Request) -> Optional[str]:
-    return getattr(request.app.state, "db_dir", None) or _DB_DIR
 
 
 def _resolve_auth_token(request: Request) -> Optional[str]:
@@ -69,20 +61,22 @@ def _check_auth(request: Request) -> None:
 
 
 def _bind_current_user_from_session(request: Request) -> None:
-    username = get_authenticated_username(request)
-    storage_module.set_current_user(username)
+    # No-op: the HTTP middleware (server.py) already binds the storage user
+    # from the Bearer session via storage_user_scope for the whole request.
+    # Kept as a stable call site in case route handlers want to re-check.
+    return
 
 
-def _load_heatmap_rows(db_dir: str, *, user=_DB_UNSET) -> list[dict[str, Any]]:
-    with _db_session(db_dir, user=user) as c:
-        return fetch_latest_snapshots_with_zip(c) or []
+def _load_heatmap_rows(*, user=_DB_UNSET) -> list[dict[str, Any]]:
+    with _db_session(user=user) as c:
+        return fetch_latest_snapshots(c) or []
 
 
-def _load_heatmap_rows_with_guest_fallback(db_dir: str) -> list[dict[str, Any]]:
-    rows = _load_heatmap_rows(db_dir)
+def _load_heatmap_rows_with_guest_fallback() -> list[dict[str, Any]]:
+    rows = _load_heatmap_rows()
     if rows:
         return rows
-    return _load_heatmap_rows(db_dir, user=None)
+    return _load_heatmap_rows(user=None)
 
 
 class PortfolioProject(BaseModel):
@@ -179,10 +173,8 @@ def _safe_int(value: Any) -> int:
     
 
 def _resolve_images_base_dir(request: Request) -> Path:
-    db_dir = _resolve_db_dir(request)
-    if db_dir:
-        return Path(db_dir)
-    return Path("data")
+    import capstone.storage as _storage
+    return Path(_storage.BASE_DIR)
 
 
 def _extract_skill_names(value: Any) -> list[str]:
@@ -974,16 +966,12 @@ def _build_heatmap_response(
 def generate_portfolio(payload: GeneratePortfolioRequest, request: Request) -> dict[str, Any]:
     _check_auth(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
     if not payload.project_ids:
         raise HTTPException(status_code=400, detail="projectIds/project_ids must be a non-empty list")
 
     projects: list[PortfolioProject] = []
 
-    with _db_session(db_dir) as c:
+    with _db_session() as c:
         for pid in payload.project_ids:
             snapshot = fetch_latest_snapshot(c, str(pid))
 
@@ -1038,11 +1026,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
 
     if id == "showcase":
         raise HTTPException(status_code=400, detail="Use /portfolio/showcase/edit with projectId and summary")
-    
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-    
+
     customization_requested = any(
         value is not None
         for value in (
@@ -1056,10 +1040,7 @@ def edit_portfolio(id: str, payload: EditPortfolioRequest, request: Request) -> 
     )
     
     if customization_requested and payload.projects is None:
-        with _db_session(db_dir) as conn:
-            ensure_portfolio_tables(conn)
-            ensure_indexes(conn)
-            
+        with _db_session() as conn:
             snapshot = helper_get_latest_snapshot(conn, id)
             if not snapshot:
                 raise HTTPException(status_code=404, detail="Project not found")
@@ -1113,11 +1094,7 @@ def latest_portfolio_summary(request: Request) -> dict[str, Any]:
         _check_auth(request)
         _bind_current_user_from_session(request)
 
-        db_dir = _resolve_db_dir(request)
-        if not db_dir:
-            raise HTTPException(status_code=500, detail="Database not configured")
-
-        with _db_session(db_dir) as c:
+        with _db_session() as c:
             rows = fetch_latest_snapshots(c) or []
 
         if not rows:
@@ -1159,17 +1136,13 @@ def portfolio_activity_heatmap(request: Request) -> dict[str, Any]:
         _check_auth(request)
         _bind_current_user_from_session(request)
 
-        db_dir = _resolve_db_dir(request)
-        if not db_dir:
-            raise HTTPException(status_code=500, detail="Database not configured")
-
         granularity = _normalize_heatmap_granularity(request.query_params.get("granularity"))
         selected_project_id = str(request.query_params.get("project_id") or "").strip()
-        rows = _load_heatmap_rows(db_dir)
+        rows = _load_heatmap_rows()
         data = _build_heatmap_response(rows, granularity, selected_project_id)
 
         if not data["cells"] and get_authenticated_username(request):
-            guest_rows = _load_heatmap_rows_with_guest_fallback(db_dir)
+            guest_rows = _load_heatmap_rows_with_guest_fallback()
             guest_data = _build_heatmap_response(guest_rows, granularity, selected_project_id)
             if guest_data["cells"]:
                 data = guest_data
@@ -1206,10 +1179,6 @@ def portfolio_project_evolution(
         _check_auth(request)
         _bind_current_user_from_session(request)
 
-        db_dir = _resolve_db_dir(request)
-        if not db_dir:
-            raise HTTPException(status_code=500, detail="Database not configured")
-
         cleaned_ids = [
             str(project_id).strip()
             for project_id in str(project_ids or "").split(",")
@@ -1220,7 +1189,7 @@ def portfolio_project_evolution(
             return {"data": {}, "error": None}
 
         payload: dict[str, Any] = {}
-        with _db_session(db_dir) as c:
+        with _db_session() as c:
             for project_id in cleaned_ids:
                 history = fetch_project_snapshot_history(c, project_id, limit=max(1, min(int(limit), 12)))
                 payload[project_id] = {
@@ -1244,10 +1213,6 @@ def portfolio_project_evolution(
 def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFormat.json) -> Any:
     _check_auth(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
     log_event("INFO", f"Portfolio export requested · ID: {id} · Format: {format.value}")
 
     if format == ExportFormat.json:
@@ -1262,10 +1227,7 @@ def export_portfolio(id: str, request: Request, format: ExportFormat = ExportFor
         return {"content": content}
 
     if format == ExportFormat.pdf:
-        with _db_session(db_dir) as conn:
-            ensure_portfolio_tables(conn)
-            ensure_indexes(conn)
-            
+        with _db_session() as conn:
             if id == "latest":
                 rows = fetch_latest_snapshots(conn) or []
                 project_ids: list[str] = []
@@ -1318,14 +1280,7 @@ def read_portfolio_entry(id: str, request: Request) -> dict[str, Any]:
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-        
+    with _db_session() as conn:
         snapshot = helper_get_latest_snapshot(conn, id)
         customization = get_portfolio_customization(conn, id) or {}
         images = list_portfolio_images(conn, id)
@@ -1380,13 +1335,7 @@ def read_portfolio_images(id: str, request: Request) -> dict[str, Any]:
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
+    with _db_session() as conn:
         return {"data": {"images": list_portfolio_images(conn, id)}, "error": None}
 
 
@@ -1401,16 +1350,9 @@ async def upload_portfolio_image(
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
     file_bytes = await file.read()
 
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
+    with _db_session() as conn:
         snapshot = helper_get_latest_snapshot(conn, id)
         if not snapshot:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -1436,14 +1378,7 @@ def remove_portfolio_image(id: str, image_id: str, request: Request) -> dict[str
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
+    with _db_session() as conn:
         deleted = delete_portfolio_image(conn, project_id=id, image_id=image_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1456,14 +1391,7 @@ def choose_cover_portfolio_image(id: str, image_id: str, request: Request) -> di
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
+    with _db_session() as conn:
         updated = set_cover_portfolio_image(conn, project_id=id, image_id=image_id)
         if not updated:
             raise HTTPException(status_code=404, detail="Image not found")
@@ -1480,14 +1408,7 @@ def reorder_project_portfolio_images(
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
+    with _db_session() as conn:
         try:
             images = reorder_portfolio_images(conn, project_id=id, image_ids=payload.image_ids)
         except ValueError as exc:
@@ -1501,14 +1422,7 @@ def get_portfolio_image_file(id: str, image_id: str, request: Request):
     _check_auth(request)
     _bind_current_user_from_session(request)
 
-    db_dir = _resolve_db_dir(request)
-    if not db_dir:
-        raise HTTPException(status_code=500, detail="Database not configured")
-
-    with _db_session(db_dir) as conn:
-        ensure_portfolio_tables(conn)
-        ensure_indexes(conn)
-
+    with _db_session() as conn:
         row = conn.execute(
             """
             SELECT image_path

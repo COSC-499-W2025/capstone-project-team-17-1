@@ -116,14 +116,14 @@ def build_jd_profile(jd_text: str) -> Dict[str, Any]:
     }
 
 
-def load_project_skills(project_id: str, db_dir: Path | None = None) -> List[Dict[str, Any]]:
+def load_project_skills(project_id: str) -> List[Dict[str, Any]]:
     """
     Load the skills list from the latest snapshot for a project.
 
     This reuses the existing mining pipeline: we just read the JSON snapshot
     that zip_analyzer stored in the database.
     """
-    conn = open_db(db_dir)
+    conn = open_db()
     snapshot = fetch_latest_snapshot(conn, project_id)
     if not snapshot:
         return []
@@ -133,7 +133,6 @@ def load_project_skills(project_id: str, db_dir: Path | None = None) -> List[Dic
 def match_job_to_project(
     job_text: str,
     project_id: str,
-    db_dir: Path | None = None,
 ) -> JobMatchResult:
     """
     Compare a free text job description with one project and return
@@ -141,7 +140,7 @@ def match_job_to_project(
     """
 
     job_skills = extract_job_skills(job_text)
-    project_skills = load_project_skills(project_id, db_dir)
+    project_skills = load_project_skills(project_id)
 
     job_set = {s.lower() for s in job_skills}
 
@@ -202,9 +201,9 @@ def build_resume_snippet(match: JobMatchResult) -> str:
     return "\n".join(lines)
 
 
-def has_matching_skills(job_text: str, project_id: str, db_dir: Path | None = None) -> bool:
+def has_matching_skills(job_text: str, project_id: str) -> bool:
     """Convenience helper: just yes or no."""
-    result = match_job_to_project(job_text, project_id, db_dir)
+    result = match_job_to_project(job_text, project_id)
     return bool(result.matched_skills)
 
 

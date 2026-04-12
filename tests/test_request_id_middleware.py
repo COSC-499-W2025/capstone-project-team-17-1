@@ -3,7 +3,7 @@ from capstone.api.server import create_app
 
 
 def test_request_id_generated_when_missing(tmp_path):
-    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    app = create_app(auth_token=None)
     client = TestClient(app)
 
     r = client.get("/health")
@@ -13,7 +13,7 @@ def test_request_id_generated_when_missing(tmp_path):
 
 
 def test_request_id_echoed_when_provided(tmp_path):
-    app = create_app(db_dir=str(tmp_path), auth_token=None)
+    app = create_app(auth_token=None)
     client = TestClient(app)
 
     rid = "my-fixed-id-123"

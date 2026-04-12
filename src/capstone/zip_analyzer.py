@@ -116,7 +116,6 @@ class ZipAnalyzer:
         mode: ModeResolution,
         preferences: Preferences,
         project_id: str | None = None,
-        db_dir: Path | None = None,
         conn: sqlite3.Connection | None = None,
         skip_contributor_storage: bool = False,
     ) -> dict[str, object]:
@@ -128,7 +127,7 @@ class ZipAnalyzer:
             raise InvalidArchiveError(detail)
 
         if conn is None:
-            conn = open_db(db_dir)
+            conn = open_db()
         try:
             stored = file_store.ensure_file(
                 conn,
@@ -147,7 +146,7 @@ class ZipAnalyzer:
                 close_db()
             except Exception:
                 pass
-            conn = open_db(db_dir)
+            conn = open_db()
             stored = file_store.ensure_file(
                 conn,
                 zip_path,
@@ -168,7 +167,6 @@ class ZipAnalyzer:
                     preferences,
                     start,
                     project_id,
-                    db_dir,
                     conn,
                     stored,
                     skip_contributor_storage=skip_contributor_storage,
@@ -188,7 +186,6 @@ class ZipAnalyzer:
         preferences: Preferences,
         start: float,
         project_id: str | None,
-        db_dir: Path | None,
         conn,
         stored_file: dict,
         skip_contributor_storage: bool = False,
@@ -433,7 +430,7 @@ class ZipAnalyzer:
         project_id = project_id or zip_path.stem
         classification = collaboration.get("classification", "unknown")
         primary_contributor = collaboration.get("primary_contributor")
-        conn = open_db(db_dir)
+        conn = open_db()
         store_analysis_snapshot(
             conn,
             project_id=project_id,

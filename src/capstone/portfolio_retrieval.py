@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from capstone.api.portfolio_helpers import (
-    ensure_portfolio_tables,
     get_portfolio_customization,
     list_portfolio_images,
 )
@@ -25,18 +24,16 @@ except Exception:
 
 
 @contextmanager
-def _db_session(db_dir: str | None, *, user=_DB_UNSET):
+def _db_session(*, user=_DB_UNSET):
     """
     Always close the SQLite handle (critical on Windows).
     Uses capstone.storage.open_db/close_db if available.
-    Pass user=None to explicitly open the guest DB regardless of CURRENT_USER.
+    Pass user=None to explicitly open the guest DB regardless of the scoped storage user.
     """
-    base_path = Path(db_dir) if db_dir else None
-
     if _open_db is not None:
-        conn = _open_db(base_path, user=user)  # pass Path or None
+        conn = _open_db(user=user)
     else:
-        target = Path(db_dir) if db_dir else Path("data")
+        target = Path("data")
         target.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(target / "capstone.db")
 
@@ -148,8 +145,6 @@ def get_latest_snapshot_dict(conn: sqlite3.Connection, project_id: str) -> Optio
 
 
 def get_portfolio_entry(conn: sqlite3.Connection, project_id: str) -> Optional[Dict[str, Any]]:
-    ensure_portfolio_tables(conn)
-
     snapshot = get_latest_snapshot_dict(conn, project_id)
     if snapshot is None:
         return None

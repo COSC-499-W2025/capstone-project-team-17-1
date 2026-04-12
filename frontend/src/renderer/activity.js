@@ -1,4 +1,4 @@
-import { captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
+import { authFetch, captureAuthDataEpoch, authDomWriteAllowed } from "./auth.js";
 
 let activityState = {
   logs: [],
@@ -145,7 +145,7 @@ export async function loadRecentActivity(options = {}) {
       container.innerHTML = `<div class="activity-line">Loading activity...</div>`;
     }
 
-    const res = await fetch("http://127.0.0.1:8002/activity");
+    const res = await authFetch("/activity");
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }

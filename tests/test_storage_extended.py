@@ -108,9 +108,9 @@ class SchemaResetTests(unittest.TestCase):
         self.addCleanup(storage.close_db)
         self.addCleanup(_restore_base_dir)
         storage.BASE_DIR = self.tmp
-        storage.CURRENT_USER = "ivy"
+        storage._bind_storage_user("ivy")
         storage._SCHEMA_READY.clear()
-        self.addCleanup(setattr, storage, "CURRENT_USER", None)
+        self.addCleanup(storage._bind_storage_user, None)
 
     def test_open_db_resets_when_table_set_differs_from_expected(self) -> None:
         db_path = storage.get_database_path()

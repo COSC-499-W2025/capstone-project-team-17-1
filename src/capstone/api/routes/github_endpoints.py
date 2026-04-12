@@ -69,7 +69,7 @@ def _apply_github_token_update(raw_token: str) -> dict:
         raise HTTPException(status_code=400, detail=err or "Invalid GitHub token")
 
     save_github_token(token)
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
     if _is_cloud_sync_user(active_user):
         try:
             upload_database(active_user)
@@ -661,7 +661,7 @@ def import_repository(
                 )
             except Exception:
                 pass  # non-fatal — resume will fall back to git-log commit data
-            active_user = storage_module.get_current_user()
+            active_user = storage_module.current_storage_user()
             if _is_cloud_sync_user(active_user):
                 upload_project_zip(
                     active_user,
@@ -786,7 +786,7 @@ def pull_repository(project_id: str, refresh: bool = False):
         except Exception:
             pass  # non-fatal
 
-        active_user = storage_module.get_current_user()
+        active_user = storage_module.current_storage_user()
         if _is_cloud_sync_user(active_user):
             upload_project_zip(
                 active_user,
@@ -838,7 +838,7 @@ def github_auth_status():
 def github_login(token: str):
     save_github_token(token)
 
-    active_user = storage_module.get_current_user()
+    active_user = storage_module.current_storage_user()
     if _is_cloud_sync_user(active_user):
         upload_database(active_user)
 

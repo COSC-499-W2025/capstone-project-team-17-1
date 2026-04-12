@@ -260,6 +260,24 @@ export async function authFetch(path, options = {}) {
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
 
+/**
+ * Poll the backend root endpoint until it responds (max ~15 s).
+ * Returns true if reachable, false on timeout.
+ */
+async function waitForBackend(maxMs = 15000, intervalMs = 500) {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${API_BASE}/`, { method: "GET", signal: AbortSignal.timeout(2000) });
+      if (res.ok) return true;
+    } catch (_) {
+      /* backend not ready yet */
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
 const _portfolioImageBlobUrls = new WeakMap();
 
 /**
@@ -627,7 +645,8 @@ function _renderEduCards() {
   if (!container) return;
   container.innerHTML = "";
   _educationEntries.forEach((entry, idx) => {
-    const isCurrent = !entry.end_date || entry.end_date.toLowerCase() === "present";
+    const normalizedEndDate = String(entry.end_date || "").trim().toLowerCase();
+    const isCurrent = normalizedEndDate === "present" || normalizedEndDate === "current";
     const card = document.createElement("div");
     card.className = "edu-card";
     card.innerHTML = `
@@ -639,7 +658,7 @@ function _renderEduCards() {
           <input class="settings-input edu-start" placeholder="Start (e.g. Sep 2020)" value="${entry.start_date || ""}" data-idx="${idx}" data-field="start_date" />
           <input class="settings-input edu-end" placeholder="End (e.g. May 2024)" value="${isCurrent ? "" : (entry.end_date || "")}" data-idx="${idx}" data-field="end_date" ${isCurrent ? "disabled" : ""} />
           <label class="edu-current-label">
-            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent && entry.university ? "checked" : ""} />
+            <input type="checkbox" class="edu-current-chk" data-idx="${idx}" ${isCurrent ? "checked" : ""} />
             <span>Current</span>
           </label>
         </div>
@@ -790,12 +809,7 @@ function closeModalToPublic() {
 }
 
 async function syncCloudDbAndRefresh() {
-  try {
-    await authFetch("/cloud/db/download", { method: "POST" });
-    await authFetch("/cloud/projects/download-all", { method: "POST" });
-  } catch (_) {
-    // No cloud backup yet or offline — continue with local DB
-  }
+  // Cloud sync disabled — all data is local-only for now.
 
   await Promise.all([
     loadProjects(),
@@ -954,11 +968,27 @@ export async function initAuthFlow() {
     let bootUser = null;
     const existingToken = getAuthToken();
     if (existingToken) {
-      const meRes = await authFetch("/auth/me");
-      if (meRes.ok) {
-        const meData = await meRes.json();
-        bootUser = meData.user || null;
+      // Wait for the backend to be reachable before validating the saved token,
+      // otherwise a slow-starting backend causes the token to be discarded.
+      const backendReady = await waitForBackend();
+      if (backendReady) {
+        try {
+          const meRes = await authFetch("/auth/me");
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            bootUser = meData.user || null;
+          } else if (meRes.status === 401) {
+            // Token explicitly rejected by the backend — clear it.
+            setAuthToken(null);
+          }
+          // For other status codes (5xx, etc.) keep the token and fall through
+          // to guest mode this session; the user can retry next launch.
+        } catch (_networkErr) {
+          // Network error even after backend was "ready" — keep the token,
+          // don't destroy a valid remember-me credential over a transient failure.
+        }
       }
+      // If backend never became ready, keep token for the next launch.
     }
 
     if (bootUser) {
@@ -972,7 +1002,6 @@ export async function initAuthFlow() {
         goToPage("dashboard", "dashboard-page");
       }
     } else {
-      if (existingToken) setAuthToken(null);
       setModeUI(false, null);
       if (!restoreLastAllowedPage()) {
         goToPage("dashboard", "dashboard-page");
@@ -992,7 +1021,7 @@ export async function initAuthFlow() {
       }
     }
   } catch (_) {
-    setAuthToken(null);
+    // Unexpected error during boot — do NOT clear the saved token.
     setModeUI(false, null);
     if (!restoreLastAllowedPage()) {
       goToPage("dashboard", "dashboard-page");
