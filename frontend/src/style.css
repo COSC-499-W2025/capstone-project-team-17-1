@@ -6129,17 +6129,6 @@ body.light .export-modal-footer {
   flex-shrink: 0;
 }
 
-.re-item-date .re-editable[data-field="start_date"]:empty::before {
-  content: "Start Date";
-  color: #b0b8c4;
-  pointer-events: none;
-}
-
-.re-item-date .re-editable[data-field="end_date"]:empty::before {
-  content: "End Date";
-  color: #b0b8c4;
-  pointer-events: none;
-}
 
 .re-date-sep {
   color: #94a3b8;
@@ -6168,17 +6157,12 @@ body.light .export-modal-footer {
   min-width: 0;
 }
 
-.re-item-header-left .re-editable:empty::before {
-  content: "Title";
+.re-editable[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
   color: #b0b8c4;
   pointer-events: none;
 }
 
-.re-item-subtitle .re-editable:empty::before {
-  content: "Subtitle";
-  color: #b0b8c4;
-  pointer-events: none;
-}
 
 .re-item-location {
   font-size: 0.8rem;
@@ -6188,11 +6172,6 @@ body.light .export-modal-footer {
   flex-shrink: 0;
 }
 
-.re-item-location .re-editable:empty::before {
-  content: "Location";
-  color: #b0b8c4;
-  pointer-events: none;
-}
 
 .re-item-meta {
   font-size: 0.8rem;

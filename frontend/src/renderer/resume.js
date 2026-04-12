@@ -957,11 +957,12 @@ async function confirmDeleteResume(resumeId) {
 // Editable resume renderer
 // ---------------------------------------------------------------------------
 
-function ce(field, value, ctx = "") {
+function ce(field, value, ctx = "", placeholder = "") {
   if (!isPrivateMode()) {
     return `<span data-field="${field}" ${ctx}>${value ?? ""}</span>`;
   }
-  return `<span contenteditable="true" data-field="${field}" ${ctx} class="re-editable">${value ?? ""}</span>`;
+  const ph = placeholder ? ` data-placeholder="${placeholder}"` : "";
+  return `<span contenteditable="true" data-field="${field}" ${ctx}${ph} class="re-editable">${value ?? ""}</span>`;
 }
 
 function ceHeader(field, value, ctx = "") {
@@ -995,31 +996,38 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   }
 
   // education / experience / project / custom
-  const showDateSep = item.start_date || item.end_date;
+  const priv = isPrivateMode();
+  const hasDate = !!(item.start_date || item.end_date);
+  const hasSubtitle = !!item.subtitle;
+  const hasLocation = !!(item.location && sectionKey !== "project");
+  const showDate = priv ? (item.start_date !== undefined || item.end_date !== undefined) : hasDate;
+  const showSubRow = priv ? (item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) : (hasSubtitle || hasLocation);
   const hasContentField = item.content !== undefined;
   const supportsContentBullets = sectionKey !== "education";
   const contentLines = supportsContentBullets && hasContentField ? contentBulletLines(item) : [];
-  if (supportsContentBullets && hasContentField && isPrivateMode() && !contentLines.length) {
+  if (supportsContentBullets && hasContentField && priv && !contentLines.length) {
     contentLines.push("");
   }
   const bulletItems = contentLines
-    .map((line) => `<li ${isPrivateMode() ? 'contenteditable="true"' : ""} data-field="content_bullet" ${ctx} class="re-item-content ${isPrivateMode() ? "re-editable" : ""}">${line}</li>`)
+    .map((line) => `<li ${priv ? 'contenteditable="true"' : ""} data-field="content_bullet" ${ctx} class="re-item-content ${priv ? "re-editable" : ""}">${line}</li>`)
     .join("");
+  const showDateSep = priv ? (item.start_date || item.end_date) : (item.start_date && item.end_date);
   return `
     <div class="re-item" data-item-id="${iid}">
       ${drag}${del}
+      ${priv || item.title || hasDate ? `
       <div class="re-item-header">
-        <span class="re-item-header-left">${ce("title", item.title, ctx)}</span>
-        <span class="re-item-date">
-          ${ce("start_date", item.start_date || "", ctx)}
+        <span class="re-item-header-left">${ce("title", item.title, ctx, "Title")}</span>
+        ${showDate ? `<span class="re-item-date">
+          ${ce("start_date", item.start_date || "", ctx, "Start Date")}
           <span class="re-date-sep"${showDateSep ? "" : ' style="display:none"'}> – </span>
-          ${ce("end_date", item.end_date || "", ctx)}
-        </span>
-      </div>
-      ${(item.subtitle !== undefined || (item.location !== undefined && sectionKey !== "project")) ? `
+          ${ce("end_date", item.end_date || "", ctx, "End Date")}
+        </span>` : ""}
+      </div>` : ""}
+      ${showSubRow ? `
       <div class="re-item-sub-row">
-        ${item.subtitle !== undefined ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx)}</span>` : ""}
-        ${(item.location !== undefined && sectionKey !== "project") ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx)}</span>` : ""}
+        ${(priv ? item.subtitle !== undefined : hasSubtitle) ? `<span class="re-item-subtitle">${ce("subtitle", item.subtitle || "", ctx, "Subtitle")}</span>` : ""}
+        ${(priv ? (item.location !== undefined && sectionKey !== "project") : hasLocation) ? `<span class="re-item-location">${ce("location", item.location ?? "", ctx, "Location")}</span>` : ""}
       </div>` : ""}
       ${bulletItems ? `
         <ul class="re-bullets">

@@ -212,9 +212,27 @@ def _render_itemize_block(bullets: list[str]) -> str:
 
 
 def _render_resume_entry_block(title: str, date_text: str, subtitle: str, location: str, bullets: list[str]) -> str:
-    lines = [
-        rf"\ResumeEntry{{{_safe_text(title)}}}{{{_safe_text(date_text)}}}{{{_safe_text(subtitle)}}}{{{_safe_text(location)}}}"
-    ]
+    lines: list[str] = []
+    has_title_row = title.strip() or date_text.strip()
+    has_sub_row = subtitle.strip() or location.strip()
+    if has_title_row:
+        left = rf"{{\bfseries\color{{Primary}} {_safe_text(title)}}}" if title.strip() else ""
+        right = rf"{{\small\color{{MutedText}} {_safe_text(date_text)}}}" if date_text.strip() else ""
+        lines.append(
+            rf"\noindent\begin{{minipage}}[t]{{0.68\textwidth}}\raggedright {left}\end{{minipage}}%"
+            "\n  \\hfill\n"
+            rf"  \begin{{minipage}}[t]{{0.30\textwidth}}\raggedleft {right}\end{{minipage}}\par"
+        )
+    if has_sub_row:
+        if has_title_row:
+            lines.append(r"\vspace{-5pt}")
+        left = rf"{{\small\itshape\color{{MutedText}} {_safe_text(subtitle)}}}" if subtitle.strip() else ""
+        right = rf"{{\small\itshape\color{{MutedText}} {_safe_text(location)}}}" if location.strip() else ""
+        lines.append(
+            rf"\noindent\begin{{minipage}}[t]{{0.68\textwidth}}\raggedright {left}\end{{minipage}}%"
+            "\n  \\hfill\n"
+            rf"  \begin{{minipage}}[t]{{0.30\textwidth}}\raggedleft {right}\end{{minipage}}\par"
+        )
     itemize = _render_itemize_block(bullets)
     if itemize:
         lines.append(itemize)
@@ -321,13 +339,13 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
     experience_blocks: list[str] = []
     for entry in experience_entries:
-        bullets = _pick_bullets(entry, "Content...")
+        bullets = _pick_bullets(entry, "")
         experience_blocks.append(
             _render_resume_entry_block(
-                title=_entry_field(entry, "title", fallback="Event"),
-                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
-                subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback="Company"),
-                location=_entry_field(entry, "location", fallback="Location"),
+                title=_entry_field(entry, "title", fallback=""),
+                date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                subtitle=_entry_field(entry, "company", "organization", "subtitle", fallback=""),
+                location=_entry_field(entry, "location", fallback=""),
                 bullets=bullets,
             )
         )
@@ -349,12 +367,12 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 )
     project_blocks: list[str] = []
     for entry in project_entries:
-        bullets = _pick_bullets(entry, "Implemented core features and improvements.")
+        bullets = _pick_bullets(entry, "")
         project_blocks.append(
             _render_resume_entry_block(
-                title=_entry_field(entry, "title", fallback="Project"),
-                date_text=_entry_field(entry, "dateRange", "date", fallback="Date"),
-                subtitle=_entry_field(entry, "stack", "subtitle", fallback="Tech Stack"),
+                title=_entry_field(entry, "title", fallback=""),
+                date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                subtitle=_entry_field(entry, "stack", "subtitle", fallback=""),
                 location="",
                 bullets=bullets,
             )
@@ -364,12 +382,14 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     education_blocks: list[str] = []
     for entry in education_entries:
         coursework = _entry_field(entry, "coursework", "content", "entrySummary", "summary", "entryBody", "body")
-        lines = [
-            rf"\ResumeEntry{{{_safe_text(_entry_field(entry, 'school', 'title', fallback='University'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'dateRange', 'date', fallback='Date'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'degree', 'summary', 'subtitle', fallback='Degree Program'))}}}"
-            rf"{{{_safe_text(_entry_field(entry, 'location', fallback='Location'))}}}"
-        ]
+        block = _render_resume_entry_block(
+            title=_entry_field(entry, "school", "title", fallback=""),
+            date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+            subtitle=_entry_field(entry, "degree", "summary", "subtitle", fallback=""),
+            location=_entry_field(entry, "location", fallback=""),
+            bullets=[],
+        )
+        lines = [block] if block else []
         if coursework:
             lines.append(r"{\small \textit{" + _safe_text(coursework) + r"}}\par")
         education_blocks.append("\n".join(lines))
