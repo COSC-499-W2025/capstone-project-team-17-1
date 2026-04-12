@@ -986,20 +986,6 @@ function buildItemHtml(rid, sid, sectionKey, item) {
   const del  = isPrivateMode() ? `<button class="re-item-delete" title="Delete item" aria-label="Delete item">×</button>` : "";
   const drag = isPrivateMode() ? `<span class="re-item-drag" title="Drag to reorder">⠿</span>` : "";
 
-  if (sectionKey === "core_skill") {
-    return `
-      <div class="re-item" data-item-id="${iid}">
-        ${drag}${del}
-        <div class="re-item-header">
-          <span class="re-item-header-left">
-            ${ce("title", item.title, ctx)}
-            <span class="re-sep">: </span>
-            ${ce("content", item.content, ctx)}
-          </span>
-        </div>
-      </div>`;
-  }
-
   if (sectionKey === "summary") {
     return `
       <div class="re-item" data-item-id="${iid}">
@@ -1144,7 +1130,7 @@ function defaultItemPayload(sectionKey) {
     case "project":
       return { title: "Project Name", subtitle: "Tech Stack", start_date: "", end_date: "", content: "" };
     case "core_skill":
-      return { title: "Skill Category", content: "skill1, skill2" };
+      return { title: "Skill Category", subtitle: "", start_date: "", end_date: "", content: "" };
     case "summary":
       return { title: "Summary", content: "Write your professional summary here." };
     default:

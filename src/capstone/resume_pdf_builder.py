@@ -290,22 +290,33 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     tools = _flatten_str_list(resume.get("tools"))
 
     core_skill_entries = _extract_resume_entries(resume, "core_skill")
-    core_skill_lines: list[str] = []
+    core_skill_blocks: list[str] = []
     if core_skill_entries:
         for entry in core_skill_entries:
-            label = _entry_field(entry, "title", fallback="Core")
-            content = _entry_field(entry, "content")
-            if not content:
-                bullets = _pick_bullets(entry, "")
-                content = ", ".join([token for token in bullets if token.strip()])
-            if content:
-                core_skill_lines.append(rf"\SkillRow{{{_safe_text(label)}}}{{{_safe_text(content)}}}")
-    if not core_skill_lines and (all_skills or tools or languages):
-        core_skill_lines = [
-            rf"\SkillRow{{Core}}{{{_safe_text(_join_or_dash(all_skills))}}}",
-            rf"\SkillRow{{Tools}}{{{_safe_text(_join_or_dash(tools))}}}",
-            rf"\SkillRow{{Languages}}{{{_safe_text(_join_or_dash(languages))}}}",
-        ]
+            bullets = _pick_bullets(entry, "")
+            core_skill_blocks.append(
+                _render_resume_entry_block(
+                    title=_entry_field(entry, "title",),
+                    date_text=_entry_field(entry, "dateRange", "date", fallback=""),
+                    subtitle=_entry_field(entry, "subtitle", fallback=""),
+                    location="",
+                    bullets=bullets,
+                )
+            )
+    if not core_skill_blocks and (all_skills or tools or languages):
+        fallback_bullets = []
+        if all_skills:
+            fallback_bullets.append(f"Core: {_join_or_dash(all_skills)}")
+        if tools:
+            fallback_bullets.append(f"Tools: {_join_or_dash(tools)}")
+        if languages:
+            fallback_bullets.append(f"Languages: {_join_or_dash(languages)}")
+        core_skill_blocks.append(
+            _render_resume_entry_block(
+                title="Skills", date_text="", subtitle="", location="",
+                bullets=fallback_bullets,
+            )
+        )
 
     experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
     experience_blocks: list[str] = []
@@ -401,7 +412,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
     summary_block = "\n".join(summary_lines)
     education_block = "\n\n".join(education_blocks)
     experience_block = "\n\n".join(experience_blocks)
-    core_skill_block = "\n".join(core_skill_lines)
+    core_skill_block = "\n\n".join(core_skill_blocks)
     project_block = "\n\n".join(project_blocks)
     custom_block = "\n\n".join(custom_section_blocks)
 

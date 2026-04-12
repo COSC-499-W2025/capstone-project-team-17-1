@@ -6168,6 +6168,12 @@ body.light .export-modal-footer {
   min-width: 0;
 }
 
+.re-item-header-left .re-editable:empty::before {
+  content: "Title";
+  color: #b0b8c4;
+  pointer-events: none;
+}
+
 .re-item-subtitle .re-editable:empty::before {
   content: "Subtitle";
   color: #b0b8c4;
