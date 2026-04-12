@@ -310,7 +310,6 @@ let _newResumeId = null;
 
 // Multi-select state: Set of selected resume IDs + id→title map for naming exports
 let _selectedResumeIds = new Set();
-let _resumeTitleMap = {};  // id → title
 
 // ---------------------------------------------------------------------------
 // Resume list order persistence (localStorage)
@@ -425,7 +424,7 @@ function setupListDragDrop(container) {
 
 async function _openExportSequential(ids) {
   for (const id of ids) {
-    await new Promise((resolve) => openExportModal(id, _resumeTitleMap[id] || "", resolve));
+    await new Promise((resolve) => openExportModal(id, resolve));
   }
 }
 
@@ -456,8 +455,6 @@ async function renderResumeList() {
 
   // Reset selection when list re-renders; rebuild title map
   _selectedResumeIds.clear();
-  _resumeTitleMap = Object.fromEntries(resumes.map((r) => [r.id, r.title || "Untitled Resume"]));
-
   const starred = getSavedStarred();
   container.innerHTML = resumes.map((r) => {
     const rawDate = r.updated_at || r.created_at;
@@ -590,7 +587,7 @@ async function renderResumeList() {
       if (_selectedResumeIds.size > 0 && _selectedResumeIds.has(id)) {
         _openExportSequential([..._selectedResumeIds]);
       } else {
-        openExportModal(id, btn.dataset.resumeTitle);
+        openExportModal(id);
       }
     });
   });
@@ -806,10 +803,8 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function openExportModal(resumeId, resumeTitle, onClose) {
+function openExportModal(resumeId, onClose) {
   document.getElementById("export-modal")?.remove();
-
-  const slug = (resumeTitle || "resume").replace(/[^a-z0-9_\-]/gi, "_").toLowerCase();
 
   const modal = document.createElement("div");
   modal.id = "export-modal";
@@ -860,30 +855,24 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     area.innerHTML = `<div class="export-preview-loading"><span class="export-spinner"></span>Loading preview…</div>`;
 
     try {
+      const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error (${res.status})`);
+      }
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const fnMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = fnMatch ? fnMatch[1] : `resume.${format === "markdown" ? "md" : format}`;
+
       if (format === "pdf") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=pdf`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
         const blob = await res.blob();
-        cache[format] = { blob, url: URL.createObjectURL(blob) };
+        cache[format] = { blob, url: URL.createObjectURL(blob), filename };
       } else if (format === "json") {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=json`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
         const payload = await res.json();
         const resume = payload?.data ?? payload;
-        cache[format] = { text: JSON.stringify(resume, null, 2) };
+        cache[format] = { text: JSON.stringify(resume, null, 2), filename };
       } else {
-        const res = await authFetch(`/resumes/${resumeId}/export?format=${format}`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error (${res.status})`);
-        }
-        cache[format] = { text: await res.text() };
+        cache[format] = { text: await res.text(), filename };
       }
 
       renderPreview(format, cache[format]);
@@ -927,11 +916,11 @@ function openExportModal(resumeId, resumeTitle, onClose) {
     if (!data) { await alertDialog("Please wait for the preview to finish loading."); return; }
 
     if (currentFormat === "pdf") {
-      downloadBlob(data.blob, `${slug}.pdf`);
+      downloadBlob(data.blob, data.filename);
     } else if (currentFormat === "json") {
-      downloadBlob(new Blob([data.text], { type: "application/json" }), `${slug}.json`);
+      downloadBlob(new Blob([data.text], { type: "application/json" }), data.filename);
     } else {
-      downloadBlob(new Blob([data.text], { type: "text/markdown" }), `${slug}.md`);
+      downloadBlob(new Blob([data.text], { type: "text/markdown" }), data.filename);
     }
   });
 

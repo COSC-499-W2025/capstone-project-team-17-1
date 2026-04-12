@@ -430,10 +430,18 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
         resume = storage.fetch_resume(conn, resume_id)
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
+    title_slug = (resume.get("title") or "resume").replace(" ", "_")
     if fmt == "json":
-        return {"data": resume, "error": None}
+        return Response(
+            content=_json.dumps({"data": resume, "error": None}),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{title_slug}.json"'},
+        )
     if fmt == "markdown":
-        return PlainTextResponse(_resume_to_markdown(resume))
+        return PlainTextResponse(
+            _resume_to_markdown(resume),
+            headers={"Content-Disposition": f'attachment; filename="{title_slug}.md"'},
+        )
     # pdf — return binary stream so Postman / browsers can open it directly
     pdf_payload = _resume_to_latex_payload(resume)
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -443,7 +451,6 @@ def export_resume(resume_id: str, request: Request, format: str = "json"):
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PDF render failed: {exc}")
         pdf_bytes = out_path.read_bytes()
-    title_slug = (resume.get("title") or "resume").replace(" ", "_")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
