@@ -62,7 +62,7 @@ def _resume_to_latex_payload(resume: dict) -> dict:
             payload.setdefault("github_url", meta.get("github_url", ""))
             payload.setdefault("portfolio_url", meta.get("portfolio_url", ""))
         section_name = _KEY_MAP.get(key, key)
-        payload["sections"].append({"name": section_name, "items": items})
+        payload["sections"].append({"name": section_name, "label": sec.get("label", ""), "items": items})
     return payload
 
 

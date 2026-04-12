@@ -160,6 +160,15 @@ def _join_or_dash(items: list[str]) -> str:
     return ", ".join(items)
 
 
+def _section_label(resume: Dict[str, Any], *keys: str, fallback: str = "") -> str:
+    for section in resume.get("sections", []) or []:
+        if section.get("name") in keys or section.get("key") in keys:
+            label = _as_clean_text(section.get("label"))
+            if label:
+                return label
+    return fallback
+
+
 def _extract_resume_entries(resume: Dict[str, Any], section_name: str) -> list[Dict[str, Any]]:
     entries: list[Dict[str, Any]] = []
     for section in resume.get("sections", []) or []:
@@ -336,7 +345,7 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
             )
         )
 
-    experience_entries = _extract_resume_entries(resume, "experience") or _extract_resume_entries(resume, "work")
+    experience_entries = _extract_resume_entries(resume, "experience")
     experience_blocks: list[str] = []
     for entry in experience_entries:
         bullets = _pick_bullets(entry, "")
@@ -424,11 +433,6 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
                 )
             )
 
-    cert_entries = _extract_resume_entries(resume, "certifications") or _extract_resume_entries(resume, "awards")
-    cert1 = cert_entries[0] if len(cert_entries) > 0 else {}
-    cert2 = cert_entries[1] if len(cert_entries) > 1 else {}
-    award1 = cert_entries[2] if len(cert_entries) > 2 else {}
-
     summary_block = "\n".join(summary_lines)
     education_block = "\n\n".join(education_blocks)
     experience_block = "\n\n".join(experience_blocks)
@@ -456,19 +460,16 @@ def _extract_template_fields(resume: Dict[str, Any]) -> Dict[str, str]:
         "PROJECT_BLOCK": project_block,
         "EDUCATION_BLOCK": education_block,
         "CUSTOM_SECTION_BLOCK": custom_block,
-        "SUMMARY_SECTION": _wrap_section("Summary", summary_block),
-        "EDUCATION_SECTION": _wrap_section("Education", education_block),
-        "EXPERIENCE_SECTION": _wrap_section("Experience", experience_block),
-        "CORE_SKILL_SECTION": _wrap_section("Core Skill", core_skill_block),
-        "PROJECT_SECTION": _wrap_section("Project", project_block),
+        "SUMMARY_SECTION": _wrap_section(_section_label(resume, "summary", fallback="Summary"), summary_block),
+        "EDUCATION_SECTION": _wrap_section(_section_label(resume, "education", fallback="Education"), education_block),
+        "EXPERIENCE_SECTION": _wrap_section(_section_label(resume, "experience", fallback="Experience"), experience_block),
+        "CORE_SKILL_SECTION": _wrap_section(_section_label(resume, "core_skill", fallback="Core Skill"), core_skill_block),
+        "PROJECT_SECTION": _wrap_section(_section_label(resume, "project", fallback="Project"), project_block),
         # Backward-compatible placeholders for custom templates using old tokens.
         "PROFESSIONAL_SUMMARY": _safe_text(summary),
         "SKILL_CORE": _safe_text(_join_or_dash(all_skills)),
         "SKILL_TOOLS": _safe_text(_join_or_dash(tools)),
         "SKILL_LANGUAGES": _safe_text(_join_or_dash(languages)),
-        "CERT_1": _safe_text(_as_clean_text(cert1.get("title") if isinstance(cert1, dict) else cert1, "Certification Name")),
-        "CERT_2": _safe_text(_as_clean_text(cert2.get("title") if isinstance(cert2, dict) else cert2, "Certification Name")),
-        "AWARD_1": _safe_text(_as_clean_text(award1.get("title") if isinstance(award1, dict) else award1, "Award Name")),
     }
 
 
