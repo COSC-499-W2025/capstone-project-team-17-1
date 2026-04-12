@@ -37,9 +37,9 @@
   {\large\bfseries\color{Primary}}
   {}{0pt}{}
   [\vspace{2pt}\color{RuleColor}\titlerule]
-\titlespacing*{\section}{0pt}{10pt}{6pt}
+\titlespacing*{\section}{0pt}{6pt}{4pt}
 
-\setlist[itemize]{leftmargin=1.15em, itemsep=2pt, topsep=3pt}
+\setlist[itemize]{leftmargin=1.15em, itemsep=0pt, parsep=0pt, topsep=2pt}
 \renewcommand{\arraystretch}{1.1}
 
 \newcommand{\ResumeHeader}[4]{%
@@ -51,7 +51,7 @@
 \newcommand{\ResumeEntry}[4]{%
   \noindent\begin{minipage}[t]{0.68\textwidth}\raggedright{\bfseries\color{Primary} #1}\end{minipage}%
   \hfill
-  \begin{minipage}[t]{0.30\textwidth}\raggedleft{\small\color{MutedText} #2}\end{minipage}\par
+  \begin{minipage}[t]{0.30\textwidth}\raggedleft{\small\color{MutedText} #2}\end{minipage}\par\vspace{-5pt}
   \noindent\begin{minipage}[t]{0.68\textwidth}\raggedright{\small\itshape\color{MutedText} #3}\end{minipage}%
   \hfill
   \begin{minipage}[t]{0.30\textwidth}\raggedleft{\small\itshape\color{MutedText} #4}\end{minipage}\par
@@ -71,22 +71,22 @@
 \ResumeHeader{__FULL_NAME__}{__LOCATION__}{\href{mailto:__EMAIL__}{__EMAIL__}}{__PHONE__}
 __PROFILE_LINKS__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __SUMMARY_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __EDUCATION_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __EXPERIENCE_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __CORE_SKILL_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __PROJECT_SECTION__
 
-\vspace{\baselineskip}
+\vspace{0.5\baselineskip}
 __CUSTOM_SECTION_BLOCK__
 
 \end{document}
